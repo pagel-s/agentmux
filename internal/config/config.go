@@ -86,6 +86,9 @@ func LoadFile(path string) (*Document, error) {
 	if len(node.Content) == 0 {
 		return nil, fmt.Errorf("config %q is empty", path)
 	}
+	if node.Content[0].Kind != yaml.MappingNode {
+		return nil, fmt.Errorf("config %q must be a YAML mapping at the top level", path)
+	}
 	if err := node.Content[0].Decode(&cfg); err != nil {
 		return nil, fmt.Errorf("invalid config in %q: %w", path, err)
 	}

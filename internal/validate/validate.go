@@ -27,7 +27,7 @@ func Document(doc *config.Document, cliParams map[string]string) []Issue {
 	if doc.Config.Version != 1 {
 		issues = append(issues, errorf("version must exist and equal 1"))
 	}
-	if doc.Config.Session == "" {
+	if strings.TrimSpace(doc.Config.Session) == "" {
 		issues = append(issues, errorf("session must exist"))
 	}
 	if len(doc.Config.Layout) == 0 {
@@ -49,10 +49,11 @@ func Document(doc *config.Document, cliParams map[string]string) []Issue {
 	}
 
 	for name, agent := range agents {
-		if agent.Provider == "" {
+		provider := strings.TrimSpace(agent.Provider)
+		if provider == "" {
 			issues = append(issues, errorf("agent %q is missing provider", name))
 		}
-		switch agent.Provider {
+		switch provider {
 		case "command", "shell", "ssh":
 		case "":
 		default:
@@ -65,7 +66,7 @@ func Document(doc *config.Document, cliParams map[string]string) []Issue {
 
 	focusCount := 0
 	for windowIndex, window := range doc.Config.Layout {
-		if window.Window == "" {
+		if strings.TrimSpace(window.Window) == "" {
 			issues = append(issues, errorf("window %d is missing window name", windowIndex+1))
 		}
 		if len(window.Panes) == 0 {
@@ -127,7 +128,7 @@ func Document(doc *config.Document, cliParams map[string]string) []Issue {
 		if issues[i].Severity == issues[j].Severity {
 			return issues[i].Message < issues[j].Message
 		}
-		return issues[i].Severity > issues[j].Severity
+		return issues[i].Severity < issues[j].Severity
 	})
 
 	return issues

@@ -1,4 +1,5 @@
 agentmux
+bin/
 *.test
 *.out
 coverage.txt

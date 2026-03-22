@@ -64,3 +64,32 @@ func TestProjectResolvesEnvAndCwdPrecedence(t *testing.T) {
 		t.Fatalf("pane.Env[MODEL] = %q, want %q", pane.Env["MODEL"], "local-model")
 	}
 }
+
+func TestProjectHandlesPaneEnvWithoutSessionEnv(t *testing.T) {
+	cfg := &config.Config{
+		Version: 1,
+		Session: "demo",
+		Layout: []config.Window{
+			{
+				Window: "main",
+				Panes: []config.Pane{
+					{
+						Command: "env",
+						Env: map[string]string{
+							"DEBUG": "1",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	resolved, err := Project(cfg, nil)
+	if err != nil {
+		t.Fatalf("Project returned error: %v", err)
+	}
+
+	if got := resolved.Windows[0].Panes[0].Env["DEBUG"]; got != "1" {
+		t.Fatalf("pane env DEBUG = %q, want %q", got, "1")
+	}
+}

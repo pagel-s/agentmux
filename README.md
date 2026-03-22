@@ -2,6 +2,17 @@
 
 Agentmux is a tmux-native CLI for reproducible multi-agent terminal workspaces. It reads a declarative YAML config, validates it, resolves params and environment inheritance, and launches the corresponding tmux session.
 
+## Status
+
+This repository is the polished v1 foundation:
+
+- declarative local YAML configs
+- schema and semantic validation
+- predictable param, env, cwd, and title resolution
+- dry-run and render output for inspection
+- tmux session creation with hooks, focus, and replace handling
+- unit, fixture, and tmux integration coverage
+
 ## v1 scope
 
 - Local YAML configs
@@ -11,10 +22,18 @@ Agentmux is a tmux-native CLI for reproducible multi-agent terminal workspaces. 
 - tmux session, window, and pane creation
 - Commands: `load`, `validate`, `render`, `list`, `doctor`
 
-## Build
+Out of scope for v1:
+
+- remote config fetching
+- daemons and agent-to-agent messaging
+- provider SDKs and plugins
+- orchestration logic beyond tmux session creation
+
+## Build And Run
 
 ```bash
-go build ./cmd/agentmux
+make build
+./bin/agentmux doctor
 ```
 
 ## Commands
@@ -27,7 +46,47 @@ agentmux list
 agentmux doctor
 ```
 
-## Example
+`load` attaches by default unless you pass `--no-attach` or `--dry-run`.
+
+## Config Shape
+
+```yaml
+version: 1
+session: ai-dev
+
+params:
+  project_dir: "."
+
+env:
+  PROJECT_DIR: "{{project_dir}}"
+
+agents:
+  coder:
+    provider: command
+    command: "ollama run codellama"
+    cwd: "{{project_dir}}"
+
+layout:
+  - window: editor
+    root: "{{project_dir}}"
+    layout: even-horizontal
+    panes:
+      - command: "nvim"
+        title: "Editor"
+        focus: true
+      - agent: coder
+```
+
+Resolution rules:
+
+- params: CLI `--param` overrides config defaults
+- env: pane env > agent env > session env
+- cwd: pane cwd > agent cwd > window root > current working directory
+- title: pane title > agent title > agent name > command-derived fallback
+
+`render` prints the fully resolved config plus a readable execution plan. `validate --strict` turns warnings such as unknown top-level fields into failures.
+
+## Examples
 
 Canonical examples:
 
@@ -35,3 +94,23 @@ Canonical examples:
 - [testdata/examples/ai-dev.yaml](testdata/examples/ai-dev.yaml)
 - [testdata/examples/review-loop.yaml](testdata/examples/review-loop.yaml)
 - [testdata/examples/ssh-ops.yaml](testdata/examples/ssh-ops.yaml)
+
+## Development
+
+```bash
+make fmt
+make test
+make build
+```
+
+The repo includes:
+
+- fixture-driven validation tests in `testdata/fixtures`
+- isolated tmux integration tests that use a dedicated socket
+- a GitHub Actions workflow in `.github/workflows/ci.yml`
+
+## Operational Notes
+
+- Configs are trusted code. Agentmux executes shell commands exactly as defined.
+- Values like `${OPENAI_API_KEY}` are preserved for shell expansion at runtime.
+- Pane titles are best-effort. Some shells overwrite the visible pane title after startup, so titles should be treated as a helpful hint rather than a hard guarantee.

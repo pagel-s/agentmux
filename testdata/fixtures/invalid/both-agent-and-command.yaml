@@ -1,0 +1,13 @@
+version: 1
+session: both-sources
+
+agents:
+  coder:
+    provider: command
+    command: "echo hi"
+
+layout:
+  - window: main
+    panes:
+      - agent: coder
+        command: "echo override"

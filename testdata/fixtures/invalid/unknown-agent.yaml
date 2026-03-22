@@ -1,0 +1,7 @@
+version: 1
+session: unknown-agent
+
+layout:
+  - window: main
+    panes:
+      - agent: ghost

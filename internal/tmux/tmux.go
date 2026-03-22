@@ -6,11 +6,19 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"sort"
 	"strings"
 
 	"agentmux/internal/resolve"
 )
+
+const (
+	envTmuxBinary = "AGENTMUX_TMUX_BIN"
+	envTmuxSocket = "AGENTMUX_TMUX_SOCKET"
+)
+
+var shellEnvRefPattern = regexp.MustCompile(`(^|[^\\])\$(\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)`)
 
 type Options struct {
 	Attach  bool
@@ -87,12 +95,11 @@ func Execute(cfg resolve.Config, opts Options) error {
 }
 
 func ListSessions() ([]string, error) {
-	cmd := exec.Command("tmux", "list-sessions", "-F", "#{session_name}")
-	out, err := cmd.Output()
+	cmd := command("list-sessions", "-F", "#{session_name}")
+	out, err := cmd.CombinedOutput()
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			stderr := string(exitErr.Stderr)
-			if strings.Contains(stderr, "no server running") {
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+			if strings.Contains(string(out), "no server running") {
 				return nil, nil
 			}
 		}
@@ -108,7 +115,7 @@ func ListSessions() ([]string, error) {
 }
 
 func SessionExists(name string) (bool, error) {
-	cmd := exec.Command("tmux", "has-session", "-t", name)
+	cmd := command("has-session", "-t", name)
 	if err := cmd.Run(); err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
 			return false, nil
@@ -211,7 +218,7 @@ func buildPaneCommand(pane resolve.Pane) string {
 }
 
 func quoteEnvValue(value string) string {
-	if strings.Contains(value, "$") || strings.Contains(value, "`") {
+	if shellEnvRefPattern.MatchString(value) {
 		return `"` + escapeDouble(value) + `"`
 	}
 	return singleQuote(value)
@@ -235,7 +242,7 @@ func parseWindowAndPane(value string) (string, string, error) {
 }
 
 func attachSession(name string, verbose bool) error {
-	cmd := exec.Command("tmux", "attach-session", "-t", name)
+	cmd := command("attach-session", "-t", name)
 	if verbose {
 		fmt.Fprintf(os.Stderr, "tmux %s\n", strings.Join(cmd.Args[1:], " "))
 	}
@@ -246,7 +253,7 @@ func attachSession(name string, verbose bool) error {
 }
 
 func run(verbose bool, args ...string) error {
-	cmd := exec.Command("tmux", args...)
+	cmd := command(args...)
 	if verbose {
 		fmt.Fprintf(os.Stderr, "tmux %s\n", strings.Join(args, " "))
 	}
@@ -256,7 +263,7 @@ func run(verbose bool, args ...string) error {
 }
 
 func capture(verbose bool, args ...string) (string, error) {
-	cmd := exec.Command("tmux", args...)
+	cmd := command(args...)
 	if verbose {
 		fmt.Fprintf(os.Stderr, "tmux %s\n", strings.Join(args, " "))
 	}
@@ -271,4 +278,28 @@ func capture(verbose bool, args ...string) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(stdout.String()), nil
+}
+
+func command(args ...string) *exec.Cmd {
+	commandArgs := make([]string, 0, len(args)+2)
+	if socket := os.Getenv(envTmuxSocket); socket != "" {
+		commandArgs = append(commandArgs, "-S", socket)
+	}
+	commandArgs = append(commandArgs, args...)
+	return exec.Command(tmuxBinary(), commandArgs...)
+}
+
+func tmuxBinary() string {
+	if binary := strings.TrimSpace(os.Getenv(envTmuxBinary)); binary != "" {
+		return binary
+	}
+	return "tmux"
+}
+
+func Binary() string {
+	return tmuxBinary()
+}
+
+func Socket() string {
+	return strings.TrimSpace(os.Getenv(envTmuxSocket))
 }

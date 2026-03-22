@@ -31,3 +31,11 @@ func TestBuildPaneCommand(t *testing.T) {
 		t.Fatalf("command missing shell wrapper: %q", command)
 	}
 }
+
+func TestQuoteEnvValueDoesNotExpandNonVariableDollarText(t *testing.T) {
+	quoted := quoteEnvValue("price$5")
+
+	if quoted != `'price$5'` {
+		t.Fatalf("quoteEnvValue = %q, want single-quoted literal", quoted)
+	}
+}
