@@ -1,0 +1,4 @@
+agentmux
+*.test
+*.out
+coverage.txt

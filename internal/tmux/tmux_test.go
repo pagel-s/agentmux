@@ -1,0 +1,33 @@
+package tmux
+
+import (
+	"strings"
+	"testing"
+
+	"agentmux/internal/resolve"
+)
+
+func TestBuildPaneCommand(t *testing.T) {
+	command := buildPaneCommand(resolve.Pane{
+		Command: "echo ${OPENAI_API_KEY}",
+		Cwd:     "/tmp/project",
+		Env: map[string]string{
+			"OPENAI_API_KEY": "${OPENAI_API_KEY}",
+			"MODEL":          "gpt-5",
+		},
+		Shell: "/bin/bash",
+	})
+
+	if !strings.Contains(command, "cd '/tmp/project'") {
+		t.Fatalf("command missing cwd change: %q", command)
+	}
+	if !strings.Contains(command, `OPENAI_API_KEY="${OPENAI_API_KEY}"`) {
+		t.Fatalf("command missing passthrough env: %q", command)
+	}
+	if !strings.Contains(command, `MODEL='gpt-5'`) {
+		t.Fatalf("command missing quoted literal env: %q", command)
+	}
+	if !strings.Contains(command, `'/bin/bash' -lc 'echo ${OPENAI_API_KEY}'`) {
+		t.Fatalf("command missing shell wrapper: %q", command)
+	}
+}
