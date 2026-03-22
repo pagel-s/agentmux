@@ -1,6 +1,7 @@
 package resolve
 
 import (
+	"os"
 	"testing"
 
 	"agentmux/internal/config"
@@ -91,5 +92,55 @@ func TestProjectHandlesPaneEnvWithoutSessionEnv(t *testing.T) {
 
 	if got := resolved.Windows[0].Panes[0].Env["DEBUG"]; got != "1" {
 		t.Fatalf("pane env DEBUG = %q, want %q", got, "1")
+	}
+}
+
+func TestProjectResolvesRelativeCwdAgainstLaunchDirectory(t *testing.T) {
+	originalWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd returned error: %v", err)
+	}
+
+	tempDir := t.TempDir()
+	if err := os.Chdir(tempDir); err != nil {
+		t.Fatalf("Chdir returned error: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(originalWD)
+	})
+
+	cfg := &config.Config{
+		Version: 1,
+		Session: "demo",
+		Agents: map[string]config.Agent{
+			"coder": {
+				Provider: "command",
+				Command:  "echo hi",
+				Cwd:      ".",
+			},
+		},
+		Layout: []config.Window{
+			{
+				Window: "main",
+				Root:   ".",
+				Panes: []config.Pane{
+					{
+						Agent: "coder",
+					},
+				},
+			},
+		},
+	}
+
+	resolved, err := Project(cfg, nil)
+	if err != nil {
+		t.Fatalf("Project returned error: %v", err)
+	}
+
+	if got := resolved.Windows[0].Root; got != tempDir {
+		t.Fatalf("window root = %q, want %q", got, tempDir)
+	}
+	if got := resolved.Windows[0].Panes[0].Cwd; got != tempDir {
+		t.Fatalf("pane cwd = %q, want %q", got, tempDir)
 	}
 }

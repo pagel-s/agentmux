@@ -325,7 +325,15 @@ func cleanPath(value string) string {
 			}
 		}
 	}
-	return filepath.Clean(value)
+	value = filepath.Clean(value)
+	if filepath.IsAbs(value) {
+		return value
+	}
+	absolute, err := filepath.Abs(value)
+	if err != nil {
+		return value
+	}
+	return absolute
 }
 
 func mergeInto(dst map[string]string, src map[string]string) {

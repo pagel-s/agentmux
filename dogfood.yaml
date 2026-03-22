@@ -1,0 +1,34 @@
+version: 1
+session: dogfood
+
+params:
+  project_dir: "."
+
+env:
+  PROJECT_DIR: "{{project_dir}}"
+
+agents:
+  reviewer:
+    provider: command
+    command: "printf 'review pane ready\n'; exec $SHELL"
+    cwd: "{{project_dir}}"
+    title: "Reviewer"
+
+layout:
+  - window: editor
+    root: "{{project_dir}}"
+    layout: even-horizontal
+    panes:
+      - command: "nvim"
+        title: "Editor"
+        focus: true
+      - command: "go test ./... -count=1"
+        title: "Tests"
+
+  - window: review
+    root: "{{project_dir}}"
+    layout: even-horizontal
+    panes:
+      - command: "git status"
+        title: "Git"
+      - agent: reviewer
