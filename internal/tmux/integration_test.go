@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"agentmux/internal/resolve"
 )
@@ -27,14 +28,14 @@ func TestExecuteCreatesIsolatedSession(t *testing.T) {
 				Panes: []resolve.Pane{
 					{
 						SourceType: "command",
-						Command:    "printf pane-one-ready",
+						Command:    "printf 'pane-one-ready\n'",
 						Cwd:        t.TempDir(),
 						Title:      "Editor",
 						Focus:      true,
 					},
 					{
 						SourceType: "command",
-						Command:    "printf pane-two-ready",
+						Command:    "printf 'pane-two-ready\n'",
 						Cwd:        t.TempDir(),
 						Title:      "Checks",
 					},
@@ -64,7 +65,7 @@ func TestExecuteCreatesIsolatedSession(t *testing.T) {
 		t.Fatalf("expected 2 panes, got output %q", paneCount)
 	}
 
-	captured := tmuxOutput(t, "capture-pane", "-pt", cfg.Session+":editor.1")
+	captured := waitForPaneContains(t, cfg.Session+":editor.1", "pane-one-ready")
 	if !strings.Contains(captured, "pane-one-ready") {
 		t.Fatalf("capture-pane output %q does not include pane-one-ready", captured)
 	}
@@ -116,6 +117,22 @@ func tmuxOutput(t *testing.T, args ...string) string {
 		t.Fatalf("tmux %v returned error: %v", args, err)
 	}
 	return out
+}
+
+func waitForPaneContains(t *testing.T, target string, want string) string {
+	t.Helper()
+
+	deadline := time.Now().Add(2 * time.Second)
+	last := ""
+	for time.Now().Before(deadline) {
+		last = tmuxOutput(t, "capture-pane", "-J", "-pt", target)
+		if strings.Contains(last, want) {
+			return last
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	return last
 }
 
 func isTmuxPermissionError(err error) bool {
