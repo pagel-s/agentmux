@@ -69,6 +69,9 @@ func TestExecuteCreatesIsolatedSession(t *testing.T) {
 	if !strings.Contains(captured, "pane-one-ready") {
 		t.Fatalf("capture-pane output %q does not include pane-one-ready", captured)
 	}
+	if strings.Contains(captured, "cd '") || strings.Contains(captured, "printf 'pane-one-ready") {
+		t.Fatalf("capture-pane output %q still includes the startup command echo", captured)
+	}
 }
 
 func TestExecuteRejectsExistingSessionWithoutReplace(t *testing.T) {

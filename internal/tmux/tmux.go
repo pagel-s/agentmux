@@ -131,14 +131,18 @@ func createWindow(session string, first bool, window resolve.Window, verbose boo
 	}
 
 	args := []string{}
+	firstPane := window.Panes[0]
 	if first {
 		args = append(args, "new-session", "-d", "-s", session, "-n", window.Name, "-P", "-F", "#{window_id}:#{pane_id}")
 	} else {
 		args = append(args, "new-window", "-t", session, "-n", window.Name, "-P", "-F", "#{window_id}:#{pane_id}")
 	}
-	if window.Root != "" {
+	if firstPane.Cwd != "" {
+		args = append(args, "-c", firstPane.Cwd)
+	} else if window.Root != "" {
 		args = append(args, "-c", window.Root)
 	}
+	args = append(args, buildPaneCommand(firstPane))
 
 	out, err := capture(verbose, args...)
 	if err != nil {
@@ -179,11 +183,6 @@ func configurePane(paneID string, pane resolve.Pane, verbose bool) error {
 		if err := run(verbose, "select-pane", "-t", paneID, "-T", pane.Title); err != nil {
 			return fmt.Errorf("set title for pane %s: %w", paneID, err)
 		}
-	}
-
-	commandLine := buildPaneCommand(pane)
-	if err := run(verbose, "send-keys", "-t", paneID, commandLine, "C-m"); err != nil {
-		return fmt.Errorf("start command in pane %s: %w", paneID, err)
 	}
 
 	return nil
