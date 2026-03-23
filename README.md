@@ -70,12 +70,12 @@ export PATH="$PWD/bin:$PATH"
 ./bin/agentmux validate <config> [--param key=value]
 ./bin/agentmux render <config> [--param key=value]
 ./bin/agentmux list
-./bin/agentmux status <session>
+./bin/agentmux status <session> [--json]
 ./bin/agentmux focus <session> <pane-name>
 ./bin/agentmux restart <session> <pane-name>
 ./bin/agentmux rerun <session> <pane-name>
 ./bin/agentmux stop <session> <pane-name>
-./bin/agentmux capture <session> <pane-name>
+./bin/agentmux capture <session> <pane-name> [--json]
 ./bin/agentmux send <session> <pane-name> <command...>
 ./bin/agentmux doctor
 ./bin/agentmux version
@@ -178,11 +178,13 @@ Named panes can now be targeted at runtime:
 
 ```bash
 ./bin/agentmux status dogfood
+./bin/agentmux status dogfood --json
 ./bin/agentmux focus dogfood resolve
 ./bin/agentmux restart dogfood resolve
 ./bin/agentmux rerun dogfood resolve
 ./bin/agentmux stop dogfood resolve
 ./bin/agentmux capture dogfood review
+./bin/agentmux capture dogfood review --json
 ./bin/agentmux send dogfood review "git status --short"
 ```
 
@@ -193,6 +195,8 @@ Named panes can now be targeted at runtime:
 `capture` prints the current joined pane contents for the named pane, which makes it possible to read back output from a live workflow endpoint.
 
 `send` writes a literal command into the target pane and presses Enter, which makes named panes usable as live workflow endpoints after startup.
+
+`status --json` and `capture --json` expose machine-friendly output for scripting and automation while preserving the existing human-readable defaults.
 
 ## Examples
 

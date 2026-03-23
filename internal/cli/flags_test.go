@@ -34,16 +34,39 @@ func TestParseRenderAcceptsInlineParam(t *testing.T) {
 }
 
 func TestParseStatusRequiresSessionName(t *testing.T) {
-	session, err := ParseStatus([]string{"dogfood"})
+	opts, err := ParseStatus([]string{"dogfood"})
 	if err != nil {
 		t.Fatalf("ParseStatus returned error: %v", err)
 	}
-	if session != "dogfood" {
-		t.Fatalf("session = %q, want %q", session, "dogfood")
+	if opts.Session != "dogfood" {
+		t.Fatalf("session = %q, want %q", opts.Session, "dogfood")
+	}
+	if opts.JSON {
+		t.Fatal("JSON = true, want false")
 	}
 
 	if _, err := ParseStatus(nil); err == nil {
 		t.Fatal("ParseStatus returned nil error for missing session")
+	}
+}
+
+func TestParseStatusAcceptsJSONFlagBeforeOrAfterSession(t *testing.T) {
+	tests := [][]string{
+		{"--json", "dogfood"},
+		{"dogfood", "--json"},
+	}
+
+	for _, args := range tests {
+		opts, err := ParseStatus(args)
+		if err != nil {
+			t.Fatalf("ParseStatus(%v) returned error: %v", args, err)
+		}
+		if opts.Session != "dogfood" {
+			t.Fatalf("Session = %q, want %q", opts.Session, "dogfood")
+		}
+		if !opts.JSON {
+			t.Fatalf("JSON = false, want true for args %v", args)
+		}
 	}
 }
 
@@ -126,9 +149,36 @@ func TestParseCaptureRequiresSessionAndPaneName(t *testing.T) {
 	if opts.Pane != "resolve" {
 		t.Fatalf("Pane = %q, want %q", opts.Pane, "resolve")
 	}
+	if opts.JSON {
+		t.Fatal("JSON = true, want false")
+	}
 
 	if _, err := ParseCapture([]string{"dogfood"}); err == nil {
 		t.Fatal("ParseCapture returned nil error for missing pane name")
+	}
+}
+
+func TestParseCaptureAcceptsJSONFlagBeforeOrAfterTarget(t *testing.T) {
+	tests := [][]string{
+		{"--json", "dogfood", "resolve"},
+		{"dogfood", "resolve", "--json"},
+		{"dogfood", "--json", "resolve"},
+	}
+
+	for _, args := range tests {
+		opts, err := ParseCapture(args)
+		if err != nil {
+			t.Fatalf("ParseCapture(%v) returned error: %v", args, err)
+		}
+		if opts.Session != "dogfood" {
+			t.Fatalf("Session = %q, want %q", opts.Session, "dogfood")
+		}
+		if opts.Pane != "resolve" {
+			t.Fatalf("Pane = %q, want %q", opts.Pane, "resolve")
+		}
+		if !opts.JSON {
+			t.Fatalf("JSON = false, want true for args %v", args)
+		}
 	}
 }
 

@@ -179,7 +179,7 @@ func runList(args []string) int {
 }
 
 func runStatus(args []string) int {
-	session, err := cli.ParseStatus(args)
+	opts, err := cli.ParseStatus(args)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		return exitValidation
@@ -190,13 +190,23 @@ func runStatus(args []string) int {
 		return exitDependency
 	}
 
-	panes, err := tmux.Status(session)
+	panes, err := tmux.Status(opts.Session)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		return exitRuntime
 	}
 
-	fmt.Print(renderStatus(session, panes))
+	if opts.JSON {
+		out, err := renderStatusJSON(opts.Session, panes)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: render status json: %v\n", err)
+			return exitRuntime
+		}
+		fmt.Print(out)
+		return exitSuccess
+	}
+
+	fmt.Print(renderStatus(opts.Session, panes))
 	return exitSuccess
 }
 
@@ -300,6 +310,16 @@ func runCapture(args []string) int {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		return exitRuntime
+	}
+
+	if opts.JSON {
+		jsonOut, err := renderCaptureJSON(opts.Session, opts.Pane, out)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: render capture json: %v\n", err)
+			return exitRuntime
+		}
+		fmt.Print(jsonOut)
+		return exitSuccess
 	}
 
 	fmt.Print(out)
@@ -507,6 +527,36 @@ func renderStatus(session string, panes []tmux.PaneStatus) string {
 	return b.String()
 }
 
+func renderStatusJSON(session string, panes []tmux.PaneStatus) (string, error) {
+	return renderJSON(struct {
+		Session string            `json:"session"`
+		Panes   []tmux.PaneStatus `json:"panes"`
+	}{
+		Session: session,
+		Panes:   panes,
+	})
+}
+
+func renderCaptureJSON(session string, pane string, content string) (string, error) {
+	return renderJSON(struct {
+		Session string `json:"session"`
+		Pane    string `json:"pane"`
+		Content string `json:"content"`
+	}{
+		Session: session,
+		Pane:    pane,
+		Content: content,
+	})
+}
+
+func renderJSON(v any) (string, error) {
+	out, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	return string(out) + "\n", nil
+}
+
 func versionString() string {
 	return fmt.Sprintf("agentmux %s", version)
 }
@@ -534,12 +584,12 @@ Usage:
   agentmux validate <config> [--param key=value] [--strict]
   agentmux render <config> [--param key=value] [--strict]
   agentmux list
-  agentmux status <session>
+  agentmux status <session> [--json]
   agentmux focus <session> <pane-name>
   agentmux restart <session> <pane-name>
   agentmux rerun <session> <pane-name>
   agentmux stop <session> <pane-name>
-  agentmux capture <session> <pane-name>
+  agentmux capture <session> <pane-name> [--json]
   agentmux send <session> <pane-name> <command...>
   agentmux doctor
   agentmux version`)

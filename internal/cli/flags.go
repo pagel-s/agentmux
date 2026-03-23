@@ -22,9 +22,20 @@ type LoadOptions struct {
 	Replace bool
 }
 
+type StatusOptions struct {
+	Session string
+	JSON    bool
+}
+
 type PaneTargetOptions struct {
 	Session string
 	Pane    string
+}
+
+type CaptureOptions struct {
+	Session string
+	Pane    string
+	JSON    bool
 }
 
 type SendOptions struct {
@@ -112,11 +123,18 @@ func ParseRender(args []string) (CommonOptions, error) {
 	return parseCommon("render", args)
 }
 
-func ParseStatus(args []string) (string, error) {
-	if len(args) != 1 {
-		return "", errors.New("status requires exactly one session name")
+func ParseStatus(args []string) (StatusOptions, error) {
+	positional, jsonOut, err := parseOptionalJSONArgs("status", args)
+	if err != nil {
+		return StatusOptions{}, err
 	}
-	return args[0], nil
+	if len(positional) != 1 {
+		return StatusOptions{}, errors.New("status requires exactly one session name")
+	}
+	return StatusOptions{
+		Session: positional[0],
+		JSON:    jsonOut,
+	}, nil
 }
 
 func ParseFocus(args []string) (PaneTargetOptions, error) {
@@ -159,13 +177,18 @@ func ParseStop(args []string) (PaneTargetOptions, error) {
 	}, nil
 }
 
-func ParseCapture(args []string) (PaneTargetOptions, error) {
-	if len(args) != 2 {
-		return PaneTargetOptions{}, errors.New("capture requires exactly one session name and one pane name")
+func ParseCapture(args []string) (CaptureOptions, error) {
+	positional, jsonOut, err := parseOptionalJSONArgs("capture", args)
+	if err != nil {
+		return CaptureOptions{}, err
 	}
-	return PaneTargetOptions{
-		Session: args[0],
-		Pane:    args[1],
+	if len(positional) != 2 {
+		return CaptureOptions{}, errors.New("capture requires exactly one session name and one pane name")
+	}
+	return CaptureOptions{
+		Session: positional[0],
+		Pane:    positional[1],
+		JSON:    jsonOut,
 	}, nil
 }
 
@@ -244,4 +267,23 @@ func normalizeArgs(args []string) ([]string, error) {
 
 	normalized = append(normalized, configPath)
 	return normalized, nil
+}
+
+func parseOptionalJSONArgs(name string, args []string) ([]string, bool, error) {
+	positional := make([]string, 0, len(args))
+	jsonOut := false
+
+	for _, arg := range args {
+		switch arg {
+		case "--json":
+			jsonOut = true
+		default:
+			if strings.HasPrefix(arg, "-") {
+				return nil, false, fmt.Errorf("%s does not accept flag %q", name, arg)
+			}
+			positional = append(positional, arg)
+		}
+	}
+
+	return positional, jsonOut, nil
 }

@@ -41,15 +41,15 @@ type paneGeometry struct {
 }
 
 type PaneStatus struct {
-	WindowIndex  int
-	WindowName   string
-	WindowID     string
-	WindowActive bool
-	PaneIndex    int
-	PaneID       string
-	PaneActive   bool
-	Name         string
-	Title        string
+	WindowIndex  int    `json:"window_index"`
+	WindowName   string `json:"window_name"`
+	WindowID     string `json:"window_id"`
+	WindowActive bool   `json:"window_active"`
+	PaneIndex    int    `json:"pane_index"`
+	PaneID       string `json:"pane_id"`
+	PaneActive   bool   `json:"pane_active"`
+	Name         string `json:"name"`
+	Title        string `json:"title"`
 }
 
 func Execute(cfg resolve.Config, opts Options) error {
