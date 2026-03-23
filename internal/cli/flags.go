@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 )
 
@@ -36,12 +37,14 @@ type CaptureOptions struct {
 	Session string
 	Pane    string
 	JSON    bool
+	Tail    int
 }
 
 type SendOptions struct {
 	Session string
 	Pane    string
 	Command string
+	NoEnter bool
 }
 
 type paramFlags struct {
@@ -199,7 +202,15 @@ func ParseKill(args []string) (PaneTargetOptions, error) {
 }
 
 func ParseCapture(args []string) (CaptureOptions, error) {
-	positional, jsonOut, err := parseOptionalJSONArgs("capture", args)
+	var tail int
+	positional, jsonOut, err := parseOptionalJSONArgs("capture", args, func(flag string, value string) error {
+		if flag != "--tail" {
+			return fmt.Errorf("capture does not accept flag %q", flag)
+		}
+		var parseErr error
+		tail, parseErr = parsePositiveIntFlag("capture", flag, value)
+		return parseErr
+	})
 	if err != nil {
 		return CaptureOptions{}, err
 	}
@@ -210,23 +221,57 @@ func ParseCapture(args []string) (CaptureOptions, error) {
 		Session: positional[0],
 		Pane:    positional[1],
 		JSON:    jsonOut,
+		Tail:    tail,
 	}, nil
 }
 
 func ParseSend(args []string) (SendOptions, error) {
-	if len(args) < 3 {
+	noEnter := false
+	positional := make([]string, 0, 2)
+	command := make([]string, 0, len(args))
+	commandMode := false
+
+	for _, arg := range args {
+		switch arg {
+		case "--no-enter":
+			if commandMode {
+				command = append(command, arg)
+			} else {
+				noEnter = true
+			}
+		case "--":
+			commandMode = true
+		default:
+			if commandMode {
+				command = append(command, arg)
+				continue
+			}
+			if len(positional) < 2 {
+				if strings.HasPrefix(arg, "-") {
+					return SendOptions{}, fmt.Errorf("send does not accept flag %q", arg)
+				}
+				positional = append(positional, arg)
+				continue
+			}
+			commandMode = true
+			command = append(command, arg)
+		}
+	}
+
+	if len(positional) != 2 || len(command) == 0 {
 		return SendOptions{}, errors.New("send requires a session name, pane name, and command")
 	}
 
-	command := strings.TrimSpace(strings.Join(args[2:], " "))
-	if command == "" {
+	commandText := strings.TrimSpace(strings.Join(command, " "))
+	if commandText == "" {
 		return SendOptions{}, errors.New("send requires a non-empty command")
 	}
 
 	return SendOptions{
-		Session: args[0],
-		Pane:    args[1],
-		Command: command,
+		Session: positional[0],
+		Pane:    positional[1],
+		Command: commandText,
+		NoEnter: noEnter,
 	}, nil
 }
 
@@ -290,21 +335,43 @@ func normalizeArgs(args []string) ([]string, error) {
 	return normalized, nil
 }
 
-func parseOptionalJSONArgs(name string, args []string) ([]string, bool, error) {
+func parseOptionalJSONArgs(name string, args []string, custom ...func(flag string, value string) error) ([]string, bool, error) {
 	positional := make([]string, 0, len(args))
 	jsonOut := false
 
-	for _, arg := range args {
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
 		switch arg {
 		case "--json":
 			jsonOut = true
 		default:
 			if strings.HasPrefix(arg, "-") {
-				return nil, false, fmt.Errorf("%s does not accept flag %q", name, arg)
+				if len(custom) == 0 {
+					return nil, false, fmt.Errorf("%s does not accept flag %q", name, arg)
+				}
+				if i+1 >= len(args) {
+					return nil, false, fmt.Errorf("%s flag %q requires a value", name, arg)
+				}
+				if err := custom[0](arg, args[i+1]); err != nil {
+					return nil, false, err
+				}
+				i++
+				continue
 			}
 			positional = append(positional, arg)
 		}
 	}
 
 	return positional, jsonOut, nil
+}
+
+func parsePositiveIntFlag(command string, flagName string, value string) (int, error) {
+	parsed, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil {
+		return 0, fmt.Errorf("%s flag %q requires a positive integer", command, flagName)
+	}
+	if parsed <= 0 {
+		return 0, fmt.Errorf("%s flag %q requires a positive integer", command, flagName)
+	}
+	return parsed, nil
 }

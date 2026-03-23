@@ -240,7 +240,7 @@ func RerunPaneByName(session string, name string, verbose bool) error {
 	return respawnPaneByName(session, name, verbose)
 }
 
-func SendCommandToPaneByName(session string, name string, commandText string, verbose bool) error {
+func SendCommandToPaneByName(session string, name string, commandText string, pressEnter bool, verbose bool) error {
 	target, err := findPaneByName(session, name)
 	if err != nil {
 		return err
@@ -253,8 +253,10 @@ func SendCommandToPaneByName(session string, name string, commandText string, ve
 	if err := run(verbose, "send-keys", "-t", target.PaneID, "-l", commandText); err != nil {
 		return fmt.Errorf("send command to pane %q: %w", name, err)
 	}
-	if err := run(verbose, "send-keys", "-t", target.PaneID, "Enter"); err != nil {
-		return fmt.Errorf("send enter to pane %q: %w", name, err)
+	if pressEnter {
+		if err := run(verbose, "send-keys", "-t", target.PaneID, "Enter"); err != nil {
+			return fmt.Errorf("send enter to pane %q: %w", name, err)
+		}
 	}
 	return nil
 }
@@ -304,7 +306,7 @@ func KillPaneByName(session string, name string, verbose bool) error {
 	return nil
 }
 
-func CapturePaneByName(session string, name string, verbose bool) (string, error) {
+func CapturePaneByName(session string, name string, tailLines int, verbose bool) (string, error) {
 	target, err := findPaneByName(session, name)
 	if err != nil {
 		return "", err
@@ -314,7 +316,38 @@ func CapturePaneByName(session string, name string, verbose bool) (string, error
 	if err != nil {
 		return "", fmt.Errorf("capture pane %q: %w", name, err)
 	}
+	if tailLines > 0 {
+		out = tailLinesFromCapture(out, tailLines)
+	}
 	return out, nil
+}
+
+func tailLinesFromCapture(content string, tailLines int) string {
+	if tailLines <= 0 || content == "" {
+		return content
+	}
+
+	trailingNewline := strings.HasSuffix(content, "\n")
+	lines := strings.Split(strings.TrimSuffix(content, "\n"), "\n")
+	for len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "" {
+		lines = lines[:len(lines)-1]
+	}
+	if len(lines) == 0 {
+		return ""
+	}
+	if tailLines >= len(lines) {
+		content = strings.Join(lines, "\n")
+		if trailingNewline {
+			return content + "\n"
+		}
+		return content
+	}
+
+	tail := strings.Join(lines[len(lines)-tailLines:], "\n")
+	if trailingNewline {
+		return tail + "\n"
+	}
+	return tail
 }
 
 func SessionExists(name string) (bool, error) {

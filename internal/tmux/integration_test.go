@@ -722,7 +722,7 @@ func TestSendCommandToNamedPane(t *testing.T) {
 		t.Fatalf("initial output %q does not include ready", out)
 	}
 
-	if err := SendCommandToPaneByName(cfg.Session, "runner", "printf 'sent-from-test\\n'", false); err != nil {
+	if err := SendCommandToPaneByName(cfg.Session, "runner", "printf 'sent-from-test\\n'", true, false); err != nil {
 		t.Fatalf("SendCommandToPaneByName returned error: %v", err)
 	}
 
@@ -768,13 +768,111 @@ func TestCaptureNamedPane(t *testing.T) {
 		t.Fatalf("Execute returned error: %v", err)
 	}
 
-	if err := SendCommandToPaneByName(cfg.Session, "runner", "printf 'captured-from-test\\n'", false); err != nil {
+	if err := SendCommandToPaneByName(cfg.Session, "runner", "printf 'captured-from-test\\n'", true, false); err != nil {
 		t.Fatalf("SendCommandToPaneByName returned error: %v", err)
 	}
 
-	captured := waitForCaptureContains(t, cfg.Session, "runner", "captured-from-test")
+	captured := waitForCaptureContains(t, cfg.Session, "runner", 0, "captured-from-test")
 	if !strings.Contains(captured, "captured-from-test") {
 		t.Fatalf("captured output %q does not include captured-from-test", captured)
+	}
+}
+
+func TestCaptureNamedPaneTailLines(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed")
+	}
+
+	socket := filepath.Join(t.TempDir(), "agentmux-capture-tail.sock")
+	t.Setenv(envTmuxSocket, socket)
+
+	cfg := resolve.Config{
+		Session: "agentmux-capture-tail",
+		Windows: []resolve.Window{
+			{
+				Name: "main",
+				Panes: []resolve.Pane{
+					{
+						Name:       "runner",
+						SourceType: "command",
+						Command:    "printf 'ready\\n'",
+						Title:      "Runner",
+					},
+				},
+			},
+		},
+	}
+
+	t.Cleanup(func() {
+		_ = command("kill-server").Run()
+	})
+
+	if err := Execute(cfg, Options{Replace: true}); err != nil {
+		if isTmuxPermissionError(err) {
+			t.Skipf("tmux integration unavailable in this environment: %v", err)
+		}
+		t.Fatalf("Execute returned error: %v", err)
+	}
+
+	if err := SendCommandToPaneByName(cfg.Session, "runner", "printf 'tail-line-1\\ntail-line-2\\ntail-line-3\\n'", true, false); err != nil {
+		t.Fatalf("SendCommandToPaneByName returned error: %v", err)
+	}
+
+	captured := waitForCaptureContains(t, cfg.Session, "runner", 3, "tail-line-3")
+	if !strings.Contains(captured, "tail-line-3") {
+		t.Fatalf("captured output %q does not include tail-line-3", captured)
+	}
+	if strings.Contains(captured, "tail-line-1") {
+		t.Fatalf("captured tail output %q still includes tail-line-1", captured)
+	}
+}
+
+func TestSendCommandToNamedPaneWithoutEnter(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed")
+	}
+
+	socket := filepath.Join(t.TempDir(), "agentmux-send-no-enter.sock")
+	t.Setenv(envTmuxSocket, socket)
+
+	cfg := resolve.Config{
+		Session: "agentmux-send-no-enter",
+		Windows: []resolve.Window{
+			{
+				Name: "main",
+				Panes: []resolve.Pane{
+					{
+						Name:       "runner",
+						SourceType: "command",
+						Command:    "printf 'ready\\n'",
+						Title:      "Runner",
+					},
+				},
+			},
+		},
+	}
+
+	t.Cleanup(func() {
+		_ = command("kill-server").Run()
+	})
+
+	if err := Execute(cfg, Options{Replace: true}); err != nil {
+		if isTmuxPermissionError(err) {
+			t.Skipf("tmux integration unavailable in this environment: %v", err)
+		}
+		t.Fatalf("Execute returned error: %v", err)
+	}
+
+	if err := SendCommandToPaneByName(cfg.Session, "runner", "printf 'queued-only\\n'", false, false); err != nil {
+		t.Fatalf("SendCommandToPaneByName returned error: %v", err)
+	}
+
+	captured := waitForPaneContainsWithin(t, cfg.Session+":main.1", "printf 'queued-only\\n'", 2*time.Second)
+	if !strings.Contains(captured, "printf 'queued-only\\n'") {
+		t.Fatalf("captured output %q does not include queued command text", captured)
+	}
+	if strings.Contains(captured, "queued-only\n") {
+		t.Fatalf("captured output %q unexpectedly includes executed command output", captured)
 	}
 }
 
@@ -821,7 +919,7 @@ func TestStopNamedPaneLeavesShellUsable(t *testing.T) {
 	if err := StopPaneByName(cfg.Session, "runner", false); err != nil {
 		t.Fatalf("StopPaneByName returned error: %v", err)
 	}
-	if err := SendCommandToPaneByName(cfg.Session, "runner", "printf 'after-stop\\n'", false); err != nil {
+	if err := SendCommandToPaneByName(cfg.Session, "runner", "printf 'after-stop\\n'", true, false); err != nil {
 		t.Fatalf("SendCommandToPaneByName after stop returned error: %v", err)
 	}
 
@@ -951,13 +1049,13 @@ func waitForPaneCount(t *testing.T, session string, want int, timeout time.Durat
 	t.Fatalf("pane count = %d, want %d", lastCount, want)
 }
 
-func waitForCaptureContains(t *testing.T, session string, paneName string, want string) string {
+func waitForCaptureContains(t *testing.T, session string, paneName string, tailLines int, want string) string {
 	t.Helper()
 
 	deadline := time.Now().Add(2 * time.Second)
 	last := ""
 	for time.Now().Before(deadline) {
-		out, err := CapturePaneByName(session, paneName, false)
+		out, err := CapturePaneByName(session, paneName, tailLines, false)
 		if err != nil {
 			if isTmuxPermissionError(err) {
 				t.Skipf("tmux integration unavailable in this environment: %v", err)

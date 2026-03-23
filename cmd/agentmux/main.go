@@ -356,14 +356,14 @@ func runCapture(args []string) int {
 		return exitDependency
 	}
 
-	out, err := tmux.CapturePaneByName(opts.Session, opts.Pane, false)
+	out, err := tmux.CapturePaneByName(opts.Session, opts.Pane, opts.Tail, false)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		return exitRuntime
 	}
 
 	if opts.JSON {
-		jsonOut, err := renderCaptureJSON(opts.Session, opts.Pane, out)
+		jsonOut, err := renderCaptureJSON(opts.Session, opts.Pane, opts.Tail, out)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error: render capture json: %v\n", err)
 			return exitRuntime
@@ -391,12 +391,16 @@ func runSend(args []string) int {
 		return exitDependency
 	}
 
-	if err := tmux.SendCommandToPaneByName(opts.Session, opts.Pane, opts.Command, false); err != nil {
+	if err := tmux.SendCommandToPaneByName(opts.Session, opts.Pane, opts.Command, !opts.NoEnter, false); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		return exitRuntime
 	}
 
-	fmt.Printf("sent command to pane %q in session %q\n", opts.Pane, opts.Session)
+	if opts.NoEnter {
+		fmt.Printf("sent command text to pane %q in session %q without pressing Enter\n", opts.Pane, opts.Session)
+	} else {
+		fmt.Printf("sent command to pane %q in session %q\n", opts.Pane, opts.Session)
+	}
 	return exitSuccess
 }
 
@@ -602,15 +606,17 @@ func renderStatusJSON(session string, panes []tmux.PaneStatus) (string, error) {
 	})
 }
 
-func renderCaptureJSON(session string, pane string, content string) (string, error) {
+func renderCaptureJSON(session string, pane string, tailLines int, content string) (string, error) {
 	return renderJSON(struct {
-		Session string `json:"session"`
-		Pane    string `json:"pane"`
-		Content string `json:"content"`
+		Session   string `json:"session"`
+		Pane      string `json:"pane"`
+		TailLines int    `json:"tail_lines,omitempty"`
+		Content   string `json:"content"`
 	}{
-		Session: session,
-		Pane:    pane,
-		Content: content,
+		Session:   session,
+		Pane:      pane,
+		TailLines: tailLines,
+		Content:   content,
 	})
 }
 
@@ -656,8 +662,8 @@ Usage:
   agentmux rerun <session> <pane-name>
   agentmux stop <session> <pane-name>
   agentmux kill <session> <pane-name>
-  agentmux capture <session> <pane-name> [--json]
-  agentmux send <session> <pane-name> <command...>
+  agentmux capture <session> <pane-name> [--json] [--tail N]
+  agentmux send <session> <pane-name> [--no-enter] <command...>
   agentmux doctor
   agentmux version`)
 }

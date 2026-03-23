@@ -78,8 +78,8 @@ export PATH="$PWD/bin:$PATH"
 ./bin/agentmux rerun <session> <pane-name>
 ./bin/agentmux stop <session> <pane-name>
 ./bin/agentmux kill <session> <pane-name>
-./bin/agentmux capture <session> <pane-name> [--json]
-./bin/agentmux send <session> <pane-name> <command...>
+./bin/agentmux capture <session> <pane-name> [--json] [--tail N]
+./bin/agentmux send <session> <pane-name> [--no-enter] <command...>
 ./bin/agentmux doctor
 ./bin/agentmux version
 ```
@@ -232,7 +232,9 @@ Named panes can now be targeted at runtime:
 ./bin/agentmux kill dogfood build
 ./bin/agentmux capture dogfood review
 ./bin/agentmux capture dogfood review --json
+./bin/agentmux capture dogfood review --tail 20
 ./bin/agentmux send dogfood review "git status --short"
+./bin/agentmux send dogfood review --no-enter "git commit -m 'wip'"
 ```
 
 These runtime commands are session-wide. Pane lookup works across all windows in the target session, not just the currently active window.
@@ -247,11 +249,17 @@ Named-pane runtime commands preserve the pane's stored `on_exit` behavior, so `r
 
 `capture` prints the current joined pane contents for the named pane, which makes it possible to read back output from a live workflow endpoint.
 
-`send` writes a literal command into the target pane and presses Enter, which makes named panes usable as live workflow endpoints after startup.
+`capture --tail N` limits output to the last `N` captured lines, which is usually more useful for scripts and polling loops than dumping the full pane every time.
+
+`send` writes literal text into the target pane and presses Enter by default, which makes named panes usable as live workflow endpoints after startup.
+
+`send --no-enter` writes the text without pressing Enter, which is useful when you want to stage input, edit it in the pane, or combine it with later keystrokes.
 
 `status --json` and `capture --json` expose machine-friendly output for scripting and automation while preserving the existing human-readable defaults.
 
 `status` now also surfaces the pane source, agent name when relevant, configured `on_exit`, and tmux's current foreground command so running sessions are easier to inspect.
+
+`capture --json` includes `session`, `pane`, `content`, and `tail_lines` when a tail limit was applied.
 
 ## Runtime Troubleshooting
 

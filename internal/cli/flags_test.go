@@ -198,6 +198,9 @@ func TestParseCaptureRequiresSessionAndPaneName(t *testing.T) {
 	if opts.JSON {
 		t.Fatal("JSON = true, want false")
 	}
+	if opts.Tail != 0 {
+		t.Fatalf("Tail = %d, want 0", opts.Tail)
+	}
 
 	if _, err := ParseCapture([]string{"dogfood"}); err == nil {
 		t.Fatal("ParseCapture returned nil error for missing pane name")
@@ -228,6 +231,37 @@ func TestParseCaptureAcceptsJSONFlagBeforeOrAfterTarget(t *testing.T) {
 	}
 }
 
+func TestParseCaptureAcceptsTailFlagBeforeOrAfterTarget(t *testing.T) {
+	tests := [][]string{
+		{"--tail", "10", "dogfood", "resolve"},
+		{"dogfood", "resolve", "--tail", "10"},
+		{"dogfood", "--tail", "10", "resolve"},
+		{"--json", "dogfood", "--tail", "10", "resolve"},
+	}
+
+	for _, args := range tests {
+		opts, err := ParseCapture(args)
+		if err != nil {
+			t.Fatalf("ParseCapture(%v) returned error: %v", args, err)
+		}
+		if opts.Tail != 10 {
+			t.Fatalf("Tail = %d, want 10 for args %v", opts.Tail, args)
+		}
+	}
+}
+
+func TestParseCaptureRejectsInvalidTailValue(t *testing.T) {
+	for _, args := range [][]string{
+		{"dogfood", "resolve", "--tail", "0"},
+		{"dogfood", "resolve", "--tail", "-1"},
+		{"dogfood", "resolve", "--tail", "abc"},
+	} {
+		if _, err := ParseCapture(args); err == nil {
+			t.Fatalf("ParseCapture(%v) returned nil error for invalid --tail", args)
+		}
+	}
+}
+
 func TestParseSendRequiresSessionPaneAndCommand(t *testing.T) {
 	opts, err := ParseSend([]string{"dogfood", "resolve", "go", "test", "./..."})
 	if err != nil {
@@ -242,8 +276,37 @@ func TestParseSendRequiresSessionPaneAndCommand(t *testing.T) {
 	if opts.Command != "go test ./..." {
 		t.Fatalf("Command = %q, want %q", opts.Command, "go test ./...")
 	}
+	if opts.NoEnter {
+		t.Fatal("NoEnter = true, want false")
+	}
 
 	if _, err := ParseSend([]string{"dogfood", "resolve"}); err == nil {
 		t.Fatal("ParseSend returned nil error for missing command")
+	}
+}
+
+func TestParseSendAcceptsNoEnterFlag(t *testing.T) {
+	opts, err := ParseSend([]string{"dogfood", "resolve", "--no-enter", "printf", "'hi'"})
+	if err != nil {
+		t.Fatalf("ParseSend returned error: %v", err)
+	}
+	if !opts.NoEnter {
+		t.Fatal("NoEnter = false, want true")
+	}
+	if opts.Command != "printf 'hi'" {
+		t.Fatalf("Command = %q, want %q", opts.Command, "printf 'hi'")
+	}
+}
+
+func TestParseSendAllowsDashedCommandArgsAfterDoubleDash(t *testing.T) {
+	opts, err := ParseSend([]string{"dogfood", "resolve", "--no-enter", "--", "--no-enter"})
+	if err != nil {
+		t.Fatalf("ParseSend returned error: %v", err)
+	}
+	if !opts.NoEnter {
+		t.Fatal("NoEnter = false, want true")
+	}
+	if opts.Command != "--no-enter" {
+		t.Fatalf("Command = %q, want %q", opts.Command, "--no-enter")
 	}
 }

@@ -83,3 +83,25 @@ func TestQuoteEnvValueDoesNotExpandNonVariableDollarText(t *testing.T) {
 		t.Fatalf("quoteEnvValue = %q, want single-quoted literal", quoted)
 	}
 }
+
+func TestTailLinesFromCapture(t *testing.T) {
+	content := "line-1\nline-2\nline-3\n"
+
+	if got := tailLinesFromCapture(content, 2); got != "line-2\nline-3\n" {
+		t.Fatalf("tailLinesFromCapture(..., 2) = %q, want %q", got, "line-2\nline-3\n")
+	}
+	if got := tailLinesFromCapture(content, 5); got != content {
+		t.Fatalf("tailLinesFromCapture(..., 5) = %q, want original content", got)
+	}
+	if got := tailLinesFromCapture(content, 0); got != content {
+		t.Fatalf("tailLinesFromCapture(..., 0) = %q, want original content", got)
+	}
+}
+
+func TestTailLinesFromCaptureDropsTrailingBlankRows(t *testing.T) {
+	content := "line-1\nline-2\n\n\n"
+
+	if got := tailLinesFromCapture(content, 1); got != "line-2\n" {
+		t.Fatalf("tailLinesFromCapture(..., 1) = %q, want %q", got, "line-2\n")
+	}
+}

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Added `capture --tail N` for smaller, automation-friendly pane reads.
+- Added `send --no-enter` for queueing text into a live pane without executing it yet.
+- Expanded runtime tests and README guidance for the automation-oriented pane control loop.
+
 ## v0.3.0 - 2026-03-23
 
 Third private release of Agentmux, focused on session reload and richer pane lifecycle behavior.
