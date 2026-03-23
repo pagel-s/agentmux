@@ -26,3 +26,14 @@ layout:
         on_exit: remain
       - name: watcher
         agent: watcher
+  - window: kill-demo
+    root: "{{project_dir}}"
+    layout: even-horizontal
+    panes:
+      - name: keep
+        command: "printf 'keep\\n'; exec $SHELL"
+        title: "Keep"
+      - name: drop
+        command: "printf 'drop\\n'"
+        title: "Drop"
+        on_exit: kill
