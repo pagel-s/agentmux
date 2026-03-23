@@ -39,6 +39,7 @@ func TestProjectResolvesEnvAndCwdPrecedence(t *testing.T) {
 				},
 				Panes: []config.Pane{
 					{
+						Name:  "reviewer-main",
 						Agent: "reviewer",
 						Cwd:   "/tmp/pane",
 						Env: map[string]string{
@@ -59,6 +60,9 @@ func TestProjectResolvesEnvAndCwdPrecedence(t *testing.T) {
 	if pane.Cwd != "/tmp/pane" {
 		t.Fatalf("pane.Cwd = %q, want %q", pane.Cwd, "/tmp/pane")
 	}
+	if pane.Name != "reviewer-main" {
+		t.Fatalf("pane.Name = %q, want %q", pane.Name, "reviewer-main")
+	}
 	if pane.Title != "Reviewer" {
 		t.Fatalf("pane.Title = %q, want %q", pane.Title, "Reviewer")
 	}
@@ -73,6 +77,39 @@ func TestProjectResolvesEnvAndCwdPrecedence(t *testing.T) {
 	}
 	if resolved.Windows[0].Env["MODEL"] != "gpt-5-window" {
 		t.Fatalf("window env MODEL = %q, want %q", resolved.Windows[0].Env["MODEL"], "gpt-5-window")
+	}
+}
+
+func TestProjectResolvesPaneNameTemplates(t *testing.T) {
+	cfg := &config.Config{
+		Version: 1,
+		Session: "demo",
+		Params: map[string]string{
+			"role": "review",
+		},
+		Layout: []config.Window{
+			{
+				Window: "main",
+				Panes: []config.Pane{
+					{
+						Name:    "{{role}}-pane",
+						Command: "pwd",
+					},
+				},
+			},
+		},
+	}
+
+	resolved, err := Project(cfg, nil)
+	if err != nil {
+		t.Fatalf("Project returned error: %v", err)
+	}
+
+	if got := resolved.Windows[0].Panes[0].Name; got != "review-pane" {
+		t.Fatalf("pane name = %q, want %q", got, "review-pane")
+	}
+	if got := resolved.Windows[0].Panes[0].Title; got != "review-pane" {
+		t.Fatalf("pane title = %q, want %q", got, "review-pane")
 	}
 }
 

@@ -281,6 +281,9 @@ func renderPlan(resolved resolve.Config, attach bool, replace bool) string {
 			if pane.AgentName != "" {
 				fmt.Fprintf(&b, "=%s", pane.AgentName)
 			}
+			if pane.Name != "" {
+				fmt.Fprintf(&b, " name=%q", pane.Name)
+			}
 			fmt.Fprintf(&b, " title=%q", pane.Title)
 			if pane.Cwd != "" {
 				fmt.Fprintf(&b, " cwd=%s", pane.Cwd)

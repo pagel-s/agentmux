@@ -112,3 +112,124 @@ func TestDocumentCollectsParamsFromWindowEnv(t *testing.T) {
 		t.Fatalf("issues missing window-env param error: %v", issues)
 	}
 }
+
+func TestDocumentRejectsDuplicatePaneNames(t *testing.T) {
+	doc := &config.Document{
+		Config: config.Config{
+			Version: 1,
+			Session: "demo",
+			Layout: []config.Window{
+				{
+					Window: "editor",
+					Panes: []config.Pane{
+						{Name: "main", Command: "pwd"},
+					},
+				},
+				{
+					Window: "review",
+					Panes: []config.Pane{
+						{Name: "main", Command: "git status"},
+					},
+				},
+			},
+		},
+	}
+
+	issues := Document(doc, nil)
+
+	found := false
+	for _, issue := range issues {
+		if issue.Message == `pane name "main" is duplicated across windows "editor" and "review"` {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("issues missing duplicate pane-name error: %v", issues)
+	}
+}
+
+func TestDocumentCollectsParamsFromPaneName(t *testing.T) {
+	doc := &config.Document{
+		Config: config.Config{
+			Version: 1,
+			Session: "demo",
+			Layout: []config.Window{
+				{
+					Window: "main",
+					Panes: []config.Pane{
+						{Name: "{{role}}-pane", Command: "pwd"},
+					},
+				},
+			},
+		},
+	}
+
+	issues := Document(doc, nil)
+
+	found := false
+	for _, issue := range issues {
+		if issue.Message == `missing required param "role"` {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("issues missing pane-name param error: %v", issues)
+	}
+}
+
+func TestDocumentRejectsInvalidPaneName(t *testing.T) {
+	doc := &config.Document{
+		Config: config.Config{
+			Version: 1,
+			Session: "demo",
+			Layout: []config.Window{
+				{
+					Window: "main",
+					Panes: []config.Pane{
+						{Name: "needs spaces", Command: "pwd"},
+					},
+				},
+			},
+		},
+	}
+
+	issues := Document(doc, nil)
+
+	found := false
+	for _, issue := range issues {
+		if issue.Message == `pane 1 in window "main" has invalid name "needs spaces"; use letters, numbers, dot, dash, or underscore` {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("issues missing invalid pane-name error: %v", issues)
+	}
+}
+
+func TestDocumentAcceptsTemplatedPaneNameWithResolvedSlug(t *testing.T) {
+	doc := &config.Document{
+		Config: config.Config{
+			Version: 1,
+			Session: "demo",
+			Layout: []config.Window{
+				{
+					Window: "main",
+					Panes: []config.Pane{
+						{Name: "{{role}}-pane", Command: "pwd"},
+					},
+				},
+			},
+		},
+	}
+
+	issues := Document(doc, map[string]string{"role": "review"})
+
+	for _, issue := range issues {
+		if issue.Message == `pane 1 in window "main" has invalid name "review-pane"; use letters, numbers, dot, dash, or underscore` {
+			t.Fatalf("unexpected invalid pane-name error: %v", issues)
+		}
+	}
+}

@@ -53,6 +53,7 @@ type Window struct {
 }
 
 type Pane struct {
+	Name    string            `yaml:"name"`
 	Agent   string            `yaml:"agent"`
 	Command string            `yaml:"command"`
 	Title   string            `yaml:"title"`

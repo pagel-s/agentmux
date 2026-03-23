@@ -27,6 +27,7 @@ func TestExecuteCreatesIsolatedSession(t *testing.T) {
 				Layout: "even-horizontal",
 				Panes: []resolve.Pane{
 					{
+						Name:       "editor-main",
 						SourceType: "command",
 						Command:    "printf 'pane-one-ready\n'",
 						Cwd:        t.TempDir(),
@@ -34,6 +35,7 @@ func TestExecuteCreatesIsolatedSession(t *testing.T) {
 						Focus:      true,
 					},
 					{
+						Name:       "checks",
 						SourceType: "command",
 						Command:    "printf 'pane-two-ready\n'",
 						Cwd:        t.TempDir(),
@@ -63,6 +65,11 @@ func TestExecuteCreatesIsolatedSession(t *testing.T) {
 	paneCount := tmuxOutput(t, "list-panes", "-t", cfg.Session+":editor", "-F", "#{pane_index}")
 	if len(strings.Fields(strings.TrimSpace(paneCount))) != 2 {
 		t.Fatalf("expected 2 panes, got output %q", paneCount)
+	}
+
+	paneName := strings.TrimSpace(tmuxOutput(t, "display-message", "-p", "-t", cfg.Session+":editor.1", "#{@agentmux_name}"))
+	if paneName != "editor-main" {
+		t.Fatalf("pane metadata name = %q, want %q", paneName, "editor-main")
 	}
 
 	captured := waitForPaneContains(t, cfg.Session+":editor.1", "pane-one-ready")

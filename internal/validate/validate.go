@@ -2,6 +2,7 @@ package validate
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -26,6 +27,8 @@ var allowedLayouts = map[string]struct{}{
 	"grid":            {},
 }
 
+var paneNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
+
 type Issue struct {
 	Severity Severity
 	Message  string
@@ -33,6 +36,7 @@ type Issue struct {
 
 func Document(doc *config.Document, cliParams map[string]string) []Issue {
 	var issues []Issue
+	params := mergedParams(doc.Config.Params, cliParams)
 
 	if doc.Config.Version != 1 {
 		issues = append(issues, errorf("version must exist and equal 1"))
@@ -75,6 +79,7 @@ func Document(doc *config.Document, cliParams map[string]string) []Issue {
 	}
 
 	focusCount := 0
+	paneNames := make(map[string]string)
 	for windowIndex, window := range doc.Config.Layout {
 		if strings.TrimSpace(window.Window) == "" {
 			issues = append(issues, errorf("window %d is missing window name", windowIndex+1))
@@ -99,6 +104,17 @@ func Document(doc *config.Document, cliParams map[string]string) []Issue {
 
 		localTitles := make(map[string]int)
 		for paneIndex, pane := range window.Panes {
+			paneName := resolvedPaneName(pane.Name, params)
+			if paneName != "" {
+				if !paneNamePattern.MatchString(paneName) {
+					issues = append(issues, errorf("pane %d in window %q has invalid name %q; use letters, numbers, dot, dash, or underscore", paneIndex+1, window.Window, paneName))
+				}
+				if existingWindow, ok := paneNames[paneName]; ok {
+					issues = append(issues, errorf("pane name %q is duplicated across windows %q and %q", paneName, existingWindow, window.Window))
+				} else {
+					paneNames[paneName] = window.Window
+				}
+			}
 			if pane.Agent == "" && pane.Command == "" {
 				issues = append(issues, errorf("pane %d in window %q must specify exactly one of agent or command", paneIndex+1, window.Window))
 				continue
@@ -140,7 +156,6 @@ func Document(doc *config.Document, cliParams map[string]string) []Issue {
 		issues = append(issues, warningf("multiple panes request focus; the last created pane will win"))
 	}
 
-	params := mergedParams(doc.Config.Params, cliParams)
 	for _, ref := range collectConfigRefs(&doc.Config) {
 		if _, ok := params[ref]; !ok {
 			issues = append(issues, errorf("missing required param %q", ref))
@@ -210,6 +225,7 @@ func collectConfigRefs(cfg *config.Config) []string {
 			add(value)
 		}
 		for _, pane := range window.Panes {
+			add(pane.Name)
 			add(pane.Agent)
 			add(pane.Command)
 			add(pane.Title)
@@ -239,6 +255,19 @@ func mergedParams(base map[string]string, overrides map[string]string) map[strin
 		out[key] = value
 	}
 	return out
+}
+
+func resolvedPaneName(raw string, params map[string]string) string {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return ""
+	}
+
+	expanded, err := tpl.ExpandString(value, params)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(expanded)
 }
 
 func errorf(format string, args ...any) Issue {

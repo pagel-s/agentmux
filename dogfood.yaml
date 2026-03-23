@@ -21,13 +21,17 @@ layout:
     grid_rows: 2
     grid_columns: 2
     panes:
-      - command: "nvim"
+      - name: editor
+        command: "nvim"
         title: "Editor"
-      - command: "go test ./... -count=1"
+      - name: tests
+        command: "go test ./... -count=1"
         title: "Tests"
-      - command: "git status"
+      - name: git
+        command: "git status"
         title: "Git"
-      - agent: reviewer
+      - name: reviewer
+        agent: reviewer
 
   - window: grid
     root: "{{project_dir}}"
@@ -35,21 +39,30 @@ layout:
     grid_rows: 3
     grid_columns: 3
     panes:
-      - command: "pwd"
+      - name: pwd
+        command: "pwd"
         title: "PWD"
-      - command: "git status --short"
+      - name: status
+        command: "git status --short"
         title: "Status"
-      - command: "git branch --show-current"
+      - name: branch
+        command: "git branch --show-current"
         title: "Branch"
-      - command: "rg --files | head -20"
+      - name: files
+        command: "rg --files | head -20"
         title: "Files"
-      - command: "go test ./internal/resolve -count=1"
+      - name: resolve
+        command: "go test ./internal/resolve -count=1"
         title: "Resolve"
         focus: true
-      - command: "go test ./internal/tmux -count=1"
+      - name: tmux
+        command: "go test ./internal/tmux -count=1"
         title: "Tmux"
-      - command: "go test ./internal/validate -count=1"
+      - name: validate
+        command: "go test ./internal/validate -count=1"
         title: "Validate"
-      - command: "make build"
+      - name: build
+        command: "make build"
         title: "Build"
-      - agent: reviewer
+      - name: review
+        agent: reviewer

@@ -83,10 +83,12 @@ layout:
     env:
       WINDOW_ROLE: "coding"
     panes:
-      - command: "nvim"
+      - name: editor
+        command: "nvim"
         title: "Editor"
         focus: true
-      - agent: coder
+      - name: coder
+        agent: coder
 ```
 
 Resolution rules:
@@ -94,8 +96,9 @@ Resolution rules:
 - params: CLI `--param` overrides config defaults
 - env: pane env > window env > agent env > session env
 - cwd: pane cwd > agent cwd > window root > current working directory
-- title: pane title > agent title > agent name > command-derived fallback
+- title: pane title > agent title > pane name > agent name > command-derived fallback
 - focus: set `focus: true` on the pane you want selected after startup
+- name: optional stable pane ID, unique across the session, for future pane-targeted commands
 
 `render` prints the fully resolved config plus a readable execution plan. `validate --strict` turns warnings such as unknown top-level fields into failures.
 
@@ -124,6 +127,27 @@ layout:
 For exact grids, the pane count must equal `grid_rows * grid_columns`.
 
 Window-level `env` applies to every pane in that window, including panes created from shared agents.
+
+## Pane Names
+
+Use `name` when you want a stable pane identity that is distinct from the visible title.
+
+```yaml
+layout:
+  - window: review
+    panes:
+      - name: editor
+        command: "nvim"
+      - name: reviewer
+        agent: coder
+```
+
+Pane names:
+
+- are optional
+- must be unique across the session
+- may use letters, numbers, dot, dash, and underscore
+- become the default pane title when there is no higher-precedence title already available
 
 ## Examples
 

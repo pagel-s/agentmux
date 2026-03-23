@@ -15,8 +15,9 @@ import (
 )
 
 const (
-	envTmuxBinary = "AGENTMUX_TMUX_BIN"
-	envTmuxSocket = "AGENTMUX_TMUX_SOCKET"
+	envTmuxBinary  = "AGENTMUX_TMUX_BIN"
+	envTmuxSocket  = "AGENTMUX_TMUX_SOCKET"
+	paneNameOption = "@agentmux_name"
 )
 
 var shellEnvRefPattern = regexp.MustCompile(`(^|[^\\])\$(\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)`)
@@ -303,6 +304,11 @@ func splitPane(targetPaneID string, pane resolve.Pane, windowRoot string, vertic
 }
 
 func configurePane(paneID string, pane resolve.Pane, verbose bool) error {
+	if pane.Name != "" {
+		if err := run(verbose, "set-option", "-p", "-t", paneID, paneNameOption, pane.Name); err != nil {
+			return fmt.Errorf("set name for pane %s: %w", paneID, err)
+		}
+	}
 	if pane.Title != "" {
 		if err := run(verbose, "select-pane", "-t", paneID, "-T", pane.Title); err != nil {
 			return fmt.Errorf("set title for pane %s: %w", paneID, err)

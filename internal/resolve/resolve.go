@@ -44,6 +44,7 @@ type Window struct {
 }
 
 type Pane struct {
+	Name       string            `json:"name,omitempty"`
 	SourceType string            `json:"sourceType"`
 	AgentName  string            `json:"agentName,omitempty"`
 	Command    string            `json:"command"`
@@ -201,6 +202,10 @@ func resolveWindow(raw config.Window, agents map[string]Agent, sessionEnv map[st
 }
 
 func resolvePane(raw config.Pane, agents map[string]Agent, sessionEnv map[string]string, windowEnv map[string]string, windowRoot string, params map[string]string) (Pane, error) {
+	name, err := expand(raw.Name, params)
+	if err != nil {
+		return Pane{}, err
+	}
 	agentName, err := expand(raw.Agent, params)
 	if err != nil {
 		return Pane{}, err
@@ -225,6 +230,7 @@ func resolvePane(raw config.Pane, agents map[string]Agent, sessionEnv map[string
 	resolved := Pane{
 		Focus: raw.Focus,
 		Env:   cloneMap(sessionEnv),
+		Name:  name,
 	}
 
 	if agentName != "" {
@@ -236,13 +242,13 @@ func resolvePane(raw config.Pane, agents map[string]Agent, sessionEnv map[string
 		mergeInto(resolved.Env, agent.Env)
 		mergeInto(resolved.Env, windowEnv)
 		resolved.Cwd = firstNonEmpty(cleanPath(cwd), agent.Cwd, windowRoot, mustGetwd())
-		resolved.Title = firstNonEmpty(title, agent.Title, agentName, commandFallback(agent.Command))
+		resolved.Title = firstNonEmpty(title, agent.Title, name, agentName, commandFallback(agent.Command))
 	} else {
 		resolved.SourceType = "command"
 		resolved.Command = command
 		mergeInto(resolved.Env, windowEnv)
 		resolved.Cwd = firstNonEmpty(cleanPath(cwd), windowRoot, mustGetwd())
-		resolved.Title = firstNonEmpty(title, commandFallback(command))
+		resolved.Title = firstNonEmpty(title, name, commandFallback(command))
 	}
 
 	mergeInto(resolved.Env, paneEnv)
