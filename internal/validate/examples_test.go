@@ -13,6 +13,7 @@ func TestExampleConfigsValidate(t *testing.T) {
 	paths := []string{
 		filepath.Join("..", "..", "testdata", "examples", "minimal.yaml"),
 		filepath.Join("..", "..", "testdata", "examples", "ai-dev.yaml"),
+		filepath.Join("..", "..", "testdata", "examples", "on-exit.yaml"),
 		filepath.Join("..", "..", "testdata", "examples", "review-loop.yaml"),
 		filepath.Join("..", "..", "testdata", "examples", "ssh-ops.yaml"),
 	}

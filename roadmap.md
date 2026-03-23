@@ -19,7 +19,7 @@ That means the next milestone should be treated as a workspace-management releas
 Target: `v0.3.0`
 
 - keep dogfooding on real sessions and fix rough edges quickly
-- add configurable pane exit behavior such as `on_exit` or optional auto-restart
+- keep refining configurable pane exit behavior such as `on_exit`
 - improve runtime automation surfaces such as `capture --tail` or `send --no-enter`
 - cut `v0.3.0` once reload and pane lifecycle behavior feel stable in real use
 

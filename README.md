@@ -13,6 +13,7 @@ This repository builds on the v1 foundation with:
 - declarative local YAML configs
 - schema and semantic validation
 - predictable param, env, cwd, and title resolution
+- configurable pane exit behavior with `on_exit`
 - dry-run and render output for inspection
 - tmux session creation with hooks, focus, and replace handling
 - unit, fixture, and tmux integration coverage
@@ -128,6 +129,7 @@ Resolution rules:
 - title: pane title > agent title > pane name > agent name > command-derived fallback
 - focus: set `focus: true` on the pane you want selected after startup
 - name: optional stable pane ID, unique across the session, for pane-targeted runtime commands
+- on_exit: pane on_exit > agent on_exit > `shell`
 
 `render` prints the fully resolved config plus a readable execution plan. `validate --strict` turns warnings such as unknown top-level fields into failures.
 
@@ -156,6 +158,36 @@ layout:
 For exact grids, the pane count must equal `grid_rows * grid_columns`.
 
 Window-level `env` applies to every pane in that window, including panes created from shared agents.
+
+## Pane Exit Behavior
+
+Use `on_exit` when you want a pane to do something other than the default drop-into-shell behavior after its startup command exits.
+
+```yaml
+agents:
+  reviewer:
+    provider: command
+    command: "review"
+    on_exit: restart
+
+layout:
+  - window: review
+    panes:
+      - name: reviewer
+        agent: reviewer
+      - name: diff
+        command: "git diff --stat"
+        on_exit: remain
+```
+
+Supported values:
+
+- `shell`: default. Run the startup command, then land in an interactive shell.
+- `remain`: keep the pane visible after the command exits.
+- `restart`: restart the startup command in place after it exits.
+- `kill`: remove the pane when the command exits.
+
+`on_exit` can be set on agents as a reusable default and overridden per pane.
 
 ## Pane Names
 
@@ -195,6 +227,8 @@ Named panes can now be targeted at runtime:
 
 `restart` and `rerun` both re-execute the pane's stored startup command in place using tmux pane respawn. In the current version, they are intentionally equivalent so the behavior stays predictable for interactive panes.
 
+Named-pane runtime commands preserve the pane's stored `on_exit` behavior, so `restart`, `rerun`, and `status` stay aligned with the original config semantics.
+
 `stop` kills the pane's current process and respawns a fresh interactive shell in place. This is the safe live-control option because it preserves the pane and its layout instead of destroying it.
 
 `kill` is the explicitly destructive option. It removes the target pane from tmux entirely, which can collapse the layout and may remove the window or session if that pane was the last one.
@@ -228,6 +262,7 @@ Canonical examples:
 
 - [testdata/examples/minimal.yaml](testdata/examples/minimal.yaml)
 - [testdata/examples/ai-dev.yaml](testdata/examples/ai-dev.yaml)
+- [testdata/examples/on-exit.yaml](testdata/examples/on-exit.yaml)
 - [testdata/examples/review-loop.yaml](testdata/examples/review-loop.yaml)
 - [testdata/examples/ssh-ops.yaml](testdata/examples/ssh-ops.yaml)
 

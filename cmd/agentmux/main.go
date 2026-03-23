@@ -532,6 +532,9 @@ func renderPlan(resolved resolve.Config, attach bool, replace bool) string {
 				sort.Strings(keys)
 				fmt.Fprintf(&b, " env=%s", strings.Join(keys, ","))
 			}
+			if pane.OnExit != "" {
+				fmt.Fprintf(&b, " on_exit=%s", pane.OnExit)
+			}
 			if pane.Focus {
 				fmt.Fprintf(&b, " focus=true")
 			}
@@ -573,6 +576,9 @@ func renderStatus(session string, panes []tmux.PaneStatus) string {
 		}
 		if pane.AgentName != "" {
 			fmt.Fprintf(&b, " agent=%q", pane.AgentName)
+		}
+		if pane.OnExit != "" {
+			fmt.Fprintf(&b, " on_exit=%q", pane.OnExit)
 		}
 		if pane.CurrentCmd != "" {
 			fmt.Fprintf(&b, " current=%q", pane.CurrentCmd)

@@ -76,6 +76,9 @@ func Document(doc *config.Document, cliParams map[string]string) []Issue {
 		if strings.TrimSpace(agent.Command) == "" {
 			issues = append(issues, errorf("agent %q has an empty command", name))
 		}
+		if onExit := resolvedOnExit(agent.OnExit, params); onExit != "" && !config.IsValidOnExit(onExit) {
+			issues = append(issues, errorf("agent %q has unsupported on_exit %q; use shell, remain, restart, or kill", name, onExit))
+		}
 	}
 
 	focusCount := 0
@@ -129,6 +132,9 @@ func Document(doc *config.Document, cliParams map[string]string) []Issue {
 			}
 			if pane.Command != "" && strings.TrimSpace(pane.Command) == "" {
 				issues = append(issues, errorf("pane %d in window %q has an empty command", paneIndex+1, window.Window))
+			}
+			if onExit := resolvedOnExit(pane.OnExit, params); onExit != "" && !config.IsValidOnExit(onExit) {
+				issues = append(issues, errorf("pane %d in window %q has unsupported on_exit %q; use shell, remain, restart, or kill", paneIndex+1, window.Window, onExit))
 			}
 			if pane.Focus {
 				focusCount++
@@ -213,6 +219,7 @@ func collectConfigRefs(cfg *config.Config) []string {
 		add(agent.Cwd)
 		add(agent.Title)
 		add(agent.Shell)
+		add(agent.OnExit)
 		for _, value := range agent.Env {
 			add(value)
 		}
@@ -230,6 +237,7 @@ func collectConfigRefs(cfg *config.Config) []string {
 			add(pane.Command)
 			add(pane.Title)
 			add(pane.Cwd)
+			add(pane.OnExit)
 			for _, value := range pane.Env {
 				add(value)
 			}
@@ -268,6 +276,19 @@ func resolvedPaneName(raw string, params map[string]string) string {
 		return ""
 	}
 	return strings.TrimSpace(expanded)
+}
+
+func resolvedOnExit(raw string, params map[string]string) string {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return ""
+	}
+
+	expanded, err := tpl.ExpandString(value, params)
+	if err != nil {
+		return ""
+	}
+	return config.NormalizeOnExit(expanded)
 }
 
 func errorf(format string, args ...any) Issue {

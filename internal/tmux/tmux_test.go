@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"agentmux/internal/config"
 	"agentmux/internal/resolve"
 )
 
@@ -17,7 +18,8 @@ func TestBuildPaneCommand(t *testing.T) {
 			"OPENAI_API_KEY": "${OPENAI_API_KEY}",
 			"MODEL":          "gpt-5",
 		},
-		Shell: "/bin/bash",
+		Shell:  "/bin/bash",
+		OnExit: config.OnExitShell,
 	})
 
 	if !strings.Contains(command, "cd '/tmp/project'") {
@@ -34,6 +36,43 @@ func TestBuildPaneCommand(t *testing.T) {
 	}
 	if !strings.Contains(command, `; exec '/bin/bash'`) {
 		t.Fatalf("command missing fallback interactive shell: %q", command)
+	}
+}
+
+func TestBuildPaneCommandRemainOmitsFallbackShell(t *testing.T) {
+	t.Setenv("SHELL", "/bin/bash")
+
+	command := buildPaneCommand(resolve.Pane{
+		Command: "printf 'done\\n'",
+		Cwd:     "/tmp/project",
+		OnExit:  config.OnExitRemain,
+	})
+
+	if strings.Contains(command, "; exec ") {
+		t.Fatalf("remain command should not include fallback shell: %q", command)
+	}
+	if !strings.Contains(command, "printf 'done\\n'") {
+		t.Fatalf("remain command missing original command: %q", command)
+	}
+}
+
+func TestBuildPaneCommandRestartWrapsCommandInLoop(t *testing.T) {
+	t.Setenv("SHELL", "/bin/bash")
+
+	command := buildPaneCommand(resolve.Pane{
+		Command: "printf 'done\\n'",
+		OnExit:  config.OnExitRestart,
+	})
+
+	for _, want := range []string{
+		"while :; do",
+		"restarting in 1s",
+		"sleep 1",
+		"; exec '/bin/bash'",
+	} {
+		if !strings.Contains(command, want) {
+			t.Fatalf("restart command %q does not include %q", command, want)
+		}
 	}
 }
 

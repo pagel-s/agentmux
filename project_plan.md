@@ -64,7 +64,7 @@ The core rule is simple: every new capability should build on tmux and named pan
 ## Immediate Priorities
 
 - keep dogfooding the tool on real sessions
-- add configurable pane exit behavior such as `on_exit` or optional auto-restart
+- refine configurable pane exit behavior such as `on_exit`
 - improve runtime automation surfaces and scriptability
 - tag the next milestone as `v0.3.0`
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Added configurable pane `on_exit` behavior with `shell`, `remain`, `restart`, and `kill`.
+- Preserved `on_exit` as live pane metadata so `status`, `restart`, `rerun`, and `stop` stay aligned with configured pane behavior.
+
 ## v0.2.0 - 2026-03-23
 
 Second private release of Agentmux, focused on live pane-oriented workspace management.

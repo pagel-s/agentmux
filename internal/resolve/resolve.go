@@ -31,6 +31,7 @@ type Agent struct {
 	Env      map[string]string `json:"env,omitempty"`
 	Title    string            `json:"title,omitempty"`
 	Shell    string            `json:"shell,omitempty"`
+	OnExit   string            `json:"onExit"`
 }
 
 type Window struct {
@@ -53,6 +54,7 @@ type Pane struct {
 	Title      string            `json:"title,omitempty"`
 	Focus      bool              `json:"focus,omitempty"`
 	Shell      string            `json:"shell,omitempty"`
+	OnExit     string            `json:"onExit"`
 }
 
 type Hooks struct {
@@ -151,6 +153,10 @@ func resolveAgent(name string, raw config.Agent, params map[string]string) (Agen
 	if err != nil {
 		return Agent{}, err
 	}
+	onExit, err := expand(raw.OnExit, params)
+	if err != nil {
+		return Agent{}, err
+	}
 
 	return Agent{
 		Name:     name,
@@ -160,6 +166,7 @@ func resolveAgent(name string, raw config.Agent, params map[string]string) (Agen
 		Env:      env,
 		Title:    title,
 		Shell:    shell,
+		OnExit:   effectiveOnExit(onExit, config.OnExitShell),
 	}, nil
 }
 
@@ -226,11 +233,16 @@ func resolvePane(raw config.Pane, agents map[string]Agent, sessionEnv map[string
 	if err != nil {
 		return Pane{}, err
 	}
+	onExit, err := expand(raw.OnExit, params)
+	if err != nil {
+		return Pane{}, err
+	}
 
 	resolved := Pane{
-		Focus: raw.Focus,
-		Env:   cloneMap(sessionEnv),
-		Name:  name,
+		Focus:  raw.Focus,
+		Env:    cloneMap(sessionEnv),
+		Name:   name,
+		OnExit: config.OnExitShell,
 	}
 
 	if agentName != "" {
@@ -239,6 +251,7 @@ func resolvePane(raw config.Pane, agents map[string]Agent, sessionEnv map[string
 		resolved.AgentName = agentName
 		resolved.Command = agent.Command
 		resolved.Shell = agent.Shell
+		resolved.OnExit = effectiveOnExit(onExit, agent.OnExit, config.OnExitShell)
 		mergeInto(resolved.Env, agent.Env)
 		mergeInto(resolved.Env, windowEnv)
 		resolved.Cwd = firstNonEmpty(cleanPath(cwd), agent.Cwd, windowRoot, mustGetwd())
@@ -246,6 +259,7 @@ func resolvePane(raw config.Pane, agents map[string]Agent, sessionEnv map[string
 	} else {
 		resolved.SourceType = "command"
 		resolved.Command = command
+		resolved.OnExit = effectiveOnExit(onExit, config.OnExitShell)
 		mergeInto(resolved.Env, windowEnv)
 		resolved.Cwd = firstNonEmpty(cleanPath(cwd), windowRoot, mustGetwd())
 		resolved.Title = firstNonEmpty(title, name, commandFallback(command))
@@ -327,6 +341,15 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func effectiveOnExit(values ...string) string {
+	for _, value := range values {
+		if normalized := config.NormalizeOnExit(value); normalized != "" {
+			return normalized
+		}
+	}
+	return config.OnExitShell
 }
 
 func cleanPath(value string) string {

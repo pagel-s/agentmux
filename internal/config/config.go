@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -40,6 +41,7 @@ type Agent struct {
 	Env      map[string]string `yaml:"env"`
 	Title    string            `yaml:"title"`
 	Shell    string            `yaml:"shell"`
+	OnExit   string            `yaml:"on_exit"`
 }
 
 type Window struct {
@@ -60,6 +62,7 @@ type Pane struct {
 	Cwd     string            `yaml:"cwd"`
 	Env     map[string]string `yaml:"env"`
 	Focus   bool              `yaml:"focus"`
+	OnExit  string            `yaml:"on_exit"`
 }
 
 type Hooks struct {
@@ -72,6 +75,26 @@ type Document struct {
 	Config            Config
 	UnknownTopLevel   []string
 	DuplicateAgentIDs []string
+}
+
+const (
+	OnExitShell   = "shell"
+	OnExitRemain  = "remain"
+	OnExitRestart = "restart"
+	OnExitKill    = "kill"
+)
+
+func NormalizeOnExit(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
+}
+
+func IsValidOnExit(value string) bool {
+	switch NormalizeOnExit(value) {
+	case "", OnExitShell, OnExitRemain, OnExitRestart, OnExitKill:
+		return true
+	default:
+		return false
+	}
 }
 
 func LoadFile(path string) (*Document, error) {

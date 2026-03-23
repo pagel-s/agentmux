@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"agentmux/internal/config"
 	"agentmux/internal/resolve"
 )
 
@@ -21,6 +22,7 @@ const (
 	paneStartupOption = "@agentmux_startup_command"
 	paneSourceOption  = "@agentmux_source_type"
 	paneAgentOption   = "@agentmux_agent_name"
+	paneOnExitOption  = "@agentmux_on_exit"
 )
 
 var shellEnvRefPattern = regexp.MustCompile(`(^|[^\\])\$(\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)`)
@@ -54,6 +56,7 @@ type PaneStatus struct {
 	Title        string `json:"title"`
 	SourceType   string `json:"source_type,omitempty"`
 	AgentName    string `json:"agent_name,omitempty"`
+	OnExit       string `json:"on_exit,omitempty"`
 	CurrentCmd   string `json:"current_command,omitempty"`
 }
 
@@ -62,6 +65,7 @@ type paneMetadata struct {
 	StartupCommand string
 	SourceType     string
 	AgentName      string
+	OnExit         string
 }
 
 func Execute(cfg resolve.Config, opts Options) error {
@@ -155,7 +159,7 @@ func Status(session string) ([]PaneStatus, error) {
 		return nil, err
 	}
 
-	out, err := capture(false, "list-panes", "-t", session, "-F", "#{window_index}\t#{window_name}\t#{window_id}\t#{window_active}\t#{pane_index}\t#{pane_id}\t#{pane_active}\t#{"+paneNameOption+"}\t#{pane_title}\t#{"+paneSourceOption+"}\t#{"+paneAgentOption+"}\t#{pane_current_command}")
+	out, err := capture(false, "list-panes", "-t", session, "-F", "#{window_index}\t#{window_name}\t#{window_id}\t#{window_active}\t#{pane_index}\t#{pane_id}\t#{pane_active}\t#{"+paneNameOption+"}\t#{pane_title}\t#{"+paneSourceOption+"}\t#{"+paneAgentOption+"}\t#{"+paneOnExitOption+"}\t#{pane_current_command}")
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +171,7 @@ func Status(session string) ([]PaneStatus, error) {
 	panes := make([]PaneStatus, 0, len(lines))
 	for _, line := range lines {
 		fields := strings.Split(line, "\t")
-		if len(fields) != 12 {
+		if len(fields) != 13 {
 			return nil, fmt.Errorf("unexpected pane status output %q", line)
 		}
 
@@ -192,7 +196,8 @@ func Status(session string) ([]PaneStatus, error) {
 			Title:        fields[8],
 			SourceType:   fields[9],
 			AgentName:    fields[10],
-			CurrentCmd:   fields[11],
+			OnExit:       fields[11],
+			CurrentCmd:   fields[12],
 		})
 	}
 
@@ -261,6 +266,13 @@ func StopPaneByName(session string, name string, verbose bool) error {
 	if err != nil {
 		return fmt.Errorf("load startup command for pane %q before stop: %w", name, err)
 	}
+	onExit, err := showPaneOption(target.PaneID, paneOnExitOption, verbose)
+	if err != nil {
+		return fmt.Errorf("load on_exit for pane %q before stop: %w", name, err)
+	}
+	if err := applyPaneLifecycle(target.PaneID, onExit, verbose); err != nil {
+		return fmt.Errorf("apply on_exit for pane %q before stop: %w", name, err)
+	}
 	shell := interactiveShell()
 	if err := run(verbose, "respawn-pane", "-k", "-t", target.PaneID, shell); err != nil {
 		return fmt.Errorf("stop pane %q: %w", name, err)
@@ -270,6 +282,7 @@ func StopPaneByName(session string, name string, verbose bool) error {
 		StartupCommand: startupCommand,
 		SourceType:     target.SourceType,
 		AgentName:      target.AgentName,
+		OnExit:         config.NormalizeOnExit(onExit),
 	}, verbose); err != nil {
 		return fmt.Errorf("restore metadata for pane %q after stop: %w", name, err)
 	}
@@ -332,7 +345,7 @@ func createWindow(session string, first bool, window resolve.Window, verbose boo
 	} else if window.Root != "" {
 		args = append(args, "-c", window.Root)
 	}
-	args = append(args, buildPaneCommand(firstPane))
+	args = append(args, paneCreateCommand(firstPane))
 
 	out, err := capture(verbose, args...)
 	if err != nil {
@@ -357,7 +370,7 @@ func createWindow(session string, first bool, window resolve.Window, verbose boo
 		} else if window.Root != "" {
 			args = append(args, "-c", window.Root)
 		}
-		args = append(args, buildPaneCommand(pane))
+		args = append(args, paneCreateCommand(pane))
 
 		out, err := capture(verbose, args...)
 		if err != nil {
@@ -451,7 +464,7 @@ func createFirstPane(session string, first bool, window resolve.Window, pane res
 	} else if window.Root != "" {
 		args = append(args, "-c", window.Root)
 	}
-	args = append(args, buildPaneCommand(pane))
+	args = append(args, paneCreateCommand(pane))
 
 	out, err := capture(verbose, args...)
 	if err != nil {
@@ -473,7 +486,7 @@ func splitPane(targetPaneID string, pane resolve.Pane, windowRoot string, vertic
 	} else if windowRoot != "" {
 		args = append(args, "-c", windowRoot)
 	}
-	args = append(args, buildPaneCommand(pane))
+	args = append(args, paneCreateCommand(pane))
 
 	out, err := capture(verbose, args...)
 	if err != nil {
@@ -483,13 +496,29 @@ func splitPane(targetPaneID string, pane resolve.Pane, windowRoot string, vertic
 }
 
 func configurePane(paneID string, pane resolve.Pane, verbose bool) error {
+	startupCommand := buildPaneCommand(pane)
+	if err := applyPaneLifecycle(paneID, pane.OnExit, verbose); err != nil {
+		return err
+	}
 	if err := applyPaneMetadata(paneID, paneMetadata{
 		Name:           pane.Name,
-		StartupCommand: buildPaneCommand(pane),
+		StartupCommand: startupCommand,
 		SourceType:     pane.SourceType,
 		AgentName:      pane.AgentName,
+		OnExit:         pane.OnExit,
 	}, verbose); err != nil {
 		return err
+	}
+	if needsDeferredStart(pane) && pane.Title != "" {
+		if err := run(verbose, "select-pane", "-t", paneID, "-T", pane.Title); err != nil {
+			return fmt.Errorf("set title for pane %s: %w", paneID, err)
+		}
+	}
+	if needsDeferredStart(pane) {
+		if err := run(verbose, "respawn-pane", "-k", "-t", paneID, startupCommand); err != nil {
+			return fmt.Errorf("start pane %s: %w", paneID, err)
+		}
+		return nil
 	}
 	if pane.Title != "" {
 		if err := run(verbose, "select-pane", "-t", paneID, "-T", pane.Title); err != nil {
@@ -523,9 +552,33 @@ func buildPaneCommand(pane resolve.Pane) string {
 	if pane.Shell != "" {
 		command = singleQuote(pane.Shell) + " -lc " + singleQuote(pane.Command)
 	}
+	switch config.NormalizeOnExit(pane.OnExit) {
+	case config.OnExitRemain, config.OnExitKill:
+		parts = append(parts, command)
+		return strings.Join(parts, " && ")
+	case config.OnExitRestart:
+		script := fmt.Sprintf("while :; do %s; status=$?; printf '\\n[agentmux] command exited with status %%s; restarting in 1s\\n' \"$status\"; sleep 1; done", command)
+		command = singleQuote(interactiveShell()) + " -lc " + singleQuote(script)
+	}
 	parts = append(parts, command)
 
 	return strings.Join(parts, " && ") + "; exec " + singleQuote(interactiveShell())
+}
+
+func paneCreateCommand(pane resolve.Pane) string {
+	if needsDeferredStart(pane) {
+		return "exec sleep 3600"
+	}
+	return buildPaneCommand(pane)
+}
+
+func needsDeferredStart(pane resolve.Pane) bool {
+	switch config.NormalizeOnExit(pane.OnExit) {
+	case config.OnExitRemain, config.OnExitKill:
+		return true
+	default:
+		return false
+	}
 }
 
 func quoteEnvValue(value string) string {
@@ -789,6 +842,13 @@ func respawnPaneByName(session string, name string, verbose bool) error {
 	if strings.TrimSpace(startupCommand) == "" {
 		return fmt.Errorf("pane %q in session %q is missing startup command metadata", name, session)
 	}
+	onExit, err := showPaneOption(target.PaneID, paneOnExitOption, verbose)
+	if err != nil {
+		return fmt.Errorf("load on_exit for pane %q: %w", name, err)
+	}
+	if err := applyPaneLifecycle(target.PaneID, onExit, verbose); err != nil {
+		return fmt.Errorf("apply on_exit for pane %q: %w", name, err)
+	}
 
 	if err := run(verbose, "respawn-pane", "-k", "-t", target.PaneID, startupCommand); err != nil {
 		return fmt.Errorf("respawn pane %q: %w", name, err)
@@ -798,8 +858,20 @@ func respawnPaneByName(session string, name string, verbose bool) error {
 		StartupCommand: startupCommand,
 		SourceType:     target.SourceType,
 		AgentName:      target.AgentName,
+		OnExit:         config.NormalizeOnExit(onExit),
 	}, verbose); err != nil {
 		return fmt.Errorf("restore metadata for pane %q after respawn: %w", name, err)
+	}
+	return nil
+}
+
+func applyPaneLifecycle(paneID string, onExit string, verbose bool) error {
+	remain := "off"
+	if config.NormalizeOnExit(onExit) == config.OnExitRemain {
+		remain = "on"
+	}
+	if err := run(verbose, "set-option", "-p", "-t", paneID, "remain-on-exit", remain); err != nil {
+		return fmt.Errorf("set remain-on-exit for pane %s: %w", paneID, err)
 	}
 	return nil
 }
@@ -823,6 +895,11 @@ func applyPaneMetadata(paneID string, metadata paneMetadata, verbose bool) error
 	if metadata.AgentName != "" {
 		if err := run(verbose, "set-option", "-p", "-t", paneID, paneAgentOption, metadata.AgentName); err != nil {
 			return fmt.Errorf("set agent name for pane %s: %w", paneID, err)
+		}
+	}
+	if metadata.OnExit != "" {
+		if err := run(verbose, "set-option", "-p", "-t", paneID, paneOnExitOption, metadata.OnExit); err != nil {
+			return fmt.Errorf("set on_exit for pane %s: %w", paneID, err)
 		}
 	}
 	return nil

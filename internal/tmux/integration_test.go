@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"agentmux/internal/config"
 	"agentmux/internal/resolve"
 )
 
@@ -198,7 +199,7 @@ func TestStatusAndFocusNamedPanes(t *testing.T) {
 				Name: "main",
 				Panes: []resolve.Pane{
 					{Name: "editor", SourceType: "command", Command: "printf ready", Title: "Editor"},
-					{Name: "checks", SourceType: "agent", AgentName: "reviewer", Command: "printf checks", Title: "Checks"},
+					{Name: "checks", SourceType: "agent", AgentName: "reviewer", Command: "printf checks", Title: "Checks", OnExit: config.OnExitRestart},
 				},
 			},
 		},
@@ -231,6 +232,12 @@ func TestStatusAndFocusNamedPanes(t *testing.T) {
 	if panes[1].AgentName != "reviewer" {
 		t.Fatalf("pane agent name = %q, want %q", panes[1].AgentName, "reviewer")
 	}
+	if panes[0].OnExit != config.OnExitShell {
+		t.Fatalf("pane on_exit = %q, want %q", panes[0].OnExit, config.OnExitShell)
+	}
+	if panes[1].OnExit != config.OnExitRestart {
+		t.Fatalf("pane on_exit = %q, want %q", panes[1].OnExit, config.OnExitRestart)
+	}
 	if panes[0].CurrentCmd == "" || panes[1].CurrentCmd == "" {
 		t.Fatalf("expected current command metadata, got %#v", panes)
 	}
@@ -254,6 +261,175 @@ func TestStatusAndFocusNamedPanes(t *testing.T) {
 		if !strings.Contains(message, "agentmux status agentmux-focus") {
 			t.Fatalf("missing-pane error %q does not include status hint", message)
 		}
+	}
+}
+
+func TestExecuteRemainOnExitKeepsPaneAvailable(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed")
+	}
+
+	socket := filepath.Join(t.TempDir(), "agentmux-remain.sock")
+	t.Setenv(envTmuxSocket, socket)
+
+	cfg := resolve.Config{
+		Session: "agentmux-remain",
+		Windows: []resolve.Window{
+			{
+				Name: "main",
+				Panes: []resolve.Pane{
+					{
+						Name:       "remain",
+						SourceType: "command",
+						Command:    "printf 'remain-done\\n'",
+						Title:      "Remain",
+						OnExit:     config.OnExitRemain,
+					},
+				},
+			},
+		},
+	}
+
+	t.Cleanup(func() {
+		_ = command("kill-server").Run()
+	})
+
+	if err := Execute(cfg, Options{Replace: true}); err != nil {
+		if isTmuxPermissionError(err) {
+			t.Skipf("tmux integration unavailable in this environment: %v", err)
+		}
+		t.Fatalf("Execute returned error: %v", err)
+	}
+
+	if out := waitForPaneContains(t, cfg.Session+":main.1", "remain-done"); !strings.Contains(out, "remain-done") {
+		t.Fatalf("remain output %q does not include remain-done", out)
+	}
+
+	if got := strings.TrimSpace(tmuxOutput(t, "show-options", "-p", "-v", "-t", cfg.Session+":main.1", "remain-on-exit")); got != "on" {
+		t.Fatalf("remain-on-exit = %q, want on", got)
+	}
+
+	panes, err := Status(cfg.Session)
+	if err != nil {
+		t.Fatalf("Status returned error: %v", err)
+	}
+	if len(panes) != 1 || panes[0].Name != "remain" {
+		t.Fatalf("status panes = %#v, want remain pane", panes)
+	}
+	if panes[0].OnExit != config.OnExitRemain {
+		t.Fatalf("pane on_exit = %q, want %q", panes[0].OnExit, config.OnExitRemain)
+	}
+}
+
+func TestExecuteRestartOnExitRestartsCommand(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed")
+	}
+
+	socket := filepath.Join(t.TempDir(), "agentmux-auto-restart.sock")
+	t.Setenv(envTmuxSocket, socket)
+
+	counterFile := filepath.Join(t.TempDir(), "counter.txt")
+	commandText := fmt.Sprintf(
+		"count=$(cat %s 2>/dev/null || echo 0); count=$((count+1)); echo \"$count\" > %s; printf 'auto-run-%%s\\n' \"$count\"",
+		singleQuote(counterFile),
+		singleQuote(counterFile),
+	)
+
+	cfg := resolve.Config{
+		Session: "agentmux-auto-restart",
+		Windows: []resolve.Window{
+			{
+				Name: "main",
+				Panes: []resolve.Pane{
+					{
+						Name:       "runner",
+						SourceType: "command",
+						Command:    commandText,
+						Title:      "Runner",
+						OnExit:     config.OnExitRestart,
+					},
+				},
+			},
+		},
+	}
+
+	t.Cleanup(func() {
+		_ = command("kill-server").Run()
+	})
+
+	if err := Execute(cfg, Options{Replace: true}); err != nil {
+		if isTmuxPermissionError(err) {
+			t.Skipf("tmux integration unavailable in this environment: %v", err)
+		}
+		t.Fatalf("Execute returned error: %v", err)
+	}
+
+	out := waitForPaneContainsWithin(t, cfg.Session+":main.1", "auto-run-2", 4*time.Second)
+	if !strings.Contains(out, "auto-run-2") {
+		t.Fatalf("restart output %q does not include auto-run-2", out)
+	}
+
+	panes, err := Status(cfg.Session)
+	if err != nil {
+		t.Fatalf("Status returned error: %v", err)
+	}
+	if len(panes) != 1 || panes[0].OnExit != config.OnExitRestart {
+		t.Fatalf("status panes = %#v, want restart pane", panes)
+	}
+}
+
+func TestExecuteKillOnExitRemovesPaneAfterCommandExit(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed")
+	}
+
+	socket := filepath.Join(t.TempDir(), "agentmux-auto-kill.sock")
+	t.Setenv(envTmuxSocket, socket)
+
+	cfg := resolve.Config{
+		Session: "agentmux-auto-kill",
+		Windows: []resolve.Window{
+			{
+				Name: "main",
+				Panes: []resolve.Pane{
+					{
+						Name:       "keep",
+						SourceType: "command",
+						Command:    "printf 'keep\\n'; exec $SHELL",
+						Title:      "Keep",
+					},
+					{
+						Name:       "drop",
+						SourceType: "command",
+						Command:    "printf 'drop\\n'",
+						Title:      "Drop",
+						OnExit:     config.OnExitKill,
+					},
+				},
+			},
+		},
+	}
+
+	t.Cleanup(func() {
+		_ = command("kill-server").Run()
+	})
+
+	if err := Execute(cfg, Options{Replace: true}); err != nil {
+		if isTmuxPermissionError(err) {
+			t.Skipf("tmux integration unavailable in this environment: %v", err)
+		}
+		t.Fatalf("Execute returned error: %v", err)
+	}
+
+	waitForPaneCount(t, cfg.Session, 1, 3*time.Second)
+
+	panes, err := Status(cfg.Session)
+	if err != nil {
+		t.Fatalf("Status returned error: %v", err)
+	}
+	if len(panes) != 1 || panes[0].Name != "keep" {
+		t.Fatalf("status panes = %#v, want only keep pane", panes)
 	}
 }
 
@@ -725,7 +901,13 @@ func tmuxOutput(t *testing.T, args ...string) string {
 func waitForPaneContains(t *testing.T, target string, want string) string {
 	t.Helper()
 
-	deadline := time.Now().Add(2 * time.Second)
+	return waitForPaneContainsWithin(t, target, want, 2*time.Second)
+}
+
+func waitForPaneContainsWithin(t *testing.T, target string, want string, timeout time.Duration) string {
+	t.Helper()
+
+	deadline := time.Now().Add(timeout)
 	last := ""
 	for time.Now().Before(deadline) {
 		last = tmuxOutput(t, "capture-pane", "-J", "-pt", target)
@@ -736,6 +918,29 @@ func waitForPaneContains(t *testing.T, target string, want string) string {
 	}
 
 	return last
+}
+
+func waitForPaneCount(t *testing.T, session string, want int, timeout time.Duration) {
+	t.Helper()
+
+	deadline := time.Now().Add(timeout)
+	lastCount := -1
+	for time.Now().Before(deadline) {
+		panes, err := Status(session)
+		if err != nil {
+			if isTmuxPermissionError(err) {
+				t.Skipf("tmux integration unavailable in this environment: %v", err)
+			}
+			t.Fatalf("Status returned error: %v", err)
+		}
+		lastCount = len(panes)
+		if lastCount == want {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	t.Fatalf("pane count = %d, want %d", lastCount, want)
 }
 
 func waitForCaptureContains(t *testing.T, session string, paneName string, want string) string {

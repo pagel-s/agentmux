@@ -195,6 +195,9 @@ func TestProjectHandlesPaneEnvWithoutSessionEnv(t *testing.T) {
 	if got := resolved.Windows[0].Panes[0].Env["DEBUG"]; got != "1" {
 		t.Fatalf("pane env DEBUG = %q, want %q", got, "1")
 	}
+	if got := resolved.Windows[0].Panes[0].OnExit; got != config.OnExitShell {
+		t.Fatalf("pane on_exit = %q, want %q", got, config.OnExitShell)
+	}
 }
 
 func TestProjectResolvesRelativeCwdAgainstLaunchDirectory(t *testing.T) {
@@ -244,5 +247,55 @@ func TestProjectResolvesRelativeCwdAgainstLaunchDirectory(t *testing.T) {
 	}
 	if got := resolved.Windows[0].Panes[0].Cwd; got != tempDir {
 		t.Fatalf("pane cwd = %q, want %q", got, tempDir)
+	}
+}
+
+func TestProjectResolvesOnExitPrecedence(t *testing.T) {
+	cfg := &config.Config{
+		Version: 1,
+		Session: "demo",
+		Agents: map[string]config.Agent{
+			"reviewer": {
+				Provider: "command",
+				Command:  "review",
+				OnExit:   "restart",
+			},
+		},
+		Layout: []config.Window{
+			{
+				Window: "main",
+				Panes: []config.Pane{
+					{
+						Name:  "agent-default",
+						Agent: "reviewer",
+					},
+					{
+						Name:   "pane-override",
+						Agent:  "reviewer",
+						OnExit: "remain",
+					},
+					{
+						Name:    "command-default",
+						Command: "pwd",
+					},
+				},
+			},
+		},
+	}
+
+	resolved, err := Project(cfg, nil)
+	if err != nil {
+		t.Fatalf("Project returned error: %v", err)
+	}
+
+	panes := resolved.Windows[0].Panes
+	if got := panes[0].OnExit; got != config.OnExitRestart {
+		t.Fatalf("agent-default on_exit = %q, want %q", got, config.OnExitRestart)
+	}
+	if got := panes[1].OnExit; got != config.OnExitRemain {
+		t.Fatalf("pane-override on_exit = %q, want %q", got, config.OnExitRemain)
+	}
+	if got := panes[2].OnExit; got != config.OnExitShell {
+		t.Fatalf("command-default on_exit = %q, want %q", got, config.OnExitShell)
 	}
 }

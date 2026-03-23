@@ -233,3 +233,41 @@ func TestDocumentAcceptsTemplatedPaneNameWithResolvedSlug(t *testing.T) {
 		}
 	}
 }
+
+func TestDocumentRejectsInvalidOnExit(t *testing.T) {
+	doc := &config.Document{
+		Config: config.Config{
+			Version: 1,
+			Session: "demo",
+			Agents: map[string]config.Agent{
+				"reviewer": {
+					Provider: "command",
+					Command:  "review",
+					OnExit:   "explode",
+				},
+			},
+			Layout: []config.Window{
+				{
+					Window: "main",
+					Panes: []config.Pane{
+						{Command: "pwd", OnExit: "linger"},
+					},
+				},
+			},
+		},
+	}
+
+	issues := Document(doc, nil)
+
+	got := map[string]bool{}
+	for _, issue := range issues {
+		got[issue.Message] = true
+	}
+
+	if !got[`agent "reviewer" has unsupported on_exit "explode"; use shell, remain, restart, or kill`] {
+		t.Fatalf("issues missing invalid agent on_exit error: %v", issues)
+	}
+	if !got[`pane 1 in window "main" has unsupported on_exit "linger"; use shell, remain, restart, or kill`] {
+		t.Fatalf("issues missing invalid pane on_exit error: %v", issues)
+	}
+}

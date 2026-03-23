@@ -43,6 +43,7 @@ func TestRenderStatusJSON(t *testing.T) {
 			Title:        "Resolve",
 			SourceType:   "agent",
 			AgentName:    "reviewer",
+			OnExit:       "restart",
 			CurrentCmd:   "bash",
 		},
 	})
@@ -66,8 +67,8 @@ func TestRenderStatusJSON(t *testing.T) {
 	if len(decoded.Panes) != 1 || decoded.Panes[0].Name != "resolve" {
 		t.Fatalf("decoded panes = %#v, want resolve pane", decoded.Panes)
 	}
-	if decoded.Panes[0].SourceType != "agent" || decoded.Panes[0].AgentName != "reviewer" || decoded.Panes[0].CurrentCmd != "bash" {
-		t.Fatalf("decoded pane metadata = %#v, want agent reviewer bash", decoded.Panes[0])
+	if decoded.Panes[0].SourceType != "agent" || decoded.Panes[0].AgentName != "reviewer" || decoded.Panes[0].OnExit != "restart" || decoded.Panes[0].CurrentCmd != "bash" {
+		t.Fatalf("decoded pane metadata = %#v, want agent reviewer restart bash", decoded.Panes[0])
 	}
 }
 
@@ -104,6 +105,7 @@ func TestRenderStatusIncludesRuntimeMetadata(t *testing.T) {
 			Title:       "Resolve",
 			SourceType:  "agent",
 			AgentName:   "reviewer",
+			OnExit:      "restart",
 			CurrentCmd:  "bash",
 			PaneActive:  true,
 		},
@@ -113,6 +115,7 @@ func TestRenderStatusIncludesRuntimeMetadata(t *testing.T) {
 		`name="resolve"`,
 		`source=agent`,
 		`agent="reviewer"`,
+		`on_exit="restart"`,
 		`current="bash"`,
 		`active=true`,
 	} {
