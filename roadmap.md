@@ -16,12 +16,13 @@ That means the next milestone should be treated as a workspace-management releas
 
 ## Immediate
 
-Target: `v0.3.0`
+Target: `v0.4.0`
 
 - keep dogfooding on real sessions and fix rough edges quickly
-- keep refining configurable pane exit behavior such as `on_exit`
 - improve runtime automation surfaces such as `capture --tail` or `send --no-enter`
-- cut `v0.3.0` once reload and pane lifecycle behavior feel stable in real use
+- improve machine-friendly runtime output and documented JSON contracts
+- consider small lifecycle refinements only when real use shows a gap
+- cut `v0.4.0` once runtime automation and lifecycle behavior feel stable in real use
 
 ## Mid-Term
 

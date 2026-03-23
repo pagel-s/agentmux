@@ -88,6 +88,16 @@ export PATH="$PWD/bin:$PATH"
 
 `reload` recreates an existing session from config using replace semantics. It is the workflow command for applying config changes onto a live session, and it fails if the session does not exist yet.
 
+Typical edit loop:
+
+```bash
+./bin/agentmux load dogfood.yaml --replace --no-attach
+./bin/agentmux status dogfood
+# edit config
+./bin/agentmux reload dogfood.yaml --no-attach
+./bin/agentmux status dogfood --json
+```
+
 ## Config Shape
 
 ```yaml
@@ -225,6 +235,8 @@ Named panes can now be targeted at runtime:
 ./bin/agentmux send dogfood review "git status --short"
 ```
 
+These runtime commands are session-wide. Pane lookup works across all windows in the target session, not just the currently active window.
+
 `restart` and `rerun` both re-execute the pane's stored startup command in place using tmux pane respawn. In the current version, they are intentionally equivalent so the behavior stays predictable for interactive panes.
 
 Named-pane runtime commands preserve the pane's stored `on_exit` behavior, so `restart`, `rerun`, and `status` stay aligned with the original config semantics.
@@ -239,7 +251,7 @@ Named-pane runtime commands preserve the pane's stored `on_exit` behavior, so `r
 
 `status --json` and `capture --json` expose machine-friendly output for scripting and automation while preserving the existing human-readable defaults.
 
-`status` now also surfaces the pane source, agent name when relevant, and tmux's current foreground command so running sessions are easier to inspect.
+`status` now also surfaces the pane source, agent name when relevant, configured `on_exit`, and tmux's current foreground command so running sessions are easier to inspect.
 
 ## Runtime Troubleshooting
 

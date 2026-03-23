@@ -1,9 +1,14 @@
 # Changelog
 
-## Unreleased
+## v0.3.0 - 2026-03-23
 
+Third private release of Agentmux, focused on session reload and richer pane lifecycle behavior.
+
+- Added `reload` as the workflow command for recreating an existing session from config, with guards against self-replacing the current tmux session.
 - Added configurable pane `on_exit` behavior with `shell`, `remain`, `restart`, and `kill`.
 - Preserved `on_exit` as live pane metadata so `status`, `restart`, `rerun`, and `stop` stay aligned with configured pane behavior.
+- Fixed live `status` and named-pane lookup so runtime commands operate across all windows in a session instead of only the active window.
+- Added an `on-exit` example config and expanded runtime coverage around multi-window sessions and pane lifecycle behavior.
 
 ## v0.2.0 - 2026-03-23
 
