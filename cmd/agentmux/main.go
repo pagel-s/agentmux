@@ -1,0 +1,340 @@
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"os/exec"
+	"sort"
+	"strings"
+
+	"agentmux/internal/cli"
+	"agentmux/internal/config"
+	"agentmux/internal/hooks"
+	"agentmux/internal/resolve"
+	"agentmux/internal/tmux"
+	"agentmux/internal/validate"
+)
+
+const (
+	exitSuccess     = 0
+	exitRuntime     = 1
+	exitValidation  = 2
+	exitConfigParse = 3
+	exitDependency  = 4
+)
+
+var version = "dev"
+
+func main() {
+	os.Exit(run(os.Args[1:]))
+}
+
+func run(args []string) int {
+	if len(args) == 0 {
+		printUsage()
+		return exitValidation
+	}
+
+	switch args[0] {
+	case "load":
+		return runLoad(args[1:])
+	case "validate":
+		return runValidate(args[1:])
+	case "render":
+		return runRender(args[1:])
+	case "list":
+		return runList(args[1:])
+	case "doctor":
+		return runDoctor(args[1:])
+	case "version", "-v", "--version":
+		fmt.Println(versionString())
+		return exitSuccess
+	case "help", "-h", "--help":
+		printUsage()
+		return exitSuccess
+	default:
+		fmt.Fprintf(os.Stderr, "error: unknown command %q\n\n", args[0])
+		printUsage()
+		return exitValidation
+	}
+}
+
+func runLoad(args []string) int {
+	opts, err := cli.ParseLoad(args)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return exitValidation
+	}
+
+	resolved, warnings, code := resolveCommand(opts.CommonOptions)
+	if code != exitSuccess {
+		return code
+	}
+	printWarnings(warnings)
+
+	if opts.DryRun {
+		fmt.Print(renderPlan(*resolved, opts.Attach, opts.Replace))
+		return exitSuccess
+	}
+
+	if err := requireTMux(); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return exitDependency
+	}
+
+	if err := hooks.RunPre(resolved.Hooks.PreSession, opts.Verbose); err != nil {
+		fmt.Fprintf(os.Stderr, "error: pre_session hook failed: %v\n", err)
+		return exitRuntime
+	}
+
+	if err := tmux.Execute(*resolved, tmux.Options{
+		Attach:  opts.Attach,
+		Replace: opts.Replace,
+		Verbose: opts.Verbose,
+	}); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return exitRuntime
+	}
+
+	if err := hooks.RunPost(resolved.Hooks.PostSession, opts.Verbose); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: post_session hook failed: %v\n", err)
+	}
+
+	return exitSuccess
+}
+
+func runValidate(args []string) int {
+	opts, err := cli.ParseValidate(args)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return exitValidation
+	}
+
+	_, warnings, code := resolveCommand(opts)
+	if code != exitSuccess {
+		return code
+	}
+	printWarnings(warnings)
+	fmt.Println("config is valid")
+	return exitSuccess
+}
+
+func runRender(args []string) int {
+	opts, err := cli.ParseRender(args)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return exitValidation
+	}
+
+	resolved, warnings, code := resolveCommand(opts)
+	if code != exitSuccess {
+		return code
+	}
+	printWarnings(warnings)
+
+	out, err := json.MarshalIndent(resolved, "", "  ")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: render failed: %v\n", err)
+		return exitRuntime
+	}
+
+	fmt.Println(string(out))
+	fmt.Println()
+	fmt.Print(renderPlan(*resolved, false, false))
+	return exitSuccess
+}
+
+func runList(args []string) int {
+	if len(args) != 0 {
+		fmt.Fprintln(os.Stderr, "error: list does not accept arguments")
+		return exitValidation
+	}
+
+	sessions, err := tmux.ListSessions()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return exitRuntime
+	}
+
+	for _, session := range sessions {
+		fmt.Println(session)
+	}
+
+	return exitSuccess
+}
+
+func runDoctor(args []string) int {
+	if len(args) != 0 {
+		fmt.Fprintln(os.Stderr, "error: doctor does not accept arguments")
+		return exitValidation
+	}
+
+	shell := os.Getenv("SHELL")
+	if shell == "" {
+		shell = "/bin/sh"
+	}
+
+	tmuxVersion := "not found"
+	tmuxErr := error(nil)
+	if path, err := exec.LookPath(tmux.Binary()); err == nil {
+		tmuxVersion = path
+		cmd := exec.Command(tmux.Binary(), "-V")
+		out, err := cmd.Output()
+		if err == nil {
+			tmuxVersion = strings.TrimSpace(string(out))
+		} else {
+			tmuxErr = err
+		}
+	} else {
+		tmuxErr = err
+	}
+
+	fmt.Printf("shell: %s\n", shell)
+	fmt.Printf("agentmux: %s\n", versionString())
+	fmt.Printf("tmux_binary: %s\n", tmux.Binary())
+	if tmux.Socket() != "" {
+		fmt.Printf("tmux_socket: %s\n", tmux.Socket())
+	}
+	fmt.Printf("tmux: %s\n", tmuxVersion)
+	if tmuxErr != nil {
+		fmt.Printf("tmux_status: %v\n", tmuxErr)
+		return exitDependency
+	}
+	fmt.Printf("cwd: %s\n", mustGetwd())
+
+	return exitSuccess
+}
+
+func resolveCommand(opts cli.CommonOptions) (*resolve.Config, []validate.Issue, int) {
+	doc, err := config.LoadFile(opts.ConfigPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return nil, nil, exitConfigParse
+	}
+
+	issues := validate.Document(doc, opts.Params)
+	printErrors(issues)
+
+	if validate.HasErrors(issues) {
+		printWarnings(issues)
+		return nil, issues, exitValidation
+	}
+	if opts.Strict && validate.HasWarnings(issues) {
+		printWarnings(issues)
+		if opts.Strict && validate.HasWarnings(issues) && !validate.HasErrors(issues) {
+			fmt.Fprintln(os.Stderr, "error: strict mode enabled; warnings treated as errors")
+		}
+		return nil, issues, exitValidation
+	}
+
+	resolved, err := resolve.Project(&doc.Config, opts.Params)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return nil, issues, exitValidation
+	}
+
+	return resolved, issues, exitSuccess
+}
+
+func printErrors(issues []validate.Issue) {
+	for _, issue := range issues {
+		if issue.Severity == validate.SeverityError {
+			fmt.Fprintf(os.Stderr, "error: %s\n", issue.Message)
+		}
+	}
+}
+
+func printWarnings(issues []validate.Issue) {
+	for _, issue := range issues {
+		if issue.Severity == validate.SeverityWarning {
+			fmt.Fprintf(os.Stderr, "warning: %s\n", issue.Message)
+		}
+	}
+}
+
+func renderPlan(resolved resolve.Config, attach bool, replace bool) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "plan:\n")
+	fmt.Fprintf(&b, "  session: %s\n", resolved.Session)
+	if replace {
+		fmt.Fprintf(&b, "  replace_existing: true\n")
+	}
+	if resolved.Hooks.PreSession != "" {
+		fmt.Fprintf(&b, "  pre_session: %s\n", resolved.Hooks.PreSession)
+	}
+	for _, window := range resolved.Windows {
+		fmt.Fprintf(&b, "  window %s", window.Name)
+		if window.Root != "" {
+			fmt.Fprintf(&b, " (root=%s)", window.Root)
+		}
+		if window.Layout != "" {
+			fmt.Fprintf(&b, " layout=%s", window.Layout)
+			if window.Layout == "grid" && window.GridRows > 0 && window.GridColumns > 0 {
+				fmt.Fprintf(&b, " %dx%d", window.GridRows, window.GridColumns)
+			}
+		}
+		fmt.Fprintln(&b)
+
+		for idx, pane := range window.Panes {
+			fmt.Fprintf(&b, "    pane %d: %s", idx+1, pane.SourceType)
+			if pane.AgentName != "" {
+				fmt.Fprintf(&b, "=%s", pane.AgentName)
+			}
+			fmt.Fprintf(&b, " title=%q", pane.Title)
+			if pane.Cwd != "" {
+				fmt.Fprintf(&b, " cwd=%s", pane.Cwd)
+			}
+			if len(pane.Env) > 0 {
+				keys := make([]string, 0, len(pane.Env))
+				for key := range pane.Env {
+					keys = append(keys, key)
+				}
+				sort.Strings(keys)
+				fmt.Fprintf(&b, " env=%s", strings.Join(keys, ","))
+			}
+			if pane.Focus {
+				fmt.Fprintf(&b, " focus=true")
+			}
+			fmt.Fprintf(&b, "\n      command: %s\n", pane.Command)
+		}
+	}
+	if resolved.Hooks.PostSession != "" {
+		fmt.Fprintf(&b, "  post_session: %s\n", resolved.Hooks.PostSession)
+	}
+	if attach {
+		fmt.Fprintf(&b, "  attach: true\n")
+	}
+	return b.String()
+}
+
+func versionString() string {
+	return fmt.Sprintf("agentmux %s", version)
+}
+
+func requireTMux() error {
+	if _, err := exec.LookPath(tmux.Binary()); err != nil {
+		return fmt.Errorf("%s is not installed or not in PATH", tmux.Binary())
+	}
+	return nil
+}
+
+func mustGetwd() string {
+	wd, err := os.Getwd()
+	if err != nil {
+		return "."
+	}
+	return wd
+}
+
+func printUsage() {
+	fmt.Println(`agentmux
+
+Usage:
+  agentmux load <config> [--param key=value] [--attach|--no-attach] [--dry-run] [--replace] [--strict] [--verbose]
+  agentmux validate <config> [--param key=value] [--strict]
+  agentmux render <config> [--param key=value] [--strict]
+  agentmux list
+  agentmux doctor
+  agentmux version`)
+}

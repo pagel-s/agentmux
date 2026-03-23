@@ -23,7 +23,6 @@ layout:
     panes:
       - command: "nvim"
         title: "Editor"
-        focus: true
       - command: "go test ./... -count=1"
         title: "Tests"
       - command: "git status"
@@ -46,6 +45,7 @@ layout:
         title: "Files"
       - command: "go test ./internal/resolve -count=1"
         title: "Resolve"
+        focus: true
       - command: "go test ./internal/tmux -count=1"
         title: "Tmux"
       - command: "go test ./internal/validate -count=1"

@@ -1,5 +1,8 @@
-agentmux
+/agentmux
 bin/
+.cache/
+.tools/
+.vscode/
 *.test
 *.out
 coverage.txt

@@ -31,19 +31,29 @@ Out of scope for v1:
 
 ## Build And Run
 
+Agentmux targets Go 1.21 or newer. If a repo-local toolchain exists under `.tools/`, the `Makefile` uses it automatically.
+
 ```bash
 make build
+./bin/agentmux version
 ./bin/agentmux doctor
+```
+
+If you want to call `agentmux` directly in the current shell:
+
+```bash
+export PATH="$PWD/bin:$PATH"
 ```
 
 ## Commands
 
 ```bash
-agentmux load <config> [--param key=value] [--attach|--no-attach] [--dry-run] [--replace]
-agentmux validate <config> [--param key=value]
-agentmux render <config> [--param key=value]
-agentmux list
-agentmux doctor
+./bin/agentmux load <config> [--param key=value] [--attach|--no-attach] [--dry-run] [--replace]
+./bin/agentmux validate <config> [--param key=value]
+./bin/agentmux render <config> [--param key=value]
+./bin/agentmux list
+./bin/agentmux doctor
+./bin/agentmux version
 ```
 
 `load` attaches by default unless you pass `--no-attach` or `--dry-run`.
@@ -83,8 +93,33 @@ Resolution rules:
 - env: pane env > agent env > session env
 - cwd: pane cwd > agent cwd > window root > current working directory
 - title: pane title > agent title > agent name > command-derived fallback
+- focus: set `focus: true` on the pane you want selected after startup
 
 `render` prints the fully resolved config plus a readable execution plan. `validate --strict` turns warnings such as unknown top-level fields into failures.
+
+## Exact Grids
+
+Use `layout: grid` with `grid_rows` and `grid_columns` when you want an exact pane matrix instead of tmux's best-effort presets.
+
+```yaml
+layout:
+  - window: workspace
+    root: "{{project_dir}}"
+    layout: grid
+    grid_rows: 2
+    grid_columns: 2
+    panes:
+      - command: "nvim"
+        title: "Editor"
+      - command: "go test ./... -count=1"
+        title: "Tests"
+      - command: "git status"
+        title: "Git"
+      - agent: coder
+        focus: true
+```
+
+For exact grids, the pane count must equal `grid_rows * grid_columns`.
 
 ## Examples
 
