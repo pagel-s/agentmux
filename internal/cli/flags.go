@@ -27,6 +27,12 @@ type PaneTargetOptions struct {
 	Pane    string
 }
 
+type SendOptions struct {
+	Session string
+	Pane    string
+	Command string
+}
+
 type paramFlags struct {
 	values map[string]string
 }
@@ -140,6 +146,23 @@ func ParseRerun(args []string) (PaneTargetOptions, error) {
 	return PaneTargetOptions{
 		Session: args[0],
 		Pane:    args[1],
+	}, nil
+}
+
+func ParseSend(args []string) (SendOptions, error) {
+	if len(args) < 3 {
+		return SendOptions{}, errors.New("send requires a session name, pane name, and command")
+	}
+
+	command := strings.TrimSpace(strings.Join(args[2:], " "))
+	if command == "" {
+		return SendOptions{}, errors.New("send requires a non-empty command")
+	}
+
+	return SendOptions{
+		Session: args[0],
+		Pane:    args[1],
+		Command: command,
 	}, nil
 }
 

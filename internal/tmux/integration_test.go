@@ -306,6 +306,56 @@ func TestRestartAndRerunNamedPane(t *testing.T) {
 	}
 }
 
+func TestSendCommandToNamedPane(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed")
+	}
+
+	socket := filepath.Join(t.TempDir(), "agentmux-send.sock")
+	t.Setenv(envTmuxSocket, socket)
+
+	cfg := resolve.Config{
+		Session: "agentmux-send",
+		Windows: []resolve.Window{
+			{
+				Name: "main",
+				Panes: []resolve.Pane{
+					{
+						Name:       "runner",
+						SourceType: "command",
+						Command:    "printf 'ready\\n'",
+						Title:      "Runner",
+					},
+				},
+			},
+		},
+	}
+
+	t.Cleanup(func() {
+		_ = command("kill-server").Run()
+	})
+
+	if err := Execute(cfg, Options{Replace: true}); err != nil {
+		if isTmuxPermissionError(err) {
+			t.Skipf("tmux integration unavailable in this environment: %v", err)
+		}
+		t.Fatalf("Execute returned error: %v", err)
+	}
+
+	if out := waitForPaneContains(t, cfg.Session+":main.1", "ready"); !strings.Contains(out, "ready") {
+		t.Fatalf("initial output %q does not include ready", out)
+	}
+
+	if err := SendCommandToPaneByName(cfg.Session, "runner", "printf 'sent-from-test\\n'", false); err != nil {
+		t.Fatalf("SendCommandToPaneByName returned error: %v", err)
+	}
+
+	sent := waitForPaneContains(t, cfg.Session+":main.1", "sent-from-test")
+	if !strings.Contains(sent, "sent-from-test") {
+		t.Fatalf("sent output %q does not include sent-from-test", sent)
+	}
+}
+
 func tmuxOutput(t *testing.T, args ...string) string {
 	t.Helper()
 

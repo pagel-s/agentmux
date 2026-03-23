@@ -210,6 +210,25 @@ func RerunPaneByName(session string, name string, verbose bool) error {
 	return respawnPaneByName(session, name, verbose)
 }
 
+func SendCommandToPaneByName(session string, name string, commandText string, verbose bool) error {
+	target, err := findPaneByName(session, name)
+	if err != nil {
+		return err
+	}
+
+	if strings.TrimSpace(commandText) == "" {
+		return fmt.Errorf("cannot send an empty command to pane %q", name)
+	}
+
+	if err := run(verbose, "send-keys", "-t", target.PaneID, "-l", commandText); err != nil {
+		return fmt.Errorf("send command to pane %q: %w", name, err)
+	}
+	if err := run(verbose, "send-keys", "-t", target.PaneID, "Enter"); err != nil {
+		return fmt.Errorf("send enter to pane %q: %w", name, err)
+	}
+	return nil
+}
+
 func SessionExists(name string) (bool, error) {
 	cmd := command("has-session", "-t", name)
 	if err := cmd.Run(); err != nil {

@@ -97,3 +97,23 @@ func TestParseRerunRequiresSessionAndPaneName(t *testing.T) {
 		t.Fatal("ParseRerun returned nil error for missing pane name")
 	}
 }
+
+func TestParseSendRequiresSessionPaneAndCommand(t *testing.T) {
+	opts, err := ParseSend([]string{"dogfood", "resolve", "go", "test", "./..."})
+	if err != nil {
+		t.Fatalf("ParseSend returned error: %v", err)
+	}
+	if opts.Session != "dogfood" {
+		t.Fatalf("Session = %q, want %q", opts.Session, "dogfood")
+	}
+	if opts.Pane != "resolve" {
+		t.Fatalf("Pane = %q, want %q", opts.Pane, "resolve")
+	}
+	if opts.Command != "go test ./..." {
+		t.Fatalf("Command = %q, want %q", opts.Command, "go test ./...")
+	}
+
+	if _, err := ParseSend([]string{"dogfood", "resolve"}); err == nil {
+		t.Fatal("ParseSend returned nil error for missing command")
+	}
+}

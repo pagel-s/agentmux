@@ -56,6 +56,7 @@ export PATH="$PWD/bin:$PATH"
 ./bin/agentmux focus <session> <pane-name>
 ./bin/agentmux restart <session> <pane-name>
 ./bin/agentmux rerun <session> <pane-name>
+./bin/agentmux send <session> <pane-name> <command...>
 ./bin/agentmux doctor
 ./bin/agentmux version
 ```
@@ -160,9 +161,12 @@ Named panes can now be targeted at runtime:
 ./bin/agentmux focus dogfood resolve
 ./bin/agentmux restart dogfood resolve
 ./bin/agentmux rerun dogfood resolve
+./bin/agentmux send dogfood review "git status --short"
 ```
 
 `restart` and `rerun` both re-execute the pane's stored startup command in place using tmux pane respawn. In the current version, they are intentionally equivalent so the behavior stays predictable for interactive panes.
+
+`send` writes a literal command into the target pane and presses Enter, which makes named panes usable as live workflow endpoints after startup.
 
 ## Examples
 
