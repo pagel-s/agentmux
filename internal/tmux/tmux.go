@@ -256,6 +256,19 @@ func StopPaneByName(session string, name string, verbose bool) error {
 	return nil
 }
 
+func CapturePaneByName(session string, name string, verbose bool) (string, error) {
+	target, err := findPaneByName(session, name)
+	if err != nil {
+		return "", err
+	}
+
+	out, err := captureRaw(verbose, "capture-pane", "-J", "-p", "-t", target.PaneID)
+	if err != nil {
+		return "", fmt.Errorf("capture pane %q: %w", name, err)
+	}
+	return out, nil
+}
+
 func SessionExists(name string) (bool, error) {
 	cmd := command("has-session", "-t", name)
 	if err := cmd.Run(); err != nil {
@@ -545,6 +558,24 @@ func capture(verbose bool, args ...string) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(stdout.String()), nil
+}
+
+func captureRaw(verbose bool, args ...string) (string, error) {
+	cmd := command(args...)
+	if verbose {
+		fmt.Fprintf(os.Stderr, "tmux %s\n", strings.Join(args, " "))
+	}
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		if stderr.Len() > 0 {
+			return "", fmt.Errorf("%s", strings.TrimSpace(stderr.String()))
+		}
+		return "", err
+	}
+	return stdout.String(), nil
 }
 
 func listPaneGeometry(target string, verbose bool) ([]paneGeometry, error) {

@@ -356,6 +356,52 @@ func TestSendCommandToNamedPane(t *testing.T) {
 	}
 }
 
+func TestCaptureNamedPane(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed")
+	}
+
+	socket := filepath.Join(t.TempDir(), "agentmux-capture.sock")
+	t.Setenv(envTmuxSocket, socket)
+
+	cfg := resolve.Config{
+		Session: "agentmux-capture",
+		Windows: []resolve.Window{
+			{
+				Name: "main",
+				Panes: []resolve.Pane{
+					{
+						Name:       "runner",
+						SourceType: "command",
+						Command:    "printf 'ready\\n'",
+						Title:      "Runner",
+					},
+				},
+			},
+		},
+	}
+
+	t.Cleanup(func() {
+		_ = command("kill-server").Run()
+	})
+
+	if err := Execute(cfg, Options{Replace: true}); err != nil {
+		if isTmuxPermissionError(err) {
+			t.Skipf("tmux integration unavailable in this environment: %v", err)
+		}
+		t.Fatalf("Execute returned error: %v", err)
+	}
+
+	if err := SendCommandToPaneByName(cfg.Session, "runner", "printf 'captured-from-test\\n'", false); err != nil {
+		t.Fatalf("SendCommandToPaneByName returned error: %v", err)
+	}
+
+	captured := waitForCaptureContains(t, cfg.Session, "runner", "captured-from-test")
+	if !strings.Contains(captured, "captured-from-test") {
+		t.Fatalf("captured output %q does not include captured-from-test", captured)
+	}
+}
+
 func TestStopNamedPaneLeavesShellUsable(t *testing.T) {
 	if _, err := exec.LookPath("tmux"); err != nil {
 		t.Skip("tmux not installed")
@@ -429,6 +475,29 @@ func waitForPaneContains(t *testing.T, target string, want string) string {
 	last := ""
 	for time.Now().Before(deadline) {
 		last = tmuxOutput(t, "capture-pane", "-J", "-pt", target)
+		if strings.Contains(last, want) {
+			return last
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	return last
+}
+
+func waitForCaptureContains(t *testing.T, session string, paneName string, want string) string {
+	t.Helper()
+
+	deadline := time.Now().Add(2 * time.Second)
+	last := ""
+	for time.Now().Before(deadline) {
+		out, err := CapturePaneByName(session, paneName, false)
+		if err != nil {
+			if isTmuxPermissionError(err) {
+				t.Skipf("tmux integration unavailable in this environment: %v", err)
+			}
+			t.Fatalf("CapturePaneByName returned error: %v", err)
+		}
+		last = out
 		if strings.Contains(last, want) {
 			return last
 		}
