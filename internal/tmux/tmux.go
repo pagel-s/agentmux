@@ -148,6 +148,10 @@ func ListSessions() ([]string, error) {
 }
 
 func Status(session string) ([]PaneStatus, error) {
+	if err := ensureSessionExists(session); err != nil {
+		return nil, err
+	}
+
 	out, err := capture(false, "list-panes", "-t", session, "-F", "#{window_index}\t#{window_name}\t#{window_id}\t#{window_active}\t#{pane_index}\t#{pane_id}\t#{pane_active}\t#{"+paneNameOption+"}\t#{pane_title}\t#{"+paneSourceOption+"}\t#{"+paneAgentOption+"}\t#{pane_current_command}")
 	if err != nil {
 		return nil, err
@@ -674,12 +678,23 @@ func findPaneByName(session string, name string) (PaneStatus, error) {
 	if target == nil {
 		sort.Strings(available)
 		if len(available) == 0 {
-			return PaneStatus{}, fmt.Errorf("pane %q not found in session %q; session has no named panes", name, session)
+			return PaneStatus{}, fmt.Errorf("pane %q not found in session %q; session has no named panes. Add `name:` fields in config and reload the session", name, session)
 		}
-		return PaneStatus{}, fmt.Errorf("pane %q not found in session %q; available named panes: %s", name, session, strings.Join(available, ", "))
+		return PaneStatus{}, fmt.Errorf("pane %q not found in session %q; available named panes: %s. Run `agentmux status %s` to inspect live panes", name, session, strings.Join(available, ", "), session)
 	}
 
 	return *target, nil
+}
+
+func ensureSessionExists(session string) error {
+	exists, err := SessionExists(session)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return fmt.Errorf("session %q not found. Run `agentmux list` to inspect tmux sessions or `agentmux load <config>` to create it", session)
+	}
+	return nil
 }
 
 func respawnPaneByName(session string, name string, verbose bool) error {

@@ -243,6 +243,81 @@ func TestStatusAndFocusNamedPanes(t *testing.T) {
 	if !strings.HasSuffix(activeName, "\tchecks") {
 		t.Fatalf("active pane metadata = %q, want checks", activeName)
 	}
+
+	if err := FocusPaneByName(cfg.Session, "missing", false); err == nil {
+		t.Fatal("FocusPaneByName returned nil error for missing pane")
+	} else {
+		message := err.Error()
+		if !strings.Contains(message, `available named panes: checks, editor`) {
+			t.Fatalf("missing-pane error %q does not list available panes", message)
+		}
+		if !strings.Contains(message, "agentmux status agentmux-focus") {
+			t.Fatalf("missing-pane error %q does not include status hint", message)
+		}
+	}
+}
+
+func TestStatusMissingSessionReturnsHelpfulError(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed")
+	}
+
+	socket := filepath.Join(t.TempDir(), "agentmux-missing.sock")
+	t.Setenv(envTmuxSocket, socket)
+
+	_, err := Status("missing-session")
+	if err == nil {
+		t.Fatal("Status returned nil error for missing session")
+	}
+	if !strings.Contains(err.Error(), `session "missing-session" not found`) {
+		t.Fatalf("missing-session error = %q, want session not found", err)
+	}
+	if !strings.Contains(err.Error(), "agentmux list") {
+		t.Fatalf("missing-session error = %q, want list hint", err)
+	}
+}
+
+func TestMissingNamedPaneInUnnamedSessionReturnsHelpfulError(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed")
+	}
+
+	socket := filepath.Join(t.TempDir(), "agentmux-unnamed.sock")
+	t.Setenv(envTmuxSocket, socket)
+
+	cfg := resolve.Config{
+		Session: "agentmux-unnamed",
+		Windows: []resolve.Window{
+			{
+				Name: "main",
+				Panes: []resolve.Pane{
+					{SourceType: "command", Command: "printf ready", Title: "Ready"},
+				},
+			},
+		},
+	}
+
+	t.Cleanup(func() {
+		_ = command("kill-server").Run()
+	})
+
+	if err := Execute(cfg, Options{Replace: true}); err != nil {
+		if isTmuxPermissionError(err) {
+			t.Skipf("tmux integration unavailable in this environment: %v", err)
+		}
+		t.Fatalf("Execute returned error: %v", err)
+	}
+
+	err := FocusPaneByName(cfg.Session, "missing", false)
+	if err == nil {
+		t.Fatal("FocusPaneByName returned nil error for unnamed session")
+	}
+	if !strings.Contains(err.Error(), "session has no named panes") {
+		t.Fatalf("unnamed-session error = %q, want no named panes", err)
+	}
+	if !strings.Contains(err.Error(), "Add `name:` fields in config and reload the session") {
+		t.Fatalf("unnamed-session error = %q, want name hint", err)
+	}
 }
 
 func TestRestartAndRerunNamedPane(t *testing.T) {

@@ -204,6 +204,20 @@ Named panes can now be targeted at runtime:
 
 `status` now also surfaces the pane source, agent name when relevant, and tmux's current foreground command so running sessions are easier to inspect.
 
+## Runtime Troubleshooting
+
+Start with:
+
+```bash
+./bin/agentmux status <session>
+```
+
+Common runtime errors:
+
+- `session "..." not found`: the tmux session does not exist yet or has already been removed. Run `./bin/agentmux list` to inspect sessions, or `./bin/agentmux load <config>` to recreate it.
+- `pane "..." not found ... available named panes: ...`: the session exists, but that pane name is wrong for the current live session. Run `./bin/agentmux status <session>` and use one of the listed pane names.
+- `session has no named panes`: the live session was created from panes without `name:` fields. Add `name:` to the panes you want to control and reload the session.
+
 ## Examples
 
 Canonical examples:
