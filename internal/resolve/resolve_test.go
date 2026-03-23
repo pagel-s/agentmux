@@ -33,6 +33,10 @@ func TestProjectResolvesEnvAndCwdPrecedence(t *testing.T) {
 			{
 				Window: "main",
 				Root:   "/tmp/workspace",
+				Env: map[string]string{
+					"MODEL":       "gpt-5-window",
+					"WINDOW_ONLY": "1",
+				},
 				Panes: []config.Pane{
 					{
 						Agent: "reviewer",
@@ -63,6 +67,67 @@ func TestProjectResolvesEnvAndCwdPrecedence(t *testing.T) {
 	}
 	if pane.Env["MODEL"] != "local-model" {
 		t.Fatalf("pane.Env[MODEL] = %q, want %q", pane.Env["MODEL"], "local-model")
+	}
+	if pane.Env["WINDOW_ONLY"] != "1" {
+		t.Fatalf("pane.Env[WINDOW_ONLY] = %q, want %q", pane.Env["WINDOW_ONLY"], "1")
+	}
+	if resolved.Windows[0].Env["MODEL"] != "gpt-5-window" {
+		t.Fatalf("window env MODEL = %q, want %q", resolved.Windows[0].Env["MODEL"], "gpt-5-window")
+	}
+}
+
+func TestProjectWindowEnvOverridesAgentAndSessionDefaults(t *testing.T) {
+	cfg := &config.Config{
+		Version: 1,
+		Session: "demo",
+		Env: map[string]string{
+			"MODEL": "gpt-5",
+		},
+		Agents: map[string]config.Agent{
+			"reviewer": {
+				Provider: "command",
+				Command:  "review",
+				Env: map[string]string{
+					"MODEL":  "gpt-5-mini",
+					"AGENT":  "1",
+					"SHARED": "agent",
+				},
+			},
+		},
+		Layout: []config.Window{
+			{
+				Window: "main",
+				Env: map[string]string{
+					"MODEL":  "gpt-5-window",
+					"SHARED": "window",
+					"WIN":    "1",
+				},
+				Panes: []config.Pane{
+					{
+						Agent: "reviewer",
+					},
+				},
+			},
+		},
+	}
+
+	resolved, err := Project(cfg, nil)
+	if err != nil {
+		t.Fatalf("Project returned error: %v", err)
+	}
+
+	pane := resolved.Windows[0].Panes[0]
+	if got := pane.Env["MODEL"]; got != "gpt-5-window" {
+		t.Fatalf("pane.Env[MODEL] = %q, want %q", got, "gpt-5-window")
+	}
+	if got := pane.Env["SHARED"]; got != "window" {
+		t.Fatalf("pane.Env[SHARED] = %q, want %q", got, "window")
+	}
+	if got := pane.Env["AGENT"]; got != "1" {
+		t.Fatalf("pane.Env[AGENT] = %q, want %q", got, "1")
+	}
+	if got := pane.Env["WIN"]; got != "1" {
+		t.Fatalf("pane.Env[WIN] = %q, want %q", got, "1")
 	}
 }
 

@@ -34,12 +34,13 @@ type Agent struct {
 }
 
 type Window struct {
-	Name        string `json:"name"`
-	Root        string `json:"root,omitempty"`
-	Layout      string `json:"layout,omitempty"`
-	GridRows    int    `json:"gridRows,omitempty"`
-	GridColumns int    `json:"gridColumns,omitempty"`
-	Panes       []Pane `json:"panes"`
+	Name        string            `json:"name"`
+	Root        string            `json:"root,omitempty"`
+	Layout      string            `json:"layout,omitempty"`
+	Env         map[string]string `json:"env,omitempty"`
+	GridRows    int               `json:"gridRows,omitempty"`
+	GridColumns int               `json:"gridColumns,omitempty"`
+	Panes       []Pane            `json:"panes"`
 }
 
 type Pane struct {
@@ -174,17 +175,22 @@ func resolveWindow(raw config.Window, agents map[string]Agent, sessionEnv map[st
 	if err != nil {
 		return Window{}, err
 	}
+	windowEnv, err := expandMap(raw.Env, params)
+	if err != nil {
+		return Window{}, err
+	}
 
 	resolved := Window{
 		Name:        name,
 		Root:        cleanPath(root),
 		Layout:      layout,
+		Env:         windowEnv,
 		GridRows:    raw.GridRows,
 		GridColumns: raw.GridColumns,
 		Panes:       make([]Pane, 0, len(raw.Panes)),
 	}
 	for _, pane := range raw.Panes {
-		out, err := resolvePane(pane, agents, sessionEnv, resolved.Root, params)
+		out, err := resolvePane(pane, agents, sessionEnv, windowEnv, resolved.Root, params)
 		if err != nil {
 			return Window{}, err
 		}
@@ -194,7 +200,7 @@ func resolveWindow(raw config.Window, agents map[string]Agent, sessionEnv map[st
 	return resolved, nil
 }
 
-func resolvePane(raw config.Pane, agents map[string]Agent, sessionEnv map[string]string, windowRoot string, params map[string]string) (Pane, error) {
+func resolvePane(raw config.Pane, agents map[string]Agent, sessionEnv map[string]string, windowEnv map[string]string, windowRoot string, params map[string]string) (Pane, error) {
 	agentName, err := expand(raw.Agent, params)
 	if err != nil {
 		return Pane{}, err
@@ -228,11 +234,13 @@ func resolvePane(raw config.Pane, agents map[string]Agent, sessionEnv map[string
 		resolved.Command = agent.Command
 		resolved.Shell = agent.Shell
 		mergeInto(resolved.Env, agent.Env)
+		mergeInto(resolved.Env, windowEnv)
 		resolved.Cwd = firstNonEmpty(cleanPath(cwd), agent.Cwd, windowRoot, mustGetwd())
 		resolved.Title = firstNonEmpty(title, agent.Title, agentName, commandFallback(agent.Command))
 	} else {
 		resolved.SourceType = "command"
 		resolved.Command = command
+		mergeInto(resolved.Env, windowEnv)
 		resolved.Cwd = firstNonEmpty(cleanPath(cwd), windowRoot, mustGetwd())
 		resolved.Title = firstNonEmpty(title, commandFallback(command))
 	}

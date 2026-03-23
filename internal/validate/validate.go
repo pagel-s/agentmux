@@ -206,6 +206,9 @@ func collectConfigRefs(cfg *config.Config) []string {
 		add(window.Window)
 		add(window.Root)
 		add(window.Layout)
+		for _, value := range window.Env {
+			add(value)
+		}
 		for _, pane := range window.Panes {
 			add(pane.Agent)
 			add(pane.Command)

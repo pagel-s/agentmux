@@ -79,3 +79,36 @@ func TestDocumentRejectsInvalidGridDefinition(t *testing.T) {
 		t.Fatalf("issues missing grid size error: %v", issues)
 	}
 }
+
+func TestDocumentCollectsParamsFromWindowEnv(t *testing.T) {
+	doc := &config.Document{
+		Config: config.Config{
+			Version: 1,
+			Session: "demo",
+			Layout: []config.Window{
+				{
+					Window: "main",
+					Env: map[string]string{
+						"PROJECT_DIR": "{{project_dir}}",
+					},
+					Panes: []config.Pane{
+						{Command: "pwd"},
+					},
+				},
+			},
+		},
+	}
+
+	issues := Document(doc, nil)
+
+	found := false
+	for _, issue := range issues {
+		if issue.Message == `missing required param "project_dir"` {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("issues missing window-env param error: %v", issues)
+	}
+}

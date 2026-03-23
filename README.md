@@ -18,7 +18,7 @@ This repository is the polished v1 foundation:
 - Local YAML configs
 - Schema and semantic validation
 - Param interpolation with `{{param_name}}`
-- Session-, agent-, and pane-level env merging
+- Session-, window-, agent-, and pane-level env merging
 - tmux session, window, and pane creation
 - Commands: `load`, `validate`, `render`, `list`, `doctor`
 
@@ -80,6 +80,8 @@ layout:
   - window: editor
     root: "{{project_dir}}"
     layout: even-horizontal
+    env:
+      WINDOW_ROLE: "coding"
     panes:
       - command: "nvim"
         title: "Editor"
@@ -90,7 +92,7 @@ layout:
 Resolution rules:
 
 - params: CLI `--param` overrides config defaults
-- env: pane env > agent env > session env
+- env: pane env > window env > agent env > session env
 - cwd: pane cwd > agent cwd > window root > current working directory
 - title: pane title > agent title > agent name > command-derived fallback
 - focus: set `focus: true` on the pane you want selected after startup
@@ -120,6 +122,8 @@ layout:
 ```
 
 For exact grids, the pane count must equal `grid_rows * grid_columns`.
+
+Window-level `env` applies to every pane in that window, including panes created from shared agents.
 
 ## Examples
 
