@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.2.0 - 2026-03-23
+
+Second private release of Agentmux, focused on live pane-oriented workspace management.
+
+- Stable pane names as first-class runtime identifiers.
+- Live pane commands: `status`, `focus`, `restart`, `rerun`, `stop`, `kill`, `capture`, and `send`.
+- `status --json` and `capture --json` for scriptable runtime automation.
+- Richer live status metadata including pane source, agent name, and current foreground command.
+- Stronger runtime error messages and troubleshooting docs for missing sessions, missing pane names, and unnamed sessions.
+- Strategy, roadmap, and README documentation aligned with the current product direction.
+
 ## v0.1.0 - 2026-03-23
 
 Initial private release of Agentmux.
