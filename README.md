@@ -202,6 +202,8 @@ Named panes can now be targeted at runtime:
 
 `status --json` and `capture --json` expose machine-friendly output for scripting and automation while preserving the existing human-readable defaults.
 
+`status` now also surfaces the pane source, agent name when relevant, and tmux's current foreground command so running sessions are easier to inspect.
+
 ## Examples
 
 Canonical examples:

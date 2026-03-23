@@ -541,6 +541,15 @@ func renderStatus(session string, panes []tmux.PaneStatus) string {
 			fmt.Fprintf(&b, " name=%q", pane.Name)
 		}
 		fmt.Fprintf(&b, " title=%q id=%s", pane.Title, pane.PaneID)
+		if pane.SourceType != "" {
+			fmt.Fprintf(&b, " source=%s", pane.SourceType)
+		}
+		if pane.AgentName != "" {
+			fmt.Fprintf(&b, " agent=%q", pane.AgentName)
+		}
+		if pane.CurrentCmd != "" {
+			fmt.Fprintf(&b, " current=%q", pane.CurrentCmd)
+		}
 		if pane.PaneActive {
 			fmt.Fprintf(&b, " active=true")
 		}

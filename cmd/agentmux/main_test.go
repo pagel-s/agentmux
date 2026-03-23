@@ -41,6 +41,9 @@ func TestRenderStatusJSON(t *testing.T) {
 			PaneActive:   true,
 			Name:         "resolve",
 			Title:        "Resolve",
+			SourceType:   "agent",
+			AgentName:    "reviewer",
+			CurrentCmd:   "bash",
 		},
 	})
 	if err != nil {
@@ -63,6 +66,9 @@ func TestRenderStatusJSON(t *testing.T) {
 	if len(decoded.Panes) != 1 || decoded.Panes[0].Name != "resolve" {
 		t.Fatalf("decoded panes = %#v, want resolve pane", decoded.Panes)
 	}
+	if decoded.Panes[0].SourceType != "agent" || decoded.Panes[0].AgentName != "reviewer" || decoded.Panes[0].CurrentCmd != "bash" {
+		t.Fatalf("decoded pane metadata = %#v, want agent reviewer bash", decoded.Panes[0])
+	}
 }
 
 func TestRenderCaptureJSON(t *testing.T) {
@@ -84,5 +90,34 @@ func TestRenderCaptureJSON(t *testing.T) {
 	}
 	if decoded.Session != "dogfood" || decoded.Pane != "review" || decoded.Content != "hello\nworld\n" {
 		t.Fatalf("decoded = %#v, want session dogfood pane review content preserved", decoded)
+	}
+}
+
+func TestRenderStatusIncludesRuntimeMetadata(t *testing.T) {
+	out := renderStatus("dogfood", []tmux.PaneStatus{
+		{
+			WindowIndex: 1,
+			WindowName:  "grid",
+			PaneIndex:   5,
+			PaneID:      "%10",
+			Name:        "resolve",
+			Title:       "Resolve",
+			SourceType:  "agent",
+			AgentName:   "reviewer",
+			CurrentCmd:  "bash",
+			PaneActive:  true,
+		},
+	})
+
+	for _, want := range []string{
+		`name="resolve"`,
+		`source=agent`,
+		`agent="reviewer"`,
+		`current="bash"`,
+		`active=true`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("renderStatus output %q does not include %q", out, want)
+		}
 	}
 }

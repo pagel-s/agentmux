@@ -18,7 +18,6 @@ That means the next milestone should be treated as a workspace-management releas
 
 Target: `v0.2.0`
 
-- improve runtime metadata surfaced through tmux pane options
 - tighten runtime error messages and docs around named panes
 - keep dogfooding on real sessions and fix rough edges quickly
 

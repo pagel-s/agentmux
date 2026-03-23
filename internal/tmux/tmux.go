@@ -19,6 +19,8 @@ const (
 	envTmuxSocket     = "AGENTMUX_TMUX_SOCKET"
 	paneNameOption    = "@agentmux_name"
 	paneStartupOption = "@agentmux_startup_command"
+	paneSourceOption  = "@agentmux_source_type"
+	paneAgentOption   = "@agentmux_agent_name"
 )
 
 var shellEnvRefPattern = regexp.MustCompile(`(^|[^\\])\$(\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)`)
@@ -50,6 +52,16 @@ type PaneStatus struct {
 	PaneActive   bool   `json:"pane_active"`
 	Name         string `json:"name"`
 	Title        string `json:"title"`
+	SourceType   string `json:"source_type,omitempty"`
+	AgentName    string `json:"agent_name,omitempty"`
+	CurrentCmd   string `json:"current_command,omitempty"`
+}
+
+type paneMetadata struct {
+	Name           string
+	StartupCommand string
+	SourceType     string
+	AgentName      string
 }
 
 func Execute(cfg resolve.Config, opts Options) error {
@@ -136,7 +148,7 @@ func ListSessions() ([]string, error) {
 }
 
 func Status(session string) ([]PaneStatus, error) {
-	out, err := capture(false, "list-panes", "-t", session, "-F", "#{window_index}\t#{window_name}\t#{window_id}\t#{window_active}\t#{pane_index}\t#{pane_id}\t#{pane_active}\t#{"+paneNameOption+"}\t#{pane_title}")
+	out, err := capture(false, "list-panes", "-t", session, "-F", "#{window_index}\t#{window_name}\t#{window_id}\t#{window_active}\t#{pane_index}\t#{pane_id}\t#{pane_active}\t#{"+paneNameOption+"}\t#{pane_title}\t#{"+paneSourceOption+"}\t#{"+paneAgentOption+"}\t#{pane_current_command}")
 	if err != nil {
 		return nil, err
 	}
@@ -148,7 +160,7 @@ func Status(session string) ([]PaneStatus, error) {
 	panes := make([]PaneStatus, 0, len(lines))
 	for _, line := range lines {
 		fields := strings.Split(line, "\t")
-		if len(fields) != 9 {
+		if len(fields) != 12 {
 			return nil, fmt.Errorf("unexpected pane status output %q", line)
 		}
 
@@ -171,6 +183,9 @@ func Status(session string) ([]PaneStatus, error) {
 			PaneActive:   fields[6] == "1",
 			Name:         fields[7],
 			Title:        fields[8],
+			SourceType:   fields[9],
+			AgentName:    fields[10],
+			CurrentCmd:   fields[11],
 		})
 	}
 
@@ -243,15 +258,13 @@ func StopPaneByName(session string, name string, verbose bool) error {
 	if err := run(verbose, "respawn-pane", "-k", "-t", target.PaneID, shell); err != nil {
 		return fmt.Errorf("stop pane %q: %w", name, err)
 	}
-	if target.Name != "" {
-		if err := run(verbose, "set-option", "-p", "-t", target.PaneID, paneNameOption, target.Name); err != nil {
-			return fmt.Errorf("restore pane name %q after stop: %w", name, err)
-		}
-	}
-	if strings.TrimSpace(startupCommand) != "" {
-		if err := run(verbose, "set-option", "-p", "-t", target.PaneID, paneStartupOption, startupCommand); err != nil {
-			return fmt.Errorf("restore startup command metadata for pane %q after stop: %w", name, err)
-		}
+	if err := applyPaneMetadata(target.PaneID, paneMetadata{
+		Name:           target.Name,
+		StartupCommand: startupCommand,
+		SourceType:     target.SourceType,
+		AgentName:      target.AgentName,
+	}, verbose); err != nil {
+		return fmt.Errorf("restore metadata for pane %q after stop: %w", name, err)
 	}
 	return nil
 }
@@ -463,14 +476,13 @@ func splitPane(targetPaneID string, pane resolve.Pane, windowRoot string, vertic
 }
 
 func configurePane(paneID string, pane resolve.Pane, verbose bool) error {
-	startupCommand := buildPaneCommand(pane)
-	if err := run(verbose, "set-option", "-p", "-t", paneID, paneStartupOption, startupCommand); err != nil {
-		return fmt.Errorf("set startup command for pane %s: %w", paneID, err)
-	}
-	if pane.Name != "" {
-		if err := run(verbose, "set-option", "-p", "-t", paneID, paneNameOption, pane.Name); err != nil {
-			return fmt.Errorf("set name for pane %s: %w", paneID, err)
-		}
+	if err := applyPaneMetadata(paneID, paneMetadata{
+		Name:           pane.Name,
+		StartupCommand: buildPaneCommand(pane),
+		SourceType:     pane.SourceType,
+		AgentName:      pane.AgentName,
+	}, verbose); err != nil {
+		return err
 	}
 	if pane.Title != "" {
 		if err := run(verbose, "select-pane", "-t", paneID, "-T", pane.Title); err != nil {
@@ -687,13 +699,37 @@ func respawnPaneByName(session string, name string, verbose bool) error {
 	if err := run(verbose, "respawn-pane", "-k", "-t", target.PaneID, startupCommand); err != nil {
 		return fmt.Errorf("respawn pane %q: %w", name, err)
 	}
-	if target.Name != "" {
-		if err := run(verbose, "set-option", "-p", "-t", target.PaneID, paneNameOption, target.Name); err != nil {
-			return fmt.Errorf("restore pane name %q after respawn: %w", name, err)
+	if err := applyPaneMetadata(target.PaneID, paneMetadata{
+		Name:           target.Name,
+		StartupCommand: startupCommand,
+		SourceType:     target.SourceType,
+		AgentName:      target.AgentName,
+	}, verbose); err != nil {
+		return fmt.Errorf("restore metadata for pane %q after respawn: %w", name, err)
+	}
+	return nil
+}
+
+func applyPaneMetadata(paneID string, metadata paneMetadata, verbose bool) error {
+	if strings.TrimSpace(metadata.StartupCommand) != "" {
+		if err := run(verbose, "set-option", "-p", "-t", paneID, paneStartupOption, metadata.StartupCommand); err != nil {
+			return fmt.Errorf("set startup command for pane %s: %w", paneID, err)
 		}
 	}
-	if err := run(verbose, "set-option", "-p", "-t", target.PaneID, paneStartupOption, startupCommand); err != nil {
-		return fmt.Errorf("restore startup command metadata for pane %q: %w", name, err)
+	if metadata.Name != "" {
+		if err := run(verbose, "set-option", "-p", "-t", paneID, paneNameOption, metadata.Name); err != nil {
+			return fmt.Errorf("set name for pane %s: %w", paneID, err)
+		}
+	}
+	if metadata.SourceType != "" {
+		if err := run(verbose, "set-option", "-p", "-t", paneID, paneSourceOption, metadata.SourceType); err != nil {
+			return fmt.Errorf("set source type for pane %s: %w", paneID, err)
+		}
+	}
+	if metadata.AgentName != "" {
+		if err := run(verbose, "set-option", "-p", "-t", paneID, paneAgentOption, metadata.AgentName); err != nil {
+			return fmt.Errorf("set agent name for pane %s: %w", paneID, err)
+		}
 	}
 	return nil
 }

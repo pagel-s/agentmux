@@ -198,7 +198,7 @@ func TestStatusAndFocusNamedPanes(t *testing.T) {
 				Name: "main",
 				Panes: []resolve.Pane{
 					{Name: "editor", SourceType: "command", Command: "printf ready", Title: "Editor"},
-					{Name: "checks", SourceType: "command", Command: "printf checks", Title: "Checks"},
+					{Name: "checks", SourceType: "agent", AgentName: "reviewer", Command: "printf checks", Title: "Checks"},
 				},
 			},
 		},
@@ -224,6 +224,15 @@ func TestStatusAndFocusNamedPanes(t *testing.T) {
 	}
 	if panes[0].Name != "editor" || panes[1].Name != "checks" {
 		t.Fatalf("unexpected pane names: %#v", panes)
+	}
+	if panes[0].SourceType != "command" || panes[1].SourceType != "agent" {
+		t.Fatalf("unexpected pane source types: %#v", panes)
+	}
+	if panes[1].AgentName != "reviewer" {
+		t.Fatalf("pane agent name = %q, want %q", panes[1].AgentName, "reviewer")
+	}
+	if panes[0].CurrentCmd == "" || panes[1].CurrentCmd == "" {
+		t.Fatalf("expected current command metadata, got %#v", panes)
 	}
 
 	if err := FocusPaneByName(cfg.Session, "checks", false); err != nil {
