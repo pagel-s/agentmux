@@ -138,6 +138,23 @@ func TestParseStopRequiresSessionAndPaneName(t *testing.T) {
 	}
 }
 
+func TestParseKillRequiresSessionAndPaneName(t *testing.T) {
+	opts, err := ParseKill([]string{"dogfood", "resolve"})
+	if err != nil {
+		t.Fatalf("ParseKill returned error: %v", err)
+	}
+	if opts.Session != "dogfood" {
+		t.Fatalf("Session = %q, want %q", opts.Session, "dogfood")
+	}
+	if opts.Pane != "resolve" {
+		t.Fatalf("Pane = %q, want %q", opts.Pane, "resolve")
+	}
+
+	if _, err := ParseKill([]string{"dogfood"}); err == nil {
+		t.Fatal("ParseKill returned nil error for missing pane name")
+	}
+}
+
 func TestParseCaptureRequiresSessionAndPaneName(t *testing.T) {
 	opts, err := ParseCapture([]string{"dogfood", "resolve"})
 	if err != nil {

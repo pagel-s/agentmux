@@ -55,6 +55,8 @@ func run(args []string) int {
 		return runRerun(args[1:])
 	case "stop":
 		return runStop(args[1:])
+	case "kill":
+		return runKill(args[1:])
 	case "capture":
 		return runCapture(args[1:])
 	case "send":
@@ -291,6 +293,27 @@ func runStop(args []string) int {
 	}
 
 	fmt.Printf("stopped pane %q in session %q\n", opts.Pane, opts.Session)
+	return exitSuccess
+}
+
+func runKill(args []string) int {
+	opts, err := cli.ParseKill(args)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return exitValidation
+	}
+
+	if err := requireTMux(); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return exitDependency
+	}
+
+	if err := tmux.KillPaneByName(opts.Session, opts.Pane, false); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return exitRuntime
+	}
+
+	fmt.Printf("killed pane %q in session %q\n", opts.Pane, opts.Session)
 	return exitSuccess
 }
 
@@ -589,6 +612,7 @@ Usage:
   agentmux restart <session> <pane-name>
   agentmux rerun <session> <pane-name>
   agentmux stop <session> <pane-name>
+  agentmux kill <session> <pane-name>
   agentmux capture <session> <pane-name> [--json]
   agentmux send <session> <pane-name> <command...>
   agentmux doctor

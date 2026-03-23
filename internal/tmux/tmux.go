@@ -256,6 +256,18 @@ func StopPaneByName(session string, name string, verbose bool) error {
 	return nil
 }
 
+func KillPaneByName(session string, name string, verbose bool) error {
+	target, err := findPaneByName(session, name)
+	if err != nil {
+		return err
+	}
+
+	if err := run(verbose, "kill-pane", "-t", target.PaneID); err != nil {
+		return fmt.Errorf("kill pane %q: %w", name, err)
+	}
+	return nil
+}
+
 func CapturePaneByName(session string, name string, verbose bool) (string, error) {
 	target, err := findPaneByName(session, name)
 	if err != nil {

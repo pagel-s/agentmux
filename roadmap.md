@@ -10,7 +10,7 @@ The product now has:
 - reusable agent templates
 - exact grid layouts
 - stable pane names
-- live pane commands such as `status`, `focus`, `restart`, `rerun`, `stop`, `capture`, and `send`
+- live pane commands such as `status`, `focus`, `restart`, `rerun`, `stop`, `kill`, `capture`, and `send`
 
 That means the next milestone should be treated as a workspace-management release, not more v1 cleanup.
 
@@ -18,8 +18,6 @@ That means the next milestone should be treated as a workspace-management releas
 
 Target: `v0.2.0`
 
-- add an explicitly destructive `kill <session> <pane-name>` command
-- add `--json` output for `status` and `capture`
 - improve runtime metadata surfaced through tmux pane options
 - tighten runtime error messages and docs around named panes
 - keep dogfooding on real sessions and fix rough edges quickly

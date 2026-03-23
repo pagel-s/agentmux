@@ -32,7 +32,7 @@ This repository builds on the v1 foundation with:
 - Param interpolation with `{{param_name}}`
 - Session-, window-, agent-, and pane-level env merging
 - tmux session, window, and pane creation
-- Commands: `load`, `validate`, `render`, `list`, `status`, `focus`, `restart`, `rerun`, `stop`, `capture`, `send`, `doctor`
+- Commands: `load`, `validate`, `render`, `list`, `status`, `focus`, `restart`, `rerun`, `stop`, `kill`, `capture`, `send`, `doctor`
 
 Current model:
 
@@ -75,6 +75,7 @@ export PATH="$PWD/bin:$PATH"
 ./bin/agentmux restart <session> <pane-name>
 ./bin/agentmux rerun <session> <pane-name>
 ./bin/agentmux stop <session> <pane-name>
+./bin/agentmux kill <session> <pane-name>
 ./bin/agentmux capture <session> <pane-name> [--json]
 ./bin/agentmux send <session> <pane-name> <command...>
 ./bin/agentmux doctor
@@ -183,6 +184,7 @@ Named panes can now be targeted at runtime:
 ./bin/agentmux restart dogfood resolve
 ./bin/agentmux rerun dogfood resolve
 ./bin/agentmux stop dogfood resolve
+./bin/agentmux kill dogfood build
 ./bin/agentmux capture dogfood review
 ./bin/agentmux capture dogfood review --json
 ./bin/agentmux send dogfood review "git status --short"
@@ -191,6 +193,8 @@ Named panes can now be targeted at runtime:
 `restart` and `rerun` both re-execute the pane's stored startup command in place using tmux pane respawn. In the current version, they are intentionally equivalent so the behavior stays predictable for interactive panes.
 
 `stop` kills the pane's current process and respawns a fresh interactive shell in place. This is the safe live-control option because it preserves the pane and its layout instead of destroying it.
+
+`kill` is the explicitly destructive option. It removes the target pane from tmux entirely, which can collapse the layout and may remove the window or session if that pane was the last one.
 
 `capture` prints the current joined pane contents for the named pane, which makes it possible to read back output from a live workflow endpoint.
 

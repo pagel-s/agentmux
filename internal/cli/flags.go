@@ -177,6 +177,16 @@ func ParseStop(args []string) (PaneTargetOptions, error) {
 	}, nil
 }
 
+func ParseKill(args []string) (PaneTargetOptions, error) {
+	if len(args) != 2 {
+		return PaneTargetOptions{}, errors.New("kill requires exactly one session name and one pane name")
+	}
+	return PaneTargetOptions{
+		Session: args[0],
+		Pane:    args[1],
+	}, nil
+}
+
 func ParseCapture(args []string) (CaptureOptions, error) {
 	positional, jsonOut, err := parseOptionalJSONArgs("capture", args)
 	if err != nil {

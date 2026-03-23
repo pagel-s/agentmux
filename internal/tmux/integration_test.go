@@ -455,6 +455,68 @@ func TestStopNamedPaneLeavesShellUsable(t *testing.T) {
 	}
 }
 
+func TestKillNamedPaneRemovesItFromSession(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed")
+	}
+
+	socket := filepath.Join(t.TempDir(), "agentmux-kill.sock")
+	t.Setenv(envTmuxSocket, socket)
+
+	cfg := resolve.Config{
+		Session: "agentmux-kill",
+		Windows: []resolve.Window{
+			{
+				Name: "main",
+				Panes: []resolve.Pane{
+					{
+						Name:       "keep",
+						SourceType: "command",
+						Command:    "printf 'keep\\n'; exec $SHELL",
+						Title:      "Keep",
+					},
+					{
+						Name:       "drop",
+						SourceType: "command",
+						Command:    "printf 'drop\\n'; exec $SHELL",
+						Title:      "Drop",
+					},
+				},
+			},
+		},
+	}
+
+	t.Cleanup(func() {
+		_ = command("kill-server").Run()
+	})
+
+	if err := Execute(cfg, Options{Replace: true}); err != nil {
+		if isTmuxPermissionError(err) {
+			t.Skipf("tmux integration unavailable in this environment: %v", err)
+		}
+		t.Fatalf("Execute returned error: %v", err)
+	}
+
+	if err := KillPaneByName(cfg.Session, "drop", false); err != nil {
+		t.Fatalf("KillPaneByName returned error: %v", err)
+	}
+
+	panes, err := Status(cfg.Session)
+	if err != nil {
+		t.Fatalf("Status returned error: %v", err)
+	}
+	if len(panes) != 1 {
+		t.Fatalf("expected 1 pane after kill, got %d", len(panes))
+	}
+	if panes[0].Name != "keep" {
+		t.Fatalf("remaining pane = %#v, want keep", panes[0])
+	}
+
+	if err := KillPaneByName(cfg.Session, "drop", false); err == nil {
+		t.Fatal("KillPaneByName returned nil error for already-killed pane")
+	}
+}
+
 func tmuxOutput(t *testing.T, args ...string) string {
 	t.Helper()
 
