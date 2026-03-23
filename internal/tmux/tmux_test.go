@@ -8,6 +8,8 @@ import (
 )
 
 func TestBuildPaneCommand(t *testing.T) {
+	t.Setenv("SHELL", "/bin/bash")
+
 	command := buildPaneCommand(resolve.Pane{
 		Command: "echo ${OPENAI_API_KEY}",
 		Cwd:     "/tmp/project",
@@ -29,6 +31,9 @@ func TestBuildPaneCommand(t *testing.T) {
 	}
 	if !strings.Contains(command, `'/bin/bash' -lc 'echo ${OPENAI_API_KEY}'`) {
 		t.Fatalf("command missing shell wrapper: %q", command)
+	}
+	if !strings.Contains(command, `; exec '/bin/bash'`) {
+		t.Fatalf("command missing fallback interactive shell: %q", command)
 	}
 }
 

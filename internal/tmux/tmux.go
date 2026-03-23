@@ -213,7 +213,7 @@ func buildPaneCommand(pane resolve.Pane) string {
 	}
 	parts = append(parts, command)
 
-	return strings.Join(parts, " && ")
+	return strings.Join(parts, " && ") + "; exec " + singleQuote(interactiveShell())
 }
 
 func quoteEnvValue(value string) string {
@@ -293,6 +293,13 @@ func tmuxBinary() string {
 		return binary
 	}
 	return "tmux"
+}
+
+func interactiveShell() string {
+	if shell := strings.TrimSpace(os.Getenv("SHELL")); shell != "" {
+		return shell
+	}
+	return "/bin/sh"
 }
 
 func Binary() string {
