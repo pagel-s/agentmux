@@ -1,267 +1,115 @@
-🚀 Agentmux — Project Plan
-🧠 Vision
+# Agentmux Project Plan
 
-Agentmux is a tmux-native tool that enables developers to define, share, and reproduce multi-agent terminal workflows using simple, declarative configuration.
+## Vision
 
-“Run your entire AI workflow in tmux—multiple agents, one command.”
+Agentmux is a tmux-native tool for defining, launching, and reusing AI-heavy terminal workspaces with one command.
 
-🎯 Target Audience
-Primary: AI-heavy terminal developers
+The long-term ambition is still the same: make multi-agent terminal workflows reproducible, shareable, and easy to inspect. The difference now is that the product should grow from a strong tmux workspace manager into anything more ambitious, not skip that step.
 
-Inspired by workflows of people like Andrej Karpathy
+## Current Product Position
 
-Characteristics:
+Current `main` is best described as a pane-oriented workspace manager built on reusable agent templates.
 
-Heavy tmux users
-Use multiple AI agents simultaneously (local + cloud)
-Comfortable with CLI + YAML
-Optimize for speed and control
+- `agents` are reusable pane templates
+- `windows` provide layout and context
+- `panes` are the runtime unit
 
-Current pain points:
+That framing is important because it keeps the product honest. Today, Agentmux is not yet a true multi-agent runtime with coordination semantics, provider-native behavior, or shared state. It is a reliable config-and-runtime layer for tmux workspaces.
 
-Manual pane/session setup
-Repetitive workflows
-No reproducibility
-Fragmented multi-agent usage
-🔥 Problem Statement
+## Product Thesis
 
-Managing multiple AI agents across terminal sessions is:
+Agentmux should win on:
 
-repetitive
-error-prone
-non-reproducile
-hard to share
-💡 Solution Overview
+- reproducibility: one config can recreate a real working session
+- transparency: tmux behavior stays explicit and debuggable
+- ergonomics: repeated tmux workflows become easy to launch and operate
+- composability: reusable agent templates reduce duplication without hiding what runs
 
-Agentmux introduces:
+## Users
 
-Agents as first-class entities
-Declarative session configs
-One-command reproducibility
-Shareable workflows
-agentmux load feature-dev.yaml
-🧩 Core Concepts
-1. Agent
+Primary users:
 
-A named execution unit with provider + configuration.
+- heavy tmux users
+- AI-heavy terminal developers
+- engineers comfortable with CLI and YAML
+- people who value explicit control over hidden automation
 
-agents:
-  coder:
-    provider: local
-    command: "ollama run codellama"
+## Near-Term Direction
 
-  reviewer:
-    provider: openai
-    model: gpt-4o
-2. Session
+The product should continue moving from "workspace compiler" to "workspace manager".
 
-A full tmux workspace.
+That means prioritizing:
 
-session: feature-x
-3. Layout
+- stable pane identity
+- live pane lifecycle operations
+- machine-friendly output for automation
+- better observability of running sessions
 
-Defines windows and panes.
+The core rule is simple: every new capability should build on tmux and named panes in a way that remains inspectable and predictable.
 
-layout:
-  - window: dev
-    panes:
-      - agent: coder
-      - agent: reviewer
-4. Command vs Agent
-command: → raw shell execution
-agent: → structured, extensible abstraction
-⚙️ Core Principles
-Terminal-first (no GUI dependency)
-Declarative configuration
-Agents as first-class citizens
-Composable and modular
-Provider-agnostic
-Reproducible workflows
-Minimal magic, maximum transparency
-📦 Config Design (Critical Feature)
-Goals:
-Portable
-Shareable
-Parameterizable
-Versioned
-Example Config
-version: 1
-session: ai-dev
+## Immediate Priorities
 
-params:
-  project_dir: .
+- finish the pane-runtime control loop with an explicitly destructive `kill` command
+- add `--json` output for `status` and `capture`
+- improve runtime metadata and error clarity
+- keep dogfooding the tool on real sessions
+- tag the next milestone as `v0.2.0`
 
-agents:
-  coder:
-    provider: local
-    command: "ollama run codellama"
+## Mid-Term Priorities
 
-  reviewer:
-    provider: openai
-    model: gpt-4o
-    env:
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
+- `reload` or `apply` to reconcile config changes onto an existing session
+- richer pane lifecycle controls such as `on_exit` policy or optional auto-restart
+- better automation surfaces, including stable metadata and scriptable output
+- local config reuse mechanisms such as includes or shared templates
 
-layout:
-  - window: editor
-    panes:
-      - command: "cd {{project_dir}} && nvim"
-      - agent: coder
+## Long-Term Decision
 
-  - window: review
-    panes:
-      - agent: reviewer
-      - command: "npm test"
-Parameter Injection
-agentmux load ai-dev.yaml --project_dir ~/myapp
-Config Composition (Future)
-imports:
-  - base.yaml
-  - agents.yaml
-🌍 Sharing & Distribution (Key Differentiator)
-Phase 1: Local configs
-agentmux load ./session.yaml
-Phase 2: Remote configs
-agentmux load https://...
-agentmux load github:user/repo/session.yaml
-Phase 3: Named configs
-agentmux load karpathy/dev
-agentmux load startup/solo-founder
-Long-term Vision: Config Ecosystem
-Public repositories of configs
-Reusable workflows
-Community-driven patterns
+Agentmux will eventually need a deliberate product choice:
 
-👉 Agentmux becomes:
-“The runtime for shared AI workflows”
+### Path A: Best-in-class tmux workspace manager
 
-⚙️ MVP Scope
-✅ Must Have
-1. YAML Config Loader
-Parse and validate configs
-Support params and env variables
-2. tmux Session Generator
-Create sessions, windows, panes
-Assign commands/agents
-3. Agent Abstraction (Basic)
-Local commands
-Simple API-based agents
-Shell fallback
-4. CLI Interface
-agentmux load <config>
-agentmux list
-agentmux validate
-5. Pane Metadata
-Pane titles = agent names
-Basic labeling for clarity
-❌ Not in MVP
-Agent-to-agent communication
-Plugin system
-GUI dashboards
-Complex orchestration
-State synchronization
-🔄 V1.5 / V2 Features
-🧠 Context Sharing
-File-based or pipe-based communication
-Shared workspace awareness
-🔄 Live Reload
-agentmux reload
-🧪 Experiment Mode
-Run same task across multiple agents
-Compare outputs
-🔌 Plugin System
-Custom providers (OpenAI, Anthropic, local, SSH)
-Extensible agent types
-🧵 Agent Groups
-agents:
-  reviewers:
-    - gpt4
-    - claude
-🧱 Architecture
-Phase 1: Thin Wrapper (MVP)
-CLI tool (Go recommended)
-YAML → tmux commands
-No persistent runtime
+Double down on:
 
-Pros:
+- lifecycle management
+- observability
+- reproducibility
+- automation
+- team-shared local workflows
 
-Fast to build
-Simple
-Reliable
-Phase 2: Agent Runtime (Future)
-Background daemon
-IPC between agents
-Context sharing
-🛠️ Tech Stack
-Recommended: Go
-Fast CLI performance
-Single binary distribution
-Strong ecosystem
-Alternative: Python
-Faster prototyping
-Easier integrations
-🧪 Example Workflow (North Star)
-agentmux load bugfix.yaml
+### Path B: True multi-agent runtime
 
-Creates:
+Only after the workspace-manager layer is proven, consider adding:
 
-Window: dev
+- provider-aware agents
+- task and handoff semantics
+- event hooks and workflow steps
+- optional daemon or background runtime
 
-Pane 1 → coding agent
-Pane 2 → reasoning agent
+The right default is to stay on Path A until real usage proves the need for Path B.
 
-Window: runtime
+## Explicit Non-Goals For Now
 
-Pane 3 → logs
-Pane 4 → tests
-🏆 Differentiation
-Tool	Limitation	Agentmux Advantage
-tmuxifier	no agent concept	agents as primitives
-raw tmux	manual setup	reproducible configs
-IDE AI tools	single agent	multi-agent workflows
-scripts	brittle	structured + shareable
-📈 Adoption Strategy
-Step 1: Target power users
-AI developers
-OSS contributors
-terminal-first engineers
-Step 2: Share configs publicly
-GitHub repos
-blog posts
-demo workflows
-Step 3: Build config ecosystem
-curated examples
-reusable templates
-🔁 Viral Loop
-User creates config
-Shares config
-Others run instantly
-They modify and re-share
-Ecosystem grows
-🚨 Risks & Mitigations
-Risk: Overengineering early
+Do not prioritize these yet:
 
-→ Keep MVP minimal
+- remote config marketplace or registry
+- agent-to-agent messaging
+- plugin SDK
+- provider-specific API abstractions in core
+- orchestration logic that bypasses tmux semantics
+- mandatory background daemon
 
-Risk: Too much abstraction
+## Success Criteria
 
-→ Keep configs explicit
+Short term:
 
-Risk: Provider lock-in
+- a user can launch a real multi-window workspace from one YAML file
+- a running session can be controlled reliably by stable pane names
+- output is clear enough for both humans and scripts
 
-→ Maintain provider-agnostic design
+Medium term:
 
-Risk: Complexity creep
+- Agentmux becomes the default way a tmux-heavy user starts and manages repeatable AI workspaces
 
-→ Strict scope control
+Long term:
 
-🧭 Success Criteria
-Short-term
-Can recreate complex workflows with one command
-Users replace manual tmux setups
-Mid-term
-Users share configs publicly
-Growing library of workflows
-Long-term
-Becomes standard for AI-native terminal workflows
-Ecosystem of configs + extensions
+- Agentmux becomes either the clear terminal-first workspace manager for AI workflows or the foundation of a true multi-agent terminal runtime, based on proven user behavior rather than speculation

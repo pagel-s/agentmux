@@ -2,9 +2,11 @@
 
 Agentmux is a tmux-native CLI for reproducible multi-agent terminal workspaces. It reads a declarative YAML config, validates it, resolves params and environment inheritance, and launches the corresponding tmux session.
 
+Current `main` also supports named-pane runtime controls, so the product is now best understood as a pane-oriented workspace manager built on reusable agent templates.
+
 ## Status
 
-This repository is the polished v1 foundation:
+This repository builds on the v1 foundation with:
 
 - declarative local YAML configs
 - schema and semantic validation
@@ -12,8 +14,16 @@ This repository is the polished v1 foundation:
 - dry-run and render output for inspection
 - tmux session creation with hooks, focus, and replace handling
 - unit, fixture, and tmux integration coverage
+- named-pane runtime controls for live sessions
 
-## v1 scope
+## Docs
+
+- `README.md`: current capabilities and usage
+- `technical_spec.md`: frozen v1 baseline contract
+- `project_plan.md`: product strategy and direction
+- `roadmap.md`: immediate, mid-term, and long-term next steps
+
+## Current Scope
 
 - Local YAML configs
 - Schema and semantic validation
@@ -22,7 +32,13 @@ This repository is the polished v1 foundation:
 - tmux session, window, and pane creation
 - Commands: `load`, `validate`, `render`, `list`, `status`, `focus`, `restart`, `rerun`, `stop`, `capture`, `send`, `doctor`
 
-Out of scope for v1:
+Current model:
+
+- `agents` are reusable pane templates
+- `windows` provide layout and context
+- `panes` are the runtime unit
+
+Still intentionally out of scope:
 
 - remote config fetching
 - daemons and agent-to-agent messaging
@@ -105,7 +121,7 @@ Resolution rules:
 - cwd: pane cwd > agent cwd > window root > current working directory
 - title: pane title > agent title > pane name > agent name > command-derived fallback
 - focus: set `focus: true` on the pane you want selected after startup
-- name: optional stable pane ID, unique across the session, for future pane-targeted commands
+- name: optional stable pane ID, unique across the session, for pane-targeted runtime commands
 
 `render` prints the fully resolved config plus a readable execution plan. `validate --strict` turns warnings such as unknown top-level fields into failures.
 

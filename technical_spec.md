@@ -1,5 +1,18 @@
-Agentmux Technical Specification v1
+Agentmux Technical Specification v1 Baseline
 Purpose
+
+Document status
+
+This file freezes the original v1 contract that established Agentmux as a reliable config-driven tmux workspace launcher.
+
+Current `main` has moved beyond this baseline with:
+
+- exact grid layout support
+- window-level environment overrides
+- stable pane names
+- named-pane runtime commands such as `status`, `focus`, `restart`, `rerun`, `stop`, `capture`, and `send`
+
+Treat this file as the v1 baseline specification, not the full reference for current `main`. For current behavior, see `README.md`. For next steps, see `roadmap.md`.
 
 Agentmux is a tmux-native CLI that reads a declarative config file and creates a reproducible tmux workspace for AI-heavy developers. The system treats agents as first-class entities, supports shareable configs, and keeps execution transparent.
 
@@ -22,7 +35,7 @@ GUI
 2. Design Principles
 Terminal-first
 Declarative configuration
-Explicit over agical
+Explicit over magical
 Provider-agnostic core
 Shareable and reproducible configs
 Safe defaults
