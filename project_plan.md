@@ -2,19 +2,21 @@
 
 ## Vision
 
+Agentmux is the fastest way to spin up and control AI-heavy tmux workspaces.
+
 Agentmux is a tmux-native tool for defining, launching, and reusing AI-heavy terminal workspaces with one command.
 
 The long-term ambition is still the same: make multi-agent terminal workflows reproducible, shareable, and easy to inspect. The difference now is that the product should grow from a strong tmux workspace manager into anything more ambitious, not skip that step.
 
 ## Current Product Position
 
-Current `main` is best described as a pane-oriented workspace manager built on reusable agent templates.
+Current `main` is best described as a pane-oriented workspace manager built on reusable agent definitions.
 
-- `agents` are reusable pane templates
+- `agents` are first-class config objects that define reusable execution defaults
 - `windows` provide layout and context
-- `panes` are the runtime unit
+- `panes` are the runtime instantiations and control unit
 
-That framing is important because it keeps the product honest. Today, Agentmux is not yet a true multi-agent runtime with coordination semantics, provider-native behavior, or shared state. It is a reliable config-and-runtime layer for tmux workspaces.
+That framing is important because it keeps the product honest. Today, Agentmux is not yet a true multi-agent runtime with coordination semantics, provider-native behavior, or shared state. It is a reliable config-and-runtime layer for tmux workspaces. Agents matter because they capture intent, defaults, and reuse. Panes matter because they are what actually runs.
 
 ## Product Thesis
 
@@ -24,6 +26,18 @@ Agentmux should win on:
 - transparency: tmux behavior stays explicit and debuggable
 - ergonomics: repeated tmux workflows become easy to launch and operate
 - composability: reusable agent templates reduce duplication without hiding what runs
+
+## Config Philosophy
+
+Configs should be easy to share, easy to inspect, and easy to move between machines.
+
+That means:
+
+- local-first by default, with no hidden remote dependency
+- portable across repos and environments through params and env inheritance
+- explicit about what actually runs in each pane
+- readable enough to serve as team documentation for a workflow
+- structured so reuse does not turn into indirection-heavy magic
 
 ## Users
 

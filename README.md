@@ -1,8 +1,10 @@
 # Agentmux
 
+Agentmux is the fastest way to spin up and control AI-heavy tmux workspaces.
+
 Agentmux is a tmux-native CLI for reproducible multi-agent terminal workspaces. It reads a declarative YAML config, validates it, resolves params and environment inheritance, and launches the corresponding tmux session.
 
-Current `main` also supports named-pane runtime controls, so the product is now best understood as a pane-oriented workspace manager built on reusable agent templates.
+Current `main` also supports named-pane runtime controls, so the product is now best understood as a pane-oriented workspace manager built on reusable agent definitions.
 
 ## Status
 
@@ -34,9 +36,9 @@ This repository builds on the v1 foundation with:
 
 Current model:
 
-- `agents` are reusable pane templates
+- `agents` are first-class config objects that define reusable execution defaults
 - `windows` provide layout and context
-- `panes` are the runtime unit
+- `panes` are the runtime instantiations and control unit
 
 Still intentionally out of scope:
 
