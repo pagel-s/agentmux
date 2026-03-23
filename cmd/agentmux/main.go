@@ -45,6 +45,10 @@ func run(args []string) int {
 		return runRender(args[1:])
 	case "list":
 		return runList(args[1:])
+	case "status":
+		return runStatus(args[1:])
+	case "focus":
+		return runFocus(args[1:])
 	case "doctor":
 		return runDoctor(args[1:])
 	case "version", "-v", "--version":
@@ -161,6 +165,49 @@ func runList(args []string) int {
 		fmt.Println(session)
 	}
 
+	return exitSuccess
+}
+
+func runStatus(args []string) int {
+	session, err := cli.ParseStatus(args)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return exitValidation
+	}
+
+	if err := requireTMux(); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return exitDependency
+	}
+
+	panes, err := tmux.Status(session)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return exitRuntime
+	}
+
+	fmt.Print(renderStatus(session, panes))
+	return exitSuccess
+}
+
+func runFocus(args []string) int {
+	opts, err := cli.ParseFocus(args)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return exitValidation
+	}
+
+	if err := requireTMux(); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return exitDependency
+	}
+
+	if err := tmux.FocusPaneByName(opts.Session, opts.Pane, false); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return exitRuntime
+	}
+
+	fmt.Printf("focused pane %q in session %q\n", opts.Pane, opts.Session)
 	return exitSuccess
 }
 
@@ -311,6 +358,36 @@ func renderPlan(resolved resolve.Config, attach bool, replace bool) string {
 	return b.String()
 }
 
+func renderStatus(session string, panes []tmux.PaneStatus) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "status:\n")
+	fmt.Fprintf(&b, "  session: %s\n", session)
+
+	currentWindow := -1
+	for _, pane := range panes {
+		if pane.WindowIndex != currentWindow {
+			currentWindow = pane.WindowIndex
+			fmt.Fprintf(&b, "  window %d %s", pane.WindowIndex, pane.WindowName)
+			if pane.WindowActive {
+				fmt.Fprintf(&b, " active=true")
+			}
+			fmt.Fprintln(&b)
+		}
+
+		fmt.Fprintf(&b, "    pane %d", pane.PaneIndex)
+		if pane.Name != "" {
+			fmt.Fprintf(&b, " name=%q", pane.Name)
+		}
+		fmt.Fprintf(&b, " title=%q id=%s", pane.Title, pane.PaneID)
+		if pane.PaneActive {
+			fmt.Fprintf(&b, " active=true")
+		}
+		fmt.Fprintln(&b)
+	}
+
+	return b.String()
+}
+
 func versionString() string {
 	return fmt.Sprintf("agentmux %s", version)
 }
@@ -338,6 +415,8 @@ Usage:
   agentmux validate <config> [--param key=value] [--strict]
   agentmux render <config> [--param key=value] [--strict]
   agentmux list
+  agentmux status <session>
+  agentmux focus <session> <pane-name>
   agentmux doctor
   agentmux version`)
 }

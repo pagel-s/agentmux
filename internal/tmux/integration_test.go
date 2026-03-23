@@ -182,6 +182,59 @@ func TestExecuteCreatesExactGridWindow(t *testing.T) {
 	}
 }
 
+func TestStatusAndFocusNamedPanes(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed")
+	}
+
+	socket := filepath.Join(t.TempDir(), "agentmux-focus.sock")
+	t.Setenv(envTmuxSocket, socket)
+
+	cfg := resolve.Config{
+		Session: "agentmux-focus",
+		Windows: []resolve.Window{
+			{
+				Name: "main",
+				Panes: []resolve.Pane{
+					{Name: "editor", SourceType: "command", Command: "printf ready", Title: "Editor"},
+					{Name: "checks", SourceType: "command", Command: "printf checks", Title: "Checks"},
+				},
+			},
+		},
+	}
+
+	t.Cleanup(func() {
+		_ = command("kill-server").Run()
+	})
+
+	if err := Execute(cfg, Options{Replace: true}); err != nil {
+		if isTmuxPermissionError(err) {
+			t.Skipf("tmux integration unavailable in this environment: %v", err)
+		}
+		t.Fatalf("Execute returned error: %v", err)
+	}
+
+	panes, err := Status(cfg.Session)
+	if err != nil {
+		t.Fatalf("Status returned error: %v", err)
+	}
+	if len(panes) != 2 {
+		t.Fatalf("expected 2 panes, got %d", len(panes))
+	}
+	if panes[0].Name != "editor" || panes[1].Name != "checks" {
+		t.Fatalf("unexpected pane names: %#v", panes)
+	}
+
+	if err := FocusPaneByName(cfg.Session, "checks", false); err != nil {
+		t.Fatalf("FocusPaneByName returned error: %v", err)
+	}
+
+	activeName := strings.TrimSpace(tmuxOutput(t, "display-message", "-p", "-t", cfg.Session+":main", "#{pane_id}\t#{@agentmux_name}"))
+	if !strings.HasSuffix(activeName, "\tchecks") {
+		t.Fatalf("active pane metadata = %q, want checks", activeName)
+	}
+}
+
 func tmuxOutput(t *testing.T, args ...string) string {
 	t.Helper()
 

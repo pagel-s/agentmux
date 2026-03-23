@@ -52,6 +52,8 @@ export PATH="$PWD/bin:$PATH"
 ./bin/agentmux validate <config> [--param key=value]
 ./bin/agentmux render <config> [--param key=value]
 ./bin/agentmux list
+./bin/agentmux status <session>
+./bin/agentmux focus <session> <pane-name>
 ./bin/agentmux doctor
 ./bin/agentmux version
 ```
@@ -148,6 +150,13 @@ Pane names:
 - must be unique across the session
 - may use letters, numbers, dot, dash, and underscore
 - become the default pane title when there is no higher-precedence title already available
+
+Named panes can now be targeted at runtime:
+
+```bash
+./bin/agentmux status dogfood
+./bin/agentmux focus dogfood resolve
+```
 
 ## Examples
 

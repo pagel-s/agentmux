@@ -22,6 +22,11 @@ type LoadOptions struct {
 	Replace bool
 }
 
+type FocusOptions struct {
+	Session string
+	Pane    string
+}
+
 type paramFlags struct {
 	values map[string]string
 }
@@ -99,6 +104,23 @@ func ParseValidate(args []string) (CommonOptions, error) {
 
 func ParseRender(args []string) (CommonOptions, error) {
 	return parseCommon("render", args)
+}
+
+func ParseStatus(args []string) (string, error) {
+	if len(args) != 1 {
+		return "", errors.New("status requires exactly one session name")
+	}
+	return args[0], nil
+}
+
+func ParseFocus(args []string) (FocusOptions, error) {
+	if len(args) != 2 {
+		return FocusOptions{}, errors.New("focus requires exactly one session name and one pane name")
+	}
+	return FocusOptions{
+		Session: args[0],
+		Pane:    args[1],
+	}, nil
 }
 
 func parseCommon(name string, args []string) (CommonOptions, error) {

@@ -39,6 +39,18 @@ type paneGeometry struct {
 	Left int
 }
 
+type PaneStatus struct {
+	WindowIndex  int
+	WindowName   string
+	WindowID     string
+	WindowActive bool
+	PaneIndex    int
+	PaneID       string
+	PaneActive   bool
+	Name         string
+	Title        string
+}
+
 func Execute(cfg resolve.Config, opts Options) error {
 	exists, err := SessionExists(cfg.Session)
 	if err != nil {
@@ -120,6 +132,92 @@ func ListSessions() ([]string, error) {
 	}
 	sort.Strings(lines)
 	return lines, nil
+}
+
+func Status(session string) ([]PaneStatus, error) {
+	out, err := capture(false, "list-panes", "-t", session, "-F", "#{window_index}\t#{window_name}\t#{window_id}\t#{window_active}\t#{pane_index}\t#{pane_id}\t#{pane_active}\t#{"+paneNameOption+"}\t#{pane_title}")
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(out) == "" {
+		return nil, nil
+	}
+
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	panes := make([]PaneStatus, 0, len(lines))
+	for _, line := range lines {
+		fields := strings.Split(line, "\t")
+		if len(fields) != 9 {
+			return nil, fmt.Errorf("unexpected pane status output %q", line)
+		}
+
+		windowIndex, err := strconv.Atoi(fields[0])
+		if err != nil {
+			return nil, fmt.Errorf("parse window index %q: %w", fields[0], err)
+		}
+		paneIndex, err := strconv.Atoi(fields[4])
+		if err != nil {
+			return nil, fmt.Errorf("parse pane index %q: %w", fields[4], err)
+		}
+
+		panes = append(panes, PaneStatus{
+			WindowIndex:  windowIndex,
+			WindowName:   fields[1],
+			WindowID:     fields[2],
+			WindowActive: fields[3] == "1",
+			PaneIndex:    paneIndex,
+			PaneID:       fields[5],
+			PaneActive:   fields[6] == "1",
+			Name:         fields[7],
+			Title:        fields[8],
+		})
+	}
+
+	sort.Slice(panes, func(i, j int) bool {
+		if panes[i].WindowIndex == panes[j].WindowIndex {
+			if panes[i].PaneIndex == panes[j].PaneIndex {
+				return panes[i].PaneID < panes[j].PaneID
+			}
+			return panes[i].PaneIndex < panes[j].PaneIndex
+		}
+		return panes[i].WindowIndex < panes[j].WindowIndex
+	})
+
+	return panes, nil
+}
+
+func FocusPaneByName(session string, name string, verbose bool) error {
+	panes, err := Status(session)
+	if err != nil {
+		return err
+	}
+
+	var target *PaneStatus
+	available := make([]string, 0, len(panes))
+	for i := range panes {
+		if panes[i].Name != "" {
+			available = append(available, panes[i].Name)
+		}
+		if panes[i].Name == name {
+			target = &panes[i]
+		}
+	}
+
+	if target == nil {
+		sort.Strings(available)
+		if len(available) == 0 {
+			return fmt.Errorf("pane %q not found in session %q; session has no named panes", name, session)
+		}
+		return fmt.Errorf("pane %q not found in session %q; available named panes: %s", name, session, strings.Join(available, ", "))
+	}
+
+	if err := run(verbose, "select-window", "-t", target.WindowID); err != nil {
+		return fmt.Errorf("focus window for pane %q: %w", name, err)
+	}
+	if err := run(verbose, "select-pane", "-t", target.PaneID); err != nil {
+		return fmt.Errorf("focus pane %q: %w", name, err)
+	}
+	return nil
 }
 
 func SessionExists(name string) (bool, error) {
