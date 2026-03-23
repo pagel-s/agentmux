@@ -10,25 +10,42 @@ env:
 agents:
   reviewer:
     provider: command
-    command: "printf 'review pane ready\n'; exec $SHELL"
+    command: "printf 'review pane ready\n'"
     cwd: "{{project_dir}}"
     title: "Reviewer"
 
 layout:
-  - window: editor
+  - window: workspace
     root: "{{project_dir}}"
-    layout: even-horizontal
+    layout: tiled
     panes:
       - command: "nvim"
         title: "Editor"
         focus: true
       - command: "go test ./... -count=1"
         title: "Tests"
-
-  - window: review
-    root: "{{project_dir}}"
-    layout: even-horizontal
-    panes:
       - command: "git status"
         title: "Git"
+      - agent: reviewer
+
+  - window: grid
+    root: "{{project_dir}}"
+    layout: tiled
+    panes:
+      - command: "pwd"
+        title: "PWD"
+      - command: "git status --short"
+        title: "Status"
+      - command: "git branch --show-current"
+        title: "Branch"
+      - command: "rg --files | head -20"
+        title: "Files"
+      - command: "go test ./internal/resolve -count=1"
+        title: "Resolve"
+      - command: "go test ./internal/tmux -count=1"
+        title: "Tmux"
+      - command: "go test ./internal/validate -count=1"
+        title: "Validate"
+      - command: "make build"
+        title: "Build"
       - agent: reviewer
