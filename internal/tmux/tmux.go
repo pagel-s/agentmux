@@ -159,7 +159,7 @@ func Status(session string) ([]PaneStatus, error) {
 		return nil, err
 	}
 
-	out, err := capture(false, "list-panes", "-t", session, "-F", "#{window_index}\t#{window_name}\t#{window_id}\t#{window_active}\t#{pane_index}\t#{pane_id}\t#{pane_active}\t#{"+paneNameOption+"}\t#{pane_title}\t#{"+paneSourceOption+"}\t#{"+paneAgentOption+"}\t#{"+paneOnExitOption+"}\t#{pane_current_command}")
+	out, err := capture(false, "list-panes", "-a", "-F", "#{session_name}\t#{window_index}\t#{window_name}\t#{window_id}\t#{window_active}\t#{pane_index}\t#{pane_id}\t#{pane_active}\t#{"+paneNameOption+"}\t#{pane_title}\t#{"+paneSourceOption+"}\t#{"+paneAgentOption+"}\t#{"+paneOnExitOption+"}\t#{pane_current_command}")
 	if err != nil {
 		return nil, err
 	}
@@ -171,33 +171,36 @@ func Status(session string) ([]PaneStatus, error) {
 	panes := make([]PaneStatus, 0, len(lines))
 	for _, line := range lines {
 		fields := strings.Split(line, "\t")
-		if len(fields) != 13 {
+		if len(fields) != 14 {
 			return nil, fmt.Errorf("unexpected pane status output %q", line)
 		}
-
-		windowIndex, err := strconv.Atoi(fields[0])
-		if err != nil {
-			return nil, fmt.Errorf("parse window index %q: %w", fields[0], err)
+		if fields[0] != session {
+			continue
 		}
-		paneIndex, err := strconv.Atoi(fields[4])
+
+		windowIndex, err := strconv.Atoi(fields[1])
 		if err != nil {
-			return nil, fmt.Errorf("parse pane index %q: %w", fields[4], err)
+			return nil, fmt.Errorf("parse window index %q: %w", fields[1], err)
+		}
+		paneIndex, err := strconv.Atoi(fields[5])
+		if err != nil {
+			return nil, fmt.Errorf("parse pane index %q: %w", fields[5], err)
 		}
 
 		panes = append(panes, PaneStatus{
 			WindowIndex:  windowIndex,
-			WindowName:   fields[1],
-			WindowID:     fields[2],
-			WindowActive: fields[3] == "1",
+			WindowName:   fields[2],
+			WindowID:     fields[3],
+			WindowActive: fields[4] == "1",
 			PaneIndex:    paneIndex,
-			PaneID:       fields[5],
-			PaneActive:   fields[6] == "1",
-			Name:         fields[7],
-			Title:        fields[8],
-			SourceType:   fields[9],
-			AgentName:    fields[10],
-			OnExit:       fields[11],
-			CurrentCmd:   fields[12],
+			PaneID:       fields[6],
+			PaneActive:   fields[7] == "1",
+			Name:         fields[8],
+			Title:        fields[9],
+			SourceType:   fields[10],
+			AgentName:    fields[11],
+			OnExit:       fields[12],
+			CurrentCmd:   fields[13],
 		})
 	}
 

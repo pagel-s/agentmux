@@ -196,9 +196,14 @@ func TestStatusAndFocusNamedPanes(t *testing.T) {
 		Session: "agentmux-focus",
 		Windows: []resolve.Window{
 			{
-				Name: "main",
+				Name: "editor",
 				Panes: []resolve.Pane{
 					{Name: "editor", SourceType: "command", Command: "printf ready", Title: "Editor"},
+				},
+			},
+			{
+				Name: "review",
+				Panes: []resolve.Pane{
 					{Name: "checks", SourceType: "agent", AgentName: "reviewer", Command: "printf checks", Title: "Checks", OnExit: config.OnExitRestart},
 				},
 			},
@@ -226,6 +231,9 @@ func TestStatusAndFocusNamedPanes(t *testing.T) {
 	if panes[0].Name != "editor" || panes[1].Name != "checks" {
 		t.Fatalf("unexpected pane names: %#v", panes)
 	}
+	if panes[0].WindowName != "editor" || panes[1].WindowName != "review" {
+		t.Fatalf("unexpected pane windows: %#v", panes)
+	}
 	if panes[0].SourceType != "command" || panes[1].SourceType != "agent" {
 		t.Fatalf("unexpected pane source types: %#v", panes)
 	}
@@ -246,7 +254,7 @@ func TestStatusAndFocusNamedPanes(t *testing.T) {
 		t.Fatalf("FocusPaneByName returned error: %v", err)
 	}
 
-	activeName := strings.TrimSpace(tmuxOutput(t, "display-message", "-p", "-t", cfg.Session+":main", "#{pane_id}\t#{@agentmux_name}"))
+	activeName := strings.TrimSpace(tmuxOutput(t, "display-message", "-p", "-t", cfg.Session+":review", "#{pane_id}\t#{@agentmux_name}"))
 	if !strings.HasSuffix(activeName, "\tchecks") {
 		t.Fatalf("active pane metadata = %q, want checks", activeName)
 	}
