@@ -22,6 +22,35 @@ func TestParseLoadAcceptsConfigBeforeFlags(t *testing.T) {
 	}
 }
 
+func TestParseReloadAcceptsConfigBeforeFlags(t *testing.T) {
+	opts, err := ParseReload([]string{"dev.yaml", "--dry-run", "--param", "project_dir=~/code/app", "--no-attach"})
+	if err != nil {
+		t.Fatalf("ParseReload returned error: %v", err)
+	}
+
+	if opts.ConfigPath != "dev.yaml" {
+		t.Fatalf("ConfigPath = %q, want %q", opts.ConfigPath, "dev.yaml")
+	}
+	if !opts.DryRun {
+		t.Fatalf("DryRun = false, want true")
+	}
+	if opts.Attach {
+		t.Fatalf("Attach = true, want false for dry-run")
+	}
+	if opts.Replace {
+		t.Fatalf("Replace = true, want false because reload is implicit replace")
+	}
+	if got := opts.Params["project_dir"]; got != "~/code/app" {
+		t.Fatalf("project_dir = %q, want %q", got, "~/code/app")
+	}
+}
+
+func TestParseReloadRejectsExplicitReplace(t *testing.T) {
+	if _, err := ParseReload([]string{"dev.yaml", "--replace"}); err == nil {
+		t.Fatal("ParseReload returned nil error for explicit --replace")
+	}
+}
+
 func TestParseRenderAcceptsInlineParam(t *testing.T) {
 	opts, err := ParseRender([]string{"--param=project_dir=.", "dev.yaml"})
 	if err != nil {

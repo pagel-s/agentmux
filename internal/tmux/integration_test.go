@@ -277,6 +277,114 @@ func TestStatusMissingSessionReturnsHelpfulError(t *testing.T) {
 	}
 }
 
+func TestCurrentSocketPathParsesTMUXEnv(t *testing.T) {
+	t.Setenv("TMUX", "/tmp/tmux-1000/default,123,0")
+	if got := currentSocketPath(); got != "/tmp/tmux-1000/default" {
+		t.Fatalf("currentSocketPath() = %q, want %q", got, "/tmp/tmux-1000/default")
+	}
+}
+
+func TestCurrentSessionUsesPaneContext(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed")
+	}
+
+	socket := filepath.Join(t.TempDir(), "agentmux-current.sock")
+	t.Setenv(envTmuxSocket, socket)
+
+	cfg := resolve.Config{
+		Session: "agentmux-current",
+		Windows: []resolve.Window{
+			{
+				Name: "main",
+				Panes: []resolve.Pane{
+					{Name: "runner", SourceType: "command", Command: "printf ready", Title: "Runner"},
+				},
+			},
+		},
+	}
+
+	t.Cleanup(func() {
+		_ = command("kill-server").Run()
+	})
+
+	if err := Execute(cfg, Options{Replace: true}); err != nil {
+		if isTmuxPermissionError(err) {
+			t.Skipf("tmux integration unavailable in this environment: %v", err)
+		}
+		t.Fatalf("Execute returned error: %v", err)
+	}
+
+	panes, err := Status(cfg.Session)
+	if err != nil {
+		t.Fatalf("Status returned error: %v", err)
+	}
+	if len(panes) != 1 {
+		t.Fatalf("expected 1 pane, got %d", len(panes))
+	}
+
+	t.Setenv("TMUX_PANE", panes[0].PaneID)
+	session, ok, err := CurrentSession()
+	if err != nil {
+		t.Fatalf("CurrentSession returned error: %v", err)
+	}
+	if !ok {
+		t.Fatal("CurrentSession reported ok=false, want true")
+	}
+	if session != cfg.Session {
+		t.Fatalf("CurrentSession = %q, want %q", session, cfg.Session)
+	}
+}
+
+func TestEnsureCanReplaceRejectsCurrentPaneSession(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed")
+	}
+
+	socket := filepath.Join(t.TempDir(), "agentmux-replace-guard.sock")
+	t.Setenv(envTmuxSocket, socket)
+
+	cfg := resolve.Config{
+		Session: "agentmux-replace-guard",
+		Windows: []resolve.Window{
+			{
+				Name: "main",
+				Panes: []resolve.Pane{
+					{Name: "runner", SourceType: "command", Command: "printf ready", Title: "Runner"},
+				},
+			},
+		},
+	}
+
+	t.Cleanup(func() {
+		_ = command("kill-server").Run()
+	})
+
+	if err := Execute(cfg, Options{Replace: true}); err != nil {
+		if isTmuxPermissionError(err) {
+			t.Skipf("tmux integration unavailable in this environment: %v", err)
+		}
+		t.Fatalf("Execute returned error: %v", err)
+	}
+
+	panes, err := Status(cfg.Session)
+	if err != nil {
+		t.Fatalf("Status returned error: %v", err)
+	}
+	if len(panes) != 1 {
+		t.Fatalf("expected 1 pane, got %d", len(panes))
+	}
+
+	t.Setenv("TMUX_PANE", panes[0].PaneID)
+	err = ensureCanReplace(cfg.Session)
+	if err == nil {
+		t.Fatal("ensureCanReplace returned nil error for current pane session")
+	}
+	if !strings.Contains(err.Error(), `cannot replace session "agentmux-replace-guard" from inside the same tmux session`) {
+		t.Fatalf("ensureCanReplace error = %q, want self-replace guard", err)
+	}
+}
+
 func TestMissingNamedPaneInUnnamedSessionReturnsHelpfulError(t *testing.T) {
 	if _, err := exec.LookPath("tmux"); err != nil {
 		t.Skip("tmux not installed")

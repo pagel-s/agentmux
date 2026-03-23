@@ -39,6 +39,8 @@ func run(args []string) int {
 	switch args[0] {
 	case "load":
 		return runLoad(args[1:])
+	case "reload":
+		return runReload(args[1:])
 	case "validate":
 		return runValidate(args[1:])
 	case "render":
@@ -83,6 +85,21 @@ func runLoad(args []string) int {
 		return exitValidation
 	}
 
+	return runSessionLaunch("load", opts, false, opts.Replace)
+}
+
+func runReload(args []string) int {
+	opts, err := cli.ParseReload(args)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return exitValidation
+	}
+
+	return runSessionLaunch("reload", opts, true, true)
+}
+
+func runSessionLaunch(mode string, opts cli.LoadOptions, requireExisting bool, replace bool) int {
+
 	resolved, warnings, code := resolveCommand(opts.CommonOptions)
 	if code != exitSuccess {
 		return code
@@ -90,13 +107,23 @@ func runLoad(args []string) int {
 	printWarnings(warnings)
 
 	if opts.DryRun {
-		fmt.Print(renderPlan(*resolved, opts.Attach, opts.Replace))
+		fmt.Print(renderPlan(*resolved, opts.Attach, replace))
 		return exitSuccess
 	}
 
 	if err := requireTMux(); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		return exitDependency
+	}
+
+	exists, err := tmux.SessionExists(resolved.Session)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return exitRuntime
+	}
+	if requireExisting && !exists {
+		fmt.Fprintf(os.Stderr, "error: %s requires existing session %q; use `agentmux load %s` to create it\n", mode, resolved.Session, opts.ConfigPath)
+		return exitRuntime
 	}
 
 	if err := hooks.RunPre(resolved.Hooks.PreSession, opts.Verbose); err != nil {
@@ -106,7 +133,7 @@ func runLoad(args []string) int {
 
 	if err := tmux.Execute(*resolved, tmux.Options{
 		Attach:  opts.Attach,
-		Replace: opts.Replace,
+		Replace: replace,
 		Verbose: opts.Verbose,
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
@@ -613,6 +640,7 @@ func printUsage() {
 
 Usage:
   agentmux load <config> [--param key=value] [--attach|--no-attach] [--dry-run] [--replace] [--strict] [--verbose]
+  agentmux reload <config> [--param key=value] [--attach|--no-attach] [--dry-run] [--strict] [--verbose]
   agentmux validate <config> [--param key=value] [--strict]
   agentmux render <config> [--param key=value] [--strict]
   agentmux list

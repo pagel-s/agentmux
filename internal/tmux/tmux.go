@@ -73,6 +73,9 @@ func Execute(cfg resolve.Config, opts Options) error {
 		if !opts.Replace {
 			return fmt.Errorf("tmux session %q already exists; rerun with --replace", cfg.Session)
 		}
+		if err := ensureCanReplace(cfg.Session); err != nil {
+			return err
+		}
 		if err := run(opts.Verbose, "kill-session", "-t", cfg.Session); err != nil {
 			return fmt.Errorf("replace existing session %q: %w", cfg.Session, err)
 		}
@@ -550,6 +553,21 @@ func parseWindowAndPane(value string) (string, string, error) {
 }
 
 func attachSession(name string, verbose bool) error {
+	if Socket() == "" {
+		if _, ok, err := CurrentSession(); err != nil {
+			return err
+		} else if ok {
+			cmd := exec.Command(tmuxBinary(), "switch-client", "-t", name)
+			if verbose {
+				fmt.Fprintf(os.Stderr, "tmux %s\n", strings.Join(cmd.Args[1:], " "))
+			}
+			cmd.Stdin = os.Stdin
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			return cmd.Run()
+		}
+	}
+
 	cmd := command("attach-session", "-t", name)
 	if verbose {
 		fmt.Fprintf(os.Stderr, "tmux %s\n", strings.Join(cmd.Args[1:], " "))
@@ -695,6 +713,67 @@ func ensureSessionExists(session string) error {
 		return fmt.Errorf("session %q not found. Run `agentmux list` to inspect tmux sessions or `agentmux load <config>` to create it", session)
 	}
 	return nil
+}
+
+func ensureCanReplace(session string) error {
+	if socket := Socket(); socket != "" {
+		if currentSocket := currentSocketPath(); currentSocket != "" && currentSocket != socket {
+			return nil
+		}
+	}
+
+	current, ok, err := CurrentSession()
+	if err != nil {
+		return err
+	}
+	if ok && current == session {
+		return fmt.Errorf("cannot replace session %q from inside the same tmux session; run this command from another shell or tmux client", session)
+	}
+	return nil
+}
+
+func currentSocketPath() string {
+	tmuxEnv := strings.TrimSpace(os.Getenv("TMUX"))
+	if tmuxEnv == "" {
+		return ""
+	}
+	socket, _, _ := strings.Cut(tmuxEnv, ",")
+	return strings.TrimSpace(socket)
+}
+
+func CurrentSession() (string, bool, error) {
+	paneID := strings.TrimSpace(os.Getenv("TMUX_PANE"))
+	if paneID == "" && strings.TrimSpace(os.Getenv("TMUX")) == "" {
+		return "", false, nil
+	}
+
+	args := make([]string, 0, 6)
+	if socket := Socket(); socket != "" {
+		args = append(args, "-S", socket)
+	}
+	args = append(args, "display-message", "-p")
+	if paneID != "" {
+		args = append(args, "-t", paneID)
+	}
+	args = append(args, "#{session_name}")
+
+	cmd := exec.Command(tmuxBinary(), args...)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		message := strings.TrimSpace(stderr.String())
+		if strings.Contains(message, "can't find pane") || strings.Contains(message, "can't find client") {
+			return "", false, nil
+		}
+		if stderr.Len() > 0 {
+			return "", false, fmt.Errorf("%s", message)
+		}
+		return "", false, err
+	}
+
+	return strings.TrimSpace(stdout.String()), true, nil
 }
 
 func respawnPaneByName(session string, name string, verbose bool) error {

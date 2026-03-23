@@ -75,8 +75,16 @@ func (p *paramFlags) Set(value string) error {
 }
 
 func ParseLoad(args []string) (LoadOptions, error) {
+	return parseLaunch("load", args, true)
+}
+
+func ParseReload(args []string) (LoadOptions, error) {
+	return parseLaunch("reload", args, false)
+}
+
+func parseLaunch(name string, args []string, allowReplace bool) (LoadOptions, error) {
 	var params paramFlags
-	fs := flag.NewFlagSet("load", flag.ContinueOnError)
+	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 
 	attach := fs.Bool("attach", false, "")
@@ -98,8 +106,11 @@ func ParseLoad(args []string) (LoadOptions, error) {
 	if *attach && *noAttach {
 		return LoadOptions{}, errors.New("cannot use --attach and --no-attach together")
 	}
+	if !allowReplace && *replace {
+		return LoadOptions{}, fmt.Errorf("%s always replaces the existing session and does not accept --replace", name)
+	}
 	if fs.NArg() != 1 {
-		return LoadOptions{}, errors.New("load requires exactly one config path")
+		return LoadOptions{}, fmt.Errorf("%s requires exactly one config path", name)
 	}
 
 	return LoadOptions{
@@ -111,7 +122,7 @@ func ParseLoad(args []string) (LoadOptions, error) {
 		},
 		Attach:  !*noAttach && !*dryRun,
 		DryRun:  *dryRun,
-		Replace: *replace,
+		Replace: allowReplace && *replace,
 	}, nil
 }
 

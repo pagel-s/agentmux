@@ -63,18 +63,16 @@ The core rule is simple: every new capability should build on tmux and named pan
 
 ## Immediate Priorities
 
-- finish the pane-runtime control loop with an explicitly destructive `kill` command
-- add `--json` output for `status` and `capture`
-- improve runtime metadata and error clarity
 - keep dogfooding the tool on real sessions
-- tag the next milestone as `v0.2.0`
+- add configurable pane exit behavior such as `on_exit` or optional auto-restart
+- improve runtime automation surfaces and scriptability
+- tag the next milestone as `v0.3.0`
 
 ## Mid-Term Priorities
 
-- `reload` or `apply` to reconcile config changes onto an existing session
-- richer pane lifecycle controls such as `on_exit` policy or optional auto-restart
 - better automation surfaces, including stable metadata and scriptable output
 - local config reuse mechanisms such as includes or shared templates
+- richer inspection and diagnostics for running sessions
 
 ## Long-Term Decision
 

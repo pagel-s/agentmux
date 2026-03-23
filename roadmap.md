@@ -16,17 +16,17 @@ That means the next milestone should be treated as a workspace-management releas
 
 ## Immediate
 
-Target: `v0.2.0`
+Target: `v0.3.0`
 
 - keep dogfooding on real sessions and fix rough edges quickly
-- cut `v0.2.0` once the runtime loop feels stable in real use
+- add configurable pane exit behavior such as `on_exit` or optional auto-restart
+- improve runtime automation surfaces such as `capture --tail` or `send --no-enter`
+- cut `v0.3.0` once reload and pane lifecycle behavior feel stable in real use
 
 ## Mid-Term
 
-Target: `v0.3.x`
+Target: `v0.4.x`
 
-- add `reload` or `apply` for updating an existing session from config
-- add configurable pane exit behavior such as `on_exit` or optional auto-restart
 - add richer inspection and diagnostics for running sessions
 - add local config reuse such as includes or shared templates
 - improve machine-friendly automation and scripting surfaces

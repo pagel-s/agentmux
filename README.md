@@ -32,7 +32,7 @@ This repository builds on the v1 foundation with:
 - Param interpolation with `{{param_name}}`
 - Session-, window-, agent-, and pane-level env merging
 - tmux session, window, and pane creation
-- Commands: `load`, `validate`, `render`, `list`, `status`, `focus`, `restart`, `rerun`, `stop`, `kill`, `capture`, `send`, `doctor`
+- Commands: `load`, `reload`, `validate`, `render`, `list`, `status`, `focus`, `restart`, `rerun`, `stop`, `kill`, `capture`, `send`, `doctor`
 
 Current model:
 
@@ -67,6 +67,7 @@ export PATH="$PWD/bin:$PATH"
 
 ```bash
 ./bin/agentmux load <config> [--param key=value] [--attach|--no-attach] [--dry-run] [--replace]
+./bin/agentmux reload <config> [--param key=value] [--attach|--no-attach] [--dry-run]
 ./bin/agentmux validate <config> [--param key=value]
 ./bin/agentmux render <config> [--param key=value]
 ./bin/agentmux list
@@ -83,6 +84,8 @@ export PATH="$PWD/bin:$PATH"
 ```
 
 `load` attaches by default unless you pass `--no-attach` or `--dry-run`.
+
+`reload` recreates an existing session from config using replace semantics. It is the workflow command for applying config changes onto a live session, and it fails if the session does not exist yet.
 
 ## Config Shape
 
@@ -217,6 +220,7 @@ Common runtime errors:
 - `session "..." not found`: the tmux session does not exist yet or has already been removed. Run `./bin/agentmux list` to inspect sessions, or `./bin/agentmux load <config>` to recreate it.
 - `pane "..." not found ... available named panes: ...`: the session exists, but that pane name is wrong for the current live session. Run `./bin/agentmux status <session>` and use one of the listed pane names.
 - `session has no named panes`: the live session was created from panes without `name:` fields. Add `name:` to the panes you want to control and reload the session.
+- `cannot replace session "..." from inside the same tmux session`: run `reload` or `load --replace` from another shell or another tmux client so Agentmux does not destroy the pane that is executing it.
 
 ## Examples
 
