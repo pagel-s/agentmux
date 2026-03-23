@@ -53,6 +53,8 @@ func run(args []string) int {
 		return runRestart(args[1:])
 	case "rerun":
 		return runRerun(args[1:])
+	case "stop":
+		return runStop(args[1:])
 	case "send":
 		return runSend(args[1:])
 	case "doctor":
@@ -256,6 +258,27 @@ func runRerun(args []string) int {
 	}
 
 	fmt.Printf("reran pane %q in session %q\n", opts.Pane, opts.Session)
+	return exitSuccess
+}
+
+func runStop(args []string) int {
+	opts, err := cli.ParseStop(args)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return exitValidation
+	}
+
+	if err := requireTMux(); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return exitDependency
+	}
+
+	if err := tmux.StopPaneByName(opts.Session, opts.Pane, false); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return exitRuntime
+	}
+
+	fmt.Printf("stopped pane %q in session %q\n", opts.Pane, opts.Session)
 	return exitSuccess
 }
 
@@ -488,6 +511,7 @@ Usage:
   agentmux focus <session> <pane-name>
   agentmux restart <session> <pane-name>
   agentmux rerun <session> <pane-name>
+  agentmux stop <session> <pane-name>
   agentmux send <session> <pane-name> <command...>
   agentmux doctor
   agentmux version`)

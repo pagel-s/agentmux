@@ -229,6 +229,33 @@ func SendCommandToPaneByName(session string, name string, commandText string, ve
 	return nil
 }
 
+func StopPaneByName(session string, name string, verbose bool) error {
+	target, err := findPaneByName(session, name)
+	if err != nil {
+		return err
+	}
+
+	startupCommand, err := showPaneOption(target.PaneID, paneStartupOption, verbose)
+	if err != nil {
+		return fmt.Errorf("load startup command for pane %q before stop: %w", name, err)
+	}
+	shell := interactiveShell()
+	if err := run(verbose, "respawn-pane", "-k", "-t", target.PaneID, shell); err != nil {
+		return fmt.Errorf("stop pane %q: %w", name, err)
+	}
+	if target.Name != "" {
+		if err := run(verbose, "set-option", "-p", "-t", target.PaneID, paneNameOption, target.Name); err != nil {
+			return fmt.Errorf("restore pane name %q after stop: %w", name, err)
+		}
+	}
+	if strings.TrimSpace(startupCommand) != "" {
+		if err := run(verbose, "set-option", "-p", "-t", target.PaneID, paneStartupOption, startupCommand); err != nil {
+			return fmt.Errorf("restore startup command metadata for pane %q after stop: %w", name, err)
+		}
+	}
+	return nil
+}
+
 func SessionExists(name string) (bool, error) {
 	cmd := command("has-session", "-t", name)
 	if err := cmd.Run(); err != nil {

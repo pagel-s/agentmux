@@ -20,7 +20,7 @@ This repository is the polished v1 foundation:
 - Param interpolation with `{{param_name}}`
 - Session-, window-, agent-, and pane-level env merging
 - tmux session, window, and pane creation
-- Commands: `load`, `validate`, `render`, `list`, `status`, `focus`, `restart`, `rerun`, `doctor`
+- Commands: `load`, `validate`, `render`, `list`, `status`, `focus`, `restart`, `rerun`, `stop`, `send`, `doctor`
 
 Out of scope for v1:
 
@@ -56,6 +56,7 @@ export PATH="$PWD/bin:$PATH"
 ./bin/agentmux focus <session> <pane-name>
 ./bin/agentmux restart <session> <pane-name>
 ./bin/agentmux rerun <session> <pane-name>
+./bin/agentmux stop <session> <pane-name>
 ./bin/agentmux send <session> <pane-name> <command...>
 ./bin/agentmux doctor
 ./bin/agentmux version
@@ -161,10 +162,13 @@ Named panes can now be targeted at runtime:
 ./bin/agentmux focus dogfood resolve
 ./bin/agentmux restart dogfood resolve
 ./bin/agentmux rerun dogfood resolve
+./bin/agentmux stop dogfood resolve
 ./bin/agentmux send dogfood review "git status --short"
 ```
 
 `restart` and `rerun` both re-execute the pane's stored startup command in place using tmux pane respawn. In the current version, they are intentionally equivalent so the behavior stays predictable for interactive panes.
+
+`stop` kills the pane's current process and respawns a fresh interactive shell in place. This is the safe live-control option because it preserves the pane and its layout instead of destroying it.
 
 `send` writes a literal command into the target pane and presses Enter, which makes named panes usable as live workflow endpoints after startup.
 

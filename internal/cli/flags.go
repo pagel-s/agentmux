@@ -149,6 +149,16 @@ func ParseRerun(args []string) (PaneTargetOptions, error) {
 	}, nil
 }
 
+func ParseStop(args []string) (PaneTargetOptions, error) {
+	if len(args) != 2 {
+		return PaneTargetOptions{}, errors.New("stop requires exactly one session name and one pane name")
+	}
+	return PaneTargetOptions{
+		Session: args[0],
+		Pane:    args[1],
+	}, nil
+}
+
 func ParseSend(args []string) (SendOptions, error) {
 	if len(args) < 3 {
 		return SendOptions{}, errors.New("send requires a session name, pane name, and command")

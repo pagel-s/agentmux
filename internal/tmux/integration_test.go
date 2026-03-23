@@ -356,6 +356,59 @@ func TestSendCommandToNamedPane(t *testing.T) {
 	}
 }
 
+func TestStopNamedPaneLeavesShellUsable(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed")
+	}
+
+	socket := filepath.Join(t.TempDir(), "agentmux-stop.sock")
+	t.Setenv(envTmuxSocket, socket)
+
+	cfg := resolve.Config{
+		Session: "agentmux-stop",
+		Windows: []resolve.Window{
+			{
+				Name: "main",
+				Panes: []resolve.Pane{
+					{
+						Name:       "runner",
+						SourceType: "command",
+						Command:    "printf 'running\\n'; while :; do sleep 1; done",
+						Title:      "Runner",
+					},
+				},
+			},
+		},
+	}
+
+	t.Cleanup(func() {
+		_ = command("kill-server").Run()
+	})
+
+	if err := Execute(cfg, Options{Replace: true}); err != nil {
+		if isTmuxPermissionError(err) {
+			t.Skipf("tmux integration unavailable in this environment: %v", err)
+		}
+		t.Fatalf("Execute returned error: %v", err)
+	}
+
+	if out := waitForPaneContains(t, cfg.Session+":main.1", "running"); !strings.Contains(out, "running") {
+		t.Fatalf("initial output %q does not include running", out)
+	}
+
+	if err := StopPaneByName(cfg.Session, "runner", false); err != nil {
+		t.Fatalf("StopPaneByName returned error: %v", err)
+	}
+	if err := SendCommandToPaneByName(cfg.Session, "runner", "printf 'after-stop\\n'", false); err != nil {
+		t.Fatalf("SendCommandToPaneByName after stop returned error: %v", err)
+	}
+
+	afterStop := waitForPaneContains(t, cfg.Session+":main.1", "after-stop")
+	if !strings.Contains(afterStop, "after-stop") {
+		t.Fatalf("output after stop %q does not include after-stop", afterStop)
+	}
+}
+
 func tmuxOutput(t *testing.T, args ...string) string {
 	t.Helper()
 

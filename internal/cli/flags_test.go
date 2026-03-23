@@ -98,6 +98,23 @@ func TestParseRerunRequiresSessionAndPaneName(t *testing.T) {
 	}
 }
 
+func TestParseStopRequiresSessionAndPaneName(t *testing.T) {
+	opts, err := ParseStop([]string{"dogfood", "resolve"})
+	if err != nil {
+		t.Fatalf("ParseStop returned error: %v", err)
+	}
+	if opts.Session != "dogfood" {
+		t.Fatalf("Session = %q, want %q", opts.Session, "dogfood")
+	}
+	if opts.Pane != "resolve" {
+		t.Fatalf("Pane = %q, want %q", opts.Pane, "resolve")
+	}
+
+	if _, err := ParseStop([]string{"dogfood"}); err == nil {
+		t.Fatal("ParseStop returned nil error for missing pane name")
+	}
+}
+
 func TestParseSendRequiresSessionPaneAndCommand(t *testing.T) {
 	opts, err := ParseSend([]string{"dogfood", "resolve", "go", "test", "./..."})
 	if err != nil {
