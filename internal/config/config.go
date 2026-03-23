@@ -43,10 +43,12 @@ type Agent struct {
 }
 
 type Window struct {
-	Window string `yaml:"window"`
-	Root   string `yaml:"root"`
-	Layout string `yaml:"layout"`
-	Panes  []Pane `yaml:"panes"`
+	Window      string `yaml:"window"`
+	Root        string `yaml:"root"`
+	Layout      string `yaml:"layout"`
+	GridRows    int    `yaml:"grid_rows"`
+	GridColumns int    `yaml:"grid_columns"`
+	Panes       []Pane `yaml:"panes"`
 }
 
 type Pane struct {

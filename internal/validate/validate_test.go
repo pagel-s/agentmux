@@ -41,3 +41,41 @@ func TestDocumentReportsMissingParamAndUnknownAgent(t *testing.T) {
 		t.Fatalf("issues missing missing-param error: %v", issues)
 	}
 }
+
+func TestDocumentRejectsInvalidGridDefinition(t *testing.T) {
+	doc := &config.Document{
+		Config: config.Config{
+			Version: 1,
+			Session: "demo",
+			Layout: []config.Window{
+				{
+					Window:      "grid",
+					Layout:      "grid",
+					GridRows:    3,
+					GridColumns: 3,
+					Panes: []config.Pane{
+						{Command: "echo 1"},
+						{Command: "echo 2"},
+					},
+				},
+			},
+		},
+	}
+
+	issues := Document(doc, nil)
+
+	if !HasErrors(issues) {
+		t.Fatal("HasErrors = false, want true")
+	}
+
+	found := false
+	for _, issue := range issues {
+		if issue.Message == `window "grid" grid 3x3 requires exactly 9 panes, got 2` {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("issues missing grid size error: %v", issues)
+	}
+}

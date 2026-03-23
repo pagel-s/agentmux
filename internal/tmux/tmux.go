@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"agentmux/internal/resolve"
@@ -29,6 +30,12 @@ type Options struct {
 type createdWindow struct {
 	ID    string
 	Panes []string
+}
+
+type paneGeometry struct {
+	ID   string
+	Top  int
+	Left int
 }
 
 func Execute(cfg resolve.Config, opts Options) error {
@@ -71,7 +78,7 @@ func Execute(cfg resolve.Config, opts Options) error {
 			}
 		}
 
-		if window.Layout != "" {
+		if window.Layout != "" && !(window.GridRows > 0 && window.GridColumns > 0) {
 			if err := run(opts.Verbose, "select-layout", "-t", created.ID, window.Layout); err != nil {
 				return fmt.Errorf("apply layout %q to window %q: %w", window.Layout, window.Name, err)
 			}
@@ -126,6 +133,9 @@ func SessionExists(name string) (bool, error) {
 }
 
 func createWindow(session string, first bool, window resolve.Window, verbose bool) (createdWindow, error) {
+	if window.GridRows > 0 && window.GridColumns > 0 {
+		return createGridWindow(session, first, window, verbose)
+	}
 	if len(window.Panes) == 0 {
 		return createdWindow{}, fmt.Errorf("window %q has no panes", window.Name)
 	}
@@ -167,6 +177,7 @@ func createWindow(session string, first bool, window resolve.Window, verbose boo
 		} else if window.Root != "" {
 			args = append(args, "-c", window.Root)
 		}
+		args = append(args, buildPaneCommand(pane))
 
 		out, err := capture(verbose, args...)
 		if err != nil {
@@ -176,6 +187,119 @@ func createWindow(session string, first bool, window resolve.Window, verbose boo
 	}
 
 	return created, nil
+}
+
+func createGridWindow(session string, first bool, window resolve.Window, verbose bool) (createdWindow, error) {
+	if len(window.Panes) == 0 {
+		return createdWindow{}, fmt.Errorf("window %q has no panes", window.Name)
+	}
+
+	rows := window.GridRows
+	cols := window.GridColumns
+	if rows <= 0 || cols <= 0 {
+		return createdWindow{}, fmt.Errorf("window %q grid layout requires positive dimensions", window.Name)
+	}
+	if len(window.Panes) != rows*cols {
+		return createdWindow{}, fmt.Errorf("window %q grid %dx%d requires exactly %d panes, got %d", window.Name, rows, cols, rows*cols, len(window.Panes))
+	}
+
+	windowID, firstPaneID, err := createFirstPane(session, first, window, window.Panes[0], verbose)
+	if err != nil {
+		return createdWindow{}, err
+	}
+
+	rowAnchor := firstPaneID
+	for row := 1; row < rows; row++ {
+		pane := window.Panes[row*cols]
+		if _, err := splitPane(rowAnchor, pane, window.Root, true, verbose); err != nil {
+			return createdWindow{}, fmt.Errorf("create row %d in window %q: %w", row+1, window.Name, err)
+		}
+	}
+	if rows > 1 {
+		if err := run(verbose, "select-layout", "-E", "-t", rowAnchor); err != nil {
+			return createdWindow{}, fmt.Errorf("equalize rows in window %q: %w", window.Name, err)
+		}
+	}
+
+	rowPanes, err := listPaneGeometry(windowID, verbose)
+	if err != nil {
+		return createdWindow{}, fmt.Errorf("inspect grid rows for window %q: %w", window.Name, err)
+	}
+	if len(rowPanes) != rows {
+		return createdWindow{}, fmt.Errorf("window %q expected %d row anchors, got %d", window.Name, rows, len(rowPanes))
+	}
+
+	for row := 0; row < rows; row++ {
+		anchor := rowPanes[row].ID
+		for col := 1; col < cols; col++ {
+			pane := window.Panes[row*cols+col]
+			if _, err := splitPane(anchor, pane, window.Root, false, verbose); err != nil {
+				return createdWindow{}, fmt.Errorf("create column %d in row %d for window %q: %w", col+1, row+1, window.Name, err)
+			}
+		}
+		if cols > 1 {
+			if err := run(verbose, "select-layout", "-E", "-t", anchor); err != nil {
+				return createdWindow{}, fmt.Errorf("equalize row %d in window %q: %w", row+1, window.Name, err)
+			}
+		}
+	}
+
+	ordered, err := listPaneGeometry(windowID, verbose)
+	if err != nil {
+		return createdWindow{}, fmt.Errorf("inspect final grid for window %q: %w", window.Name, err)
+	}
+
+	created := createdWindow{
+		ID:    windowID,
+		Panes: make([]string, 0, len(ordered)),
+	}
+	for _, pane := range ordered {
+		created.Panes = append(created.Panes, pane.ID)
+	}
+	return created, nil
+}
+
+func createFirstPane(session string, first bool, window resolve.Window, pane resolve.Pane, verbose bool) (string, string, error) {
+	args := []string{}
+	if first {
+		args = append(args, "new-session", "-d", "-s", session, "-n", window.Name, "-P", "-F", "#{window_id}:#{pane_id}")
+	} else {
+		args = append(args, "new-window", "-t", session, "-n", window.Name, "-P", "-F", "#{window_id}:#{pane_id}")
+	}
+	if pane.Cwd != "" {
+		args = append(args, "-c", pane.Cwd)
+	} else if window.Root != "" {
+		args = append(args, "-c", window.Root)
+	}
+	args = append(args, buildPaneCommand(pane))
+
+	out, err := capture(verbose, args...)
+	if err != nil {
+		return "", "", fmt.Errorf("create window %q: %w", window.Name, err)
+	}
+	return parseWindowAndPane(out)
+}
+
+func splitPane(targetPaneID string, pane resolve.Pane, windowRoot string, vertical bool, verbose bool) (string, error) {
+	args := []string{"split-window"}
+	if vertical {
+		args = append(args, "-v")
+	} else {
+		args = append(args, "-h")
+	}
+	args = append(args, "-t", targetPaneID, "-P", "-F", "#{pane_id}")
+	if pane.Cwd != "" {
+		args = append(args, "-c", pane.Cwd)
+	} else if windowRoot != "" {
+		args = append(args, "-c", windowRoot)
+	}
+	args = append(args, buildPaneCommand(pane))
+
+	out, err := capture(verbose, args...)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(out), nil
 }
 
 func configurePane(paneID string, pane resolve.Pane, verbose bool) error {
@@ -277,6 +401,49 @@ func capture(verbose bool, args ...string) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(stdout.String()), nil
+}
+
+func listPaneGeometry(target string, verbose bool) ([]paneGeometry, error) {
+	out, err := capture(verbose, "list-panes", "-t", target, "-F", "#{pane_id}\t#{pane_top}\t#{pane_left}")
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(out) == "" {
+		return nil, nil
+	}
+
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	panes := make([]paneGeometry, 0, len(lines))
+	for _, line := range lines {
+		fields := strings.Split(line, "\t")
+		if len(fields) != 3 {
+			return nil, fmt.Errorf("unexpected pane geometry output %q", line)
+		}
+		top, err := strconv.Atoi(fields[1])
+		if err != nil {
+			return nil, fmt.Errorf("parse pane top %q: %w", fields[1], err)
+		}
+		left, err := strconv.Atoi(fields[2])
+		if err != nil {
+			return nil, fmt.Errorf("parse pane left %q: %w", fields[2], err)
+		}
+		panes = append(panes, paneGeometry{
+			ID:   fields[0],
+			Top:  top,
+			Left: left,
+		})
+	}
+
+	sort.Slice(panes, func(i, j int) bool {
+		if panes[i].Top == panes[j].Top {
+			if panes[i].Left == panes[j].Left {
+				return panes[i].ID < panes[j].ID
+			}
+			return panes[i].Left < panes[j].Left
+		}
+		return panes[i].Top < panes[j].Top
+	})
+	return panes, nil
 }
 
 func command(args ...string) *exec.Cmd {

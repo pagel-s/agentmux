@@ -16,6 +16,16 @@ const (
 	SeverityError   Severity = "error"
 )
 
+var allowedLayouts = map[string]struct{}{
+	"":                {},
+	"even-horizontal": {},
+	"even-vertical":   {},
+	"main-horizontal": {},
+	"main-vertical":   {},
+	"tiled":           {},
+	"grid":            {},
+}
+
 type Issue struct {
 	Severity Severity
 	Message  string
@@ -71,6 +81,19 @@ func Document(doc *config.Document, cliParams map[string]string) []Issue {
 		}
 		if len(window.Panes) == 0 {
 			issues = append(issues, errorf("window %q must contain at least one pane", window.Window))
+		}
+		if _, ok := allowedLayouts[strings.TrimSpace(window.Layout)]; !ok {
+			issues = append(issues, errorf("window %q has unsupported layout %q", window.Window, window.Layout))
+		}
+		if window.Layout == "grid" {
+			if window.GridRows <= 0 || window.GridColumns <= 0 {
+				issues = append(issues, errorf("window %q uses layout %q and requires positive grid_rows and grid_columns", window.Window, window.Layout))
+			}
+			if window.GridRows > 0 && window.GridColumns > 0 && len(window.Panes) != window.GridRows*window.GridColumns {
+				issues = append(issues, errorf("window %q grid %dx%d requires exactly %d panes, got %d", window.Window, window.GridRows, window.GridColumns, window.GridRows*window.GridColumns, len(window.Panes)))
+			}
+		} else if window.GridRows != 0 || window.GridColumns != 0 {
+			issues = append(issues, errorf("window %q sets grid_rows/grid_columns but layout is %q; use layout %q for exact grids", window.Window, window.Layout, "grid"))
 		}
 		windowNames[window.Window]++
 

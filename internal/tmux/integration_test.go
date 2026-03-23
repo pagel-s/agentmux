@@ -109,6 +109,72 @@ func TestExecuteRejectsExistingSessionWithoutReplace(t *testing.T) {
 	}
 }
 
+func TestExecuteCreatesExactGridWindow(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed")
+	}
+
+	socket := filepath.Join(t.TempDir(), "agentmux-grid.sock")
+	t.Setenv(envTmuxSocket, socket)
+
+	panes := make([]resolve.Pane, 0, 9)
+	for i := 0; i < 9; i++ {
+		panes = append(panes, resolve.Pane{
+			SourceType: "command",
+			Command:    "printf grid",
+			Title:      "Grid",
+		})
+	}
+
+	cfg := resolve.Config{
+		Session: "agentmux-grid",
+		Windows: []resolve.Window{
+			{
+				Name:        "grid",
+				Layout:      "grid",
+				GridRows:    3,
+				GridColumns: 3,
+				Panes:       panes,
+			},
+		},
+	}
+
+	t.Cleanup(func() {
+		_ = command("kill-server").Run()
+	})
+
+	if err := Execute(cfg, Options{Replace: true}); err != nil {
+		if isTmuxPermissionError(err) {
+			t.Skipf("tmux integration unavailable in this environment: %v", err)
+		}
+		t.Fatalf("Execute returned error: %v", err)
+	}
+
+	geometry, err := listPaneGeometry(cfg.Session+":grid", false)
+	if err != nil {
+		if isTmuxPermissionError(err) {
+			t.Skipf("tmux integration unavailable in this environment: %v", err)
+		}
+		t.Fatalf("listPaneGeometry returned error: %v", err)
+	}
+	if len(geometry) != 9 {
+		t.Fatalf("expected 9 panes, got %d", len(geometry))
+	}
+
+	rowSet := map[int]struct{}{}
+	colSet := map[int]struct{}{}
+	for _, pane := range geometry {
+		rowSet[pane.Top] = struct{}{}
+		colSet[pane.Left] = struct{}{}
+	}
+	if len(rowSet) != 3 {
+		t.Fatalf("expected 3 unique row positions, got %d from %#v", len(rowSet), geometry)
+	}
+	if len(colSet) != 3 {
+		t.Fatalf("expected 3 unique column positions, got %d from %#v", len(colSet), geometry)
+	}
+}
+
 func tmuxOutput(t *testing.T, args ...string) string {
 	t.Helper()
 

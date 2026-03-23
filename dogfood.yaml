@@ -17,7 +17,9 @@ agents:
 layout:
   - window: workspace
     root: "{{project_dir}}"
-    layout: tiled
+    layout: grid
+    grid_rows: 2
+    grid_columns: 2
     panes:
       - command: "nvim"
         title: "Editor"
@@ -30,7 +32,9 @@ layout:
 
   - window: grid
     root: "{{project_dir}}"
-    layout: tiled
+    layout: grid
+    grid_rows: 3
+    grid_columns: 3
     panes:
       - command: "pwd"
         title: "PWD"

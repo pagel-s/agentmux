@@ -34,10 +34,12 @@ type Agent struct {
 }
 
 type Window struct {
-	Name   string `json:"name"`
-	Root   string `json:"root,omitempty"`
-	Layout string `json:"layout,omitempty"`
-	Panes  []Pane `json:"panes"`
+	Name        string `json:"name"`
+	Root        string `json:"root,omitempty"`
+	Layout      string `json:"layout,omitempty"`
+	GridRows    int    `json:"gridRows,omitempty"`
+	GridColumns int    `json:"gridColumns,omitempty"`
+	Panes       []Pane `json:"panes"`
 }
 
 type Pane struct {
@@ -174,10 +176,12 @@ func resolveWindow(raw config.Window, agents map[string]Agent, sessionEnv map[st
 	}
 
 	resolved := Window{
-		Name:   name,
-		Root:   cleanPath(root),
-		Layout: layout,
-		Panes:  make([]Pane, 0, len(raw.Panes)),
+		Name:        name,
+		Root:        cleanPath(root),
+		Layout:      layout,
+		GridRows:    raw.GridRows,
+		GridColumns: raw.GridColumns,
+		Panes:       make([]Pane, 0, len(raw.Panes)),
 	}
 	for _, pane := range raw.Panes {
 		out, err := resolvePane(pane, agents, sessionEnv, resolved.Root, params)
