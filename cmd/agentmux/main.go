@@ -49,6 +49,10 @@ func run(args []string) int {
 		return runStatus(args[1:])
 	case "focus":
 		return runFocus(args[1:])
+	case "restart":
+		return runRestart(args[1:])
+	case "rerun":
+		return runRerun(args[1:])
 	case "doctor":
 		return runDoctor(args[1:])
 	case "version", "-v", "--version":
@@ -208,6 +212,48 @@ func runFocus(args []string) int {
 	}
 
 	fmt.Printf("focused pane %q in session %q\n", opts.Pane, opts.Session)
+	return exitSuccess
+}
+
+func runRestart(args []string) int {
+	opts, err := cli.ParseRestart(args)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return exitValidation
+	}
+
+	if err := requireTMux(); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return exitDependency
+	}
+
+	if err := tmux.RestartPaneByName(opts.Session, opts.Pane, false); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return exitRuntime
+	}
+
+	fmt.Printf("restarted pane %q in session %q\n", opts.Pane, opts.Session)
+	return exitSuccess
+}
+
+func runRerun(args []string) int {
+	opts, err := cli.ParseRerun(args)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return exitValidation
+	}
+
+	if err := requireTMux(); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return exitDependency
+	}
+
+	if err := tmux.RerunPaneByName(opts.Session, opts.Pane, false); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return exitRuntime
+	}
+
+	fmt.Printf("reran pane %q in session %q\n", opts.Pane, opts.Session)
 	return exitSuccess
 }
 
@@ -417,6 +463,8 @@ Usage:
   agentmux list
   agentmux status <session>
   agentmux focus <session> <pane-name>
+  agentmux restart <session> <pane-name>
+  agentmux rerun <session> <pane-name>
   agentmux doctor
   agentmux version`)
 }

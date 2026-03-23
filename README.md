@@ -20,7 +20,7 @@ This repository is the polished v1 foundation:
 - Param interpolation with `{{param_name}}`
 - Session-, window-, agent-, and pane-level env merging
 - tmux session, window, and pane creation
-- Commands: `load`, `validate`, `render`, `list`, `doctor`
+- Commands: `load`, `validate`, `render`, `list`, `status`, `focus`, `restart`, `rerun`, `doctor`
 
 Out of scope for v1:
 
@@ -54,6 +54,8 @@ export PATH="$PWD/bin:$PATH"
 ./bin/agentmux list
 ./bin/agentmux status <session>
 ./bin/agentmux focus <session> <pane-name>
+./bin/agentmux restart <session> <pane-name>
+./bin/agentmux rerun <session> <pane-name>
 ./bin/agentmux doctor
 ./bin/agentmux version
 ```
@@ -156,7 +158,11 @@ Named panes can now be targeted at runtime:
 ```bash
 ./bin/agentmux status dogfood
 ./bin/agentmux focus dogfood resolve
+./bin/agentmux restart dogfood resolve
+./bin/agentmux rerun dogfood resolve
 ```
+
+`restart` and `rerun` both re-execute the pane's stored startup command in place using tmux pane respawn. In the current version, they are intentionally equivalent so the behavior stays predictable for interactive panes.
 
 ## Examples
 

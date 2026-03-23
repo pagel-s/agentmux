@@ -22,7 +22,7 @@ type LoadOptions struct {
 	Replace bool
 }
 
-type FocusOptions struct {
+type PaneTargetOptions struct {
 	Session string
 	Pane    string
 }
@@ -113,11 +113,31 @@ func ParseStatus(args []string) (string, error) {
 	return args[0], nil
 }
 
-func ParseFocus(args []string) (FocusOptions, error) {
+func ParseFocus(args []string) (PaneTargetOptions, error) {
 	if len(args) != 2 {
-		return FocusOptions{}, errors.New("focus requires exactly one session name and one pane name")
+		return PaneTargetOptions{}, errors.New("focus requires exactly one session name and one pane name")
 	}
-	return FocusOptions{
+	return PaneTargetOptions{
+		Session: args[0],
+		Pane:    args[1],
+	}, nil
+}
+
+func ParseRestart(args []string) (PaneTargetOptions, error) {
+	if len(args) != 2 {
+		return PaneTargetOptions{}, errors.New("restart requires exactly one session name and one pane name")
+	}
+	return PaneTargetOptions{
+		Session: args[0],
+		Pane:    args[1],
+	}, nil
+}
+
+func ParseRerun(args []string) (PaneTargetOptions, error) {
+	if len(args) != 2 {
+		return PaneTargetOptions{}, errors.New("rerun requires exactly one session name and one pane name")
+	}
+	return PaneTargetOptions{
 		Session: args[0],
 		Pane:    args[1],
 	}, nil

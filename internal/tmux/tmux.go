@@ -15,9 +15,10 @@ import (
 )
 
 const (
-	envTmuxBinary  = "AGENTMUX_TMUX_BIN"
-	envTmuxSocket  = "AGENTMUX_TMUX_SOCKET"
-	paneNameOption = "@agentmux_name"
+	envTmuxBinary     = "AGENTMUX_TMUX_BIN"
+	envTmuxSocket     = "AGENTMUX_TMUX_SOCKET"
+	paneNameOption    = "@agentmux_name"
+	paneStartupOption = "@agentmux_startup_command"
 )
 
 var shellEnvRefPattern = regexp.MustCompile(`(^|[^\\])\$(\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)`)
@@ -187,28 +188,9 @@ func Status(session string) ([]PaneStatus, error) {
 }
 
 func FocusPaneByName(session string, name string, verbose bool) error {
-	panes, err := Status(session)
+	target, err := findPaneByName(session, name)
 	if err != nil {
 		return err
-	}
-
-	var target *PaneStatus
-	available := make([]string, 0, len(panes))
-	for i := range panes {
-		if panes[i].Name != "" {
-			available = append(available, panes[i].Name)
-		}
-		if panes[i].Name == name {
-			target = &panes[i]
-		}
-	}
-
-	if target == nil {
-		sort.Strings(available)
-		if len(available) == 0 {
-			return fmt.Errorf("pane %q not found in session %q; session has no named panes", name, session)
-		}
-		return fmt.Errorf("pane %q not found in session %q; available named panes: %s", name, session, strings.Join(available, ", "))
 	}
 
 	if err := run(verbose, "select-window", "-t", target.WindowID); err != nil {
@@ -218,6 +200,14 @@ func FocusPaneByName(session string, name string, verbose bool) error {
 		return fmt.Errorf("focus pane %q: %w", name, err)
 	}
 	return nil
+}
+
+func RestartPaneByName(session string, name string, verbose bool) error {
+	return respawnPaneByName(session, name, verbose)
+}
+
+func RerunPaneByName(session string, name string, verbose bool) error {
+	return respawnPaneByName(session, name, verbose)
 }
 
 func SessionExists(name string) (bool, error) {
@@ -402,6 +392,10 @@ func splitPane(targetPaneID string, pane resolve.Pane, windowRoot string, vertic
 }
 
 func configurePane(paneID string, pane resolve.Pane, verbose bool) error {
+	startupCommand := buildPaneCommand(pane)
+	if err := run(verbose, "set-option", "-p", "-t", paneID, paneStartupOption, startupCommand); err != nil {
+		return fmt.Errorf("set startup command for pane %s: %w", paneID, err)
+	}
 	if pane.Name != "" {
 		if err := run(verbose, "set-option", "-p", "-t", paneID, paneNameOption, pane.Name); err != nil {
 			return fmt.Errorf("set name for pane %s: %w", paneID, err)
@@ -557,6 +551,70 @@ func command(args ...string) *exec.Cmd {
 	}
 	commandArgs = append(commandArgs, args...)
 	return exec.Command(tmuxBinary(), commandArgs...)
+}
+
+func findPaneByName(session string, name string) (PaneStatus, error) {
+	panes, err := Status(session)
+	if err != nil {
+		return PaneStatus{}, err
+	}
+
+	var target *PaneStatus
+	available := make([]string, 0, len(panes))
+	for i := range panes {
+		if panes[i].Name != "" {
+			available = append(available, panes[i].Name)
+		}
+		if panes[i].Name == name {
+			target = &panes[i]
+		}
+	}
+
+	if target == nil {
+		sort.Strings(available)
+		if len(available) == 0 {
+			return PaneStatus{}, fmt.Errorf("pane %q not found in session %q; session has no named panes", name, session)
+		}
+		return PaneStatus{}, fmt.Errorf("pane %q not found in session %q; available named panes: %s", name, session, strings.Join(available, ", "))
+	}
+
+	return *target, nil
+}
+
+func respawnPaneByName(session string, name string, verbose bool) error {
+	target, err := findPaneByName(session, name)
+	if err != nil {
+		return err
+	}
+
+	startupCommand, err := showPaneOption(target.PaneID, paneStartupOption, verbose)
+	if err != nil {
+		return fmt.Errorf("load startup command for pane %q: %w", name, err)
+	}
+	if strings.TrimSpace(startupCommand) == "" {
+		return fmt.Errorf("pane %q in session %q is missing startup command metadata", name, session)
+	}
+
+	if err := run(verbose, "respawn-pane", "-k", "-t", target.PaneID, startupCommand); err != nil {
+		return fmt.Errorf("respawn pane %q: %w", name, err)
+	}
+	if target.Name != "" {
+		if err := run(verbose, "set-option", "-p", "-t", target.PaneID, paneNameOption, target.Name); err != nil {
+			return fmt.Errorf("restore pane name %q after respawn: %w", name, err)
+		}
+	}
+	if err := run(verbose, "set-option", "-p", "-t", target.PaneID, paneStartupOption, startupCommand); err != nil {
+		return fmt.Errorf("restore startup command metadata for pane %q: %w", name, err)
+	}
+	return nil
+}
+
+func showPaneOption(targetPaneID string, option string, verbose bool) (string, error) {
+	value, err := capture(verbose, "show-options", "-p", "-v", "-t", targetPaneID, option)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(value), nil
 }
 
 func tmuxBinary() string {

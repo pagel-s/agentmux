@@ -1,6 +1,7 @@
 package tmux
 
 import (
+	"fmt"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -232,6 +233,76 @@ func TestStatusAndFocusNamedPanes(t *testing.T) {
 	activeName := strings.TrimSpace(tmuxOutput(t, "display-message", "-p", "-t", cfg.Session+":main", "#{pane_id}\t#{@agentmux_name}"))
 	if !strings.HasSuffix(activeName, "\tchecks") {
 		t.Fatalf("active pane metadata = %q, want checks", activeName)
+	}
+}
+
+func TestRestartAndRerunNamedPane(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed")
+	}
+
+	socket := filepath.Join(t.TempDir(), "agentmux-rerun.sock")
+	t.Setenv(envTmuxSocket, socket)
+
+	counterFile := filepath.Join(t.TempDir(), "counter.txt")
+	commandText := fmt.Sprintf(
+		"count=$(cat %s 2>/dev/null || echo 0); count=$((count+1)); echo \"$count\" > %s; printf 'run-%%s\\n' \"$count\"",
+		singleQuote(counterFile),
+		singleQuote(counterFile),
+	)
+
+	cfg := resolve.Config{
+		Session: "agentmux-rerun",
+		Windows: []resolve.Window{
+			{
+				Name: "main",
+				Panes: []resolve.Pane{
+					{
+						Name:       "runner",
+						SourceType: "command",
+						Command:    commandText,
+						Title:      "Runner",
+					},
+				},
+			},
+		},
+	}
+
+	t.Cleanup(func() {
+		_ = command("kill-server").Run()
+	})
+
+	if err := Execute(cfg, Options{Replace: true}); err != nil {
+		if isTmuxPermissionError(err) {
+			t.Skipf("tmux integration unavailable in this environment: %v", err)
+		}
+		t.Fatalf("Execute returned error: %v", err)
+	}
+
+	initial := waitForPaneContains(t, cfg.Session+":main.1", "run-1")
+	if !strings.Contains(initial, "run-1") {
+		t.Fatalf("initial output %q does not include run-1", initial)
+	}
+
+	if err := RestartPaneByName(cfg.Session, "runner", false); err != nil {
+		t.Fatalf("RestartPaneByName returned error: %v", err)
+	}
+	restarted := waitForPaneContains(t, cfg.Session+":main.1", "run-2")
+	if !strings.Contains(restarted, "run-2") {
+		t.Fatalf("restarted output %q does not include run-2", restarted)
+	}
+
+	if err := RerunPaneByName(cfg.Session, "runner", false); err != nil {
+		t.Fatalf("RerunPaneByName returned error: %v", err)
+	}
+	rerun := waitForPaneContains(t, cfg.Session+":main.1", "run-3")
+	if !strings.Contains(rerun, "run-3") {
+		t.Fatalf("rerun output %q does not include run-3", rerun)
+	}
+
+	name := strings.TrimSpace(tmuxOutput(t, "display-message", "-p", "-t", cfg.Session+":main.1", "#{@agentmux_name}"))
+	if name != "runner" {
+		t.Fatalf("pane metadata name = %q, want %q", name, "runner")
 	}
 }
 

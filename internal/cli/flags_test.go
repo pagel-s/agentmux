@@ -63,3 +63,37 @@ func TestParseFocusRequiresSessionAndPaneName(t *testing.T) {
 		t.Fatal("ParseFocus returned nil error for missing pane name")
 	}
 }
+
+func TestParseRestartRequiresSessionAndPaneName(t *testing.T) {
+	opts, err := ParseRestart([]string{"dogfood", "resolve"})
+	if err != nil {
+		t.Fatalf("ParseRestart returned error: %v", err)
+	}
+	if opts.Session != "dogfood" {
+		t.Fatalf("Session = %q, want %q", opts.Session, "dogfood")
+	}
+	if opts.Pane != "resolve" {
+		t.Fatalf("Pane = %q, want %q", opts.Pane, "resolve")
+	}
+
+	if _, err := ParseRestart([]string{"dogfood"}); err == nil {
+		t.Fatal("ParseRestart returned nil error for missing pane name")
+	}
+}
+
+func TestParseRerunRequiresSessionAndPaneName(t *testing.T) {
+	opts, err := ParseRerun([]string{"dogfood", "resolve"})
+	if err != nil {
+		t.Fatalf("ParseRerun returned error: %v", err)
+	}
+	if opts.Session != "dogfood" {
+		t.Fatalf("Session = %q, want %q", opts.Session, "dogfood")
+	}
+	if opts.Pane != "resolve" {
+		t.Fatalf("Pane = %q, want %q", opts.Pane, "resolve")
+	}
+
+	if _, err := ParseRerun([]string{"dogfood"}); err == nil {
+		t.Fatal("ParseRerun returned nil error for missing pane name")
+	}
+}
