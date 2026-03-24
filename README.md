@@ -25,6 +25,7 @@ This repository builds on the v1 foundation with:
 - `technical_spec.md`: frozen v1 baseline contract
 - `project_plan.md`: product strategy and direction
 - `roadmap.md`: immediate, mid-term, and long-term next steps
+- `roadmap_2026.md`: sharper product direction for the rest of 2026
 
 ## Current Scope
 

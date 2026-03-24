@@ -1,5 +1,7 @@
 # Agentmux Roadmap
 
+For a sharper product-direction document focused on the rest of 2026, see `roadmap_2026.md`.
+
 ## Current Frame
 
 Current `main` is beyond the original `v0.1.0` launcher baseline.
