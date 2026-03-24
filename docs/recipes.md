@@ -4,6 +4,11 @@ This guide shows concrete starting points for common Agentmux workflows.
 
 Use it when you know roughly what you want to do, but do not want to assemble the config from the full reference docs.
 
+If you want the fastest copy-and-tweak path, start from one of these files:
+
+- [`docs/recipes/coding-starter.yaml`](recipes/coding-starter.yaml): edit 3 fields and launch a coding workspace
+- [`docs/recipes/review-starter.yaml`](recipes/review-starter.yaml): edit 3 fields and launch a review workspace
+
 ## Coding Session
 
 Use this when you want one session for editing, tests, git, and an AI helper pane.
@@ -15,6 +20,10 @@ Best starter:
 ```
 
 That gives you the `ai-dev` template with a session name derived from `coding.yaml`.
+
+Fastest copyable file:
+
+- [`docs/recipes/coding-starter.yaml`](recipes/coding-starter.yaml)
 
 Typical next steps:
 
@@ -86,6 +95,10 @@ Best starter:
 ```bash
 ./bin/agentmux init review-loop review.yaml
 ```
+
+Fastest copyable file:
+
+- [`docs/recipes/review-starter.yaml`](recipes/review-starter.yaml)
 
 Typical next steps:
 

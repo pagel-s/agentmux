@@ -1,0 +1,40 @@
+# Copy this file and change only these 3 fields:
+# 1. session
+# 2. params.project_dir
+# 3. agents.coder.command
+
+version: 1
+session: my-coding-session
+
+params:
+  project_dir: "/path/to/your/repo"
+
+env:
+  PROJECT_DIR: "{{project_dir}}"
+
+agents:
+  coder:
+    provider: command
+    command: "printf 'replace agents.coder.command with your coding command\\n'; exec $SHELL"
+    cwd: "{{project_dir}}"
+    title: "Coder"
+
+layout:
+  - window: workspace
+    root: "{{project_dir}}"
+    layout: grid
+    grid_rows: 2
+    grid_columns: 2
+    panes:
+      - name: editor
+        command: "exec ${EDITOR:-vi}"
+        title: "Editor"
+        focus: true
+      - name: checks
+        command: "printf 'run your test or build command here\\n'; exec $SHELL"
+        title: "Checks"
+      - name: git
+        command: "git status"
+        title: "Git"
+      - name: coder
+        agent: coder
