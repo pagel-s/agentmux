@@ -5,6 +5,7 @@
 This document sharpens the next stage of the project after `v0.4.0`.
 
 It is more concrete than `project_plan.md` and more directional than `roadmap.md`.
+For a more execution-oriented breakdown, see `milestones_2026.md`.
 Use it to answer:
 
 - where the product is right now
