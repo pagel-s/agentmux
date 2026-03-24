@@ -29,6 +29,7 @@ This repository builds on the v1 foundation with:
 - `milestones_2026.md`: concrete milestone and issue-bucket board for 2026
 - `docs/commands.md`: command guide with explanations and examples
 - `docs/config-guide.md`: config authoring guide
+- `docs/recipes.md`: real-world workflow recipes and starter patterns
 - `docs/runtime.md`: live session and runtime control guide
 
 ## Current Scope

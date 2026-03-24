@@ -2,6 +2,8 @@
 
 This guide explains what each command is for, when to use it, and the most useful examples.
 
+If you want workflow-shaped examples instead of command reference, see [`recipes.md`](recipes.md).
+
 ## The Short Version
 
 If you only remember a few commands, remember these:

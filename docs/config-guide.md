@@ -2,6 +2,8 @@
 
 Agentmux configs are local YAML files that define one tmux workspace.
 
+If you want use-case-driven starting points instead of field-by-field reference, see [`recipes.md`](recipes.md).
+
 ## Mental Model
 
 - `agents`: reusable execution defaults
