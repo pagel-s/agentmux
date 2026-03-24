@@ -209,28 +209,25 @@ func runList(args []string) int {
 }
 
 func runStatus(args []string) int {
+	jsonOut := hasFlag(args, "--json")
 	opts, err := cli.ParseStatus(args)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		return exitValidation
+		return printCommandError("status", jsonOut, exitValidation, err, "", "")
 	}
 
 	if err := requireTMux(); err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		return exitDependency
+		return printCommandError("status", opts.JSON, exitDependency, err, opts.Session, "")
 	}
 
 	panes, err := tmux.Status(opts.Session)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		return exitRuntime
+		return printCommandError("status", opts.JSON, exitRuntime, err, opts.Session, "")
 	}
 
 	if opts.JSON {
 		out, err := renderStatusJSON(opts.Session, panes)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "error: render status json: %v\n", err)
-			return exitRuntime
+			return printCommandError("status", true, exitRuntime, fmt.Errorf("render status json: %w", err), opts.Session, "")
 		}
 		fmt.Print(out)
 		return exitSuccess
@@ -241,133 +238,170 @@ func runStatus(args []string) int {
 }
 
 func runFocus(args []string) int {
+	jsonOut := hasFlag(args, "--json")
 	opts, err := cli.ParseFocus(args)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		return exitValidation
+		return printCommandError("focus", jsonOut, exitValidation, err, "", "")
 	}
 
 	if err := requireTMux(); err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		return exitDependency
+		return printCommandError("focus", opts.JSON, exitDependency, err, opts.Session, opts.Pane)
 	}
 
 	if err := tmux.FocusPaneByName(opts.Session, opts.Pane, false); err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		return exitRuntime
+		return printCommandError("focus", opts.JSON, exitRuntime, err, opts.Session, opts.Pane)
 	}
 
-	fmt.Printf("focused pane %q in session %q\n", opts.Pane, opts.Session)
+	message := fmt.Sprintf("focused pane %q in session %q", opts.Pane, opts.Session)
+	if opts.JSON {
+		out, err := renderActionJSON("focus", opts.Session, opts.Pane, message, false)
+		if err != nil {
+			return printCommandError("focus", true, exitRuntime, fmt.Errorf("render focus json: %w", err), opts.Session, opts.Pane)
+		}
+		fmt.Print(out)
+		return exitSuccess
+	}
+
+	fmt.Println(message)
 	return exitSuccess
 }
 
 func runRestart(args []string) int {
+	jsonOut := hasFlag(args, "--json")
 	opts, err := cli.ParseRestart(args)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		return exitValidation
+		return printCommandError("restart", jsonOut, exitValidation, err, "", "")
 	}
 
 	if err := requireTMux(); err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		return exitDependency
+		return printCommandError("restart", opts.JSON, exitDependency, err, opts.Session, opts.Pane)
 	}
 
 	if err := tmux.RestartPaneByName(opts.Session, opts.Pane, false); err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		return exitRuntime
+		return printCommandError("restart", opts.JSON, exitRuntime, err, opts.Session, opts.Pane)
 	}
 
-	fmt.Printf("restarted pane %q in session %q\n", opts.Pane, opts.Session)
+	message := fmt.Sprintf("restarted pane %q in session %q", opts.Pane, opts.Session)
+	if opts.JSON {
+		out, err := renderActionJSON("restart", opts.Session, opts.Pane, message, false)
+		if err != nil {
+			return printCommandError("restart", true, exitRuntime, fmt.Errorf("render restart json: %w", err), opts.Session, opts.Pane)
+		}
+		fmt.Print(out)
+		return exitSuccess
+	}
+
+	fmt.Println(message)
 	return exitSuccess
 }
 
 func runRerun(args []string) int {
+	jsonOut := hasFlag(args, "--json")
 	opts, err := cli.ParseRerun(args)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		return exitValidation
+		return printCommandError("rerun", jsonOut, exitValidation, err, "", "")
 	}
 
 	if err := requireTMux(); err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		return exitDependency
+		return printCommandError("rerun", opts.JSON, exitDependency, err, opts.Session, opts.Pane)
 	}
 
 	if err := tmux.RerunPaneByName(opts.Session, opts.Pane, false); err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		return exitRuntime
+		return printCommandError("rerun", opts.JSON, exitRuntime, err, opts.Session, opts.Pane)
 	}
 
-	fmt.Printf("reran pane %q in session %q\n", opts.Pane, opts.Session)
+	message := fmt.Sprintf("reran pane %q in session %q", opts.Pane, opts.Session)
+	if opts.JSON {
+		out, err := renderActionJSON("rerun", opts.Session, opts.Pane, message, false)
+		if err != nil {
+			return printCommandError("rerun", true, exitRuntime, fmt.Errorf("render rerun json: %w", err), opts.Session, opts.Pane)
+		}
+		fmt.Print(out)
+		return exitSuccess
+	}
+
+	fmt.Println(message)
 	return exitSuccess
 }
 
 func runStop(args []string) int {
+	jsonOut := hasFlag(args, "--json")
 	opts, err := cli.ParseStop(args)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		return exitValidation
+		return printCommandError("stop", jsonOut, exitValidation, err, "", "")
 	}
 
 	if err := requireTMux(); err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		return exitDependency
+		return printCommandError("stop", opts.JSON, exitDependency, err, opts.Session, opts.Pane)
 	}
 
 	if err := tmux.StopPaneByName(opts.Session, opts.Pane, false); err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		return exitRuntime
+		return printCommandError("stop", opts.JSON, exitRuntime, err, opts.Session, opts.Pane)
 	}
 
-	fmt.Printf("stopped pane %q in session %q\n", opts.Pane, opts.Session)
+	message := fmt.Sprintf("stopped pane %q in session %q", opts.Pane, opts.Session)
+	if opts.JSON {
+		out, err := renderActionJSON("stop", opts.Session, opts.Pane, message, false)
+		if err != nil {
+			return printCommandError("stop", true, exitRuntime, fmt.Errorf("render stop json: %w", err), opts.Session, opts.Pane)
+		}
+		fmt.Print(out)
+		return exitSuccess
+	}
+
+	fmt.Println(message)
 	return exitSuccess
 }
 
 func runKill(args []string) int {
+	jsonOut := hasFlag(args, "--json")
 	opts, err := cli.ParseKill(args)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		return exitValidation
+		return printCommandError("kill", jsonOut, exitValidation, err, "", "")
 	}
 
 	if err := requireTMux(); err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		return exitDependency
+		return printCommandError("kill", opts.JSON, exitDependency, err, opts.Session, opts.Pane)
 	}
 
 	if err := tmux.KillPaneByName(opts.Session, opts.Pane, false); err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		return exitRuntime
+		return printCommandError("kill", opts.JSON, exitRuntime, err, opts.Session, opts.Pane)
 	}
 
-	fmt.Printf("killed pane %q in session %q\n", opts.Pane, opts.Session)
+	message := fmt.Sprintf("killed pane %q in session %q", opts.Pane, opts.Session)
+	if opts.JSON {
+		out, err := renderActionJSON("kill", opts.Session, opts.Pane, message, false)
+		if err != nil {
+			return printCommandError("kill", true, exitRuntime, fmt.Errorf("render kill json: %w", err), opts.Session, opts.Pane)
+		}
+		fmt.Print(out)
+		return exitSuccess
+	}
+
+	fmt.Println(message)
 	return exitSuccess
 }
 
 func runCapture(args []string) int {
+	jsonOut := hasFlag(args, "--json")
 	opts, err := cli.ParseCapture(args)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		return exitValidation
+		return printCommandError("capture", jsonOut, exitValidation, err, "", "")
 	}
 
 	if err := requireTMux(); err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		return exitDependency
+		return printCommandError("capture", opts.JSON, exitDependency, err, opts.Session, opts.Pane)
 	}
 
 	out, err := tmux.CapturePaneByName(opts.Session, opts.Pane, opts.Tail, false)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		return exitRuntime
+		return printCommandError("capture", opts.JSON, exitRuntime, err, opts.Session, opts.Pane)
 	}
 
 	if opts.JSON {
 		jsonOut, err := renderCaptureJSON(opts.Session, opts.Pane, opts.Tail, out)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "error: render capture json: %v\n", err)
-			return exitRuntime
+			return printCommandError("capture", true, exitRuntime, fmt.Errorf("render capture json: %w", err), opts.Session, opts.Pane)
 		}
 		fmt.Print(jsonOut)
 		return exitSuccess
@@ -381,27 +415,43 @@ func runCapture(args []string) int {
 }
 
 func runSend(args []string) int {
+	jsonOut := hasFlag(args, "--json")
 	opts, err := cli.ParseSend(args)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		return exitValidation
+		return printCommandError("send", jsonOut, exitValidation, err, "", "")
 	}
 
 	if err := requireTMux(); err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		return exitDependency
+		return printCommandError("send", opts.JSON, exitDependency, err, opts.Session, opts.Pane)
 	}
 
 	if err := tmux.SendCommandToPaneByName(opts.Session, opts.Pane, opts.Command, !opts.NoEnter, false); err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		return exitRuntime
+		return printCommandError("send", opts.JSON, exitRuntime, err, opts.Session, opts.Pane)
 	}
 
 	if opts.NoEnter {
-		fmt.Printf("sent command text to pane %q in session %q without pressing Enter\n", opts.Pane, opts.Session)
-	} else {
-		fmt.Printf("sent command to pane %q in session %q\n", opts.Pane, opts.Session)
+		message := fmt.Sprintf("sent command text to pane %q in session %q without pressing Enter", opts.Pane, opts.Session)
+		if opts.JSON {
+			out, err := renderActionJSON("send", opts.Session, opts.Pane, message, true)
+			if err != nil {
+				return printCommandError("send", true, exitRuntime, fmt.Errorf("render send json: %w", err), opts.Session, opts.Pane)
+			}
+			fmt.Print(out)
+			return exitSuccess
+		}
+		fmt.Println(message)
+		return exitSuccess
 	}
+	message := fmt.Sprintf("sent command to pane %q in session %q", opts.Pane, opts.Session)
+	if opts.JSON {
+		out, err := renderActionJSON("send", opts.Session, opts.Pane, message, false)
+		if err != nil {
+			return printCommandError("send", true, exitRuntime, fmt.Errorf("render send json: %w", err), opts.Session, opts.Pane)
+		}
+		fmt.Print(out)
+		return exitSuccess
+	}
+	fmt.Println(message)
 	return exitSuccess
 }
 
@@ -629,12 +679,91 @@ func renderCaptureJSON(session string, pane string, tailLines int, content strin
 	})
 }
 
+func renderActionJSON(kind string, session string, pane string, message string, noEnter bool) (string, error) {
+	return renderJSON(struct {
+		SchemaVersion int    `json:"schema_version"`
+		Kind          string `json:"kind"`
+		Session       string `json:"session"`
+		Pane          string `json:"pane,omitempty"`
+		Message       string `json:"message,omitempty"`
+		NoEnter       bool   `json:"no_enter,omitempty"`
+	}{
+		SchemaVersion: jsonSchemaV1,
+		Kind:          kind,
+		Session:       session,
+		Pane:          pane,
+		Message:       message,
+		NoEnter:       noEnter,
+	})
+}
+
+func renderErrorJSON(command string, exitCode int, message string, session string, pane string) (string, error) {
+	return renderJSON(struct {
+		SchemaVersion int    `json:"schema_version"`
+		Kind          string `json:"kind"`
+		Command       string `json:"command"`
+		ErrorCode     string `json:"error_code"`
+		ExitCode      int    `json:"exit_code"`
+		Message       string `json:"message"`
+		Session       string `json:"session,omitempty"`
+		Pane          string `json:"pane,omitempty"`
+	}{
+		SchemaVersion: jsonSchemaV1,
+		Kind:          "error",
+		Command:       command,
+		ErrorCode:     exitCodeName(exitCode),
+		ExitCode:      exitCode,
+		Message:       message,
+		Session:       session,
+		Pane:          pane,
+	})
+}
+
 func renderJSON(v any) (string, error) {
 	out, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		return "", err
 	}
 	return string(out) + "\n", nil
+}
+
+func printCommandError(command string, jsonOut bool, exitCode int, err error, session string, pane string) int {
+	if jsonOut {
+		out, renderErr := renderErrorJSON(command, exitCode, err.Error(), session, pane)
+		if renderErr == nil {
+			fmt.Print(out)
+			return exitCode
+		}
+		fmt.Fprintf(os.Stderr, "error: render %s error json: %v\n", command, renderErr)
+	}
+	fmt.Fprintf(os.Stderr, "error: %v\n", err)
+	return exitCode
+}
+
+func exitCodeName(code int) string {
+	switch code {
+	case exitSuccess:
+		return "success"
+	case exitRuntime:
+		return "runtime"
+	case exitValidation:
+		return "validation"
+	case exitConfigParse:
+		return "config_parse"
+	case exitDependency:
+		return "dependency"
+	default:
+		return "unknown"
+	}
+}
+
+func hasFlag(args []string, flag string) bool {
+	for _, arg := range args {
+		if arg == flag {
+			return true
+		}
+	}
+	return false
 }
 
 func versionString() string {
@@ -666,13 +795,13 @@ Usage:
   agentmux render <config> [--param key=value] [--strict]
   agentmux list
   agentmux status <session> [--json]
-  agentmux focus <session> <pane-name>
-  agentmux restart <session> <pane-name>
-  agentmux rerun <session> <pane-name>
-  agentmux stop <session> <pane-name>
-  agentmux kill <session> <pane-name>
+  agentmux focus <session> <pane-name> [--json]
+  agentmux restart <session> <pane-name> [--json]
+  agentmux rerun <session> <pane-name> [--json]
+  agentmux stop <session> <pane-name> [--json]
+  agentmux kill <session> <pane-name> [--json]
   agentmux capture <session> <pane-name> [--json] [--tail N]
-  agentmux send <session> <pane-name> [--no-enter] <command...>
+  agentmux send <session> <pane-name> [--json] [--no-enter] <command...>
   agentmux doctor
   agentmux version`)
 }

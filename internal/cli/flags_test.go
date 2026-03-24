@@ -110,9 +110,30 @@ func TestParseFocusRequiresSessionAndPaneName(t *testing.T) {
 	if opts.Pane != "resolve" {
 		t.Fatalf("Pane = %q, want %q", opts.Pane, "resolve")
 	}
+	if opts.JSON {
+		t.Fatal("JSON = true, want false")
+	}
 
 	if _, err := ParseFocus([]string{"dogfood"}); err == nil {
 		t.Fatal("ParseFocus returned nil error for missing pane name")
+	}
+}
+
+func TestParseFocusAcceptsJSONFlagBeforeOrAfterTarget(t *testing.T) {
+	tests := [][]string{
+		{"--json", "dogfood", "resolve"},
+		{"dogfood", "resolve", "--json"},
+		{"dogfood", "--json", "resolve"},
+	}
+
+	for _, args := range tests {
+		opts, err := ParseFocus(args)
+		if err != nil {
+			t.Fatalf("ParseFocus(%v) returned error: %v", args, err)
+		}
+		if !opts.JSON {
+			t.Fatalf("JSON = false, want true for args %v", args)
+		}
 	}
 }
 
@@ -279,6 +300,9 @@ func TestParseSendRequiresSessionPaneAndCommand(t *testing.T) {
 	if opts.NoEnter {
 		t.Fatal("NoEnter = true, want false")
 	}
+	if opts.JSON {
+		t.Fatal("JSON = true, want false")
+	}
 
 	if _, err := ParseSend([]string{"dogfood", "resolve"}); err == nil {
 		t.Fatal("ParseSend returned nil error for missing command")
@@ -295,6 +319,19 @@ func TestParseSendAcceptsNoEnterFlag(t *testing.T) {
 	}
 	if opts.Command != "printf 'hi'" {
 		t.Fatalf("Command = %q, want %q", opts.Command, "printf 'hi'")
+	}
+}
+
+func TestParseSendAcceptsJSONAndNoEnterFlags(t *testing.T) {
+	opts, err := ParseSend([]string{"dogfood", "resolve", "--json", "--no-enter", "printf", "'hi'"})
+	if err != nil {
+		t.Fatalf("ParseSend returned error: %v", err)
+	}
+	if !opts.JSON {
+		t.Fatal("JSON = false, want true")
+	}
+	if !opts.NoEnter {
+		t.Fatal("NoEnter = false, want true")
 	}
 }
 

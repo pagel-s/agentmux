@@ -73,13 +73,13 @@ export PATH="$PWD/bin:$PATH"
 ./bin/agentmux render <config> [--param key=value]
 ./bin/agentmux list
 ./bin/agentmux status <session> [--json]
-./bin/agentmux focus <session> <pane-name>
-./bin/agentmux restart <session> <pane-name>
-./bin/agentmux rerun <session> <pane-name>
-./bin/agentmux stop <session> <pane-name>
-./bin/agentmux kill <session> <pane-name>
+./bin/agentmux focus <session> <pane-name> [--json]
+./bin/agentmux restart <session> <pane-name> [--json]
+./bin/agentmux rerun <session> <pane-name> [--json]
+./bin/agentmux stop <session> <pane-name> [--json]
+./bin/agentmux kill <session> <pane-name> [--json]
 ./bin/agentmux capture <session> <pane-name> [--json] [--tail N]
-./bin/agentmux send <session> <pane-name> [--no-enter] <command...>
+./bin/agentmux send <session> <pane-name> [--json] [--no-enter] <command...>
 ./bin/agentmux doctor
 ./bin/agentmux version
 ```
@@ -226,6 +226,7 @@ Named panes can now be targeted at runtime:
 ./bin/agentmux status dogfood
 ./bin/agentmux status dogfood --json
 ./bin/agentmux focus dogfood resolve
+./bin/agentmux focus dogfood resolve --json
 ./bin/agentmux restart dogfood resolve
 ./bin/agentmux rerun dogfood resolve
 ./bin/agentmux stop dogfood resolve
@@ -255,7 +256,7 @@ Named-pane runtime commands preserve the pane's stored `on_exit` behavior, so `r
 
 `send --no-enter` writes the text without pressing Enter, which is useful when you want to stage input, edit it in the pane, or combine it with later keystrokes.
 
-`status --json` and `capture --json` expose machine-friendly output for scripting and automation while preserving the existing human-readable defaults.
+`--json` exposes machine-friendly output for scripting and automation across the runtime pane-control commands while preserving the existing human-readable defaults.
 
 `status` now also surfaces the pane source, agent name when relevant, configured `on_exit`, and tmux's current foreground command so running sessions are easier to inspect.
 
@@ -263,12 +264,14 @@ Named-pane runtime commands preserve the pane's stored `on_exit` behavior, so `r
 
 ## Automation Contract
 
-For machine-readable runtime output, Agentmux currently exposes two JSON shapes:
+For machine-readable runtime output, Agentmux currently exposes:
 
 - `status --json`: `{ "schema_version": 1, "kind": "status", "session": "...", "panes": [...] }`
 - `capture --json`: `{ "schema_version": 1, "kind": "capture", "session": "...", "pane": "...", "tail_lines": N, "content": "..." }`
+- action commands with `--json`, such as `focus --json` or `send --json`: `{ "schema_version": 1, "kind": "focus", ... }`
+- runtime failures with `--json`: `{ "schema_version": 1, "kind": "error", "command": "focus", "error_code": "runtime", "exit_code": 1, "message": "..." }`
 
-`schema_version` and `kind` are intended to be the stable contract anchors for automation. The pane objects returned by `status --json` match the fields shown in the human-readable status output.
+`schema_version` and `kind` are the stable contract anchors for automation. The pane objects returned by `status --json` match the fields shown in the human-readable status output.
 
 Runtime command exit codes:
 
@@ -277,6 +280,8 @@ Runtime command exit codes:
 - `2`: usage or validation failure
 - `3`: config parse or config load failure
 - `4`: missing dependency, such as tmux not being installed
+
+When `--json` is set on a runtime command, structured errors are printed to stdout and the process still exits with the same non-zero exit code.
 
 ## Runtime Troubleshooting
 

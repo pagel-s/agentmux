@@ -2,9 +2,14 @@ package main
 
 import (
 	"encoding/json"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"agentmux/internal/resolve"
 	"agentmux/internal/tmux"
 )
 
@@ -117,6 +122,29 @@ func TestRenderCaptureJSON(t *testing.T) {
 	}
 }
 
+func TestRenderErrorJSON(t *testing.T) {
+	out, err := renderErrorJSON("status", exitRuntime, `session "missing" not found`, "missing", "")
+	if err != nil {
+		t.Fatalf("renderErrorJSON returned error: %v", err)
+	}
+
+	var decoded struct {
+		SchemaVersion int    `json:"schema_version"`
+		Kind          string `json:"kind"`
+		Command       string `json:"command"`
+		ErrorCode     string `json:"error_code"`
+		ExitCode      int    `json:"exit_code"`
+		Message       string `json:"message"`
+		Session       string `json:"session"`
+	}
+	if err := json.Unmarshal([]byte(out), &decoded); err != nil {
+		t.Fatalf("json.Unmarshal returned error: %v", err)
+	}
+	if decoded.SchemaVersion != jsonSchemaV1 || decoded.Kind != "error" || decoded.Command != "status" || decoded.ErrorCode != "runtime" || decoded.ExitCode != exitRuntime || decoded.Session != "missing" {
+		t.Fatalf("decoded error = %#v, want stable runtime error envelope", decoded)
+	}
+}
+
 func TestRenderStatusIncludesRuntimeMetadata(t *testing.T) {
 	out := renderStatus("dogfood", []tmux.PaneStatus{
 		{
@@ -146,4 +174,176 @@ func TestRenderStatusIncludesRuntimeMetadata(t *testing.T) {
 			t.Fatalf("renderStatus output %q does not include %q", out, want)
 		}
 	}
+}
+
+func TestRunStatusJSONErrorForMissingSession(t *testing.T) {
+	if _, err := exec.LookPath(tmux.Binary()); err != nil {
+		t.Skip("tmux not installed")
+	}
+
+	code, stdout, stderr := captureRunOutput(t, []string{"status", "missing-session", "--json"})
+	if code != exitRuntime {
+		t.Fatalf("code = %d, want %d", code, exitRuntime)
+	}
+	if strings.TrimSpace(stderr) != "" {
+		t.Fatalf("stderr = %q, want empty stderr for json error", stderr)
+	}
+
+	var decoded struct {
+		Kind      string `json:"kind"`
+		Command   string `json:"command"`
+		ErrorCode string `json:"error_code"`
+		ExitCode  int    `json:"exit_code"`
+		Message   string `json:"message"`
+		Session   string `json:"session"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &decoded); err != nil {
+		t.Fatalf("json.Unmarshal returned error: %v", err)
+	}
+	if decoded.Kind != "error" || decoded.Command != "status" || decoded.ErrorCode != "runtime" || decoded.ExitCode != exitRuntime || decoded.Session != "missing-session" {
+		t.Fatalf("decoded error = %#v, want status runtime error", decoded)
+	}
+	if !strings.Contains(decoded.Message, `session "missing-session" not found`) {
+		t.Fatalf("message = %q, want missing-session text", decoded.Message)
+	}
+}
+
+func TestRunFocusJSONErrorForMissingPane(t *testing.T) {
+	if _, err := exec.LookPath(tmux.Binary()); err != nil {
+		t.Skip("tmux not installed")
+	}
+
+	socket := filepath.Join(t.TempDir(), "cmd-json-focus.sock")
+	t.Setenv("AGENTMUX_TMUX_SOCKET", socket)
+
+	cfg := resolve.Config{
+		Session: "cmd-json-focus",
+		Windows: []resolve.Window{
+			{
+				Name: "main",
+				Panes: []resolve.Pane{
+					{Name: "runner", SourceType: "command", Command: "printf ready", Title: "Runner"},
+				},
+			},
+		},
+	}
+
+	t.Cleanup(func() {
+		_ = exec.Command(tmux.Binary(), "-S", socket, "kill-server").Run()
+	})
+
+	if err := tmux.Execute(cfg, tmux.Options{Replace: true}); err != nil {
+		if isTMUXPermissionError(err) {
+			t.Skipf("tmux integration unavailable in this environment: %v", err)
+		}
+		t.Fatalf("Execute returned error: %v", err)
+	}
+
+	code, stdout, stderr := captureRunOutput(t, []string{"focus", "cmd-json-focus", "missing-pane", "--json"})
+	if code != exitRuntime {
+		t.Fatalf("code = %d, want %d", code, exitRuntime)
+	}
+	if strings.TrimSpace(stderr) != "" {
+		t.Fatalf("stderr = %q, want empty stderr for json error", stderr)
+	}
+
+	var decoded struct {
+		Kind      string `json:"kind"`
+		Command   string `json:"command"`
+		ErrorCode string `json:"error_code"`
+		ExitCode  int    `json:"exit_code"`
+		Message   string `json:"message"`
+		Session   string `json:"session"`
+		Pane      string `json:"pane"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &decoded); err != nil {
+		t.Fatalf("json.Unmarshal returned error: %v", err)
+	}
+	if decoded.Kind != "error" || decoded.Command != "focus" || decoded.ErrorCode != "runtime" || decoded.ExitCode != exitRuntime || decoded.Session != "cmd-json-focus" || decoded.Pane != "missing-pane" {
+		t.Fatalf("decoded error = %#v, want focus runtime error", decoded)
+	}
+	if !strings.Contains(decoded.Message, `available named panes: runner`) {
+		t.Fatalf("message = %q, want available pane hint", decoded.Message)
+	}
+}
+
+func TestRunStatusJSONErrorForMissingDependency(t *testing.T) {
+	t.Setenv("AGENTMUX_TMUX_BIN", filepath.Join(t.TempDir(), "does-not-exist-tmux"))
+
+	code, stdout, stderr := captureRunOutput(t, []string{"status", "dogfood", "--json"})
+	if code != exitDependency {
+		t.Fatalf("code = %d, want %d", code, exitDependency)
+	}
+	if strings.TrimSpace(stderr) != "" {
+		t.Fatalf("stderr = %q, want empty stderr for json dependency error", stderr)
+	}
+
+	var decoded struct {
+		Kind      string `json:"kind"`
+		Command   string `json:"command"`
+		ErrorCode string `json:"error_code"`
+		ExitCode  int    `json:"exit_code"`
+		Message   string `json:"message"`
+		Session   string `json:"session"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &decoded); err != nil {
+		t.Fatalf("json.Unmarshal returned error: %v", err)
+	}
+	if decoded.Kind != "error" || decoded.Command != "status" || decoded.ErrorCode != "dependency" || decoded.ExitCode != exitDependency || decoded.Session != "dogfood" {
+		t.Fatalf("decoded error = %#v, want status dependency error", decoded)
+	}
+	if !strings.Contains(decoded.Message, "is not installed or not in PATH") {
+		t.Fatalf("message = %q, want dependency text", decoded.Message)
+	}
+}
+
+func captureRunOutput(t *testing.T, args []string) (code int, stdout string, stderr string) {
+	t.Helper()
+
+	originalStdout := os.Stdout
+	originalStderr := os.Stderr
+
+	stdoutReader, stdoutWriter, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe stdout returned error: %v", err)
+	}
+	stderrReader, stderrWriter, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe stderr returned error: %v", err)
+	}
+
+	os.Stdout = stdoutWriter
+	os.Stderr = stderrWriter
+	t.Cleanup(func() {
+		os.Stdout = originalStdout
+		os.Stderr = originalStderr
+	})
+
+	code = run(args)
+
+	_ = stdoutWriter.Close()
+	_ = stderrWriter.Close()
+	os.Stdout = originalStdout
+	os.Stderr = originalStderr
+
+	stdoutBytes, err := io.ReadAll(stdoutReader)
+	if err != nil {
+		t.Fatalf("ReadAll stdout returned error: %v", err)
+	}
+	stderrBytes, err := io.ReadAll(stderrReader)
+	if err != nil {
+		t.Fatalf("ReadAll stderr returned error: %v", err)
+	}
+	_ = stdoutReader.Close()
+	_ = stderrReader.Close()
+
+	return code, string(stdoutBytes), string(stderrBytes)
+}
+
+func isTMUXPermissionError(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := err.Error()
+	return strings.Contains(message, "Operation not permitted") || strings.Contains(message, "permission denied")
 }

@@ -31,6 +31,7 @@ type StatusOptions struct {
 type PaneTargetOptions struct {
 	Session string
 	Pane    string
+	JSON    bool
 }
 
 type CaptureOptions struct {
@@ -45,6 +46,7 @@ type SendOptions struct {
 	Pane    string
 	Command string
 	NoEnter bool
+	JSON    bool
 }
 
 type paramFlags struct {
@@ -152,53 +154,23 @@ func ParseStatus(args []string) (StatusOptions, error) {
 }
 
 func ParseFocus(args []string) (PaneTargetOptions, error) {
-	if len(args) != 2 {
-		return PaneTargetOptions{}, errors.New("focus requires exactly one session name and one pane name")
-	}
-	return PaneTargetOptions{
-		Session: args[0],
-		Pane:    args[1],
-	}, nil
+	return parsePaneTarget("focus", args)
 }
 
 func ParseRestart(args []string) (PaneTargetOptions, error) {
-	if len(args) != 2 {
-		return PaneTargetOptions{}, errors.New("restart requires exactly one session name and one pane name")
-	}
-	return PaneTargetOptions{
-		Session: args[0],
-		Pane:    args[1],
-	}, nil
+	return parsePaneTarget("restart", args)
 }
 
 func ParseRerun(args []string) (PaneTargetOptions, error) {
-	if len(args) != 2 {
-		return PaneTargetOptions{}, errors.New("rerun requires exactly one session name and one pane name")
-	}
-	return PaneTargetOptions{
-		Session: args[0],
-		Pane:    args[1],
-	}, nil
+	return parsePaneTarget("rerun", args)
 }
 
 func ParseStop(args []string) (PaneTargetOptions, error) {
-	if len(args) != 2 {
-		return PaneTargetOptions{}, errors.New("stop requires exactly one session name and one pane name")
-	}
-	return PaneTargetOptions{
-		Session: args[0],
-		Pane:    args[1],
-	}, nil
+	return parsePaneTarget("stop", args)
 }
 
 func ParseKill(args []string) (PaneTargetOptions, error) {
-	if len(args) != 2 {
-		return PaneTargetOptions{}, errors.New("kill requires exactly one session name and one pane name")
-	}
-	return PaneTargetOptions{
-		Session: args[0],
-		Pane:    args[1],
-	}, nil
+	return parsePaneTarget("kill", args)
 }
 
 func ParseCapture(args []string) (CaptureOptions, error) {
@@ -227,12 +199,19 @@ func ParseCapture(args []string) (CaptureOptions, error) {
 
 func ParseSend(args []string) (SendOptions, error) {
 	noEnter := false
+	jsonOut := false
 	positional := make([]string, 0, 2)
 	command := make([]string, 0, len(args))
 	commandMode := false
 
 	for _, arg := range args {
 		switch arg {
+		case "--json":
+			if commandMode {
+				command = append(command, arg)
+			} else {
+				jsonOut = true
+			}
 		case "--no-enter":
 			if commandMode {
 				command = append(command, arg)
@@ -272,6 +251,22 @@ func ParseSend(args []string) (SendOptions, error) {
 		Pane:    positional[1],
 		Command: commandText,
 		NoEnter: noEnter,
+		JSON:    jsonOut,
+	}, nil
+}
+
+func parsePaneTarget(name string, args []string) (PaneTargetOptions, error) {
+	positional, jsonOut, err := parseOptionalJSONArgs(name, args)
+	if err != nil {
+		return PaneTargetOptions{}, err
+	}
+	if len(positional) != 2 {
+		return PaneTargetOptions{}, fmt.Errorf("%s requires exactly one session name and one pane name", name)
+	}
+	return PaneTargetOptions{
+		Session: positional[0],
+		Pane:    positional[1],
+		JSON:    jsonOut,
 	}, nil
 }
 

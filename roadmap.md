@@ -19,8 +19,8 @@ That means the next milestone should be treated as a workspace-management releas
 Target: `v0.4.0`
 
 - keep dogfooding on real sessions and fix rough edges quickly
-- add machine-readable runtime error output where it materially helps automation
 - improve runtime automation surfaces beyond the basic pane loop
+- consider JSON output for `list` or additional runtime inspection only if a real automation need appears
 - consider small lifecycle refinements only when real use shows a gap
 - cut `v0.4.0` once runtime automation and lifecycle behavior feel stable in real use
 
