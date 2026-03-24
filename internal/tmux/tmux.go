@@ -308,7 +308,7 @@ func KillPaneByName(session string, name string, verbose bool) error {
 	return nil
 }
 
-func CapturePaneByName(session string, name string, tailLines int, verbose bool) (string, error) {
+func CapturePaneByName(session string, name string, tailLines int, stripEmpty bool, verbose bool) (string, error) {
 	target, err := findPaneByName(session, name)
 	if err != nil {
 		return "", err
@@ -318,10 +318,38 @@ func CapturePaneByName(session string, name string, tailLines int, verbose bool)
 	if err != nil {
 		return "", fmt.Errorf("capture pane %q: %w", name, err)
 	}
+	if stripEmpty {
+		out = stripEmptyLinesFromCapture(out)
+	}
 	if tailLines > 0 {
 		out = tailLinesFromCapture(out, tailLines)
 	}
 	return out, nil
+}
+
+func stripEmptyLinesFromCapture(content string) string {
+	if content == "" {
+		return content
+	}
+
+	trailingNewline := strings.HasSuffix(content, "\n")
+	lines := strings.Split(strings.TrimSuffix(content, "\n"), "\n")
+	filtered := make([]string, 0, len(lines))
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		filtered = append(filtered, line)
+	}
+	if len(filtered) == 0 {
+		return ""
+	}
+
+	content = strings.Join(filtered, "\n")
+	if trailingNewline {
+		return content + "\n"
+	}
+	return content
 }
 
 func tailLinesFromCapture(content string, tailLines int) string {

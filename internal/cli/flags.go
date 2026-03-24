@@ -35,10 +35,11 @@ type PaneTargetOptions struct {
 }
 
 type CaptureOptions struct {
-	Session string
-	Pane    string
-	JSON    bool
-	Tail    int
+	Session    string
+	Pane       string
+	JSON       bool
+	Tail       int
+	StripEmpty bool
 }
 
 type SendOptions struct {
@@ -174,26 +175,44 @@ func ParseKill(args []string) (PaneTargetOptions, error) {
 }
 
 func ParseCapture(args []string) (CaptureOptions, error) {
-	var tail int
-	positional, jsonOut, err := parseOptionalJSONArgs("capture", args, func(flag string, value string) error {
-		if flag != "--tail" {
-			return fmt.Errorf("capture does not accept flag %q", flag)
+	tail := 0
+	jsonOut := false
+	stripEmpty := false
+	positional := make([]string, 0, 2)
+
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch arg {
+		case "--json":
+			jsonOut = true
+		case "--strip-empty":
+			stripEmpty = true
+		case "--tail":
+			if i+1 >= len(args) {
+				return CaptureOptions{}, fmt.Errorf("capture flag %q requires a value", arg)
+			}
+			parsed, err := parsePositiveIntFlag("capture", arg, args[i+1])
+			if err != nil {
+				return CaptureOptions{}, err
+			}
+			tail = parsed
+			i++
+		default:
+			if strings.HasPrefix(arg, "-") {
+				return CaptureOptions{}, fmt.Errorf("capture does not accept flag %q", arg)
+			}
+			positional = append(positional, arg)
 		}
-		var parseErr error
-		tail, parseErr = parsePositiveIntFlag("capture", flag, value)
-		return parseErr
-	})
-	if err != nil {
-		return CaptureOptions{}, err
 	}
 	if len(positional) != 2 {
 		return CaptureOptions{}, errors.New("capture requires exactly one session name and one pane name")
 	}
 	return CaptureOptions{
-		Session: positional[0],
-		Pane:    positional[1],
-		JSON:    jsonOut,
-		Tail:    tail,
+		Session:    positional[0],
+		Pane:       positional[1],
+		JSON:       jsonOut,
+		Tail:       tail,
+		StripEmpty: stripEmpty,
 	}, nil
 }
 

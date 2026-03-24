@@ -393,13 +393,13 @@ func runCapture(args []string) int {
 		return printCommandError("capture", opts.JSON, exitDependency, err, opts.Session, opts.Pane)
 	}
 
-	out, err := tmux.CapturePaneByName(opts.Session, opts.Pane, opts.Tail, false)
+	out, err := tmux.CapturePaneByName(opts.Session, opts.Pane, opts.Tail, opts.StripEmpty, false)
 	if err != nil {
 		return printCommandError("capture", opts.JSON, exitRuntime, err, opts.Session, opts.Pane)
 	}
 
 	if opts.JSON {
-		jsonOut, err := renderCaptureJSON(opts.Session, opts.Pane, opts.Tail, out)
+		jsonOut, err := renderCaptureJSON(opts.Session, opts.Pane, opts.Tail, opts.StripEmpty, out)
 		if err != nil {
 			return printCommandError("capture", true, exitRuntime, fmt.Errorf("render capture json: %w", err), opts.Session, opts.Pane)
 		}
@@ -664,13 +664,14 @@ func renderStatusJSON(session string, panes []tmux.PaneStatus) (string, error) {
 	})
 }
 
-func renderCaptureJSON(session string, pane string, tailLines int, content string) (string, error) {
+func renderCaptureJSON(session string, pane string, tailLines int, stripEmpty bool, content string) (string, error) {
 	return renderJSON(struct {
 		SchemaVersion int    `json:"schema_version"`
 		Kind          string `json:"kind"`
 		Session       string `json:"session"`
 		Pane          string `json:"pane"`
 		TailLines     int    `json:"tail_lines,omitempty"`
+		StripEmpty    bool   `json:"strip_empty,omitempty"`
 		Content       string `json:"content"`
 	}{
 		SchemaVersion: jsonSchemaV1,
@@ -678,6 +679,7 @@ func renderCaptureJSON(session string, pane string, tailLines int, content strin
 		Session:       session,
 		Pane:          pane,
 		TailLines:     tailLines,
+		StripEmpty:    stripEmpty,
 		Content:       content,
 	})
 }
@@ -803,7 +805,7 @@ Usage:
   agentmux rerun <session> <pane-name> [--json]
   agentmux stop <session> <pane-name> [--json]
   agentmux kill <session> <pane-name> [--json]
-  agentmux capture <session> <pane-name> [--json] [--tail N]
+  agentmux capture <session> <pane-name> [--json] [--tail N] [--strip-empty]
   agentmux send <session> <pane-name> [--json] [--no-enter] <command...>
   agentmux doctor
   agentmux version`)

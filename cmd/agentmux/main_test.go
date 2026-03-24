@@ -99,7 +99,7 @@ func TestRenderStatusJSON(t *testing.T) {
 }
 
 func TestRenderCaptureJSON(t *testing.T) {
-	out, err := renderCaptureJSON("dogfood", "review", 5, "hello\nworld\n")
+	out, err := renderCaptureJSON("dogfood", "review", 5, true, "hello\nworld\n")
 	if err != nil {
 		t.Fatalf("renderCaptureJSON returned error: %v", err)
 	}
@@ -113,12 +113,13 @@ func TestRenderCaptureJSON(t *testing.T) {
 		Session       string `json:"session"`
 		Pane          string `json:"pane"`
 		TailLines     int    `json:"tail_lines"`
+		StripEmpty    bool   `json:"strip_empty"`
 		Content       string `json:"content"`
 	}
 	if err := json.Unmarshal([]byte(out), &decoded); err != nil {
 		t.Fatalf("json.Unmarshal returned error: %v", err)
 	}
-	if decoded.SchemaVersion != jsonSchemaV1 || decoded.Kind != "capture" || decoded.Session != "dogfood" || decoded.Pane != "review" || decoded.TailLines != 5 || decoded.Content != "hello\nworld\n" {
+	if decoded.SchemaVersion != jsonSchemaV1 || decoded.Kind != "capture" || decoded.Session != "dogfood" || decoded.Pane != "review" || decoded.TailLines != 5 || !decoded.StripEmpty || decoded.Content != "hello\nworld\n" {
 		t.Fatalf("decoded = %#v, want session dogfood pane review content preserved", decoded)
 	}
 }

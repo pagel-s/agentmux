@@ -222,6 +222,9 @@ func TestParseCaptureRequiresSessionAndPaneName(t *testing.T) {
 	if opts.Tail != 0 {
 		t.Fatalf("Tail = %d, want 0", opts.Tail)
 	}
+	if opts.StripEmpty {
+		t.Fatal("StripEmpty = true, want false")
+	}
 
 	if _, err := ParseCapture([]string{"dogfood"}); err == nil {
 		t.Fatal("ParseCapture returned nil error for missing pane name")
@@ -267,6 +270,26 @@ func TestParseCaptureAcceptsTailFlagBeforeOrAfterTarget(t *testing.T) {
 		}
 		if opts.Tail != 10 {
 			t.Fatalf("Tail = %d, want 10 for args %v", opts.Tail, args)
+		}
+	}
+}
+
+func TestParseCaptureAcceptsStripEmptyFlagBeforeOrAfterTarget(t *testing.T) {
+	tests := [][]string{
+		{"--strip-empty", "dogfood", "resolve"},
+		{"dogfood", "resolve", "--strip-empty"},
+		{"dogfood", "--strip-empty", "resolve"},
+		{"--json", "dogfood", "--strip-empty", "resolve"},
+		{"dogfood", "--tail", "10", "--strip-empty", "resolve"},
+	}
+
+	for _, args := range tests {
+		opts, err := ParseCapture(args)
+		if err != nil {
+			t.Fatalf("ParseCapture(%v) returned error: %v", args, err)
+		}
+		if !opts.StripEmpty {
+			t.Fatalf("StripEmpty = false, want true for args %v", args)
 		}
 	}
 }

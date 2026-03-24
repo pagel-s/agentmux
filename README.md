@@ -78,7 +78,7 @@ export PATH="$PWD/bin:$PATH"
 ./bin/agentmux rerun <session> <pane-name> [--json]
 ./bin/agentmux stop <session> <pane-name> [--json]
 ./bin/agentmux kill <session> <pane-name> [--json]
-./bin/agentmux capture <session> <pane-name> [--json] [--tail N]
+./bin/agentmux capture <session> <pane-name> [--json] [--tail N] [--strip-empty]
 ./bin/agentmux send <session> <pane-name> [--json] [--no-enter] <command...>
 ./bin/agentmux doctor
 ./bin/agentmux version
@@ -234,6 +234,7 @@ Named panes can now be targeted at runtime:
 ./bin/agentmux capture dogfood review
 ./bin/agentmux capture dogfood review --json
 ./bin/agentmux capture dogfood review --tail 20
+./bin/agentmux capture dogfood review --tail 20 --strip-empty
 ./bin/agentmux send dogfood review "git status --short"
 ./bin/agentmux send dogfood review --no-enter "git commit -m 'wip'"
 ```
@@ -252,6 +253,8 @@ Named-pane runtime commands preserve the pane's stored `on_exit` behavior, so `r
 
 `capture --tail N` limits output to the last `N` captured lines, which is usually more useful for scripts and polling loops than dumping the full pane every time.
 
+`capture --strip-empty` removes blank and whitespace-only lines before printing or tailing, which is usually a better fit for automation against shell panes that include terminal filler rows.
+
 `send` writes literal text into the target pane and presses Enter by default, which makes named panes usable as live workflow endpoints after startup.
 
 `send --no-enter` writes the text without pressing Enter, which is useful when you want to stage input, edit it in the pane, or combine it with later keystrokes.
@@ -260,18 +263,82 @@ Named-pane runtime commands preserve the pane's stored `on_exit` behavior, so `r
 
 `status` now also surfaces the pane source, agent name when relevant, configured `on_exit`, tmux's current foreground command, and whether the pane is currently dead. That makes remain-on-exit panes and other finished runtime states easier to inspect without leaving Agentmux.
 
-`capture --json` includes `session`, `pane`, `content`, and `tail_lines` when a tail limit was applied.
+`capture --json` includes `session`, `pane`, `content`, and optional `tail_lines` / `strip_empty` metadata when those filters were applied.
 
 ## Automation Contract
 
 For machine-readable runtime output, Agentmux currently exposes:
 
 - `status --json`: `{ "schema_version": 1, "kind": "status", "session": "...", "panes": [...] }`
-- `capture --json`: `{ "schema_version": 1, "kind": "capture", "session": "...", "pane": "...", "tail_lines": N, "content": "..." }`
+- `capture --json`: `{ "schema_version": 1, "kind": "capture", "session": "...", "pane": "...", "tail_lines": N, "strip_empty": true, "content": "..." }`
 - action commands with `--json`, such as `focus --json` or `send --json`: `{ "schema_version": 1, "kind": "focus", ... }`
 - runtime failures with `--json`: `{ "schema_version": 1, "kind": "error", "command": "focus", "error_code": "runtime", "exit_code": 1, "message": "..." }`
 
 `schema_version` and `kind` are the stable contract anchors for automation. The pane objects returned by `status --json` match the fields shown in the human-readable status output, including live fields like `dead`, `current_command`, `source_type`, and configured `on_exit`.
+
+Concrete examples:
+
+```json
+{
+  "schema_version": 1,
+  "kind": "status",
+  "session": "dogfood",
+  "panes": [
+    {
+      "window_index": 1,
+      "window_name": "grid",
+      "window_id": "@2",
+      "window_active": true,
+      "pane_index": 4,
+      "pane_id": "%11",
+      "pane_active": true,
+      "dead": false,
+      "name": "review",
+      "title": "Review",
+      "source_type": "agent",
+      "agent_name": "reviewer",
+      "on_exit": "restart",
+      "current_command": "bash"
+    }
+  ]
+}
+```
+
+```json
+{
+  "schema_version": 1,
+  "kind": "capture",
+  "session": "dogfood",
+  "pane": "review",
+  "tail_lines": 20,
+  "strip_empty": true,
+  "content": "manual-send\nafter-stop\n"
+}
+```
+
+```json
+{
+  "schema_version": 1,
+  "kind": "send",
+  "session": "dogfood",
+  "pane": "review",
+  "message": "sent command to pane \"review\" in session \"dogfood\"",
+  "no_enter": true
+}
+```
+
+```json
+{
+  "schema_version": 1,
+  "kind": "error",
+  "command": "focus",
+  "error_code": "runtime",
+  "exit_code": 1,
+  "message": "pane \"missing\" not found in session \"dogfood\"; available named panes: review, build. Run `agentmux status dogfood` to inspect the live session",
+  "session": "dogfood",
+  "pane": "missing"
+}
+```
 
 Runtime command exit codes:
 

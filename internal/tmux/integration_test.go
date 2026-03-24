@@ -831,6 +831,55 @@ func TestCaptureNamedPaneTailLines(t *testing.T) {
 	}
 }
 
+func TestCaptureNamedPaneStripEmpty(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed")
+	}
+
+	socket := filepath.Join(t.TempDir(), "agentmux-capture-strip-empty.sock")
+	t.Setenv(envTmuxSocket, socket)
+
+	cfg := resolve.Config{
+		Session: "agentmux-capture-strip-empty",
+		Windows: []resolve.Window{
+			{
+				Name: "main",
+				Panes: []resolve.Pane{
+					{
+						Name:       "runner",
+						SourceType: "command",
+						Command:    "printf 'ready\\n'",
+						Title:      "Runner",
+					},
+				},
+			},
+		},
+	}
+
+	t.Cleanup(func() {
+		_ = command("kill-server").Run()
+	})
+
+	if err := Execute(cfg, Options{Replace: true}); err != nil {
+		if isTmuxPermissionError(err) {
+			t.Skipf("tmux integration unavailable in this environment: %v", err)
+		}
+		t.Fatalf("Execute returned error: %v", err)
+	}
+
+	if err := SendCommandToPaneByName(cfg.Session, "runner", "printf 'line-1\\n\\nline-2\\n'", true, false); err != nil {
+		t.Fatalf("SendCommandToPaneByName returned error: %v", err)
+	}
+
+	captured := waitForCaptureContainsOptions(t, cfg.Session, "runner", 0, true, "line-2")
+	if !strings.Contains(captured, "line-1") || !strings.Contains(captured, "line-2") {
+		t.Fatalf("captured output %q does not include expected lines", captured)
+	}
+	if strings.Contains(captured, "\n\n") {
+		t.Fatalf("captured output %q still includes blank lines", captured)
+	}
+}
+
 func TestSendCommandToNamedPaneWithoutEnter(t *testing.T) {
 	if _, err := exec.LookPath("tmux"); err != nil {
 		t.Skip("tmux not installed")
@@ -1089,10 +1138,16 @@ func waitForPaneDead(t *testing.T, session string, paneName string, want bool, t
 func waitForCaptureContains(t *testing.T, session string, paneName string, tailLines int, want string) string {
 	t.Helper()
 
+	return waitForCaptureContainsOptions(t, session, paneName, tailLines, false, want)
+}
+
+func waitForCaptureContainsOptions(t *testing.T, session string, paneName string, tailLines int, stripEmpty bool, want string) string {
+	t.Helper()
+
 	deadline := time.Now().Add(2 * time.Second)
 	last := ""
 	for time.Now().Before(deadline) {
-		out, err := CapturePaneByName(session, paneName, tailLines, false)
+		out, err := CapturePaneByName(session, paneName, tailLines, stripEmpty, false)
 		if err != nil {
 			if isTmuxPermissionError(err) {
 				t.Skipf("tmux integration unavailable in this environment: %v", err)
