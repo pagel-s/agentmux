@@ -115,6 +115,23 @@ func TestParseEditRequiresExactlyOneTarget(t *testing.T) {
 	}
 }
 
+func TestParseRememberRequiresSessionAndConfigPath(t *testing.T) {
+	opts, err := ParseRemember([]string{"dogfood", "dogfood.yaml"})
+	if err != nil {
+		t.Fatalf("ParseRemember returned error: %v", err)
+	}
+	if opts.Session != "dogfood" {
+		t.Fatalf("Session = %q, want %q", opts.Session, "dogfood")
+	}
+	if opts.Path != "dogfood.yaml" {
+		t.Fatalf("Path = %q, want %q", opts.Path, "dogfood.yaml")
+	}
+
+	if _, err := ParseRemember([]string{"dogfood"}); err == nil {
+		t.Fatal("ParseRemember returned nil error for missing config path")
+	}
+}
+
 func TestParseStatusRequiresSessionName(t *testing.T) {
 	opts, err := ParseStatus([]string{"dogfood"})
 	if err != nil {

@@ -35,7 +35,7 @@ This repository builds on the v1 foundation with:
 - Param interpolation with `{{param_name}}`
 - Session-, window-, agent-, and pane-level env merging
 - tmux session, window, and pane creation
-- Commands: `templates`, `init`, `edit`, `load`, `reload`, `validate`, `render`, `list`, `status`, `focus`, `restart`, `rerun`, `stop`, `kill`, `capture`, `send`, `doctor`
+- Commands: `templates`, `init`, `edit`, `remember`, `load`, `reload`, `validate`, `render`, `list`, `status`, `focus`, `restart`, `rerun`, `stop`, `kill`, `capture`, `send`, `doctor`
 
 Current model:
 
@@ -72,6 +72,7 @@ export PATH="$PWD/bin:$PATH"
 ./bin/agentmux templates
 ./bin/agentmux init <template> <path> [--force]
 ./bin/agentmux edit <path-or-session>
+./bin/agentmux remember <session> <config>
 ./bin/agentmux load <config> [--param key=value] [--attach|--no-attach] [--dry-run] [--replace]
 ./bin/agentmux reload <config> [--param key=value] [--attach|--no-attach] [--dry-run]
 ./bin/agentmux validate <config> [--param key=value]
@@ -101,6 +102,8 @@ export PATH="$PWD/bin:$PATH"
 
 `edit` opens either a config path directly or the config path remembered for a live session that was loaded or reloaded from disk.
 
+`remember` backfills that config-path metadata for an already-running session, so `edit <session>` can work without forcing a reload.
+
 Starter flow:
 
 ```bash
@@ -108,6 +111,13 @@ Starter flow:
 ./bin/agentmux init default my-workflow.yaml
 ./bin/agentmux validate my-workflow.yaml
 ./bin/agentmux load my-workflow.yaml --replace --no-attach
+```
+
+Backfill flow for older live sessions:
+
+```bash
+./bin/agentmux remember dogfood ./dogfood.yaml
+./bin/agentmux edit dogfood
 ```
 
 Typical edit loop:
@@ -390,6 +400,7 @@ Common runtime errors:
 - `session "..." not found`: the tmux session does not exist yet or has already been removed. Run `./bin/agentmux list` to inspect sessions, or `./bin/agentmux load <config>` to recreate it.
 - `pane "..." not found ... available named panes: ...`: the session exists, but that pane name is wrong for the current live session. Run `./bin/agentmux status <session>` and use one of the listed pane names.
 - `session has no named panes`: the live session was created from panes without `name:` fields. Add `name:` to the panes you want to control and reload the session.
+- `session "..." is missing config path metadata`: use `./bin/agentmux remember <session> ./path/to/config.yaml`, edit the file path directly, or reload the session from a config path first.
 - `cannot replace session "..." from inside the same tmux session`: run `reload` or `load --replace` from another shell or another tmux client so Agentmux does not destroy the pane that is executing it.
 
 ## Examples

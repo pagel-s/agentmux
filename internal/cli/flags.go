@@ -61,6 +61,11 @@ type EditOptions struct {
 	Target string
 }
 
+type RememberOptions struct {
+	Session string
+	Path    string
+}
+
 type paramFlags struct {
 	values map[string]string
 }
@@ -186,6 +191,22 @@ func ParseEdit(args []string) (EditOptions, error) {
 		return EditOptions{}, errors.New("edit target must not be empty")
 	}
 	return EditOptions{Target: args[0]}, nil
+}
+
+func ParseRemember(args []string) (RememberOptions, error) {
+	if len(args) != 2 {
+		return RememberOptions{}, errors.New("remember requires exactly one session name and one config path")
+	}
+	if strings.TrimSpace(args[0]) == "" {
+		return RememberOptions{}, errors.New("remember session name must not be empty")
+	}
+	if strings.TrimSpace(args[1]) == "" {
+		return RememberOptions{}, errors.New("remember config path must not be empty")
+	}
+	return RememberOptions{
+		Session: args[0],
+		Path:    args[1],
+	}, nil
 }
 
 func ParseStatus(args []string) (StatusOptions, error) {

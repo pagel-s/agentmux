@@ -436,6 +436,85 @@ func TestResolveEditTargetFromSessionMetadata(t *testing.T) {
 	}
 }
 
+func TestResolveExistingConfigPathRequiresExistingFile(t *testing.T) {
+	target := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(target, []byte("version: 1\nsession: demo\nlayout:\n  - window: main\n    panes:\n      - command: \"printf ready\"\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	got, err := resolveExistingConfigPath(target)
+	if err != nil {
+		t.Fatalf("resolveExistingConfigPath returned error: %v", err)
+	}
+	want, err := filepath.Abs(target)
+	if err != nil {
+		t.Fatalf("filepath.Abs returned error: %v", err)
+	}
+	if got != want {
+		t.Fatalf("resolveExistingConfigPath = %q, want %q", got, want)
+	}
+}
+
+func TestRunRememberStoresSessionConfigPath(t *testing.T) {
+	if _, err := exec.LookPath(tmux.Binary()); err != nil {
+		t.Skip("tmux not installed")
+	}
+
+	socket := filepath.Join(t.TempDir(), "cmd-remember.sock")
+	t.Setenv("AGENTMUX_TMUX_SOCKET", socket)
+
+	cfg := resolve.Config{
+		Session: "cmd-remember",
+		Windows: []resolve.Window{
+			{
+				Name: "main",
+				Panes: []resolve.Pane{
+					{Name: "runner", SourceType: "command", Command: "printf ready", Title: "Runner"},
+				},
+			},
+		},
+	}
+
+	t.Cleanup(func() {
+		_ = exec.Command(tmux.Binary(), "-S", socket, "kill-server").Run()
+	})
+
+	if err := tmux.Execute(cfg, tmux.Options{Replace: true}); err != nil {
+		if isTMUXPermissionError(err) {
+			t.Skipf("tmux integration unavailable in this environment: %v", err)
+		}
+		t.Fatalf("Execute returned error: %v", err)
+	}
+
+	configPath := filepath.Join(t.TempDir(), "remember.yaml")
+	if err := os.WriteFile(configPath, []byte("version: 1\nsession: remember\nlayout:\n  - window: main\n    panes:\n      - command: \"printf ready\"\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	code, stdout, stderr := captureRunOutput(t, []string{"remember", "cmd-remember", configPath})
+	if code != exitSuccess {
+		t.Fatalf("code = %d, want %d", code, exitSuccess)
+	}
+	if strings.TrimSpace(stderr) != "" {
+		t.Fatalf("stderr = %q, want empty", stderr)
+	}
+	if !strings.Contains(stdout, `remembered config path`) {
+		t.Fatalf("stdout = %q, want remember success message", stdout)
+	}
+
+	gotPath, err := tmux.SessionConfigPath(cfg.Session, false)
+	if err != nil {
+		t.Fatalf("SessionConfigPath returned error: %v", err)
+	}
+	wantPath, err := filepath.Abs(configPath)
+	if err != nil {
+		t.Fatalf("filepath.Abs returned error: %v", err)
+	}
+	if gotPath != wantPath {
+		t.Fatalf("SessionConfigPath = %q, want %q", gotPath, wantPath)
+	}
+}
+
 func captureRunOutput(t *testing.T, args []string) (code int, stdout string, stderr string) {
 	t.Helper()
 

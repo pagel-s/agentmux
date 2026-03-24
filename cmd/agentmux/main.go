@@ -50,6 +50,8 @@ func run(args []string) int {
 		return runInit(args[1:])
 	case "edit":
 		return runEdit(args[1:])
+	case "remember":
+		return runRemember(args[1:])
 	case "validate":
 		return runValidate(args[1:])
 	case "render":
@@ -195,6 +197,33 @@ func runEdit(args []string) int {
 		fmt.Fprintf(os.Stderr, "error: edit %s: %v\n", targetPath, err)
 		return exitRuntime
 	}
+	return exitSuccess
+}
+
+func runRemember(args []string) int {
+	opts, err := cli.ParseRemember(args)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return exitValidation
+	}
+
+	if err := requireTMux(); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return exitDependency
+	}
+
+	configPath, err := resolveExistingConfigPath(opts.Path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return exitRuntime
+	}
+
+	if err := tmux.SetSessionConfigPath(opts.Session, configPath, false); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return exitRuntime
+	}
+
+	fmt.Printf("remembered config path %s for session %q\n", configPath, opts.Session)
 	return exitSuccess
 }
 
@@ -936,9 +965,28 @@ func resolveEditTarget(target string) (string, error) {
 		return "", err
 	}
 	if strings.TrimSpace(path) == "" {
-		return "", fmt.Errorf("session %q is missing config path metadata; use `agentmux edit ./path/to/config.yaml` directly or reload the session from a config path first", target)
+		return "", fmt.Errorf("session %q is missing config path metadata; use `agentmux remember %s ./path/to/config.yaml`, `agentmux edit ./path/to/config.yaml`, or reload the session from a config path first", target, target)
 	}
 	return path, nil
+}
+
+func resolveExistingConfigPath(target string) (string, error) {
+	expanded := expandUserPath(target)
+	absPath, err := filepath.Abs(expanded)
+	if err != nil {
+		return "", fmt.Errorf("resolve config path %q: %w", target, err)
+	}
+	info, err := os.Stat(absPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("config path %q does not exist", absPath)
+		}
+		return "", fmt.Errorf("inspect config path %q: %w", absPath, err)
+	}
+	if info.IsDir() {
+		return "", fmt.Errorf("config path %q is a directory", absPath)
+	}
+	return absPath, nil
 }
 
 func editorInvocation(path string) (string, string, error) {
@@ -1013,6 +1061,7 @@ Usage:
   agentmux templates
   agentmux init <template> <path> [--force]
   agentmux edit <path-or-session>
+  agentmux remember <session> <config>
   agentmux load <config> [--param key=value] [--attach|--no-attach] [--dry-run] [--replace] [--strict] [--verbose]
   agentmux reload <config> [--param key=value] [--attach|--no-attach] [--dry-run] [--strict] [--verbose]
   agentmux validate <config> [--param key=value] [--strict]
