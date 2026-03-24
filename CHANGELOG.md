@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added `status --pane <name>` for targeted single-pane inspection in both human-readable and JSON output.
 - Added `capture --tail N` for smaller, automation-friendly pane reads.
 - Added `capture --strip-empty` for cleaner script-facing reads from shell panes with blank terminal filler rows.
 - Added `send --no-enter` for queueing text into a live pane without executing it yet.

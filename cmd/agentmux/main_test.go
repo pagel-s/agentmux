@@ -47,7 +47,7 @@ func TestRunValidateMissingFileReturnsConfigParseExitCode(t *testing.T) {
 }
 
 func TestRenderStatusJSON(t *testing.T) {
-	out, err := renderStatusJSON("dogfood", []tmux.PaneStatus{
+	out, err := renderStatusJSON("dogfood", "resolve", []tmux.PaneStatus{
 		{
 			WindowIndex:  1,
 			WindowName:   "grid",
@@ -76,6 +76,7 @@ func TestRenderStatusJSON(t *testing.T) {
 		SchemaVersion int               `json:"schema_version"`
 		Kind          string            `json:"kind"`
 		Session       string            `json:"session"`
+		Pane          string            `json:"pane"`
 		Panes         []tmux.PaneStatus `json:"panes"`
 	}
 	if err := json.Unmarshal([]byte(out), &decoded); err != nil {
@@ -89,6 +90,9 @@ func TestRenderStatusJSON(t *testing.T) {
 	}
 	if decoded.Session != "dogfood" {
 		t.Fatalf("Session = %q, want %q", decoded.Session, "dogfood")
+	}
+	if decoded.Pane != "resolve" {
+		t.Fatalf("Pane = %q, want %q", decoded.Pane, "resolve")
 	}
 	if len(decoded.Panes) != 1 || decoded.Panes[0].Name != "resolve" {
 		t.Fatalf("decoded panes = %#v, want resolve pane", decoded.Panes)
@@ -209,6 +213,63 @@ func TestRunStatusJSONErrorForMissingSession(t *testing.T) {
 	}
 	if !strings.Contains(decoded.Message, `session "missing-session" not found`) {
 		t.Fatalf("message = %q, want missing-session text", decoded.Message)
+	}
+}
+
+func TestRunStatusJSONForSinglePane(t *testing.T) {
+	if _, err := exec.LookPath(tmux.Binary()); err != nil {
+		t.Skip("tmux not installed")
+	}
+
+	socket := filepath.Join(t.TempDir(), "cmd-json-status-pane.sock")
+	t.Setenv("AGENTMUX_TMUX_SOCKET", socket)
+
+	cfg := resolve.Config{
+		Session: "cmd-json-status-pane",
+		Windows: []resolve.Window{
+			{
+				Name: "main",
+				Panes: []resolve.Pane{
+					{Name: "runner", SourceType: "command", Command: "printf ready", Title: "Runner"},
+					{Name: "review", SourceType: "agent", AgentName: "reviewer", Command: "printf review", Title: "Review"},
+				},
+			},
+		},
+	}
+
+	t.Cleanup(func() {
+		_ = exec.Command(tmux.Binary(), "-S", socket, "kill-server").Run()
+	})
+
+	if err := tmux.Execute(cfg, tmux.Options{Replace: true}); err != nil {
+		if isTMUXPermissionError(err) {
+			t.Skipf("tmux integration unavailable in this environment: %v", err)
+		}
+		t.Fatalf("Execute returned error: %v", err)
+	}
+
+	code, stdout, stderr := captureRunOutput(t, []string{"status", "cmd-json-status-pane", "--pane", "runner", "--json"})
+	if code != exitSuccess {
+		t.Fatalf("code = %d, want %d", code, exitSuccess)
+	}
+	if strings.TrimSpace(stderr) != "" {
+		t.Fatalf("stderr = %q, want empty", stderr)
+	}
+
+	var decoded struct {
+		Kind    string            `json:"kind"`
+		Session string            `json:"session"`
+		Pane    string            `json:"pane"`
+		Panes   []tmux.PaneStatus `json:"panes"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &decoded); err != nil {
+		t.Fatalf("json.Unmarshal returned error: %v", err)
+	}
+	if decoded.Kind != "status" || decoded.Session != "cmd-json-status-pane" || decoded.Pane != "runner" {
+		t.Fatalf("decoded status = %#v, want filtered runner status", decoded)
+	}
+	if len(decoded.Panes) != 1 || decoded.Panes[0].Name != "runner" {
+		t.Fatalf("decoded panes = %#v, want only runner pane", decoded.Panes)
 	}
 }
 

@@ -219,6 +219,10 @@ func Status(session string) ([]PaneStatus, error) {
 	return panes, nil
 }
 
+func StatusPaneByName(session string, name string) (PaneStatus, error) {
+	return findPaneByName(session, name)
+}
+
 func FocusPaneByName(session string, name string, verbose bool) error {
 	target, err := findPaneByName(session, name)
 	if err != nil {

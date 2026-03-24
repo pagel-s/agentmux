@@ -72,7 +72,7 @@ export PATH="$PWD/bin:$PATH"
 ./bin/agentmux validate <config> [--param key=value]
 ./bin/agentmux render <config> [--param key=value]
 ./bin/agentmux list
-./bin/agentmux status <session> [--json]
+./bin/agentmux status <session> [--json] [--pane <pane-name>]
 ./bin/agentmux focus <session> <pane-name> [--json]
 ./bin/agentmux restart <session> <pane-name> [--json]
 ./bin/agentmux rerun <session> <pane-name> [--json]
@@ -225,6 +225,8 @@ Named panes can now be targeted at runtime:
 ```bash
 ./bin/agentmux status dogfood
 ./bin/agentmux status dogfood --json
+./bin/agentmux status dogfood --pane review
+./bin/agentmux status dogfood --pane review --json
 ./bin/agentmux focus dogfood resolve
 ./bin/agentmux focus dogfood resolve --json
 ./bin/agentmux restart dogfood resolve
@@ -263,18 +265,20 @@ Named-pane runtime commands preserve the pane's stored `on_exit` behavior, so `r
 
 `status` now also surfaces the pane source, agent name when relevant, configured `on_exit`, tmux's current foreground command, and whether the pane is currently dead. That makes remain-on-exit panes and other finished runtime states easier to inspect without leaving Agentmux.
 
+`status --pane <name>` narrows inspection to a single named pane while preserving the existing output shapes. This is useful for polling loops and targeted debugging without adding a separate command family.
+
 `capture --json` includes `session`, `pane`, `content`, and optional `tail_lines` / `strip_empty` metadata when those filters were applied.
 
 ## Automation Contract
 
 For machine-readable runtime output, Agentmux currently exposes:
 
-- `status --json`: `{ "schema_version": 1, "kind": "status", "session": "...", "panes": [...] }`
+- `status --json`: `{ "schema_version": 1, "kind": "status", "session": "...", "pane": "...", "panes": [...] }`
 - `capture --json`: `{ "schema_version": 1, "kind": "capture", "session": "...", "pane": "...", "tail_lines": N, "strip_empty": true, "content": "..." }`
 - action commands with `--json`, such as `focus --json` or `send --json`: `{ "schema_version": 1, "kind": "focus", ... }`
 - runtime failures with `--json`: `{ "schema_version": 1, "kind": "error", "command": "focus", "error_code": "runtime", "exit_code": 1, "message": "..." }`
 
-`schema_version` and `kind` are the stable contract anchors for automation. The pane objects returned by `status --json` match the fields shown in the human-readable status output, including live fields like `dead`, `current_command`, `source_type`, and configured `on_exit`.
+`schema_version` and `kind` are the stable contract anchors for automation. The pane objects returned by `status --json` match the fields shown in the human-readable status output, including live fields like `dead`, `current_command`, `source_type`, and configured `on_exit`. When `status` is filtered with `--pane`, the top-level `pane` field is included and the `panes` array contains just that one live pane.
 
 Concrete examples:
 
@@ -283,6 +287,7 @@ Concrete examples:
   "schema_version": 1,
   "kind": "status",
   "session": "dogfood",
+  "pane": "review",
   "panes": [
     {
       "window_index": 1,

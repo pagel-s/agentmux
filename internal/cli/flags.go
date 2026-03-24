@@ -25,6 +25,7 @@ type LoadOptions struct {
 
 type StatusOptions struct {
 	Session string
+	Pane    string
 	JSON    bool
 }
 
@@ -141,15 +142,37 @@ func ParseRender(args []string) (CommonOptions, error) {
 }
 
 func ParseStatus(args []string) (StatusOptions, error) {
-	positional, jsonOut, err := parseOptionalJSONArgs("status", args)
-	if err != nil {
-		return StatusOptions{}, err
+	jsonOut := false
+	pane := ""
+	positional := make([]string, 0, 1)
+
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch arg {
+		case "--json":
+			jsonOut = true
+		case "--pane":
+			if i+1 >= len(args) {
+				return StatusOptions{}, fmt.Errorf("status flag %q requires a value", arg)
+			}
+			pane = strings.TrimSpace(args[i+1])
+			if pane == "" {
+				return StatusOptions{}, fmt.Errorf("status flag %q requires a non-empty value", arg)
+			}
+			i++
+		default:
+			if strings.HasPrefix(arg, "-") {
+				return StatusOptions{}, fmt.Errorf("status does not accept flag %q", arg)
+			}
+			positional = append(positional, arg)
+		}
 	}
 	if len(positional) != 1 {
 		return StatusOptions{}, errors.New("status requires exactly one session name")
 	}
 	return StatusOptions{
 		Session: positional[0],
+		Pane:    pane,
 		JSON:    jsonOut,
 	}, nil
 }

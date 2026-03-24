@@ -2,6 +2,15 @@ package cli
 
 import "testing"
 
+func contains(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
 func TestParseLoadAcceptsConfigBeforeFlags(t *testing.T) {
 	opts, err := ParseLoad([]string{"dev.yaml", "--dry-run", "--param", "project_dir=~/code/app", "--no-attach"})
 	if err != nil {
@@ -73,16 +82,23 @@ func TestParseStatusRequiresSessionName(t *testing.T) {
 	if opts.JSON {
 		t.Fatal("JSON = true, want false")
 	}
+	if opts.Pane != "" {
+		t.Fatalf("Pane = %q, want empty", opts.Pane)
+	}
 
 	if _, err := ParseStatus(nil); err == nil {
 		t.Fatal("ParseStatus returned nil error for missing session")
 	}
 }
 
-func TestParseStatusAcceptsJSONFlagBeforeOrAfterSession(t *testing.T) {
+func TestParseStatusAcceptsJSONAndPaneFlagsBeforeOrAfterSession(t *testing.T) {
 	tests := [][]string{
 		{"--json", "dogfood"},
 		{"dogfood", "--json"},
+		{"--pane", "review", "dogfood"},
+		{"dogfood", "--pane", "review"},
+		{"--json", "dogfood", "--pane", "review"},
+		{"--pane", "review", "--json", "dogfood"},
 	}
 
 	for _, args := range tests {
@@ -93,8 +109,11 @@ func TestParseStatusAcceptsJSONFlagBeforeOrAfterSession(t *testing.T) {
 		if opts.Session != "dogfood" {
 			t.Fatalf("Session = %q, want %q", opts.Session, "dogfood")
 		}
-		if !opts.JSON {
+		if contains(args, "--json") && !opts.JSON {
 			t.Fatalf("JSON = false, want true for args %v", args)
+		}
+		if contains(args, "--pane") && opts.Pane != "review" {
+			t.Fatalf("Pane = %q, want %q for args %v", opts.Pane, "review", args)
 		}
 	}
 }

@@ -216,18 +216,28 @@ func runStatus(args []string) int {
 	}
 
 	if err := requireTMux(); err != nil {
-		return printCommandError("status", opts.JSON, exitDependency, err, opts.Session, "")
+		return printCommandError("status", opts.JSON, exitDependency, err, opts.Session, opts.Pane)
 	}
 
-	panes, err := tmux.Status(opts.Session)
-	if err != nil {
-		return printCommandError("status", opts.JSON, exitRuntime, err, opts.Session, "")
+	panes := []tmux.PaneStatus{}
+	if opts.Pane != "" {
+		pane, err := tmux.StatusPaneByName(opts.Session, opts.Pane)
+		if err != nil {
+			return printCommandError("status", opts.JSON, exitRuntime, err, opts.Session, opts.Pane)
+		}
+		panes = append(panes, pane)
+	} else {
+		allPanes, err := tmux.Status(opts.Session)
+		if err != nil {
+			return printCommandError("status", opts.JSON, exitRuntime, err, opts.Session, opts.Pane)
+		}
+		panes = allPanes
 	}
 
 	if opts.JSON {
-		out, err := renderStatusJSON(opts.Session, panes)
+		out, err := renderStatusJSON(opts.Session, opts.Pane, panes)
 		if err != nil {
-			return printCommandError("status", true, exitRuntime, fmt.Errorf("render status json: %w", err), opts.Session, "")
+			return printCommandError("status", true, exitRuntime, fmt.Errorf("render status json: %w", err), opts.Session, opts.Pane)
 		}
 		fmt.Print(out)
 		return exitSuccess
@@ -650,16 +660,18 @@ func renderStatus(session string, panes []tmux.PaneStatus) string {
 	return b.String()
 }
 
-func renderStatusJSON(session string, panes []tmux.PaneStatus) (string, error) {
+func renderStatusJSON(session string, pane string, panes []tmux.PaneStatus) (string, error) {
 	return renderJSON(struct {
 		SchemaVersion int               `json:"schema_version"`
 		Kind          string            `json:"kind"`
 		Session       string            `json:"session"`
+		Pane          string            `json:"pane,omitempty"`
 		Panes         []tmux.PaneStatus `json:"panes"`
 	}{
 		SchemaVersion: jsonSchemaV1,
 		Kind:          "status",
 		Session:       session,
+		Pane:          pane,
 		Panes:         panes,
 	})
 }
@@ -799,7 +811,7 @@ Usage:
   agentmux validate <config> [--param key=value] [--strict]
   agentmux render <config> [--param key=value] [--strict]
   agentmux list
-  agentmux status <session> [--json]
+  agentmux status <session> [--json] [--pane <pane-name>]
   agentmux focus <session> <pane-name> [--json]
   agentmux restart <session> <pane-name> [--json]
   agentmux rerun <session> <pane-name> [--json]
