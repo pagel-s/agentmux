@@ -16,14 +16,13 @@ That means the next milestone should be treated as a workspace-management releas
 
 ## Immediate
 
-Target: `v0.4.0`
+Target: `v0.4.x`
 
 - keep dogfooding on real sessions and fix rough edges quickly
 - improve runtime automation surfaces beyond the basic pane loop
-- prepare `v0.4.0` from the current runtime loop instead of adding broader command surface area
 - consider JSON output for `list` or additional runtime inspection only if a real automation need appears
 - consider small lifecycle refinements only when real use shows a gap
-- cut `v0.4.0` once runtime automation and lifecycle behavior feel stable in real use
+- cut small follow-up releases from the current runtime loop instead of broadening the command surface too quickly
 
 ## Mid-Term
 

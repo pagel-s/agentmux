@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.4.0 - 2026-03-24
 
 - Added `status --pane <name>` for targeted single-pane inspection in both human-readable and JSON output.
 - Added `capture --tail N` for smaller, automation-friendly pane reads.
