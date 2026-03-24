@@ -258,7 +258,7 @@ Named-pane runtime commands preserve the pane's stored `on_exit` behavior, so `r
 
 `--json` exposes machine-friendly output for scripting and automation across the runtime pane-control commands while preserving the existing human-readable defaults.
 
-`status` now also surfaces the pane source, agent name when relevant, configured `on_exit`, and tmux's current foreground command so running sessions are easier to inspect.
+`status` now also surfaces the pane source, agent name when relevant, configured `on_exit`, tmux's current foreground command, and whether the pane is currently dead. That makes remain-on-exit panes and other finished runtime states easier to inspect without leaving Agentmux.
 
 `capture --json` includes `session`, `pane`, `content`, and `tail_lines` when a tail limit was applied.
 
@@ -271,7 +271,7 @@ For machine-readable runtime output, Agentmux currently exposes:
 - action commands with `--json`, such as `focus --json` or `send --json`: `{ "schema_version": 1, "kind": "focus", ... }`
 - runtime failures with `--json`: `{ "schema_version": 1, "kind": "error", "command": "focus", "error_code": "runtime", "exit_code": 1, "message": "..." }`
 
-`schema_version` and `kind` are the stable contract anchors for automation. The pane objects returned by `status --json` match the fields shown in the human-readable status output.
+`schema_version` and `kind` are the stable contract anchors for automation. The pane objects returned by `status --json` match the fields shown in the human-readable status output, including live fields like `dead`, `current_command`, `source_type`, and configured `on_exit`.
 
 Runtime command exit codes:
 

@@ -237,6 +237,9 @@ func TestStatusAndFocusNamedPanes(t *testing.T) {
 	if panes[0].SourceType != "command" || panes[1].SourceType != "agent" {
 		t.Fatalf("unexpected pane source types: %#v", panes)
 	}
+	if panes[0].Dead || panes[1].Dead {
+		t.Fatalf("expected live panes, got %#v", panes)
+	}
 	if panes[1].AgentName != "reviewer" {
 		t.Fatalf("pane agent name = %q, want %q", panes[1].AgentName, "reviewer")
 	}
@@ -327,6 +330,7 @@ func TestExecuteRemainOnExitKeepsPaneAvailable(t *testing.T) {
 	if panes[0].OnExit != config.OnExitRemain {
 		t.Fatalf("pane on_exit = %q, want %q", panes[0].OnExit, config.OnExitRemain)
 	}
+	waitForPaneDead(t, cfg.Session, "remain", true, 2*time.Second)
 }
 
 func TestExecuteRestartOnExitRestartsCommand(t *testing.T) {
@@ -1047,6 +1051,39 @@ func waitForPaneCount(t *testing.T, session string, want int, timeout time.Durat
 	}
 
 	t.Fatalf("pane count = %d, want %d", lastCount, want)
+}
+
+func waitForPaneDead(t *testing.T, session string, paneName string, want bool, timeout time.Duration) {
+	t.Helper()
+
+	deadline := time.Now().Add(timeout)
+	var last PaneStatus
+	found := false
+	for time.Now().Before(deadline) {
+		panes, err := Status(session)
+		if err != nil {
+			if isTmuxPermissionError(err) {
+				t.Skipf("tmux integration unavailable in this environment: %v", err)
+			}
+			t.Fatalf("Status returned error: %v", err)
+		}
+		for _, pane := range panes {
+			if pane.Name == paneName {
+				last = pane
+				found = true
+				if pane.Dead == want {
+					return
+				}
+				break
+			}
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	if !found {
+		t.Fatalf("pane %q not found in session %q", paneName, session)
+	}
+	t.Fatalf("pane %q dead = %t, want %t", paneName, last.Dead, want)
 }
 
 func waitForCaptureContains(t *testing.T, session string, paneName string, tailLines int, want string) string {

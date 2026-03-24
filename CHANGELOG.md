@@ -6,6 +6,7 @@
 - Added `send --no-enter` for queueing text into a live pane without executing it yet.
 - Added explicit JSON `schema_version` and `kind` fields for runtime automation output.
 - Added structured JSON error output for runtime commands when `--json` is set, while preserving the existing exit codes.
+- Added live pane dead/alive status to `status` so finished `remain` panes and similar runtime states are visible in both human-readable and JSON output.
 - Expanded runtime tests and README guidance for the automation-oriented pane control loop.
 
 ## v0.3.0 - 2026-03-23

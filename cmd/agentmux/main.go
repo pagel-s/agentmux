@@ -638,6 +638,9 @@ func renderStatus(session string, panes []tmux.PaneStatus) string {
 		if pane.CurrentCmd != "" {
 			fmt.Fprintf(&b, " current=%q", pane.CurrentCmd)
 		}
+		if pane.Dead {
+			fmt.Fprintf(&b, " dead=true")
+		}
 		if pane.PaneActive {
 			fmt.Fprintf(&b, " active=true")
 		}

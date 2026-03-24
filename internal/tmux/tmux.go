@@ -52,6 +52,7 @@ type PaneStatus struct {
 	PaneIndex    int    `json:"pane_index"`
 	PaneID       string `json:"pane_id"`
 	PaneActive   bool   `json:"pane_active"`
+	Dead         bool   `json:"dead"`
 	Name         string `json:"name"`
 	Title        string `json:"title"`
 	SourceType   string `json:"source_type,omitempty"`
@@ -159,7 +160,7 @@ func Status(session string) ([]PaneStatus, error) {
 		return nil, err
 	}
 
-	out, err := capture(false, "list-panes", "-a", "-F", "#{session_name}\t#{window_index}\t#{window_name}\t#{window_id}\t#{window_active}\t#{pane_index}\t#{pane_id}\t#{pane_active}\t#{"+paneNameOption+"}\t#{pane_title}\t#{"+paneSourceOption+"}\t#{"+paneAgentOption+"}\t#{"+paneOnExitOption+"}\t#{pane_current_command}")
+	out, err := capture(false, "list-panes", "-a", "-F", "#{session_name}\t#{window_index}\t#{window_name}\t#{window_id}\t#{window_active}\t#{pane_index}\t#{pane_id}\t#{pane_active}\t#{pane_dead}\t#{"+paneNameOption+"}\t#{pane_title}\t#{"+paneSourceOption+"}\t#{"+paneAgentOption+"}\t#{"+paneOnExitOption+"}\t#{pane_current_command}")
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +172,7 @@ func Status(session string) ([]PaneStatus, error) {
 	panes := make([]PaneStatus, 0, len(lines))
 	for _, line := range lines {
 		fields := strings.Split(line, "\t")
-		if len(fields) != 14 {
+		if len(fields) != 15 {
 			return nil, fmt.Errorf("unexpected pane status output %q", line)
 		}
 		if fields[0] != session {
@@ -195,12 +196,13 @@ func Status(session string) ([]PaneStatus, error) {
 			PaneIndex:    paneIndex,
 			PaneID:       fields[6],
 			PaneActive:   fields[7] == "1",
-			Name:         fields[8],
-			Title:        fields[9],
-			SourceType:   fields[10],
-			AgentName:    fields[11],
-			OnExit:       fields[12],
-			CurrentCmd:   fields[13],
+			Dead:         fields[8] == "1",
+			Name:         fields[9],
+			Title:        fields[10],
+			SourceType:   fields[11],
+			AgentName:    fields[12],
+			OnExit:       fields[13],
+			CurrentCmd:   fields[14],
 		})
 	}
 
