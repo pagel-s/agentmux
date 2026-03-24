@@ -24,11 +24,13 @@ type InitOptions struct {
 }
 
 var descriptions = map[string]string{
-	"ai-dev":      "Multi-window coding workspace with coder and reviewer agents",
-	"minimal":     "Smallest valid starter config",
-	"on-exit":     "Pane exit-policy demo with shell, remain, restart, and kill",
-	"review-loop": "Coding and review loop with reusable agents",
-	"ssh-ops":     "Remote operations starter with an SSH-driven agent",
+	"ai-dev":          "Multi-window coding workspace with coder and reviewer agents",
+	"coding-starter":  "Minimal copy-and-tweak coding workspace",
+	"minimal":         "Smallest valid starter config",
+	"on-exit":         "Pane exit-policy demo with shell, remain, restart, and kill",
+	"review-loop":     "Coding and review loop with reusable agents",
+	"review-starter":  "Minimal copy-and-tweak review workspace",
+	"ssh-ops":         "Remote operations starter with an SSH-driven agent",
 }
 
 var aliases = map[string]string{

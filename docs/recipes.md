@@ -16,10 +16,18 @@ Use this when you want one session for editing, tests, git, and an AI helper pan
 Best starter:
 
 ```bash
+./bin/agentmux init coding-starter coding.yaml
+```
+
+Fuller starter:
+
+```bash
 ./bin/agentmux init default coding.yaml
 ```
 
-That gives you the `ai-dev` template with a session name derived from `coding.yaml`.
+`coding-starter` is the fastest path when you want a small file to tweak.
+
+`default` gives you the fuller `ai-dev` template with a session name derived from `coding.yaml`.
 
 Fastest copyable file:
 
@@ -91,6 +99,12 @@ Related files:
 Use this when you want a dedicated code-review workspace with an editor pane, a reviewer pane, and a checks pane.
 
 Best starter:
+
+```bash
+./bin/agentmux init review-starter review.yaml
+```
+
+Fuller starter:
 
 ```bash
 ./bin/agentmux init review-loop review.yaml

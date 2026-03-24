@@ -33,6 +33,8 @@ Examples:
 
 ```bash
 ./bin/agentmux templates
+./bin/agentmux init coding-starter coding.yaml
+./bin/agentmux init review-starter review.yaml
 ```
 
 ### `init`
@@ -48,6 +50,7 @@ When to use it:
 Examples:
 
 ```bash
+./bin/agentmux init coding-starter coding.yaml
 ./bin/agentmux init default my-workflow.yaml
 ./bin/agentmux init minimal scratch.yaml
 ./bin/agentmux init ai-dev work/review.yaml --force
@@ -55,6 +58,7 @@ Examples:
 
 Useful notes:
 - `default` is an alias for `ai-dev`
+- `coding-starter` and `review-starter` are built-in minimal copy-and-tweak starters
 - `--force` overwrites an existing file
 
 ### `edit`

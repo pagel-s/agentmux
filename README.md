@@ -114,6 +114,15 @@ Starter flow:
 
 ```bash
 ./bin/agentmux templates
+./bin/agentmux init coding-starter coding.yaml
+./bin/agentmux validate coding.yaml
+./bin/agentmux load coding.yaml --replace --no-attach
+```
+
+Full-featured starter flow:
+
+```bash
+./bin/agentmux templates
 ./bin/agentmux init default my-workflow.yaml
 ./bin/agentmux validate my-workflow.yaml
 ./bin/agentmux load my-workflow.yaml --replace --no-attach
@@ -423,8 +432,10 @@ Built-in starter templates use the same names:
 
 - `minimal`
 - `ai-dev`
+- `coding-starter`
 - `on-exit`
 - `review-loop`
+- `review-starter`
 - `ssh-ops`
 
 Starter aliases:

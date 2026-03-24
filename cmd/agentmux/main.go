@@ -143,6 +143,7 @@ func runTemplates(args []string) int {
 	}
 	fmt.Println("examples:")
 	fmt.Println("  agentmux init default my-workflow.yaml")
+	fmt.Println("  agentmux init coding-starter coding.yaml")
 	fmt.Println("  agentmux init minimal scratch.yaml")
 	return exitSuccess
 }
@@ -1082,6 +1083,7 @@ Usage:
 Starter flow:
   agentmux templates
   agentmux init default my-workflow.yaml
+  agentmux init coding-starter coding.yaml
   agentmux validate my-workflow.yaml
   agentmux load my-workflow.yaml --replace --no-attach`)
 }

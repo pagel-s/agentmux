@@ -1,0 +1,30 @@
+version: 1
+session: review-starter
+
+params:
+  project_dir: "/path/to/your/repo"
+
+env:
+  PROJECT_DIR: "{{project_dir}}"
+
+agents:
+  reviewer:
+    provider: command
+    command: "printf 'replace agents.reviewer.command with your review command\\n'; exec $SHELL"
+    cwd: "{{project_dir}}"
+    title: "Reviewer"
+
+layout:
+  - window: review
+    root: "{{project_dir}}"
+    layout: even-vertical
+    panes:
+      - name: diff
+        command: "git diff --stat"
+        title: "Diff"
+        focus: true
+      - name: reviewer
+        agent: reviewer
+      - name: checks
+        command: "printf 'run your checks here\\n'; exec $SHELL"
+        title: "Checks"

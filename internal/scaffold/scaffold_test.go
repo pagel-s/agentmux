@@ -13,8 +13,8 @@ func TestListIncludesCanonicalTemplates(t *testing.T) {
 		t.Fatalf("List returned error: %v", err)
 	}
 
-	if len(templates) < 5 {
-		t.Fatalf("len(templates) = %d, want at least 5", len(templates))
+	if len(templates) < 7 {
+		t.Fatalf("len(templates) = %d, want at least 7", len(templates))
 	}
 
 	names := make([]string, 0, len(templates))
@@ -22,7 +22,7 @@ func TestListIncludesCanonicalTemplates(t *testing.T) {
 		names = append(names, template.Name)
 	}
 
-	for _, want := range []string{"minimal", "ai-dev", "on-exit", "review-loop", "ssh-ops"} {
+	for _, want := range []string{"minimal", "ai-dev", "coding-starter", "on-exit", "review-loop", "review-starter", "ssh-ops"} {
 		found := false
 		for _, name := range names {
 			if name == want {
