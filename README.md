@@ -261,6 +261,23 @@ Named-pane runtime commands preserve the pane's stored `on_exit` behavior, so `r
 
 `capture --json` includes `session`, `pane`, `content`, and `tail_lines` when a tail limit was applied.
 
+## Automation Contract
+
+For machine-readable runtime output, Agentmux currently exposes two JSON shapes:
+
+- `status --json`: `{ "schema_version": 1, "kind": "status", "session": "...", "panes": [...] }`
+- `capture --json`: `{ "schema_version": 1, "kind": "capture", "session": "...", "pane": "...", "tail_lines": N, "content": "..." }`
+
+`schema_version` and `kind` are intended to be the stable contract anchors for automation. The pane objects returned by `status --json` match the fields shown in the human-readable status output.
+
+Runtime command exit codes:
+
+- `0`: success
+- `1`: runtime failure, such as tmux errors or missing live sessions/panes
+- `2`: usage or validation failure
+- `3`: config parse or config load failure
+- `4`: missing dependency, such as tmux not being installed
+
 ## Runtime Troubleshooting
 
 Start with:

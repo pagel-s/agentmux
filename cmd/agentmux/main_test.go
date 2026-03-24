@@ -29,6 +29,18 @@ func TestRunVersionReturnsSuccess(t *testing.T) {
 	}
 }
 
+func TestRunWithoutArgsReturnsValidationExitCode(t *testing.T) {
+	if got, want := run(nil), exitValidation; got != want {
+		t.Fatalf("run(nil) = %d, want %d", got, want)
+	}
+}
+
+func TestRunValidateMissingFileReturnsConfigParseExitCode(t *testing.T) {
+	if got, want := run([]string{"validate", "does-not-exist.yaml"}), exitConfigParse; got != want {
+		t.Fatalf("run(validate missing-file) = %d, want %d", got, want)
+	}
+}
+
 func TestRenderStatusJSON(t *testing.T) {
 	out, err := renderStatusJSON("dogfood", []tmux.PaneStatus{
 		{
@@ -55,11 +67,19 @@ func TestRenderStatusJSON(t *testing.T) {
 	}
 
 	var decoded struct {
-		Session string            `json:"session"`
-		Panes   []tmux.PaneStatus `json:"panes"`
+		SchemaVersion int               `json:"schema_version"`
+		Kind          string            `json:"kind"`
+		Session       string            `json:"session"`
+		Panes         []tmux.PaneStatus `json:"panes"`
 	}
 	if err := json.Unmarshal([]byte(out), &decoded); err != nil {
 		t.Fatalf("json.Unmarshal returned error: %v", err)
+	}
+	if decoded.SchemaVersion != jsonSchemaV1 {
+		t.Fatalf("SchemaVersion = %d, want %d", decoded.SchemaVersion, jsonSchemaV1)
+	}
+	if decoded.Kind != "status" {
+		t.Fatalf("Kind = %q, want %q", decoded.Kind, "status")
 	}
 	if decoded.Session != "dogfood" {
 		t.Fatalf("Session = %q, want %q", decoded.Session, "dogfood")
@@ -82,15 +102,17 @@ func TestRenderCaptureJSON(t *testing.T) {
 	}
 
 	var decoded struct {
-		Session   string `json:"session"`
-		Pane      string `json:"pane"`
-		TailLines int    `json:"tail_lines"`
-		Content   string `json:"content"`
+		SchemaVersion int    `json:"schema_version"`
+		Kind          string `json:"kind"`
+		Session       string `json:"session"`
+		Pane          string `json:"pane"`
+		TailLines     int    `json:"tail_lines"`
+		Content       string `json:"content"`
 	}
 	if err := json.Unmarshal([]byte(out), &decoded); err != nil {
 		t.Fatalf("json.Unmarshal returned error: %v", err)
 	}
-	if decoded.Session != "dogfood" || decoded.Pane != "review" || decoded.TailLines != 5 || decoded.Content != "hello\nworld\n" {
+	if decoded.SchemaVersion != jsonSchemaV1 || decoded.Kind != "capture" || decoded.Session != "dogfood" || decoded.Pane != "review" || decoded.TailLines != 5 || decoded.Content != "hello\nworld\n" {
 		t.Fatalf("decoded = %#v, want session dogfood pane review content preserved", decoded)
 	}
 }

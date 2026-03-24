@@ -22,6 +22,7 @@ const (
 	exitValidation  = 2
 	exitConfigParse = 3
 	exitDependency  = 4
+	jsonSchemaV1    = 1
 )
 
 var version = "dev"
@@ -598,25 +599,33 @@ func renderStatus(session string, panes []tmux.PaneStatus) string {
 
 func renderStatusJSON(session string, panes []tmux.PaneStatus) (string, error) {
 	return renderJSON(struct {
-		Session string            `json:"session"`
-		Panes   []tmux.PaneStatus `json:"panes"`
+		SchemaVersion int               `json:"schema_version"`
+		Kind          string            `json:"kind"`
+		Session       string            `json:"session"`
+		Panes         []tmux.PaneStatus `json:"panes"`
 	}{
-		Session: session,
-		Panes:   panes,
+		SchemaVersion: jsonSchemaV1,
+		Kind:          "status",
+		Session:       session,
+		Panes:         panes,
 	})
 }
 
 func renderCaptureJSON(session string, pane string, tailLines int, content string) (string, error) {
 	return renderJSON(struct {
-		Session   string `json:"session"`
-		Pane      string `json:"pane"`
-		TailLines int    `json:"tail_lines,omitempty"`
-		Content   string `json:"content"`
+		SchemaVersion int    `json:"schema_version"`
+		Kind          string `json:"kind"`
+		Session       string `json:"session"`
+		Pane          string `json:"pane"`
+		TailLines     int    `json:"tail_lines,omitempty"`
+		Content       string `json:"content"`
 	}{
-		Session:   session,
-		Pane:      pane,
-		TailLines: tailLines,
-		Content:   content,
+		SchemaVersion: jsonSchemaV1,
+		Kind:          "capture",
+		Session:       session,
+		Pane:          pane,
+		TailLines:     tailLines,
+		Content:       content,
 	})
 }
 
