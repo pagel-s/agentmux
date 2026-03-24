@@ -36,6 +36,19 @@ func TestListIncludesCanonicalTemplates(t *testing.T) {
 	}
 }
 
+func TestLookupSupportsDefaultAlias(t *testing.T) {
+	template, ok, err := Lookup("default")
+	if err != nil {
+		t.Fatalf("Lookup returned error: %v", err)
+	}
+	if !ok {
+		t.Fatal("Lookup(default) reported ok=false")
+	}
+	if template.Name != "ai-dev" {
+		t.Fatalf("template.Name = %q, want %q", template.Name, "ai-dev")
+	}
+}
+
 func TestInitWritesTemplateAndDerivesSessionFromTarget(t *testing.T) {
 	target := filepath.Join(t.TempDir(), "My Workflow.yaml")
 

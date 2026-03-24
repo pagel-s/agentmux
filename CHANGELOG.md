@@ -4,6 +4,7 @@
 
 - Added `templates` and `init` so new configs can be created from built-in starter templates instead of copied manually.
 - Added `edit <path-or-session>` with session config-path metadata, so live sessions can reopen the config file they came from.
+- Added a friendly `default` starter alias for the `ai-dev` template and clearer help/output for the starter flow.
 
 ## v0.4.0 - 2026-03-24
 

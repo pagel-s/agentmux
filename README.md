@@ -95,6 +95,8 @@ export PATH="$PWD/bin:$PATH"
 
 `templates` lists the built-in starter configs that ship with Agentmux.
 
+`default` is a friendly alias for the `ai-dev` starter template.
+
 `init` writes one of those built-in starter configs to a target path and rewrites the top-level `session` field from the target filename by default.
 
 `edit` opens either a config path directly or the config path remembered for a live session that was loaded or reloaded from disk.
@@ -103,7 +105,7 @@ Starter flow:
 
 ```bash
 ./bin/agentmux templates
-./bin/agentmux init minimal my-workflow.yaml
+./bin/agentmux init default my-workflow.yaml
 ./bin/agentmux validate my-workflow.yaml
 ./bin/agentmux load my-workflow.yaml --replace --no-attach
 ```
@@ -407,6 +409,10 @@ Built-in starter templates use the same names:
 - `on-exit`
 - `review-loop`
 - `ssh-ops`
+
+Starter aliases:
+
+- `default` -> `ai-dev`
 
 ## Development
 

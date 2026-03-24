@@ -31,6 +31,10 @@ var descriptions = map[string]string{
 	"ssh-ops":     "Remote operations starter with an SSH-driven agent",
 }
 
+var aliases = map[string]string{
+	"default": "ai-dev",
+}
+
 var sessionCharPattern = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
 
 func List() ([]Template, error) {
@@ -63,6 +67,9 @@ func List() ([]Template, error) {
 }
 
 func Lookup(name string) (Template, bool, error) {
+	if target, ok := aliases[name]; ok {
+		name = target
+	}
 	templates, err := List()
 	if err != nil {
 		return Template{}, false, err
@@ -120,11 +127,23 @@ func Names() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	names := make([]string, 0, len(templates))
+	names := make([]string, 0, len(templates)+len(aliases))
 	for _, template := range templates {
 		names = append(names, template.Name)
 	}
+	for alias := range aliases {
+		names = append(names, alias)
+	}
+	sort.Strings(names)
 	return names, nil
+}
+
+func Aliases() map[string]string {
+	out := make(map[string]string, len(aliases))
+	for alias, target := range aliases {
+		out[alias] = target
+	}
+	return out
 }
 
 func expandUserPath(path string) string {

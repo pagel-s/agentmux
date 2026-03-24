@@ -127,6 +127,21 @@ func runTemplates(args []string) int {
 		}
 		fmt.Printf("  %s\n", template.Name)
 	}
+	aliases := scaffold.Aliases()
+	if len(aliases) > 0 {
+		fmt.Println("aliases:")
+		aliasNames := make([]string, 0, len(aliases))
+		for alias := range aliases {
+			aliasNames = append(aliasNames, alias)
+		}
+		sort.Strings(aliasNames)
+		for _, alias := range aliasNames {
+			fmt.Printf("  %s -> %s\n", alias, aliases[alias])
+		}
+	}
+	fmt.Println("examples:")
+	fmt.Println("  agentmux init default my-workflow.yaml")
+	fmt.Println("  agentmux init minimal scratch.yaml")
 	return exitSuccess
 }
 
@@ -149,6 +164,7 @@ func runInit(args []string) int {
 	fmt.Printf("  agentmux validate %s\n", path)
 	fmt.Printf("  agentmux render %s\n", path)
 	fmt.Printf("  agentmux load %s --replace --no-attach\n", path)
+	fmt.Printf("  agentmux edit %s\n", path)
 	return exitSuccess
 }
 
@@ -920,7 +936,7 @@ func resolveEditTarget(target string) (string, error) {
 		return "", err
 	}
 	if strings.TrimSpace(path) == "" {
-		return "", fmt.Errorf("session %q is missing config path metadata; reload it from a config path first", target)
+		return "", fmt.Errorf("session %q is missing config path metadata; use `agentmux edit ./path/to/config.yaml` directly or reload the session from a config path first", target)
 	}
 	return path, nil
 }
@@ -1012,4 +1028,11 @@ Usage:
   agentmux send <session> <pane-name> [--json] [--no-enter] <command...>
   agentmux doctor
   agentmux version`)
+
+	fmt.Println(`
+Starter flow:
+  agentmux templates
+  agentmux init default my-workflow.yaml
+  agentmux validate my-workflow.yaml
+  agentmux load my-workflow.yaml --replace --no-attach`)
 }
