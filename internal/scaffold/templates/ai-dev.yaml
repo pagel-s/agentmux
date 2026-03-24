@@ -1,0 +1,47 @@
+version: 1
+name: AI Dev Workspace
+session: ai-dev
+description: Multi-agent coding workspace
+
+params:
+  project_dir: "."
+
+env:
+  PROJECT_DIR: "{{project_dir}}"
+
+agents:
+  coder:
+    provider: command
+    command: "ollama run codellama"
+    cwd: "{{project_dir}}"
+    title: "Coder"
+
+  reviewer:
+    provider: command
+    command: "openai api chat.completions.create -m gpt-5"
+    cwd: "{{project_dir}}"
+    env:
+      OPENAI_API_KEY: "${OPENAI_API_KEY}"
+    title: "Reviewer"
+
+layout:
+  - window: editor
+    root: "{{project_dir}}"
+    layout: even-horizontal
+    panes:
+      - command: "nvim"
+        title: "Editor"
+        focus: true
+      - agent: coder
+
+  - window: validation
+    root: "{{project_dir}}"
+    layout: even-vertical
+    panes:
+      - command: "npm test --watch"
+        title: "Tests"
+      - agent: reviewer
+
+hooks:
+  pre_session: "test -d {{project_dir}}"
+  post_session: "tmux display-message 'Agentmux ready'"

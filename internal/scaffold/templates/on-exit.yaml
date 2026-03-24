@@ -1,0 +1,39 @@
+version: 1
+session: on-exit-demo
+
+params:
+  project_dir: "."
+
+agents:
+  watcher:
+    provider: command
+    command: "go test ./internal/resolve -count=1"
+    cwd: "{{project_dir}}"
+    title: "Watcher"
+    on_exit: restart
+
+layout:
+  - window: policies
+    root: "{{project_dir}}"
+    layout: even-horizontal
+    panes:
+      - name: shell-default
+        command: "printf 'shell\\n'"
+        title: "Shell"
+      - name: remain-log
+        command: "printf 'remain\\n'"
+        title: "Remain"
+        on_exit: remain
+      - name: watcher
+        agent: watcher
+  - window: kill-demo
+    root: "{{project_dir}}"
+    layout: even-horizontal
+    panes:
+      - name: keep
+        command: "printf 'keep\\n'; exec $SHELL"
+        title: "Keep"
+      - name: drop
+        command: "printf 'drop\\n'"
+        title: "Drop"
+        on_exit: kill

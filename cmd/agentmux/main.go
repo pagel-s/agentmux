@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -12,6 +13,7 @@ import (
 	"agentmux/internal/config"
 	"agentmux/internal/hooks"
 	"agentmux/internal/resolve"
+	"agentmux/internal/scaffold"
 	"agentmux/internal/tmux"
 	"agentmux/internal/validate"
 )
@@ -42,6 +44,12 @@ func run(args []string) int {
 		return runLoad(args[1:])
 	case "reload":
 		return runReload(args[1:])
+	case "templates":
+		return runTemplates(args[1:])
+	case "init":
+		return runInit(args[1:])
+	case "edit":
+		return runEdit(args[1:])
 	case "validate":
 		return runValidate(args[1:])
 	case "render":
@@ -99,6 +107,81 @@ func runReload(args []string) int {
 	return runSessionLaunch("reload", opts, true, true)
 }
 
+func runTemplates(args []string) int {
+	if len(args) != 0 {
+		fmt.Fprintln(os.Stderr, "error: templates does not accept arguments")
+		return exitValidation
+	}
+
+	templates, err := scaffold.List()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return exitRuntime
+	}
+
+	fmt.Println("templates:")
+	for _, template := range templates {
+		if template.Description != "" {
+			fmt.Printf("  %s: %s\n", template.Name, template.Description)
+			continue
+		}
+		fmt.Printf("  %s\n", template.Name)
+	}
+	return exitSuccess
+}
+
+func runInit(args []string) int {
+	opts, err := cli.ParseInit(args)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return exitValidation
+	}
+
+	path, session, err := scaffold.Init(opts.Template, opts.Path, scaffold.InitOptions{Force: opts.Force})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return exitRuntime
+	}
+
+	fmt.Printf("created %s from template %q\n", path, opts.Template)
+	fmt.Printf("session: %s\n", session)
+	fmt.Printf("next:\n")
+	fmt.Printf("  agentmux validate %s\n", path)
+	fmt.Printf("  agentmux render %s\n", path)
+	fmt.Printf("  agentmux load %s --replace --no-attach\n", path)
+	return exitSuccess
+}
+
+func runEdit(args []string) int {
+	opts, err := cli.ParseEdit(args)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return exitValidation
+	}
+
+	targetPath, err := resolveEditTarget(opts.Target)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return exitRuntime
+	}
+
+	editorShell, editorCommand, err := editorInvocation(targetPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return exitDependency
+	}
+
+	cmd := exec.Command(editorShell, "-lc", editorCommand)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "error: edit %s: %v\n", targetPath, err)
+		return exitRuntime
+	}
+	return exitSuccess
+}
+
 func runSessionLaunch(mode string, opts cli.LoadOptions, requireExisting bool, replace bool) int {
 
 	resolved, warnings, code := resolveCommand(opts.CommonOptions)
@@ -139,6 +222,12 @@ func runSessionLaunch(mode string, opts cli.LoadOptions, requireExisting bool, r
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		return exitRuntime
+	}
+
+	if absConfigPath, err := filepath.Abs(opts.ConfigPath); err == nil {
+		if err := tmux.SetSessionConfigPath(resolved.Session, absConfigPath, opts.Verbose); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: failed to persist config path metadata for session %q: %v\n", resolved.Session, err)
+		}
 	}
 
 	if err := hooks.RunPost(resolved.Hooks.PostSession, opts.Verbose); err != nil {
@@ -794,6 +883,105 @@ func requireTMux() error {
 	return nil
 }
 
+func resolveEditTarget(target string) (string, error) {
+	expanded := expandUserPath(target)
+	if pathLikeTarget(target) {
+		absPath, err := filepath.Abs(expanded)
+		if err != nil {
+			return "", fmt.Errorf("resolve edit target %q: %w", target, err)
+		}
+		if info, err := os.Stat(absPath); err == nil && info.IsDir() {
+			return "", fmt.Errorf("edit target %q is a directory", absPath)
+		} else if err != nil && !os.IsNotExist(err) {
+			return "", fmt.Errorf("inspect edit target %q: %w", absPath, err)
+		}
+		return absPath, nil
+	}
+
+	if info, err := os.Stat(expanded); err == nil {
+		if info.IsDir() {
+			return "", fmt.Errorf("edit target %q is a directory", expanded)
+		}
+		absPath, err := filepath.Abs(expanded)
+		if err != nil {
+			return "", fmt.Errorf("resolve edit target %q: %w", target, err)
+		}
+		return absPath, nil
+	} else if err != nil && !os.IsNotExist(err) {
+		return "", fmt.Errorf("inspect edit target %q: %w", expanded, err)
+	}
+
+	if err := requireTMux(); err != nil {
+		return "", fmt.Errorf("edit target %q is not a file path, and tmux is unavailable to resolve it as a session", target)
+	}
+
+	path, err := tmux.SessionConfigPath(target, false)
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(path) == "" {
+		return "", fmt.Errorf("session %q is missing config path metadata; reload it from a config path first", target)
+	}
+	return path, nil
+}
+
+func editorInvocation(path string) (string, string, error) {
+	editor := strings.TrimSpace(os.Getenv("VISUAL"))
+	if editor == "" {
+		editor = strings.TrimSpace(os.Getenv("EDITOR"))
+	}
+	if editor == "" {
+		editor = "vi"
+	}
+
+	shell := strings.TrimSpace(os.Getenv("SHELL"))
+	if shell == "" {
+		shell = "/bin/sh"
+	}
+	if _, err := exec.LookPath(shell); err != nil {
+		return "", "", fmt.Errorf("shell %q is not installed or not in PATH", shell)
+	}
+	editorFields := strings.Fields(editor)
+	if len(editorFields) == 0 {
+		return "", "", fmt.Errorf("editor command is empty")
+	}
+	if _, err := exec.LookPath(editorFields[0]); err != nil {
+		return "", "", fmt.Errorf("editor %q is not installed or not in PATH", editorFields[0])
+	}
+
+	command := editor + " " + shellQuote(path)
+	return shell, command, nil
+}
+
+func pathLikeTarget(target string) bool {
+	if strings.HasPrefix(target, "~") || strings.HasPrefix(target, ".") {
+		return true
+	}
+	if strings.Contains(target, string(os.PathSeparator)) {
+		return true
+	}
+	ext := strings.ToLower(filepath.Ext(target))
+	return ext == ".yaml" || ext == ".yml"
+}
+
+func expandUserPath(path string) string {
+	if path == "~" {
+		if home, err := os.UserHomeDir(); err == nil {
+			return home
+		}
+	}
+	if strings.HasPrefix(path, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(home, strings.TrimPrefix(path, "~/"))
+		}
+	}
+	return path
+}
+
+func shellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", `'"'"'`) + "'"
+}
+
 func mustGetwd() string {
 	wd, err := os.Getwd()
 	if err != nil {
@@ -806,6 +994,9 @@ func printUsage() {
 	fmt.Println(`agentmux
 
 Usage:
+  agentmux templates
+  agentmux init <template> <path> [--force]
+  agentmux edit <path-or-session>
   agentmux load <config> [--param key=value] [--attach|--no-attach] [--dry-run] [--replace] [--strict] [--verbose]
   agentmux reload <config> [--param key=value] [--attach|--no-attach] [--dry-run] [--strict] [--verbose]
   agentmux validate <config> [--param key=value] [--strict]

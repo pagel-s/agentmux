@@ -275,6 +275,51 @@ func TestStatusAndFocusNamedPanes(t *testing.T) {
 	}
 }
 
+func TestSessionConfigPathRoundTrip(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed")
+	}
+
+	socket := filepath.Join(t.TempDir(), "agentmux-session-meta.sock")
+	t.Setenv(envTmuxSocket, socket)
+
+	cfg := resolve.Config{
+		Session: "agentmux-session-meta",
+		Windows: []resolve.Window{
+			{
+				Name: "main",
+				Panes: []resolve.Pane{
+					{Name: "runner", SourceType: "command", Command: "printf ready", Title: "Runner"},
+				},
+			},
+		},
+	}
+
+	t.Cleanup(func() {
+		_ = command("kill-server").Run()
+	})
+
+	if err := Execute(cfg, Options{Replace: true}); err != nil {
+		if isTmuxPermissionError(err) {
+			t.Skipf("tmux integration unavailable in this environment: %v", err)
+		}
+		t.Fatalf("Execute returned error: %v", err)
+	}
+
+	wantPath := filepath.Join(t.TempDir(), "workflow.yaml")
+	if err := SetSessionConfigPath(cfg.Session, wantPath, false); err != nil {
+		t.Fatalf("SetSessionConfigPath returned error: %v", err)
+	}
+
+	gotPath, err := SessionConfigPath(cfg.Session, false)
+	if err != nil {
+		t.Fatalf("SessionConfigPath returned error: %v", err)
+	}
+	if gotPath != wantPath {
+		t.Fatalf("SessionConfigPath = %q, want %q", gotPath, wantPath)
+	}
+}
+
 func TestExecuteRemainOnExitKeepsPaneAvailable(t *testing.T) {
 	if _, err := exec.LookPath("tmux"); err != nil {
 		t.Skip("tmux not installed")

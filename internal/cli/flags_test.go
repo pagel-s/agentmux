@@ -71,6 +71,50 @@ func TestParseRenderAcceptsInlineParam(t *testing.T) {
 	}
 }
 
+func TestParseInitRequiresTemplateAndTarget(t *testing.T) {
+	opts, err := ParseInit([]string{"minimal", "my-workflow.yaml"})
+	if err != nil {
+		t.Fatalf("ParseInit returned error: %v", err)
+	}
+	if opts.Template != "minimal" {
+		t.Fatalf("Template = %q, want %q", opts.Template, "minimal")
+	}
+	if opts.Path != "my-workflow.yaml" {
+		t.Fatalf("Path = %q, want %q", opts.Path, "my-workflow.yaml")
+	}
+	if opts.Force {
+		t.Fatal("Force = true, want false")
+	}
+
+	if _, err := ParseInit([]string{"minimal"}); err == nil {
+		t.Fatal("ParseInit returned nil error for missing target path")
+	}
+}
+
+func TestParseInitAcceptsForce(t *testing.T) {
+	opts, err := ParseInit([]string{"--force", "minimal", "my-workflow.yaml"})
+	if err != nil {
+		t.Fatalf("ParseInit returned error: %v", err)
+	}
+	if !opts.Force {
+		t.Fatal("Force = false, want true")
+	}
+}
+
+func TestParseEditRequiresExactlyOneTarget(t *testing.T) {
+	opts, err := ParseEdit([]string{"dogfood"})
+	if err != nil {
+		t.Fatalf("ParseEdit returned error: %v", err)
+	}
+	if opts.Target != "dogfood" {
+		t.Fatalf("Target = %q, want %q", opts.Target, "dogfood")
+	}
+
+	if _, err := ParseEdit(nil); err == nil {
+		t.Fatal("ParseEdit returned nil error for missing target")
+	}
+}
+
 func TestParseStatusRequiresSessionName(t *testing.T) {
 	opts, err := ParseStatus([]string{"dogfood"})
 	if err != nil {

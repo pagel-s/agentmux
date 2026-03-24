@@ -51,6 +51,16 @@ type SendOptions struct {
 	JSON    bool
 }
 
+type InitOptions struct {
+	Template string
+	Path     string
+	Force    bool
+}
+
+type EditOptions struct {
+	Target string
+}
+
 type paramFlags struct {
 	values map[string]string
 }
@@ -139,6 +149,43 @@ func ParseValidate(args []string) (CommonOptions, error) {
 
 func ParseRender(args []string) (CommonOptions, error) {
 	return parseCommon("render", args)
+}
+
+func ParseInit(args []string) (InitOptions, error) {
+	force := false
+	positional := make([]string, 0, 2)
+
+	for _, arg := range args {
+		switch arg {
+		case "--force":
+			force = true
+		default:
+			if strings.HasPrefix(arg, "-") {
+				return InitOptions{}, fmt.Errorf("init does not accept flag %q", arg)
+			}
+			positional = append(positional, arg)
+		}
+	}
+
+	if len(positional) != 2 {
+		return InitOptions{}, errors.New("init requires exactly one template name and one target path")
+	}
+
+	return InitOptions{
+		Template: positional[0],
+		Path:     positional[1],
+		Force:    force,
+	}, nil
+}
+
+func ParseEdit(args []string) (EditOptions, error) {
+	if len(args) != 1 {
+		return EditOptions{}, errors.New("edit requires exactly one path or session name")
+	}
+	if strings.TrimSpace(args[0]) == "" {
+		return EditOptions{}, errors.New("edit target must not be empty")
+	}
+	return EditOptions{Target: args[0]}, nil
 }
 
 func ParseStatus(args []string) (StatusOptions, error) {

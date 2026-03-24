@@ -49,6 +49,7 @@ Theme: make the runtime loop feel dependable in daily use.
 - tighten install docs
 - make `go install` and local build flows clearer
 - reduce confusion around stale binaries and path setup
+- keep config creation and reopening ergonomic through starter templates and session-aware editing
 
 ### Nice To Have
 

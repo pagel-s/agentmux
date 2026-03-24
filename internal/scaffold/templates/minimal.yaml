@@ -1,0 +1,12 @@
+version: 1
+session: minimal-dev
+
+agents:
+  coder:
+    provider: command
+    command: "echo coder-ready && exec $SHELL"
+
+layout:
+  - window: main
+    panes:
+      - agent: coder

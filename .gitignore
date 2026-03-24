@@ -1,6 +1,7 @@
 /agentmux
 bin/
 .cache/
+.tmp/
 .tools/
 .vscode/
 *.test

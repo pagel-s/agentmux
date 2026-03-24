@@ -1,0 +1,17 @@
+version: 1
+name: SSH Ops
+session: ssh-ops
+
+agents:
+  prod-shell:
+    provider: ssh
+    command: "ssh user@prod.example.com"
+    title: "Prod"
+
+layout:
+  - window: ops
+    layout: even-horizontal
+    panes:
+      - agent: prod-shell
+      - command: "tail -f /var/log/syslog"
+        title: "Logs"

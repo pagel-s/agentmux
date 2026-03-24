@@ -35,7 +35,7 @@ This repository builds on the v1 foundation with:
 - Param interpolation with `{{param_name}}`
 - Session-, window-, agent-, and pane-level env merging
 - tmux session, window, and pane creation
-- Commands: `load`, `reload`, `validate`, `render`, `list`, `status`, `focus`, `restart`, `rerun`, `stop`, `kill`, `capture`, `send`, `doctor`
+- Commands: `templates`, `init`, `edit`, `load`, `reload`, `validate`, `render`, `list`, `status`, `focus`, `restart`, `rerun`, `stop`, `kill`, `capture`, `send`, `doctor`
 
 Current model:
 
@@ -69,6 +69,9 @@ export PATH="$PWD/bin:$PATH"
 ## Commands
 
 ```bash
+./bin/agentmux templates
+./bin/agentmux init <template> <path> [--force]
+./bin/agentmux edit <path-or-session>
 ./bin/agentmux load <config> [--param key=value] [--attach|--no-attach] [--dry-run] [--replace]
 ./bin/agentmux reload <config> [--param key=value] [--attach|--no-attach] [--dry-run]
 ./bin/agentmux validate <config> [--param key=value]
@@ -90,12 +93,27 @@ export PATH="$PWD/bin:$PATH"
 
 `reload` recreates an existing session from config using replace semantics. It is the workflow command for applying config changes onto a live session, and it fails if the session does not exist yet.
 
+`templates` lists the built-in starter configs that ship with Agentmux.
+
+`init` writes one of those built-in starter configs to a target path and rewrites the top-level `session` field from the target filename by default.
+
+`edit` opens either a config path directly or the config path remembered for a live session that was loaded or reloaded from disk.
+
+Starter flow:
+
+```bash
+./bin/agentmux templates
+./bin/agentmux init minimal my-workflow.yaml
+./bin/agentmux validate my-workflow.yaml
+./bin/agentmux load my-workflow.yaml --replace --no-attach
+```
+
 Typical edit loop:
 
 ```bash
 ./bin/agentmux load dogfood.yaml --replace --no-attach
+./bin/agentmux edit dogfood
 ./bin/agentmux status dogfood
-# edit config
 ./bin/agentmux reload dogfood.yaml --no-attach
 ./bin/agentmux status dogfood --json
 ```
@@ -381,6 +399,14 @@ Canonical examples:
 - [testdata/examples/on-exit.yaml](testdata/examples/on-exit.yaml)
 - [testdata/examples/review-loop.yaml](testdata/examples/review-loop.yaml)
 - [testdata/examples/ssh-ops.yaml](testdata/examples/ssh-ops.yaml)
+
+Built-in starter templates use the same names:
+
+- `minimal`
+- `ai-dev`
+- `on-exit`
+- `review-loop`
+- `ssh-ops`
 
 ## Development
 

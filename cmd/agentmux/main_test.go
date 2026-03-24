@@ -362,6 +362,80 @@ func TestRunStatusJSONErrorForMissingDependency(t *testing.T) {
 	}
 }
 
+func TestResolveEditTargetReturnsAbsPathForYamlPath(t *testing.T) {
+	target := filepath.Join(t.TempDir(), "new-config.yaml")
+	got, err := resolveEditTarget(target)
+	if err != nil {
+		t.Fatalf("resolveEditTarget returned error: %v", err)
+	}
+	want, err := filepath.Abs(target)
+	if err != nil {
+		t.Fatalf("filepath.Abs returned error: %v", err)
+	}
+	if got != want {
+		t.Fatalf("resolveEditTarget = %q, want %q", got, want)
+	}
+}
+
+func TestEditorInvocationUsesConfiguredEditor(t *testing.T) {
+	t.Setenv("EDITOR", "vi")
+	shell, command, err := editorInvocation("/tmp/config.yaml")
+	if err != nil {
+		t.Fatalf("editorInvocation returned error: %v", err)
+	}
+	if shell == "" {
+		t.Fatal("shell = empty, want a shell path")
+	}
+	if !strings.Contains(command, "vi ") || !strings.Contains(command, "/tmp/config.yaml") {
+		t.Fatalf("command = %q, want editor plus target path", command)
+	}
+}
+
+func TestResolveEditTargetFromSessionMetadata(t *testing.T) {
+	if _, err := exec.LookPath(tmux.Binary()); err != nil {
+		t.Skip("tmux not installed")
+	}
+
+	socket := filepath.Join(t.TempDir(), "cmd-edit-session.sock")
+	t.Setenv("AGENTMUX_TMUX_SOCKET", socket)
+
+	cfg := resolve.Config{
+		Session: "cmd-edit-session",
+		Windows: []resolve.Window{
+			{
+				Name: "main",
+				Panes: []resolve.Pane{
+					{Name: "runner", SourceType: "command", Command: "printf ready", Title: "Runner"},
+				},
+			},
+		},
+	}
+
+	t.Cleanup(func() {
+		_ = exec.Command(tmux.Binary(), "-S", socket, "kill-server").Run()
+	})
+
+	if err := tmux.Execute(cfg, tmux.Options{Replace: true}); err != nil {
+		if isTMUXPermissionError(err) {
+			t.Skipf("tmux integration unavailable in this environment: %v", err)
+		}
+		t.Fatalf("Execute returned error: %v", err)
+	}
+
+	wantPath := filepath.Join(t.TempDir(), "dogfood.yaml")
+	if err := tmux.SetSessionConfigPath(cfg.Session, wantPath, false); err != nil {
+		t.Fatalf("SetSessionConfigPath returned error: %v", err)
+	}
+
+	gotPath, err := resolveEditTarget(cfg.Session)
+	if err != nil {
+		t.Fatalf("resolveEditTarget returned error: %v", err)
+	}
+	if gotPath != wantPath {
+		t.Fatalf("resolveEditTarget = %q, want %q", gotPath, wantPath)
+	}
+}
+
 func captureRunOutput(t *testing.T, args []string) (code int, stdout string, stderr string) {
 	t.Helper()
 

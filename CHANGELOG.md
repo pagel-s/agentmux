@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Added `templates` and `init` so new configs can be created from built-in starter templates instead of copied manually.
+- Added `edit <path-or-session>` with session config-path metadata, so live sessions can reopen the config file they came from.
+
 ## v0.4.0 - 2026-03-24
 
 - Added `status --pane <name>` for targeted single-pane inspection in both human-readable and JSON output.

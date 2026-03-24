@@ -23,6 +23,7 @@ const (
 	paneSourceOption  = "@agentmux_source_type"
 	paneAgentOption   = "@agentmux_agent_name"
 	paneOnExitOption  = "@agentmux_on_exit"
+	sessionConfigPath = "@agentmux_config_path"
 )
 
 var shellEnvRefPattern = regexp.MustCompile(`(^|[^\\])\$(\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)`)
@@ -221,6 +222,27 @@ func Status(session string) ([]PaneStatus, error) {
 
 func StatusPaneByName(session string, name string) (PaneStatus, error) {
 	return findPaneByName(session, name)
+}
+
+func SetSessionConfigPath(session string, path string, verbose bool) error {
+	if strings.TrimSpace(path) == "" {
+		return nil
+	}
+	if err := run(verbose, "set-option", "-t", session, sessionConfigPath, path); err != nil {
+		return fmt.Errorf("set config path for session %q: %w", session, err)
+	}
+	return nil
+}
+
+func SessionConfigPath(session string, verbose bool) (string, error) {
+	if err := ensureSessionExists(session); err != nil {
+		return "", err
+	}
+	value, err := capture(verbose, "show-options", "-qv", "-t", session, sessionConfigPath)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(value), nil
 }
 
 func FocusPaneByName(session string, name string, verbose bool) error {
