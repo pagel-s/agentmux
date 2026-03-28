@@ -193,12 +193,12 @@ func TestStatusAndFocusNamedPanes(t *testing.T) {
 	t.Setenv(envTmuxSocket, socket)
 
 	cfg := resolve.Config{
-		Session: "agentmux-focus",
+		Session: "agentmux-status",
 		Windows: []resolve.Window{
 			{
 				Name: "editor",
 				Panes: []resolve.Pane{
-					{Name: "editor", SourceType: "command", Command: "printf ready", Title: "Editor"},
+					{Name: "editor", SourceType: "command", Command: "printf ready", Title: "Editor", OnExit: config.OnExitShell},
 				},
 			},
 			{
@@ -269,7 +269,7 @@ func TestStatusAndFocusNamedPanes(t *testing.T) {
 		if !strings.Contains(message, `available named panes: checks, editor`) {
 			t.Fatalf("missing-pane error %q does not list available panes", message)
 		}
-		if !strings.Contains(message, "agentmux status agentmux-focus") {
+		if !strings.Contains(message, "agentmux status agentmux-status") {
 			t.Fatalf("missing-pane error %q does not include status hint", message)
 		}
 	}
@@ -337,7 +337,7 @@ func TestExecuteRemainOnExitKeepsPaneAvailable(t *testing.T) {
 					{
 						Name:       "remain",
 						SourceType: "command",
-						Command:    "printf 'remain-done\\n'",
+						Command:    "printf 'remain-done\\n' && sleep 0.2",
 						Title:      "Remain",
 						OnExit:     config.OnExitRemain,
 					},
@@ -608,6 +608,7 @@ func TestEnsureCanReplaceRejectsCurrentPaneSession(t *testing.T) {
 		t.Fatalf("expected 1 pane, got %d", len(panes))
 	}
 
+	t.Setenv("TMUX", socket+",123,0")
 	t.Setenv("TMUX_PANE", panes[0].PaneID)
 	err = ensureCanReplace(cfg.Session)
 	if err == nil {
@@ -863,15 +864,15 @@ func TestCaptureNamedPaneTailLines(t *testing.T) {
 		t.Fatalf("Execute returned error: %v", err)
 	}
 
-	if err := SendCommandToPaneByName(cfg.Session, "runner", "printf 'tail-line-1\\ntail-line-2\\ntail-line-3\\n'", true, false); err != nil {
+	if err := SendCommandToPaneByName(cfg.Session, "runner", "for i in $(seq 1 20); do echo \"tail-line-$i\"; done", true, false); err != nil {
 		t.Fatalf("SendCommandToPaneByName returned error: %v", err)
 	}
 
-	captured := waitForCaptureContains(t, cfg.Session, "runner", 3, "tail-line-3")
-	if !strings.Contains(captured, "tail-line-3") {
-		t.Fatalf("captured output %q does not include tail-line-3", captured)
+	captured := waitForCaptureContains(t, cfg.Session, "runner", 10, "tail-line-20")
+	if !strings.Contains(captured, "tail-line-20") {
+		t.Fatalf("captured output %q does not include tail-line-20", captured)
 	}
-	if strings.Contains(captured, "tail-line-1") {
+	if strings.Contains(captured, "tail-line-1\n") {
 		t.Fatalf("captured tail output %q still includes tail-line-1", captured)
 	}
 }
