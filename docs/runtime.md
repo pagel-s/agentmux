@@ -133,6 +133,16 @@ Delete a value:
 
 This mechanism allows isolated terminal agents to signal progress, share file paths, or manage state without a background daemon.
 
+## Synchronization (Wait)
+
+The `wait` command blocks until a specific pattern (regex) appears in a pane's output. This is useful for coordinating handoffs between agents.
+
+```bash
+./bin/agentmux wait my-workflow reviewer "REVIEW COMPLETE" --timeout 5m
+```
+
+If the pattern is found, the command exits with code `0`. If the timeout is reached, it exits with code `1`.
+
 ## Troubleshooting
 
 Missing session:

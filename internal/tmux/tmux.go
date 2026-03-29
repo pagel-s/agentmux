@@ -475,6 +475,31 @@ func CapturePaneByName(session string, name string, tailLines int, stripEmpty bo
 	return out, nil
 }
 
+func WaitForPattern(session string, name string, pattern string, timeout time.Duration, verbose bool) (string, error) {
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return "", fmt.Errorf("invalid pattern %q: %w", pattern, err)
+	}
+
+	start := time.Now()
+	for {
+		out, err := CapturePaneByName(session, name, 100, true, verbose)
+		if err != nil {
+			return "", err
+		}
+
+		if match := re.FindString(out); match != "" {
+			return match, nil
+		}
+
+		if timeout > 0 && time.Since(start) > timeout {
+			return "", fmt.Errorf("timeout waiting for pattern %q in pane %q after %v", pattern, name, timeout)
+		}
+
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
 func stripEmptyLinesFromCapture(content string) string {
 	if content == "" {
 		return content

@@ -76,6 +76,8 @@ func run(args []string) int {
 		return runKVList(args[1:])
 	case "kv-del":
 		return runKVDel(args[1:])
+	case "wait":
+		return runWait(args[1:])
 	case "focus":
 		return runFocus(args[1:])
 	case "restart":
@@ -588,6 +590,43 @@ func runKVDel(args []string) int {
 	}
 
 	fmt.Println(message)
+	return exitSuccess
+}
+
+func runWait(args []string) int {
+	jsonOut := hasFlag(args, "--json")
+	opts, err := cli.ParseWait(args)
+	if err != nil {
+		return printCommandError("wait", jsonOut, exitValidation, err, "", "")
+	}
+
+	timeout := time.Duration(0)
+	if opts.Timeout != "" {
+		timeout, err = time.ParseDuration(opts.Timeout)
+		if err != nil {
+			return printCommandError("wait", opts.JSON, exitValidation, fmt.Errorf("invalid timeout %q: %w", opts.Timeout, err), opts.Session, opts.Pane)
+		}
+	}
+
+	if err := requireTMux(); err != nil {
+		return printCommandError("wait", opts.JSON, exitDependency, err, opts.Session, opts.Pane)
+	}
+
+	match, err := tmux.WaitForPattern(opts.Session, opts.Pane, opts.Pattern, timeout, false)
+	if err != nil {
+		return printCommandError("wait", opts.JSON, exitRuntime, err, opts.Session, opts.Pane)
+	}
+
+	if opts.JSON {
+		out, err := renderWaitJSON(opts.Session, opts.Pane, opts.Pattern, match)
+		if err != nil {
+			return printCommandError("wait", true, exitRuntime, fmt.Errorf("render wait json: %w", err), opts.Session, opts.Pane)
+		}
+		fmt.Print(out)
+		return exitSuccess
+	}
+
+	fmt.Printf("matched pattern %q in pane %q: %s\n", opts.Pattern, opts.Pane, match)
 	return exitSuccess
 }
 
@@ -1162,6 +1201,24 @@ func renderKVActionJSON(kind string, session string, key string, value string, m
 	})
 }
 
+func renderWaitJSON(session string, pane string, pattern string, match string) (string, error) {
+	return renderJSON(struct {
+		SchemaVersion int    `json:"schema_version"`
+		Kind          string `json:"kind"`
+		Session       string `json:"session"`
+		Pane          string `json:"pane"`
+		Pattern       string `json:"pattern"`
+		Match         string `json:"match"`
+	}{
+		SchemaVersion: jsonSchemaV1,
+		Kind:          "wait",
+		Session:       session,
+		Pane:          pane,
+		Pattern:       pattern,
+		Match:         match,
+	})
+}
+
 func renderStatusJSON(session string, pane string, panes []tmux.PaneStatus) (string, error) {
 	return renderJSON(struct {
 		SchemaVersion int               `json:"schema_version"`
@@ -1460,6 +1517,7 @@ Usage:
   agentmux kv-get <session> <key> [--json]
   agentmux kv-list <session> [--json]
   agentmux kv-del <session> <key> [--json]
+  agentmux wait <session> <pane> <pattern> [--timeout <duration>] [--json]
   agentmux focus <session> <pane-name> [--json]
   agentmux restart <session> <pane-name> [--json]
   agentmux rerun <session> <pane-name> [--json]

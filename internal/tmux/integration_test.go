@@ -1575,3 +1575,80 @@ func TestBlackboardKVStore(t *testing.T) {
 		t.Fatalf("GetKV after DelKV returned %q, want empty", val)
 	}
 }
+func TestWaitCondition(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed")
+	}
+
+	socket := filepath.Join(t.TempDir(), "agentmux-wait.sock")
+	t.Setenv(envTmuxSocket, socket)
+
+	cfg := resolve.Config{
+		Session: "agentmux-wait",
+		Windows: []resolve.Window{
+			{Name: "main", Panes: []resolve.Pane{{Name: "p1", Command: "exec $SHELL"}}},
+		},
+	}
+
+	t.Cleanup(func() {
+		_ = command("kill-server").Run()
+	})
+
+	if err := Execute(cfg, Options{Replace: true}); err != nil {
+		if isTmuxPermissionError(err) {
+			t.Skipf("tmux integration unavailable in this environment: %v", err)
+		}
+		t.Fatalf("Execute returned error: %v", err)
+	}
+
+	// In a separate goroutine, send the "FINISHED" message after a short delay
+	go func() {
+		time.Sleep(1 * time.Second)
+		_ = SendCommandToPaneByName(cfg.Session, "p1", "echo 'Work is FINISHED'", true, false)
+	}()
+
+	// Wait for the pattern
+	match, err := WaitForPattern(cfg.Session, "p1", "FINISHED", 5*time.Second, false)
+	if err != nil {
+		t.Fatalf("WaitForPattern failed: %v", err)
+	}
+	if match != "FINISHED" {
+		t.Fatalf("WaitForPattern matched %q, want FINISHED", match)
+	}
+}
+
+func TestWaitTimeout(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed")
+	}
+
+	socket := filepath.Join(t.TempDir(), "agentmux-timeout.sock")
+	t.Setenv(envTmuxSocket, socket)
+
+	cfg := resolve.Config{
+		Session: "agentmux-timeout",
+		Windows: []resolve.Window{
+			{Name: "main", Panes: []resolve.Pane{{Name: "p1", Command: "exec $SHELL"}}},
+		},
+	}
+
+	t.Cleanup(func() {
+		_ = command("kill-server").Run()
+	})
+
+	if err := Execute(cfg, Options{Replace: true}); err != nil {
+		if isTmuxPermissionError(err) {
+			t.Skipf("tmux integration unavailable in this environment: %v", err)
+		}
+		t.Fatalf("Execute returned error: %v", err)
+	}
+
+	// Wait for a pattern that will never appear with a short timeout
+	_, err := WaitForPattern(cfg.Session, "p1", "NEVER", 1*time.Second, false)
+	if err == nil {
+		t.Fatal("expected timeout error, got nil")
+	}
+	if !strings.Contains(err.Error(), "timeout") {
+		t.Fatalf("expected timeout error message, got %q", err.Error())
+	}
+}
