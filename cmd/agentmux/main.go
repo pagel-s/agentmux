@@ -774,35 +774,44 @@ func renderStatus(session string, panes []tmux.PaneStatus) string {
 			currentWindow = pane.WindowIndex
 			fmt.Fprintf(&b, "  window %d %s", pane.WindowIndex, pane.WindowName)
 			if pane.WindowActive {
-				fmt.Fprintf(&b, " active=true")
+				fmt.Fprintf(&b, " [active]")
 			}
 			fmt.Fprintln(&b)
 		}
 
 		fmt.Fprintf(&b, "    pane %d", pane.PaneIndex)
 		if pane.Name != "" {
-			fmt.Fprintf(&b, " name=%q", pane.Name)
+			fmt.Fprintf(&b, " %s", pane.Name)
 		}
-		fmt.Fprintf(&b, " title=%q id=%s", pane.Title, pane.PaneID)
-		if pane.SourceType != "" {
-			fmt.Fprintf(&b, " source=%s", pane.SourceType)
-		}
-		if pane.AgentName != "" {
-			fmt.Fprintf(&b, " agent=%q", pane.AgentName)
-		}
-		if pane.OnExit != "" {
-			fmt.Fprintf(&b, " on_exit=%q", pane.OnExit)
-		}
-		if pane.CurrentCmd != "" {
-			fmt.Fprintf(&b, " current=%q", pane.CurrentCmd)
-		}
+		fmt.Fprintf(&b, " id=%s", pane.PaneID)
+
 		if pane.Dead {
-			fmt.Fprintf(&b, " dead=true")
+			fmt.Fprintf(&b, " [DEAD (status %d)]", pane.ExitStatus)
+		} else {
+			fmt.Fprintf(&b, " [RUNNING (pid %d)]", pane.Pid)
 		}
+
 		if pane.PaneActive {
-			fmt.Fprintf(&b, " active=true")
+			fmt.Fprintf(&b, " [active]")
 		}
 		fmt.Fprintln(&b)
+
+		fmt.Fprintf(&b, "      title: %q\n", pane.Title)
+		if pane.SourceType != "" {
+			fmt.Fprintf(&b, "      source: %s", pane.SourceType)
+			if pane.AgentName != "" {
+				fmt.Fprintf(&b, " (%s)", pane.AgentName)
+			}
+			fmt.Fprintln(&b)
+		}
+		if pane.OnExit != "" {
+			fmt.Fprintf(&b, "      on_exit: %s\n", pane.OnExit)
+		}
+		if pane.Dead && pane.StartupCmd != "" {
+			fmt.Fprintf(&b, "      startup: %s\n", pane.StartupCmd)
+		} else if pane.CurrentCmd != "" {
+			fmt.Fprintf(&b, "      command: %s\n", pane.CurrentCmd)
+		}
 	}
 
 	return b.String()

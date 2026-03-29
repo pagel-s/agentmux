@@ -170,13 +170,14 @@ func TestRenderStatusIncludesRuntimeMetadata(t *testing.T) {
 	})
 
 	for _, want := range []string{
-		`name="resolve"`,
-		`source=agent`,
-		`agent="reviewer"`,
-		`on_exit="restart"`,
-		`current="bash"`,
-		`dead=true`,
-		`active=true`,
+		"pane 5 resolve",
+		"id=%10",
+		"source: agent",
+		"(reviewer)",
+		"on_exit: restart",
+		"command: bash",
+		"DEAD (status 0)",
+		"[active]",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("renderStatus output %q does not include %q", out, want)

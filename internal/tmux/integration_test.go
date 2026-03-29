@@ -1454,3 +1454,58 @@ func TestReconcileReturnsErrStructuralChangeOnWindowCountMismatch(t *testing.T) 
 		t.Fatalf("Reconcile error = %v, want ErrStructuralChange", err)
 	}
 }
+func TestStatusShowsExitCodeForDeadPanes(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed")
+	}
+
+	socket := filepath.Join(t.TempDir(), "agentmux-status-exit.sock")
+	t.Setenv(envTmuxSocket, socket)
+
+	cfg := resolve.Config{
+		Session: "agentmux-status-exit",
+		Windows: []resolve.Window{
+			{
+				Name: "main",
+				Panes: []resolve.Pane{
+					{
+						Name:       "p1",
+						SourceType: "command",
+						Command:    "exit 42",
+						OnExit:     config.OnExitRemain,
+					},
+				},
+			},
+		},
+	}
+
+	t.Cleanup(func() {
+		_ = command("kill-server").Run()
+	})
+
+	if err := Execute(cfg, Options{Replace: true}); err != nil {
+		if isTmuxPermissionError(err) {
+			t.Skipf("tmux integration unavailable in this environment: %v", err)
+		}
+		t.Fatalf("Execute returned error: %v", err)
+	}
+
+	// wait for pane to die
+	deadline := time.Now().Add(2 * time.Second)
+	found := false
+	for time.Now().Before(deadline) {
+		panes, _ := Status(cfg.Session)
+		if len(panes) > 0 && panes[0].Dead {
+			if panes[0].ExitStatus != 42 {
+				t.Fatalf("pane exit status = %d, want 42", panes[0].ExitStatus)
+			}
+			found = true
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	if !found {
+		t.Fatal("pane did not die or exit status not captured")
+	}
+}

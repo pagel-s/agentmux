@@ -166,7 +166,9 @@ Useful flags:
 ### `reload`
 
 What it does:
-- recreates an existing session from a config using replace semantics
+- reconciles an existing session from a config without destroying the whole session
+- surgically updates pane metadata or respawns individual panes if their config changed
+- preserves history and layout for untouched panes
 
 When to use it:
 - after editing a config for a session that already exists
@@ -179,6 +181,8 @@ Examples:
 
 Useful note:
 - unlike `load`, `reload` expects the session to already exist
+- if the session structure (window or pane count) has changed significantly, it falls back to a destructive replace with a warning
+- if you are running `reload` from inside one of the session's panes, and that pane's config changed, it will be respawned last
 
 ### `list`
 
@@ -204,6 +208,7 @@ These commands operate on live sessions and mostly target named panes.
 What it does:
 - shows live panes in a session
 - reports metadata like pane name, title, source, `on_exit`, current command, and `dead`
+- includes PID for running panes and exit status for dead panes
 
 When to use it:
 - as the first runtime debugging step

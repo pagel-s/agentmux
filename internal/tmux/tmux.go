@@ -61,6 +61,8 @@ type PaneStatus struct {
 	OnExit       string `json:"on_exit,omitempty"`
 	CurrentCmd   string `json:"current_command,omitempty"`
 	StartupCmd   string `json:"startup_command,omitempty"`
+	ExitStatus   int    `json:"exit_status,omitempty"`
+	Pid          int    `json:"pid,omitempty"`
 }
 
 type paneMetadata struct {
@@ -162,7 +164,7 @@ func Status(session string) ([]PaneStatus, error) {
 		return nil, err
 	}
 
-	out, err := capture(false, "list-panes", "-a", "-F", "#{session_name}\t#{window_index}\t#{window_name}\t#{window_id}\t#{window_active}\t#{pane_index}\t#{pane_id}\t#{pane_active}\t#{pane_dead}\t#{"+paneNameOption+"}\t#{pane_title}\t#{"+paneSourceOption+"}\t#{"+paneAgentOption+"}\t#{"+paneOnExitOption+"}\t#{pane_current_command}\t#{"+paneStartupOption+"}")
+	out, err := capture(false, "list-panes", "-a", "-F", "#{session_name}\t#{window_index}\t#{window_name}\t#{window_id}\t#{window_active}\t#{pane_index}\t#{pane_id}\t#{pane_active}\t#{pane_dead}\t#{"+paneNameOption+"}\t#{pane_title}\t#{"+paneSourceOption+"}\t#{"+paneAgentOption+"}\t#{"+paneOnExitOption+"}\t#{pane_current_command}\t#{"+paneStartupOption+"}\t#{pane_dead_status}\t#{pane_pid}")
 	if err != nil {
 		return nil, err
 	}
@@ -174,7 +176,7 @@ func Status(session string) ([]PaneStatus, error) {
 	panes := make([]PaneStatus, 0, len(lines))
 	for _, line := range lines {
 		fields := strings.Split(line, "\t")
-		if len(fields) != 16 {
+		if len(fields) != 18 {
 			return nil, fmt.Errorf("unexpected pane status output %q", line)
 		}
 		if fields[0] != session {
@@ -189,6 +191,8 @@ func Status(session string) ([]PaneStatus, error) {
 		if err != nil {
 			return nil, fmt.Errorf("parse pane index %q: %w", fields[5], err)
 		}
+		exitStatus, _ := strconv.Atoi(fields[16])
+		pid, _ := strconv.Atoi(fields[17])
 
 		panes = append(panes, PaneStatus{
 			WindowIndex:  windowIndex,
@@ -206,6 +210,8 @@ func Status(session string) ([]PaneStatus, error) {
 			OnExit:       fields[13],
 			CurrentCmd:   fields[14],
 			StartupCmd:   fields[15],
+			ExitStatus:   exitStatus,
+			Pid:          pid,
 		})
 	}
 
