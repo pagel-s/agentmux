@@ -344,20 +344,110 @@ Examples:
 Useful note:
 - `--no-enter` stages the text without executing it yet
 
+## Agentic Commands
+
+These commands enable coordination and orchestration between multiple agents.
+
+### `kv-set`
+
+What it does:
+- sets a shared key-value pair in the session's "Blackboard"
+- uses tmux session options for storage
+
+When to use it:
+- to signal state between panes (e.g., `status=ready`)
+- to share data like file paths or task IDs
+
+Examples:
+
+```bash
+./bin/agentmux kv-set my-team current_task "researching-agent-scaling"
+```
+
+### `kv-get`
+
+What it does:
+- retrieves a value from the session's Blackboard
+
+Examples:
+
+```bash
+./bin/agentmux kv-get my-team current_task
+```
+
+### `kv-list`
+
+What it does:
+- lists all keys and values currently stored in the Blackboard
+
+Examples:
+
+```bash
+./bin/agentmux kv-list my-team
+./bin/agentmux kv-list my-team --json
+```
+
+### `kv-del`
+
+What it does:
+- removes a key from the Blackboard
+
+Examples:
+
+```bash
+./bin/agentmux kv-del my-team current_task
+```
+
+### `wait`
+
+What it does:
+- blocks until a specific regex pattern appears in a pane's terminal output
+
+When to use it:
+- to synchronize handoffs (e.g., wait for "BUILD SUCCESSFUL")
+
+Examples:
+
+```bash
+./bin/agentmux wait my-team builder "SUCCESS" --timeout 5m
+```
+
+### `scale`
+
+What it does:
+- dynamically adds or removes instances of a specific agent
+
+When to use it:
+- to adjust workforce based on load (e.g., spawn 3 more "Researchers")
+
+Examples:
+
+```bash
+./bin/agentmux scale my-team researcher 5
+./bin/agentmux scale my-team researcher 1
+```
+
+Useful note:
+- scaling up creates new panes with unique names like `researcher-2`
+- scaling down removes panes with the highest IDs
+
 ## Utility Commands
 
 ### `doctor`
 
 What it does:
 - prints environment and dependency information
+- can check requirements for a specific config file
 
 When to use it:
 - when tmux or environment issues look suspicious
+- to verify if a shared config will run on your machine
 
 Examples:
 
 ```bash
 ./bin/agentmux doctor
+./bin/agentmux doctor ./shared-team-config.yaml
 ```
 
 ### `version`

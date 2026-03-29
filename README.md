@@ -10,14 +10,12 @@ Current `main` also supports named-pane runtime controls, so the product is now 
 
 This repository builds on the v1 foundation with:
 
-- declarative local YAML configs
-- schema and semantic validation
-- predictable param, env, cwd, and title resolution
-- configurable pane exit behavior with `on_exit`
-- dry-run and render output for inspection
-- tmux session creation with hooks, focus, and replace handling
-- unit, fixture, and tmux integration coverage
-- named-pane runtime controls for live sessions
+- **Agentic Orchestration:** `wait`, `kv-set`, and `scale` for multi-agent coordination.
+- **Declarative Workspaces:** YAML configs with `include` for modular reuse.
+- **Non-destructive Management:** `reload` surgically updates panes without killing sessions.
+- **Reliability:** `requires` block for pre-flight dependency and environment checks.
+- **Deep Inspection:** `inspect` and `status --logs` for real-time metrics and activity.
+- **Standardized Foundation:** Built-in templates and `init` for rapid scaffolding.
 
 ## Docs
 
@@ -46,6 +44,7 @@ Current model:
 - `agents` are first-class config objects that define reusable execution defaults
 - `windows` provide layout and context
 - `panes` are the runtime instantiations and control unit
+- **Coordination** happens through a shared Blackboard (KV-store) and Output Synchronization (wait)
 
 Still intentionally out of scope:
 
@@ -84,7 +83,14 @@ For command-by-command explanations and usage examples, see [`docs/commands.md`]
 ./bin/agentmux validate <config> [--param key=value]
 ./bin/agentmux render <config> [--param key=value]
 ./bin/agentmux list
-./bin/agentmux status <session> [--json] [--pane <pane-name>]
+./bin/agentmux status <session> [--json] [--pane <pane-name>] [--logs [N]]
+./bin/agentmux inspect <session> <pane-name> [--json]
+./bin/agentmux kv-set <session> <key> <value> [--json]
+./bin/agentmux kv-get <session> <key> [--json]
+./bin/agentmux kv-list <session> [--json]
+./bin/agentmux kv-del <session> <key> [--json]
+./bin/agentmux wait <session> <pane> <pattern> [--timeout <duration>] [--json]
+./bin/agentmux scale <session> <agent-name> <count> [--window <name>] [--json]
 ./bin/agentmux focus <session> <pane-name> [--json]
 ./bin/agentmux restart <session> <pane-name> [--json]
 ./bin/agentmux rerun <session> <pane-name> [--json]

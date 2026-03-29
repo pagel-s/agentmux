@@ -263,6 +263,46 @@ Related files:
 
 - [`testdata/examples/on-exit.yaml`](../testdata/examples/on-exit.yaml)
 
+## Coordinated Team
+
+Use this when you want multiple agents to work together using shared state and synchronization.
+
+Best starter:
+
+```bash
+./bin/agentmux init supervisor-demo team.yaml
+```
+
+What this starter demonstrates:
+
+- **Shared Blackboard (KV-Store):** Agents reading and writing to `agentmux kv-set`.
+- **Synchronization (Wait):** One agent waiting for another to print a specific message.
+- **Dynamic Scaling:** A manager agent expanding the team automatically.
+
+Typical next steps:
+
+```bash
+./bin/agentmux load team.yaml
+# Observe the manager pane coordinating the engineer panes
+```
+
+Key coordination commands:
+
+```bash
+# Set a shared variable
+./bin/agentmux kv-set my-team current_task "research"
+
+# Wait for a pane to finish
+./bin/agentmux wait my-team worker "DONE"
+
+# Scale the workforce
+./bin/agentmux scale my-team worker 5
+```
+
+Related files:
+
+- [`testdata/examples/research-team.yaml`](../testdata/examples/research-team.yaml)
+
 ## Choosing A Starter
 
 If you are unsure where to begin:

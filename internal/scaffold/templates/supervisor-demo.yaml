@@ -1,0 +1,62 @@
+# description: Orchestrated multi-agent team demo with manager and workers
+# This template demonstrates coordination using KV-store, wait, and scale.
+
+version: 1
+name: supervisor-demo
+session: supervisor-demo
+
+requires:
+  binaries:
+    - tmux
+    - agentmux
+
+params:
+  worker_count: "1"
+
+agents:
+  engineer:
+    provider: command
+    # A worker that waits for a task, does it, and signals completion
+    command: |
+      printf "Engineer ready. Waiting for task on blackboard...\n"
+      while :; do
+        TASK=$(agentmux kv-get supervisor-demo current_task)
+        if [ -n "$TASK" ] && [ "$TASK" != "none" ]; then
+          printf "\n[WORKING] Received task: $TASK\n"
+          sleep 3
+          printf "[DONE] Task finished: $TASK\n"
+          agentmux kv-set supervisor-demo current_task "none"
+        fi
+        sleep 1
+      done
+    on_exit: restart
+
+layout:
+  - window: team
+    layout: main-horizontal
+    panes:
+      - name: manager
+        title: "Team Manager"
+        focus: true
+        # The manager script that orchestrates the team
+        command: |
+          printf "Team Manager starting up...\n"
+          agentmux kv-set supervisor-demo current_task "none"
+          
+          printf "\n1. Dispatching task to Engineer...\n"
+          agentmux kv-set supervisor-demo current_task "Design the new architecture"
+          
+          printf "2. Waiting for Engineer to finish...\n"
+          agentmux wait supervisor-demo engineer "DONE"
+          
+          printf "\n3. Success! Task completed.\n"
+          
+          printf "\n4. Scaling the team for a 'Heavy' task...\n"
+          agentmux scale supervisor-demo engineer 3
+          
+          printf "\nTeam is now 3 Engineers strong. Check 'agentmux status'.\n"
+          exec $SHELL
+
+      - name: engineer
+        agent: engineer
+        title: "Senior Engineer"

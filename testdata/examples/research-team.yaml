@@ -1,0 +1,45 @@
+# description: AI Research Team with automated handoffs
+# This example shows how to use 'wait' and 'kv-set' for a 3-agent pipeline.
+
+version: 1
+session: research-team
+
+params:
+  topic: "LLM Agent Coordination"
+
+agents:
+  searcher:
+    provider: command
+    command: |
+      printf "Searcher ready for topic: {{topic}}\n"
+      # Simulate searching
+      sleep 2
+      printf "Found 5 relevant papers.\n"
+      printf "[RESULT] ./research/papers.md\n"
+      agentmux kv-set research-team papers_path "./research/papers.md"
+    on_exit: remain
+
+  writer:
+    provider: command
+    command: |
+      printf "Writer waiting for search results...\n"
+      # This agent uses the 'wait' primitive logic via a manual loop
+      # (Ideally, the user would run 'agentmux wait' in their own script)
+      while [ "$(agentmux kv-get research-team papers_path)" == "" ]; do
+        sleep 1
+      done
+      PATH=$(agentmux kv-get research-team papers_path)
+      printf "\n[STARTING] Writing summary for papers at $PATH\n"
+      sleep 3
+      printf "[DONE] Summary complete.\n"
+    on_exit: remain
+
+layout:
+  - window: workflow
+    panes:
+      - name: searcher
+        agent: searcher
+        title: "Agent: Searcher"
+      - name: writer
+        agent: writer
+        title: "Agent: Writer"

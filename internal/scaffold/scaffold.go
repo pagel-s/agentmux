@@ -42,9 +42,10 @@ var descriptions = map[string]string{
 	"on-exit":        "Pane exit-policy demo with shell, remain, restart, and kill",
 	"review-loop":    "Coding and review loop with reusable agents",
 	"review-starter": "Minimal copy-and-tweak review workspace",
-	"ssh-ops":        "Remote operations starter with an SSH-driven agent",
-	"team-standard":  "Team standard workspace pattern (base + personal overrides)",
-}
+	"ssh-ops":         "Remote operations starter with an SSH-driven agent",
+	"team-standard":   "Team standard workspace pattern (base + personal overrides)",
+	"supervisor-demo": "Orchestrated multi-agent team demo with manager and workers",
+	}
 
 var aliases = map[string]string{
 	"default": "ai-dev",
