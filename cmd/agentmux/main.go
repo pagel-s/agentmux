@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -256,7 +257,26 @@ func runRemember(args []string) int {
 }
 
 func runSessionLaunch(mode string, opts cli.LoadOptions, requireExisting bool, replace bool) int {
+	jsonOut := hasFlag(os.Args[1:], "--json")
 
+	// 1. Initial load to check for requirements
+	doc, err := config.LoadFile(opts.ConfigPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return exitConfigParse
+	}
+
+	// 2. Setup Wizard (Interactive fulfillment)
+	if opts.Params == nil {
+		opts.Params = make(map[string]string)
+	}
+	report := envcheck.Check(doc.Config.Requires, opts.Params)
+	if err := fulfillRequirements(doc.Config.Session, report, opts.Params, jsonOut); err != nil {
+		// report already printed to stderr in fulfillRequirements
+		return exitValidation
+	}
+
+	// 3. Resolve and Validate
 	resolved, warnings, code := resolveCommand(opts.CommonOptions)
 	if code != exitSuccess {
 		return code
@@ -283,11 +303,23 @@ func runSessionLaunch(mode string, opts cli.LoadOptions, requireExisting bool, r
 		return exitRuntime
 	}
 
-	// Pre-flight environment check
-	if missing := envcheck.Check(resolved.Requires); len(missing) > 0 {
+	// Final pre-flight check (in case some env vars were missed or implicit)
+	if missing := envcheck.Check(resolved.Requires, opts.Params); missing.HasMissing() {
 		fmt.Fprintf(os.Stderr, "error: pre-flight check failed for session %q:\n", resolved.Session)
-		for _, m := range missing {
-			fmt.Fprintf(os.Stderr, "  - %s\n", m)
+		if len(missing.MissingBinaries) > 0 {
+			for _, m := range missing.MissingBinaries {
+				fmt.Fprintf(os.Stderr, "  - binary %q not found in PATH\n", m)
+			}
+		}
+		if len(missing.MissingEnv) > 0 {
+			for _, m := range missing.MissingEnv {
+				fmt.Fprintf(os.Stderr, "  - environment variable %q is not set\n", m)
+			}
+		}
+		if len(missing.MissingParams) > 0 {
+			for _, m := range missing.MissingParams {
+				fmt.Fprintf(os.Stderr, "  - parameter %q is missing\n", m)
+			}
 		}
 		return exitValidation
 	}
@@ -688,6 +720,59 @@ func runScale(args []string) int {
 	return exitSuccess
 }
 
+func fulfillRequirements(session string, report envcheck.Report, params map[string]string, jsonOut bool) error {
+	if !report.HasMissing() {
+		return nil
+	}
+
+	// 1. Hard fail on missing binaries (cannot be fulfilled interactively)
+	if len(report.MissingBinaries) > 0 {
+		fmt.Fprintf(os.Stderr, "error: pre-flight check failed for session %q (missing binaries):\n", session)
+		for _, bin := range report.MissingBinaries {
+			fmt.Fprintf(os.Stderr, "  - binary %q not found in PATH\n", bin)
+		}
+		return errors.New("missing mandatory binaries")
+	}
+
+	// 2. Interactive fulfillment for Env and Params
+	// If jsonOut is requested, we are in automation mode; do not prompt.
+	if jsonOut {
+		return nil // Caller will handle the remaining missing items via resolve/validate errors
+	}
+
+	// Only prompt if we have something to prompt for
+	if len(report.MissingEnv) == 0 && len(report.MissingParams) == 0 {
+		return nil
+	}
+
+	fmt.Printf("\n--- Setup Wizard for session %q ---\n", session)
+	fmt.Println("Some mandatory requirements are missing. Please provide them below:")
+
+	reader := bufio.NewReader(os.Stdin)
+
+	for _, env := range report.MissingEnv {
+		fmt.Printf("  Enter value for environment variable %q: ", env)
+		val, _ := reader.ReadString('\n')
+		val = strings.TrimSpace(val)
+		if val != "" {
+			os.Setenv(env, val)
+		}
+	}
+
+	for _, p := range report.MissingParams {
+		fmt.Printf("  Enter value for parameter %q: ", p)
+		val, _ := reader.ReadString('\n')
+		val = strings.TrimSpace(val)
+		if val != "" {
+			params[p] = val
+		}
+	}
+
+	fmt.Println("--- Setup Complete ---")
+	fmt.Println()
+	return nil
+}
+
 func runFocus(args []string) int {
 	jsonOut := hasFlag(args, "--json")
 	opts, err := cli.ParseFocus(args)
@@ -990,12 +1075,18 @@ func runDoctor(args []string) int {
 		if code != exitSuccess {
 			fmt.Printf("  [!] ERROR: could not resolve config: exit code %d\n", code)
 		} else {
-			missing := envcheck.Check(resolved.Requires)
-			if len(missing) == 0 {
+			report := envcheck.Check(resolved.Requires, resolved.Params)
+			if !report.HasMissing() {
 				fmt.Println("  [✓] all requirements met.")
 			} else {
-				for _, m := range missing {
-					fmt.Printf("  [!] MISSING: %s\n", m)
+				for _, m := range report.MissingBinaries {
+					fmt.Printf("  [!] MISSING BINARY: %s\n", m)
+				}
+				for _, m := range report.MissingEnv {
+					fmt.Printf("  [!] MISSING ENV:    %s\n", m)
+				}
+				for _, m := range report.MissingParams {
+					fmt.Printf("  [!] MISSING PARAM:  %s\n", m)
 				}
 			}
 		}

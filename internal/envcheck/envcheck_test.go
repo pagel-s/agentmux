@@ -12,19 +12,20 @@ func TestCheck(t *testing.T) {
 	reqs := config.Requirements{
 		Binaries: []string{"ls", "sh"},
 		Env:      []string{"PATH"},
+		Params:   []string{"p1"},
 	}
-	missing := Check(reqs)
-	if len(missing) > 0 {
-		t.Errorf("expected 0 missing, got %v", missing)
+	report := Check(reqs, map[string]string{"p1": "v1"})
+	if report.HasMissing() {
+		t.Errorf("expected 0 missing, got %+v", report)
 	}
 
 	// 2. Missing binary
 	reqs = config.Requirements{
 		Binaries: []string{"non-existent-binary-xyz"},
 	}
-	missing = Check(reqs)
-	if len(missing) != 1 {
-		t.Errorf("expected 1 missing binary, got %v", missing)
+	report = Check(reqs, nil)
+	if len(report.MissingBinaries) != 1 {
+		t.Errorf("expected 1 missing binary, got %v", report.MissingBinaries)
 	}
 
 	// 3. Missing env
@@ -32,15 +33,17 @@ func TestCheck(t *testing.T) {
 	reqs = config.Requirements{
 		Env: []string{"TEST_AGENTMUX_ENV"},
 	}
-	missing = Check(reqs)
-	if len(missing) != 1 {
-		t.Errorf("expected 1 missing env, got %v", missing)
+	report = Check(reqs, nil)
+	if len(report.MissingEnv) != 1 {
+		t.Errorf("expected 1 missing env, got %v", report.MissingEnv)
 	}
 
-	// 4. Met env
-	os.Setenv("TEST_AGENTMUX_ENV", "value")
-	missing = Check(reqs)
-	if len(missing) != 0 {
-		t.Errorf("expected 0 missing env, got %v", missing)
+	// 4. Missing param
+	reqs = config.Requirements{
+		Params: []string{"missing_p"},
+	}
+	report = Check(reqs, nil)
+	if len(report.MissingParams) != 1 {
+		t.Errorf("expected 1 missing param, got %v", report.MissingParams)
 	}
 }
