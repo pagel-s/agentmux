@@ -80,6 +80,8 @@ func run(args []string) int {
 		return runKVDel(args[1:])
 	case "wait":
 		return runWait(args[1:])
+	case "scale":
+		return runScale(args[1:])
 	case "focus":
 		return runFocus(args[1:])
 	case "restart":
@@ -638,6 +640,51 @@ func runWait(args []string) int {
 	}
 
 	fmt.Printf("matched pattern %q in pane %q: %s\n", opts.Pattern, opts.Pane, match)
+	return exitSuccess
+}
+
+func runScale(args []string) int {
+	jsonOut := hasFlag(args, "--json")
+	opts, err := cli.ParseScale(args)
+	if err != nil {
+		return printCommandError("scale", jsonOut, exitValidation, err, "", "")
+	}
+
+	if err := requireTMux(); err != nil {
+		return printCommandError("scale", opts.JSON, exitDependency, err, opts.Session, "")
+	}
+
+	// 1. Get config path from session
+	configPath, err := tmux.SessionConfigPath(opts.Session, false)
+	if err != nil {
+		return printCommandError("scale", opts.JSON, exitRuntime, err, opts.Session, "")
+	}
+	if configPath == "" {
+		return printCommandError("scale", opts.JSON, exitRuntime, fmt.Errorf("session %q has no config path metadata; scaling requires a session launched with agentmux", opts.Session), opts.Session, "")
+	}
+
+	// 2. Resolve config
+	resolved, _, code := resolveCommand(cli.CommonOptions{ConfigPath: configPath})
+	if code != exitSuccess {
+		return code
+	}
+
+	// 3. Apply scaling
+	if err := tmux.ScaleAgent(opts.Session, opts.Agent, opts.Count, opts.Window, *resolved, tmux.Options{Verbose: false}); err != nil {
+		return printCommandError("scale", opts.JSON, exitRuntime, err, opts.Session, "")
+	}
+
+	message := fmt.Sprintf("scaled agent %q to %d instances in session %q", opts.Agent, opts.Count, opts.Session)
+	if opts.JSON {
+		out, err := renderScaleJSON(opts.Session, opts.Agent, opts.Count, message)
+		if err != nil {
+			return printCommandError("scale", true, exitRuntime, fmt.Errorf("render scale json: %w", err), opts.Session, "")
+		}
+		fmt.Print(out)
+		return exitSuccess
+	}
+
+	fmt.Println(message)
 	return exitSuccess
 }
 
@@ -1251,6 +1298,24 @@ func renderWaitJSON(session string, pane string, pattern string, match string) (
 	})
 }
 
+func renderScaleJSON(session string, agent string, count int, message string) (string, error) {
+	return renderJSON(struct {
+		SchemaVersion int    `json:"schema_version"`
+		Kind          string `json:"kind"`
+		Session       string `json:"session"`
+		Agent         string `json:"agent"`
+		Count         int    `json:"count"`
+		Message       string `json:"message"`
+	}{
+		SchemaVersion: jsonSchemaV1,
+		Kind:          "scale",
+		Session:       session,
+		Agent:         agent,
+		Count:         count,
+		Message:       message,
+	})
+}
+
 func renderStatusJSON(session string, pane string, panes []tmux.PaneStatus) (string, error) {
 	return renderJSON(struct {
 		SchemaVersion int               `json:"schema_version"`
@@ -1550,6 +1615,7 @@ Usage:
   agentmux kv-list <session> [--json]
   agentmux kv-del <session> <key> [--json]
   agentmux wait <session> <pane> <pattern> [--timeout <duration>] [--json]
+  agentmux scale <session> <agent-name> <count> [--window <name>] [--json]
   agentmux focus <session> <pane-name> [--json]
   agentmux restart <session> <pane-name> [--json]
   agentmux rerun <session> <pane-name> [--json]

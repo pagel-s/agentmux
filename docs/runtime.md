@@ -143,6 +143,21 @@ The `wait` command blocks until a specific pattern (regex) appears in a pane's o
 
 If the pattern is found, the command exits with code `0`. If the timeout is reached, it exits with code `1`.
 
+## Dynamic Scaling (Scale)
+
+The `scale` command allows you to dynamically adjust the number of instances of a specific agent in a running session.
+
+```bash
+# Increase or decrease the number of 'researcher' workers to 3
+./bin/agentmux scale my-workflow researcher 3
+```
+
+This command will:
+- **Scale Up:** Create new panes using the agent's original configuration (command, env, cwd) from the session's config file.
+- **Scale Down:** Surigically terminate instances of the agent until the target count is reached.
+- **Naming:** Automatically assign unique names like `researcher-2`, `researcher-3`.
+- **Layout:** Re-apply the window's defined layout (e.g., `even-horizontal`) to keep the workspace tidy.
+
 ## Troubleshooting
 
 Missing session:

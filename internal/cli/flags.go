@@ -51,6 +51,14 @@ type WaitOptions struct {
 	JSON    bool
 }
 
+type ScaleOptions struct {
+	Session string
+	Agent   string
+	Count   int
+	Window  string
+	JSON    bool
+}
+
 type PaneTargetOptions struct {
 	Session string
 	Pane    string
@@ -389,6 +397,48 @@ func ParseWait(args []string) (WaitOptions, error) {
 		Pane:    positional[1],
 		Pattern: positional[2],
 		Timeout: timeout,
+		JSON:    jsonOut,
+	}, nil
+}
+
+func ParseScale(args []string) (ScaleOptions, error) {
+	window := ""
+	positional := make([]string, 0, 3)
+	jsonOut := false
+
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch arg {
+		case "--json":
+			jsonOut = true
+		case "--window":
+			if i+1 >= len(args) {
+				return ScaleOptions{}, fmt.Errorf("scale flag %q requires a value", arg)
+			}
+			window = args[i+1]
+			i++
+		default:
+			if strings.HasPrefix(arg, "-") {
+				return ScaleOptions{}, fmt.Errorf("scale does not accept flag %q", arg)
+			}
+			positional = append(positional, arg)
+		}
+	}
+
+	if len(positional) != 3 {
+		return ScaleOptions{}, errors.New("scale requires session name, agent name, and count")
+	}
+
+	count, err := strconv.Atoi(positional[2])
+	if err != nil || count < 0 {
+		return ScaleOptions{}, fmt.Errorf("invalid count %q; must be a non-negative integer", positional[2])
+	}
+
+	return ScaleOptions{
+		Session: positional[0],
+		Agent:   positional[1],
+		Count:   count,
+		Window:  window,
 		JSON:    jsonOut,
 	}, nil
 }

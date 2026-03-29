@@ -375,6 +375,152 @@ func StopPaneByName(session string, name string, verbose bool) error {
 	return nil
 }
 
+func ScaleAgent(session string, agentName string, targetCount int, preferredWindow string, cfg resolve.Config, opts Options) error {
+	if targetCount < 0 {
+		return fmt.Errorf("target count must be non-negative, got %d", targetCount)
+	}
+
+	panes, err := Status(session)
+	if err != nil {
+		return err
+	}
+
+	// 1. Find existing instances of the agent
+	var instances []PaneStatus
+	for _, p := range panes {
+		if p.AgentName == agentName {
+			instances = append(instances, p)
+		}
+	}
+
+	currentCount := len(instances)
+	if currentCount == targetCount {
+		return nil
+	}
+
+	// 2. Identify the target agent and its intended layout
+	var targetAgent *resolve.Agent
+	if a, ok := cfg.Agents[agentName]; ok {
+		targetAgent = &a
+	} else {
+		return fmt.Errorf("agent %q not found in configuration", agentName)
+	}
+
+	// Find the window and its layout
+	var targetWindow resolve.Window
+	foundWindow := false
+	for _, w := range cfg.Windows {
+		if preferredWindow != "" && w.Name == preferredWindow {
+			targetWindow = w
+			foundWindow = true
+			break
+		}
+		// If no preferred window, find the first window that uses this agent
+		for _, p := range w.Panes {
+			if p.AgentName == agentName {
+				targetWindow = w
+				foundWindow = true
+				break
+			}
+		}
+		if foundWindow {
+			break
+		}
+	}
+
+	if !foundWindow {
+		if preferredWindow != "" {
+			return fmt.Errorf("window %q not found in configuration", preferredWindow)
+		}
+		// Fallback to first window
+		if len(cfg.Windows) > 0 {
+			targetWindow = cfg.Windows[0]
+		} else {
+			return fmt.Errorf("no windows found in configuration to scale agent %q", agentName)
+		}
+	}
+
+	// Find the live window ID
+	liveWindowID := ""
+	if currentCount > 0 {
+		liveWindowID = instances[0].WindowID
+	} else {
+		// Find window by name in the live session
+		for _, p := range panes {
+			if p.WindowName == targetWindow.Name {
+				liveWindowID = p.WindowID
+				break
+			}
+		}
+	}
+
+	if liveWindowID == "" {
+		return fmt.Errorf("could not find live window for %q in session %q", targetWindow.Name, session)
+	}
+
+	// 3. Apply changes
+	if targetCount > currentCount {
+		// Scale Up
+		diff := targetCount - currentCount
+		for i := 0; i < diff; i++ {
+			instanceNum := currentCount + i + 1
+			name := agentName
+			if instanceNum > 1 {
+				name = fmt.Sprintf("%s-%d", agentName, instanceNum)
+			}
+
+			// Build a resolve.Pane from the agent
+			pane := resolve.Pane{
+				Name:       name,
+				AgentName:  agentName,
+				SourceType: "agent",
+				Command:    targetAgent.Command,
+				Cwd:        targetAgent.Cwd,
+				Env:        targetAgent.Env,
+				Title:      targetAgent.Title,
+				OnExit:     targetAgent.OnExit,
+				Shell:      targetAgent.Shell,
+			}
+
+			// Split window
+			newPaneID, err := splitPane(liveWindowID, pane, targetWindow.Root, false, opts.Verbose)
+			if err != nil {
+				return fmt.Errorf("scale up: split pane: %w", err)
+			}
+
+			// Configure new pane
+			if err := configurePane(newPaneID, pane, opts.Verbose); err != nil {
+				return fmt.Errorf("scale up: configure pane %s: %w", newPaneID, err)
+			}
+		}
+	} else {
+		// Scale Down
+		diff := currentCount - targetCount
+		// Kill the highest IDs/Indices
+		sort.Slice(instances, func(i, j int) bool {
+			return instances[i].PaneIndex > instances[j].PaneIndex
+		})
+
+		for i := 0; i < diff; i++ {
+			p := instances[i]
+			if err := run(opts.Verbose, "kill-pane", "-t", p.PaneID); err != nil {
+				return fmt.Errorf("scale down: kill pane %s: %w", p.PaneID, err)
+			}
+		}
+	}
+
+	// 4. Re-apply layout if specified
+	if targetWindow.Layout != "" && targetWindow.Layout != "grid" {
+		if err := run(opts.Verbose, "select-layout", "-t", liveWindowID, targetWindow.Layout); err != nil {
+			if opts.Verbose {
+				fmt.Fprintf(os.Stderr, "warning: scale re-layout failed: %v\n", err)
+			}
+		}
+	}
+
+	return nil
+}
+
 func KillPaneByName(session string, name string, verbose bool) error {
 	target, err := findPaneByName(session, name)
 	if err != nil {

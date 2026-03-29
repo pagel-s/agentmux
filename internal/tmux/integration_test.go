@@ -1652,3 +1652,97 @@ func TestWaitTimeout(t *testing.T) {
 		t.Fatalf("expected timeout error message, got %q", err.Error())
 	}
 }
+func TestScaleAgent(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed")
+	}
+
+	socket := filepath.Join(t.TempDir(), "agentmux-scale.sock")
+	t.Setenv(envTmuxSocket, socket)
+
+	cfg := resolve.Config{
+		Session: "agentmux-scale",
+		Agents: map[string]resolve.Agent{
+			"worker": {
+				Provider: "command",
+				Command:  "sleep 3600",
+				OnExit:   config.OnExitKill,
+			},
+		},
+		Windows: []resolve.Window{
+			{
+				Name: "main",
+				Panes: []resolve.Pane{
+					{
+						Name:       "worker",
+						AgentName:  "worker",
+						SourceType: "agent",
+						Command:    "sleep 3600",
+						OnExit:     config.OnExitKill,
+					},
+				},
+				Layout: "even-horizontal",
+			},
+		},
+	}
+
+	t.Cleanup(func() {
+		_ = command("kill-server").Run()
+	})
+
+	if err := Execute(cfg, Options{Replace: true}); err != nil {
+		if isTmuxPermissionError(err) {
+			t.Skipf("tmux integration unavailable in this environment: %v", err)
+		}
+		t.Fatalf("Execute returned error: %v", err)
+	}
+
+	// 1. Scale Up to 3
+	if err := ScaleAgent(cfg.Session, "worker", 3, "", cfg, Options{Verbose: true}); err != nil {
+		t.Fatalf("ScaleAgent UP failed: %v", err)
+	}
+
+	panes, err := Status(cfg.Session)
+	if err != nil {
+		t.Fatalf("Status after scale up: %v", err)
+	}
+
+	workerPanes := 0
+	names := make(map[string]bool)
+	for _, p := range panes {
+		if p.AgentName == "worker" {
+			workerPanes++
+			if p.Name != "" {
+				names[p.Name] = true
+			}
+		}
+	}
+
+	if workerPanes != 3 {
+		t.Fatalf("Expected 3 worker panes, got %d", workerPanes)
+	}
+	if !names["worker"] || !names["worker-2"] || !names["worker-3"] {
+		t.Fatalf("Expected pane names worker, worker-2, worker-3, got %v", names)
+	}
+
+	// 2. Scale Down to 1
+	if err := ScaleAgent(cfg.Session, "worker", 1, "", cfg, Options{Verbose: true}); err != nil {
+		t.Fatalf("ScaleAgent DOWN failed: %v", err)
+	}
+
+	panes, err = Status(cfg.Session)
+	if err != nil {
+		t.Fatalf("Status after scale down: %v", err)
+	}
+
+	workerPanes = 0
+	for _, p := range panes {
+		if p.AgentName == "worker" {
+			workerPanes++
+		}
+	}
+
+	if workerPanes != 1 {
+		t.Fatalf("Expected 1 worker pane, got %d", workerPanes)
+	}
+}
