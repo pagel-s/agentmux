@@ -22,6 +22,7 @@ import (
 	"agentmux/internal/resolve"
 	"agentmux/internal/scaffold"
 	"agentmux/internal/tmux"
+	"agentmux/internal/tui"
 	"agentmux/internal/validate"
 )
 
@@ -71,6 +72,8 @@ func run(args []string) int {
 		return runRender(args[1:])
 	case "list":
 		return runList(args[1:])
+	case "dashboard":
+		return runDashboard(args[1:])
 	case "status":
 		return runStatus(args[1:])
 	case "inspect":
@@ -436,6 +439,26 @@ func runList(args []string) int {
 
 	for _, session := range sessions {
 		fmt.Println(session)
+	}
+
+	return exitSuccess
+}
+
+func runDashboard(args []string) int {
+	if len(args) != 1 {
+		fmt.Fprintln(os.Stderr, "error: dashboard requires exactly one session name")
+		return exitValidation
+	}
+
+	session := args[0]
+	if err := requireTMux(); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return exitDependency
+	}
+
+	if err := tui.RunDashboard(session); err != nil {
+		fmt.Fprintf(os.Stderr, "error: dashboard: %v\n", err)
+		return exitRuntime
 	}
 
 	return exitSuccess
@@ -1738,6 +1761,7 @@ Usage:
   agentmux validate <config> [--param key=value] [--strict]
   agentmux render <config> [--param key=value] [--strict]
   agentmux list
+  agentmux dashboard <session>
   agentmux status <session> [--json] [--pane <pane-name>] [--logs [N]]
   agentmux inspect <session> <pane-name> [--json]
   agentmux kv-set <session> <key> <value> [--json]

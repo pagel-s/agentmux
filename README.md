@@ -15,7 +15,7 @@ This repository builds on the v1 foundation with:
 - **Declarative Workspaces:** YAML configs with `include` for modular reuse.
 - **Non-destructive Management:** `reload` surgically updates panes without killing sessions.
 - **Reliability:** `requires` block for pre-flight dependency and environment checks.
-- **Deep Inspection:** `inspect` and `status --logs` for real-time metrics and activity.
+- **Deep Inspection:** `dashboard`, `inspect`, and `status --logs` for real-time metrics and activity.
 - **Standardized Foundation:** Built-in templates and `init` for rapid scaffolding.
 
 ## Docs
@@ -84,6 +84,7 @@ For command-by-command explanations and usage examples, see [`docs/commands.md`]
 ./bin/agentmux validate <config> [--param key=value]
 ./bin/agentmux render <config> [--param key=value]
 ./bin/agentmux list
+./bin/agentmux dashboard <session>
 ./bin/agentmux status <session> [--json] [--pane <pane-name>] [--logs [N]]
 ./bin/agentmux inspect <session> <pane-name> [--json]
 ./bin/agentmux kv-set <session> <key> <value> [--json]

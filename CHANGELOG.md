@@ -1,7 +1,20 @@
 # Changelog
 
-## v0.6.0 - 2026-03-29
+## v0.7.0 - 2026-03-29
 
+Seventh private release of Agentmux, introducing the **Agentic Team Protocol** for coordination and portable session sharing.
+
+- Added **Mission Control (TUI Dashboard)**: a real-time, full-screen dashboard for monitoring agents and the shared Blackboard.
+- Implemented **Blackboard (KV-Store)**: a shared memory layer for agent coordination using tmux session options.
+- Added **Synchronization (`wait`)**: a primitive to block execution until a specific regex pattern appears in a pane's output.
+- Implemented **Dynamic Scaling (`scale`)**: surgically add or remove agent instances in a running session.
+- Added **Environment Guards (`requires:`)**: pre-flight checks for binaries, env vars, and mandatory params.
+- Introduced **Portable Bundles**: the `{{config_dir}}` variable and `pack` command for self-contained session distribution.
+- Added **Remote Loading**: fetch and launch configurations or `.amx` bundles directly from URLs.
+- Added `supervisor-demo` and `research-team` examples showcasing multi-agent orchestration.
+
+## v0.6.0 - 2026-03-29
+...
 Sixth private release of Agentmux, focused on config reuse, team workflows, and professional packaging.
 
 - Added `include:` top-level field for splitting configurations and sharing common agents, params, and environment variables across files.
