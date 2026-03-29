@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"agentmux/internal/config"
 	"agentmux/internal/resolve"
@@ -23,6 +24,7 @@ const (
 	paneSourceOption  = "@agentmux_source_type"
 	paneAgentOption   = "@agentmux_agent_name"
 	paneOnExitOption  = "@agentmux_on_exit"
+	paneStartTimeOption = "@agentmux_start_time"
 	sessionConfigPath = "@agentmux_config_path"
 )
 
@@ -62,7 +64,10 @@ type PaneStatus struct {
 	CurrentCmd   string `json:"current_command,omitempty"`
 	StartupCmd   string `json:"startup_command,omitempty"`
 	ExitStatus   int    `json:"exit_status,omitempty"`
-	Pid          int    `json:"pid,omitempty"`
+	Pid          int     `json:"pid,omitempty"`
+	StartTime    string  `json:"start_time,omitempty"`
+	CPU          float64 `json:"cpu_percent,omitempty"`
+	Memory       float64 `json:"memory_percent,omitempty"`
 }
 
 type paneMetadata struct {
@@ -71,6 +76,7 @@ type paneMetadata struct {
 	SourceType     string
 	AgentName      string
 	OnExit         string
+	StartTime      string
 }
 
 func Execute(cfg resolve.Config, opts Options) error {
@@ -164,7 +170,7 @@ func Status(session string) ([]PaneStatus, error) {
 		return nil, err
 	}
 
-	out, err := capture(false, "list-panes", "-a", "-F", "#{session_name}\t#{window_index}\t#{window_name}\t#{window_id}\t#{window_active}\t#{pane_index}\t#{pane_id}\t#{pane_active}\t#{pane_dead}\t#{"+paneNameOption+"}\t#{pane_title}\t#{"+paneSourceOption+"}\t#{"+paneAgentOption+"}\t#{"+paneOnExitOption+"}\t#{pane_current_command}\t#{"+paneStartupOption+"}\t#{pane_dead_status}\t#{pane_pid}")
+	out, err := capture(false, "list-panes", "-a", "-F", "#{session_name}\t#{window_index}\t#{window_name}\t#{window_id}\t#{window_active}\t#{pane_index}\t#{pane_id}\t#{pane_active}\t#{pane_dead}\t#{"+paneNameOption+"}\t#{pane_title}\t#{"+paneSourceOption+"}\t#{"+paneAgentOption+"}\t#{"+paneOnExitOption+"}\t#{pane_current_command}\t#{"+paneStartupOption+"}\t#{pane_dead_status}\t#{pane_pid}\t#{"+paneStartTimeOption+"}")
 	if err != nil {
 		return nil, err
 	}
@@ -176,7 +182,7 @@ func Status(session string) ([]PaneStatus, error) {
 	panes := make([]PaneStatus, 0, len(lines))
 	for _, line := range lines {
 		fields := strings.Split(line, "\t")
-		if len(fields) != 18 {
+		if len(fields) != 19 {
 			return nil, fmt.Errorf("unexpected pane status output %q", line)
 		}
 		if fields[0] != session {
@@ -194,7 +200,7 @@ func Status(session string) ([]PaneStatus, error) {
 		exitStatus, _ := strconv.Atoi(fields[16])
 		pid, _ := strconv.Atoi(fields[17])
 
-		panes = append(panes, PaneStatus{
+		status := PaneStatus{
 			WindowIndex:  windowIndex,
 			WindowName:   fields[2],
 			WindowID:     fields[3],
@@ -212,7 +218,17 @@ func Status(session string) ([]PaneStatus, error) {
 			StartupCmd:   fields[15],
 			ExitStatus:   exitStatus,
 			Pid:          pid,
-		})
+			StartTime:    fields[18],
+		}
+
+		if !status.Dead && status.Pid > 0 {
+			if cpu, mem, err := getProcessMetrics(status.Pid); err == nil {
+				status.CPU = cpu
+				status.Memory = mem
+			}
+		}
+
+		panes = append(panes, status)
 	}
 
 	sort.Slice(panes, func(i, j int) bool {
@@ -226,6 +242,31 @@ func Status(session string) ([]PaneStatus, error) {
 	})
 
 	return panes, nil
+}
+
+func getProcessMetrics(pid int) (float64, float64, error) {
+	cmd := exec.Command("ps", "-o", "%cpu,%mem", "-p", strconv.Itoa(pid), "--no-headers")
+	out, err := cmd.Output()
+	if err != nil {
+		return 0, 0, err
+	}
+
+	fields := strings.Fields(string(out))
+	if len(fields) != 2 {
+		return 0, 0, fmt.Errorf("unexpected ps output: %q", string(out))
+	}
+
+	cpu, err := strconv.ParseFloat(fields[0], 64)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	mem, err := strconv.ParseFloat(fields[1], 64)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	return cpu, mem, nil
 }
 
 func StatusPaneByName(session string, name string) (PaneStatus, error) {
@@ -977,6 +1018,10 @@ func applyPaneLifecycle(paneID string, onExit string, verbose bool) error {
 }
 
 func applyPaneMetadata(paneID string, metadata paneMetadata, verbose bool) error {
+	if metadata.StartTime == "" {
+		metadata.StartTime = time.Now().Format(time.RFC3339)
+	}
+
 	if strings.TrimSpace(metadata.StartupCommand) != "" {
 		if err := run(verbose, "set-option", "-p", "-t", paneID, paneStartupOption, metadata.StartupCommand); err != nil {
 			return fmt.Errorf("set startup command for pane %s: %w", paneID, err)
@@ -1000,6 +1045,11 @@ func applyPaneMetadata(paneID string, metadata paneMetadata, verbose bool) error
 	if metadata.OnExit != "" {
 		if err := run(verbose, "set-option", "-p", "-t", paneID, paneOnExitOption, metadata.OnExit); err != nil {
 			return fmt.Errorf("set on_exit for pane %s: %w", paneID, err)
+		}
+	}
+	if metadata.StartTime != "" {
+		if err := run(verbose, "set-option", "-p", "-t", paneID, paneStartTimeOption, metadata.StartTime); err != nil {
+			return fmt.Errorf("set start time for pane %s: %w", paneID, err)
 		}
 	}
 	return nil

@@ -27,6 +27,13 @@ type StatusOptions struct {
 	Session string
 	Pane    string
 	JSON    bool
+	Logs    int
+}
+
+type InspectOptions struct {
+	Session string
+	Pane    string
+	JSON    bool
 }
 
 type PaneTargetOptions struct {
@@ -212,6 +219,7 @@ func ParseRemember(args []string) (RememberOptions, error) {
 func ParseStatus(args []string) (StatusOptions, error) {
 	jsonOut := false
 	pane := ""
+	logs := 0
 	positional := make([]string, 0, 1)
 
 	for i := 0; i < len(args); i++ {
@@ -219,6 +227,18 @@ func ParseStatus(args []string) (StatusOptions, error) {
 		switch arg {
 		case "--json":
 			jsonOut = true
+		case "--logs":
+			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
+				parsed, err := strconv.Atoi(args[i+1])
+				if err == nil && parsed > 0 {
+					logs = parsed
+					i++
+				} else {
+					logs = 10
+				}
+			} else {
+				logs = 10
+			}
 		case "--pane":
 			if i+1 >= len(args) {
 				return StatusOptions{}, fmt.Errorf("status flag %q requires a value", arg)
@@ -241,6 +261,22 @@ func ParseStatus(args []string) (StatusOptions, error) {
 	return StatusOptions{
 		Session: positional[0],
 		Pane:    pane,
+		JSON:    jsonOut,
+		Logs:    logs,
+	}, nil
+}
+
+func ParseInspect(args []string) (InspectOptions, error) {
+	positional, jsonOut, err := parseOptionalJSONArgs("inspect", args)
+	if err != nil {
+		return InspectOptions{}, err
+	}
+	if len(positional) != 2 {
+		return InspectOptions{}, errors.New("inspect requires exactly one session name and one pane name")
+	}
+	return InspectOptions{
+		Session: positional[0],
+		Pane:    positional[1],
 		JSON:    jsonOut,
 	}, nil
 }

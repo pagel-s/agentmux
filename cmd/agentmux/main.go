@@ -61,6 +61,8 @@ func run(args []string) int {
 		return runList(args[1:])
 	case "status":
 		return runStatus(args[1:])
+	case "inspect":
+		return runInspect(args[1:])
 	case "focus":
 		return runFocus(args[1:])
 	case "restart":
@@ -392,6 +394,53 @@ func runStatus(args []string) int {
 	}
 
 	fmt.Print(renderStatus(opts.Session, panes))
+
+	if opts.Logs > 0 {
+		for _, pane := range panes {
+			out, err := tmux.CapturePaneByName(opts.Session, pane.Name, opts.Logs, true, false)
+			if err == nil && strings.TrimSpace(out) != "" {
+				fmt.Printf("\n--- logs: %s ---\n%s", pane.Name, out)
+				if !strings.HasSuffix(out, "\n") {
+					fmt.Println()
+				}
+			}
+		}
+	}
+
+	return exitSuccess
+}
+
+func runInspect(args []string) int {
+	jsonOut := hasFlag(args, "--json")
+	opts, err := cli.ParseInspect(args)
+	if err != nil {
+		return printCommandError("inspect", jsonOut, exitValidation, err, "", "")
+	}
+
+	if err := requireTMux(); err != nil {
+		return printCommandError("inspect", opts.JSON, exitDependency, err, opts.Session, opts.Pane)
+	}
+
+	pane, err := tmux.StatusPaneByName(opts.Session, opts.Pane)
+	if err != nil {
+		return printCommandError("inspect", opts.JSON, exitRuntime, err, opts.Session, opts.Pane)
+	}
+
+	logs, err := tmux.CapturePaneByName(opts.Session, opts.Pane, 20, true, false)
+	if err != nil {
+		logs = fmt.Sprintf("error capturing logs: %v", err)
+	}
+
+	if opts.JSON {
+		out, err := renderInspectJSON(opts.Session, pane, logs)
+		if err != nil {
+			return printCommandError("inspect", true, exitRuntime, fmt.Errorf("render inspect json: %w", err), opts.Session, opts.Pane)
+		}
+		fmt.Print(out)
+		return exitSuccess
+	}
+
+	fmt.Print(renderInspect(opts.Session, pane, logs))
 	return exitSuccess
 }
 
@@ -817,6 +866,72 @@ func renderStatus(session string, panes []tmux.PaneStatus) string {
 	return b.String()
 }
 
+func renderInspect(session string, pane tmux.PaneStatus, logs string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "inspect:\n")
+	fmt.Fprintf(&b, "  session: %s\n", session)
+	fmt.Fprintf(&b, "  pane:    %s\n", pane.Name)
+	fmt.Fprintf(&b, "  id:      %s\n", pane.PaneID)
+	fmt.Fprintf(&b, "  window:  %d (%s)\n", pane.WindowIndex, pane.WindowName)
+	fmt.Fprintf(&b, "\n")
+
+	fmt.Fprintf(&b, "  state:   ")
+	if pane.Dead {
+		fmt.Fprintf(&b, "DEAD (exit code %d)\n", pane.ExitStatus)
+	} else {
+		fmt.Fprintf(&b, "RUNNING (pid %d, cpu %.1f%%, mem %.1f%%)\n", pane.Pid, pane.CPU, pane.Memory)
+	}
+
+	if pane.StartTime != "" {
+		fmt.Fprintf(&b, "  started: %s\n", pane.StartTime)
+	}
+	fmt.Fprintf(&b, "  active:  %v\n", pane.PaneActive)
+	fmt.Fprintf(&b, "\n")
+
+	fmt.Fprintf(&b, "  config:\n")
+	fmt.Fprintf(&b, "    title:   %q\n", pane.Title)
+	fmt.Fprintf(&b, "    source:  %s", pane.SourceType)
+	if pane.AgentName != "" {
+		fmt.Fprintf(&b, " (%s)", pane.AgentName)
+	}
+	fmt.Fprintf(&b, "\n")
+	fmt.Fprintf(&b, "    on_exit: %s\n", pane.OnExit)
+	fmt.Fprintf(&b, "\n")
+
+	if pane.Dead {
+		fmt.Fprintf(&b, "  startup:\n    %s\n", pane.StartupCmd)
+	} else {
+		fmt.Fprintf(&b, "  command:\n    %s\n", pane.CurrentCmd)
+	}
+	fmt.Fprintf(&b, "\n")
+
+	if strings.TrimSpace(logs) != "" {
+		fmt.Fprintf(&b, "  logs:\n")
+		lines := strings.Split(strings.TrimSpace(logs), "\n")
+		for _, line := range lines {
+			fmt.Fprintf(&b, "    %s\n", line)
+		}
+	}
+
+	return b.String()
+}
+
+func renderInspectJSON(session string, pane tmux.PaneStatus, logs string) (string, error) {
+	return renderJSON(struct {
+		SchemaVersion int             `json:"schema_version"`
+		Kind          string          `json:"kind"`
+		Session       string          `json:"session"`
+		Pane          tmux.PaneStatus `json:"pane"`
+		Logs          string          `json:"logs"`
+	}{
+		SchemaVersion: jsonSchemaV1,
+		Kind:          "inspect",
+		Session:       session,
+		Pane:          pane,
+		Logs:          logs,
+	})
+}
+
 func renderStatusJSON(session string, pane string, panes []tmux.PaneStatus) (string, error) {
 	return renderJSON(struct {
 		SchemaVersion int               `json:"schema_version"`
@@ -1090,7 +1205,8 @@ Usage:
   agentmux validate <config> [--param key=value] [--strict]
   agentmux render <config> [--param key=value] [--strict]
   agentmux list
-  agentmux status <session> [--json] [--pane <pane-name>]
+  agentmux status <session> [--json] [--pane <pane-name>] [--logs [N]]
+  agentmux inspect <session> <pane-name> [--json]
   agentmux focus <session> <pane-name> [--json]
   agentmux restart <session> <pane-name> [--json]
   agentmux rerun <session> <pane-name> [--json]
