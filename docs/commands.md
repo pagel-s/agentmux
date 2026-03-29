@@ -143,16 +143,18 @@ Examples:
 ### `load`
 
 What it does:
-- creates a tmux session from a config
+- creates a tmux session from a config or a remote URL
 
 When to use it:
 - the first time you launch a config
 - when replacing an existing session from scratch
+- when launching a shared session from a URL
 
 Examples:
 
 ```bash
 ./bin/agentmux load my-workflow.yaml
+./bin/agentmux load https://example.com/team.amx
 ./bin/agentmux load my-workflow.yaml --replace --no-attach
 ./bin/agentmux load my-workflow.yaml --dry-run
 ```

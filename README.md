@@ -11,6 +11,7 @@ Current `main` also supports named-pane runtime controls, so the product is now 
 This repository builds on the v1 foundation with:
 
 - **Agentic Orchestration:** `wait`, `kv-set`, and `scale` for multi-agent coordination.
+- **Remote Loading:** Fetch and launch configurations directly from URLs.
 - **Declarative Workspaces:** YAML configs with `include` for modular reuse.
 - **Non-destructive Management:** `reload` surgically updates panes without killing sessions.
 - **Reliability:** `requires` block for pre-flight dependency and environment checks.

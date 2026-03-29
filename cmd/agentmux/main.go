@@ -18,6 +18,7 @@ import (
 	"agentmux/internal/envcheck"
 	"agentmux/internal/hooks"
 	"agentmux/internal/pack"
+	"agentmux/internal/remote"
 	"agentmux/internal/resolve"
 	"agentmux/internal/scaffold"
 	"agentmux/internal/tmux"
@@ -1114,6 +1115,16 @@ func runDoctor(args []string) int {
 
 func resolveCommand(opts cli.CommonOptions) (*resolve.Config, []validate.Issue, int) {
 	configPath := opts.ConfigPath
+
+	if remote.IsRemote(configPath) {
+		localPath, err := remote.Fetch(configPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: fetch remote config %s: %v\n", configPath, err)
+			return nil, nil, exitRuntime
+		}
+		configPath = localPath
+	}
+
 	if strings.HasSuffix(configPath, ".amx") {
 		_, mainYaml, err := pack.UnpackBundle(configPath)
 		if err != nil {
