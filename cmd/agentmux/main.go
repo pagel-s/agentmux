@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -261,11 +262,23 @@ func runSessionLaunch(mode string, opts cli.LoadOptions, requireExisting bool, r
 		return exitRuntime
 	}
 
-	if err := tmux.Execute(*resolved, tmux.Options{
+	execOpts := tmux.Options{
 		Attach:  opts.Attach,
 		Replace: replace,
 		Verbose: opts.Verbose,
-	}); err != nil {
+	}
+
+	if mode == "reload" {
+		err = tmux.Reconcile(*resolved, execOpts)
+		if errors.Is(err, tmux.ErrStructuralChange) {
+			fmt.Fprintf(os.Stderr, "warning: %v. Re-creating entire session.\n", err)
+			err = tmux.Execute(*resolved, execOpts)
+		}
+	} else {
+		err = tmux.Execute(*resolved, execOpts)
+	}
+
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		return exitRuntime
 	}

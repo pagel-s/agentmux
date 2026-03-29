@@ -1,6 +1,7 @@
 package tmux
 
 import (
+	"errors"
 	"fmt"
 	"os/exec"
 	"path/filepath"
@@ -1216,4 +1217,240 @@ func isTmuxPermissionError(err error) bool {
 	}
 	message := err.Error()
 	return strings.Contains(message, "Operation not permitted") || strings.Contains(message, "permission denied")
+}
+func TestNonDestructiveReloadReconcilesPanes(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed")
+	}
+
+	socket := filepath.Join(t.TempDir(), "agentmux-reconcile.sock")
+	t.Setenv(envTmuxSocket, socket)
+
+	cfg1 := resolve.Config{
+		Session: "agentmux-reconcile",
+		Windows: []resolve.Window{
+			{
+				Name: "main",
+				Panes: []resolve.Pane{
+					{
+						Name:       "p1",
+						SourceType: "command",
+						Command:    "printf 'unique-history-123\\n' && sleep 3600",
+						Title:      "Original Title",
+						OnExit:     config.OnExitKill,
+					},
+					{
+						Name:       "p2",
+						SourceType: "command",
+						Command:    "echo $MY_VAR && sleep 3600",
+						Env:        map[string]string{"MY_VAR": "v1"},
+						Title:      "P2",
+						OnExit:     config.OnExitKill,
+					},
+				},
+			},
+		},
+	}
+
+	t.Cleanup(func() {
+		_ = command("kill-server").Run()
+	})
+
+	if err := Execute(cfg1, Options{Replace: true}); err != nil {
+		if isTmuxPermissionError(err) {
+			t.Skipf("tmux integration unavailable in this environment: %v", err)
+		}
+		t.Fatalf("Execute returned error: %v", err)
+	}
+
+	panes1, err := Status(cfg1.Session)
+	if err != nil {
+		t.Fatalf("Status after Execute: %v", err)
+	}
+	if len(panes1) != 2 {
+		t.Fatalf("Expected 2 panes, got %d", len(panes1))
+	}
+
+	// wait for output in pane 1
+	waitForPaneContains(t, panes1[0].PaneID, "unique-history-123")
+
+	// Change config
+	cfg2 := resolve.Config{
+		Session: "agentmux-reconcile",
+		Windows: []resolve.Window{
+			{
+				Name: "main",
+				Panes: []resolve.Pane{
+					{
+						Name:       "p1",
+						SourceType: "command",
+						Command:    "printf 'unique-history-123\\n' && sleep 3600",
+						Title:      "New Title",
+						OnExit:     config.OnExitKill,
+					},
+					{
+						Name:       "p2",
+						SourceType: "command",
+						Command:    "echo $MY_VAR && sleep 3600",
+						Env:        map[string]string{"MY_VAR": "v2"},
+						Title:      "P2",
+						OnExit:     config.OnExitKill,
+					},
+				},
+			},
+		},
+	}
+
+	if err := Reconcile(cfg2, Options{Verbose: true}); err != nil {
+		t.Fatalf("Reconcile returned error: %v", err)
+	}
+
+	panes, err := Status(cfg2.Session)
+	if err != nil {
+		t.Fatalf("Status returned error: %v", err)
+	}
+
+	// Verify p1
+	if panes[0].Title != "New Title" {
+		t.Fatalf("pane 1 title not updated, got %q", panes[0].Title)
+	}
+	out1 := tmuxOutput(t, "capture-pane", "-J", "-p", "-t", panes[0].PaneID)
+	if !strings.Contains(out1, "unique-history-123") {
+		t.Fatalf("pane 1 history lost, respawned unexpectedly")
+	}
+
+	// Verify p2
+	if !strings.Contains(panes[1].StartupCmd, "MY_VAR='v2'") {
+		t.Fatalf("pane 2 startup cmd not updated, got %q", panes[1].StartupCmd)
+	}
+}
+func TestReconcileSelfRespawnIsDeferred(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed")
+	}
+
+	socket := filepath.Join(t.TempDir(), "agentmux-self.sock")
+	t.Setenv(envTmuxSocket, socket)
+
+	cfg1 := resolve.Config{
+		Session: "agentmux-self",
+		Windows: []resolve.Window{
+			{
+				Name: "main",
+				Panes: []resolve.Pane{
+					{
+						Name:       "p1",
+						SourceType: "command",
+						Command:    "printf 'p1-v1\\n' && sleep 3600",
+						Title:      "P1",
+						OnExit:     config.OnExitKill,
+					},
+					{
+						Name:       "p2",
+						SourceType: "command",
+						Command:    "printf 'p2-v1\\n' && sleep 3600",
+						Title:      "P2",
+						OnExit:     config.OnExitKill,
+					},
+				},
+			},
+		},
+	}
+
+	t.Cleanup(func() {
+		_ = command("kill-server").Run()
+	})
+
+	if err := Execute(cfg1, Options{Replace: true}); err != nil {
+		if isTmuxPermissionError(err) {
+			t.Skipf("tmux integration unavailable in this environment: %v", err)
+		}
+		t.Fatalf("Execute returned error: %v", err)
+	}
+
+	panes1, err := Status(cfg1.Session)
+	if err != nil {
+		t.Fatalf("Status after Execute: %v", err)
+	}
+
+	// wait for output in p2
+	waitForPaneContains(t, panes1[1].PaneID, "p2-v1")
+
+	// Change config: both p1 and p2 change
+	cfg2 := resolve.Config{
+		Session: "agentmux-self",
+		Windows: []resolve.Window{
+			{
+				Name: "main",
+				Panes: []resolve.Pane{
+					{
+						Name:       "p1",
+						SourceType: "command",
+						Command:    "printf 'p1-v2\\n' && sleep 3600",
+						Title:      "P1",
+						OnExit:     config.OnExitKill,
+					},
+					{
+						Name:       "p2",
+						SourceType: "command",
+						Command:    "printf 'p2-v2\\n' && sleep 3600",
+						Title:      "P2",
+						OnExit:     config.OnExitKill,
+					},
+				},
+			},
+		},
+	}
+
+	// Simulate running from inside p1
+	t.Setenv("TMUX_PANE", panes1[0].PaneID)
+
+	if err := Reconcile(cfg2, Options{Verbose: true}); err != nil {
+		t.Fatalf("Reconcile returned error: %v", err)
+	}
+
+	// Verify p2 was respawned (p2-v2)
+	waitForPaneContains(t, panes1[1].PaneID, "p2-v2")
+
+	// Verify p1 was respawned (p1-v2) - it should happen last but it should happen!
+	waitForPaneContains(t, panes1[0].PaneID, "p1-v2")
+}
+func TestReconcileReturnsErrStructuralChangeOnWindowCountMismatch(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed")
+	}
+
+	socket := filepath.Join(t.TempDir(), "agentmux-structural.sock")
+	t.Setenv(envTmuxSocket, socket)
+
+	cfg1 := resolve.Config{
+		Session: "agentmux-structural",
+		Windows: []resolve.Window{
+			{Name: "w1", Panes: []resolve.Pane{{Name: "p1", Command: "sleep 3600"}}},
+			{Name: "w2", Panes: []resolve.Pane{{Name: "p2", Command: "sleep 3600"}}},
+		},
+	}
+
+	t.Cleanup(func() {
+		_ = command("kill-server").Run()
+	})
+
+	if err := Execute(cfg1, Options{Replace: true}); err != nil {
+		if isTmuxPermissionError(err) {
+			t.Skipf("tmux integration unavailable in this environment: %v", err)
+		}
+		t.Fatalf("Execute returned error: %v", err)
+	}
+
+	cfg2 := resolve.Config{
+		Session: "agentmux-structural",
+		Windows: []resolve.Window{
+			{Name: "w1", Panes: []resolve.Pane{{Name: "p1", Command: "sleep 3600"}}},
+		},
+	}
+
+	err := Reconcile(cfg2, Options{})
+	if !errors.Is(err, ErrStructuralChange) {
+		t.Fatalf("Reconcile error = %v, want ErrStructuralChange", err)
+	}
 }
