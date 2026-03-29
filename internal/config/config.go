@@ -155,7 +155,7 @@ func loadRecursive(path string, seen map[string]bool) (*Document, error) {
 
 		incDoc, err := loadRecursive(fullIncPath, seen)
 		if err != nil {
-			return nil, fmt.Errorf("include %q: %w", incPath, err)
+			return nil, fmt.Errorf("in %q: include %q: %w", absPath, incPath, err)
 		}
 
 		mergeConfigs(&doc.Config, &incDoc.Config)

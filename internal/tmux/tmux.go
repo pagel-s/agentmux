@@ -170,7 +170,7 @@ func Status(session string) ([]PaneStatus, error) {
 		return nil, err
 	}
 
-	out, err := capture(false, "list-panes", "-a", "-F", "#{session_name}\t#{window_index}\t#{window_name}\t#{window_id}\t#{window_active}\t#{pane_index}\t#{pane_id}\t#{pane_active}\t#{pane_dead}\t#{"+paneNameOption+"}\t#{pane_title}\t#{"+paneSourceOption+"}\t#{"+paneAgentOption+"}\t#{"+paneOnExitOption+"}\t#{pane_current_command}\t#{"+paneStartupOption+"}\t#{pane_dead_status}\t#{pane_pid}\t#{"+paneStartTimeOption+"}")
+	out, err := captureRaw(false, "list-panes", "-a", "-F", "#{session_name}\t#{window_index}\t#{window_name}\t#{window_id}\t#{window_active}\t#{pane_index}\t#{pane_id}\t#{pane_active}\t#{pane_dead}\t#{"+paneNameOption+"}\t#{pane_title}\t#{"+paneSourceOption+"}\t#{"+paneAgentOption+"}\t#{"+paneOnExitOption+"}\t#{pane_current_command}\t#{"+paneStartupOption+"}\t#{pane_dead_status}\t#{pane_pid}\t#{"+paneStartTimeOption+"}")
 	if err != nil {
 		return nil, err
 	}
@@ -178,12 +178,12 @@ func Status(session string) ([]PaneStatus, error) {
 		return nil, nil
 	}
 
-	lines := strings.Split(strings.TrimSpace(out), "\n")
+	lines := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
 	panes := make([]PaneStatus, 0, len(lines))
 	for _, line := range lines {
 		fields := strings.Split(line, "\t")
 		if len(fields) != 19 {
-			return nil, fmt.Errorf("unexpected pane status output %q", line)
+			return nil, fmt.Errorf("unexpected pane status output %q (fields=%d, want 19)", line, len(fields))
 		}
 		if fields[0] != session {
 			continue

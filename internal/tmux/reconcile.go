@@ -37,6 +37,9 @@ func Reconcile(cfg resolve.Config, opts Options) error {
 	}
 
 	var actions []reconcileAction
+	var windowsToRename []struct{ ID, NewName string }
+	var windowsToLayout []struct{ ID, Layout string }
+
 	focusWindowID := ""
 	focusPaneID := ""
 
@@ -46,11 +49,17 @@ func Reconcile(cfg resolve.Config, opts Options) error {
 			return fmt.Errorf("%w: missing window at index %d", ErrStructuralChange, windowIndex)
 		}
 
+		windowID := livePanes[0].WindowID
+		if window.Name != livePanes[0].WindowName {
+			windowsToRename = append(windowsToRename, struct{ ID, NewName string }{windowID, window.Name})
+		}
+
 		// Tmux indices can be 1-based or 0-based depending on config, but the number of panes should match
 		if len(window.Panes) != len(livePanes) {
 			return fmt.Errorf("%w: window %q expected %d panes, but has %d", ErrStructuralChange, window.Name, len(window.Panes), len(livePanes))
 		}
 
+		windowWasTouched := false
 		for paneIndex, pane := range window.Panes {
 			live := livePanes[paneIndex]
 
@@ -75,6 +84,9 @@ func Reconcile(cfg resolve.Config, opts Options) error {
 					NeedsRespawn:     needsRespawn,
 					NeedsMetaUpdate:  needsMetaUpdate,
 				})
+				if needsRespawn {
+					windowWasTouched = true
+				}
 			}
 
 			if pane.Focus {
@@ -82,11 +94,28 @@ func Reconcile(cfg resolve.Config, opts Options) error {
 				focusPaneID = live.PaneID
 			}
 		}
+
+		// Always re-apply layout if window was touched or if layout name doesn't match?
+		// Tmux doesn't store the "name" of the layout (like 'even-horizontal'), it just has the raw geometry.
+		// So we re-apply if the YAML specified a layout and either a pane was respawned OR we just want to be sure.
+		if window.Layout != "" && window.Layout != "grid" {
+			// For now, always re-apply layout during reload if specified, to ensure sync.
+			windowsToLayout = append(windowsToLayout, struct{ ID, Layout string }{windowID, window.Layout})
+		} else if windowWasTouched && window.Layout != "" && window.Layout != "grid" {
+			windowsToLayout = append(windowsToLayout, struct{ ID, Layout string }{windowID, window.Layout})
+		}
+	}
+
+	// 1. Rename windows
+	for _, w := range windowsToRename {
+		if err := run(opts.Verbose, "rename-window", "-t", w.ID, w.NewName); err != nil {
+			return fmt.Errorf("rename window %s to %q: %w", w.ID, w.NewName, err)
+		}
 	}
 
 	currentPaneID := strings.TrimSpace(os.Getenv("TMUX_PANE"))
 
-	// Apply actions
+	// 2. Apply pane actions
 	var deferredAction *reconcileAction
 	for _, action := range actions {
 		if action.NeedsRespawn && action.PaneID == currentPaneID {
@@ -101,7 +130,17 @@ func Reconcile(cfg resolve.Config, opts Options) error {
 		}
 	}
 
-	// Apply focus before deferred self-respawn so focus happens
+	// 3. Re-apply layouts
+	for _, w := range windowsToLayout {
+		if err := run(opts.Verbose, "select-layout", "-t", w.ID, w.Layout); err != nil {
+			// Layout might fail if panes are in a weird state during respawn, but we try anyway
+			if opts.Verbose {
+				fmt.Fprintf(os.Stderr, "warning: failed to apply layout %q to window %s: %v\n", w.Layout, w.ID, err)
+			}
+		}
+	}
+
+	// 4. Apply focus before deferred self-respawn
 	if focusPaneID != "" {
 		if err := run(opts.Verbose, "select-window", "-t", focusWindowID); err != nil {
 			return fmt.Errorf("focus window: %w", err)

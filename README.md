@@ -350,7 +350,13 @@ Concrete examples:
       "source_type": "agent",
       "agent_name": "reviewer",
       "on_exit": "restart",
-      "current_command": "bash"
+      "current_command": "bash",
+      "startup_command": "openai api chat.completions.create -m gpt-5",
+      "exit_status": 0,
+      "pid": 12345,
+      "start_time": "2026-03-29T17:42:04Z",
+      "cpu_percent": 0.5,
+      "memory_percent": 1.2
     }
   ]
 }
