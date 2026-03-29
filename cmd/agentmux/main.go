@@ -126,11 +126,16 @@ func runTemplates(args []string) int {
 
 	fmt.Println("templates:")
 	for _, template := range templates {
+		sourceStr := ""
+		if template.Source != scaffold.SourceBuiltin {
+			sourceStr = fmt.Sprintf(" [%s]", template.Source)
+		}
+
 		if template.Description != "" {
-			fmt.Printf("  %s: %s\n", template.Name, template.Description)
+			fmt.Printf("  %s: %s%s\n", template.Name, template.Description, sourceStr)
 			continue
 		}
-		fmt.Printf("  %s\n", template.Name)
+		fmt.Printf("  %s%s\n", template.Name, sourceStr)
 	}
 	aliases := scaffold.Aliases()
 	if len(aliases) > 0 {
@@ -700,6 +705,26 @@ func runDoctor(args []string) int {
 		return exitDependency
 	}
 	fmt.Printf("cwd: %s\n", mustGetwd())
+
+	// Check for local/global templates
+	templates, err := scaffold.List()
+	if err == nil {
+		projectTemplates := 0
+		globalTemplates := 0
+		for _, t := range templates {
+			if t.Source == scaffold.SourceRepo {
+				projectTemplates++
+			} else if t.Source == scaffold.SourceGlobal {
+				globalTemplates++
+			}
+		}
+		if projectTemplates > 0 {
+			fmt.Printf("project_templates: %d found in .agentmux/templates/\n", projectTemplates)
+		}
+		if globalTemplates > 0 {
+			fmt.Printf("global_templates: %d found in ~/.config/agentmux/templates/\n", globalTemplates)
+		}
+	}
 
 	return exitSuccess
 }

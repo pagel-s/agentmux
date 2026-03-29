@@ -2,6 +2,7 @@ package scaffold
 
 import (
 	"embed"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,10 +16,19 @@ import (
 //go:embed templates/*.yaml
 var templateFS embed.FS
 
+type TemplateSource string
+
+const (
+	SourceBuiltin TemplateSource = "built-in"
+	SourceGlobal  TemplateSource = "global"
+	SourceRepo    TemplateSource = "project"
+)
+
 type Template struct {
 	Name        string
 	Description string
 	Content     string
+	Source      TemplateSource
 }
 
 type InitOptions struct {
@@ -33,6 +43,7 @@ var descriptions = map[string]string{
 	"review-loop":     "Coding and review loop with reusable agents",
 	"review-starter":  "Minimal copy-and-tweak review workspace",
 	"ssh-ops":         "Remote operations starter with an SSH-driven agent",
+	"team-standard":   "Team standard workspace pattern (base + personal overrides)",
 }
 
 var aliases = map[string]string{
@@ -60,18 +71,19 @@ func List() ([]Template, error) {
 				Name:        name,
 				Description: descriptions[name],
 				Content:     string(content),
+				Source:      SourceBuiltin,
 			}
 		}
 	}
 
 	// 2. Global templates (~/.config/agentmux/templates)
 	if globalDir := findGlobalTemplatesDir(); globalDir != "" {
-		loadFromDir(globalDir, templatesMap)
+		loadFromDir(globalDir, templatesMap, SourceGlobal)
 	}
 
 	// 3. Repo templates (.agentmux/templates)
 	if repoDir := findRepoTemplatesDir(); repoDir != "" {
-		loadFromDir(repoDir, templatesMap)
+		loadFromDir(repoDir, templatesMap, SourceRepo)
 	}
 
 	templates := make([]Template, 0, len(templatesMap))
@@ -85,7 +97,7 @@ func List() ([]Template, error) {
 	return templates, nil
 }
 
-func loadFromDir(dir string, m map[string]Template) {
+func loadFromDir(dir string, m map[string]Template, source TemplateSource) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return
@@ -115,6 +127,7 @@ func loadFromDir(dir string, m map[string]Template) {
 			Name:        name,
 			Description: desc,
 			Content:     string(content),
+			Source:      source,
 		}
 	}
 }
@@ -188,11 +201,29 @@ func Init(templateName string, targetPath string, opts InitOptions) (string, str
 		return "", "", err
 	}
 	if !ok {
-		names, namesErr := Names()
-		if namesErr != nil {
+		templates, err := List()
+		if err != nil {
 			return "", "", fmt.Errorf("unknown template %q", templateName)
 		}
-		return "", "", fmt.Errorf("unknown template %q; available templates: %s", templateName, strings.Join(names, ", "))
+
+		var project []string
+		var others []string
+		for _, t := range templates {
+			if t.Source == SourceRepo {
+				project = append(project, t.Name)
+			} else {
+				others = append(others, t.Name)
+			}
+		}
+
+		msg := fmt.Sprintf("unknown template %q", templateName)
+		if len(project) > 0 {
+			msg += fmt.Sprintf("; found %d project templates: %s", len(project), strings.Join(project, ", "))
+		}
+		if len(others) > 0 {
+			msg += fmt.Sprintf("; built-in templates: %s", strings.Join(others, ", "))
+		}
+		return "", "", errors.New(msg)
 	}
 
 	expandedTarget := expandUserPath(targetPath)

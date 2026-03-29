@@ -1,0 +1,42 @@
+# description: Team standard workspace pattern (base + personal overrides)
+# Use this as a reference for layered configs.
+# Typically, you would split this into two files.
+
+# --- BASE (Shared by team) ---
+version: 1
+params:
+  project_dir: "."
+  ai_model: "gpt-4o"
+
+agents:
+  # Standard team agent
+  coder:
+    provider: command
+    command: "openai chat --model {{ai_model}}"
+    cwd: "{{project_dir}}"
+    on_exit: restart
+
+layout:
+  - window: code
+    root: "{{project_dir}}"
+    panes:
+      - name: editor
+        command: "nvim"
+        focus: true
+      - name: ai
+        agent: coder
+
+# --- PERSONAL (Personal overrides) ---
+# To use layering, create a personal file that includes the base:
+#
+# include:
+#   - team-standard.yaml
+#
+# params:
+#   ai_model: "claude-3-5-sonnet" # Personal model preference
+#
+# layout:
+#   - window: code
+#     panes:
+#       - name: editor
+#         command: "code ." # Personal editor preference

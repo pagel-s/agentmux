@@ -1,0 +1,20 @@
+# Personal configuration that includes the team base.
+# Each developer can customize their tools and model preferences here.
+version: 1
+include:
+  - team-base.yaml
+
+session: project-personal
+
+params:
+  # Personal preference: run only short tests
+  test_command: "go test ./... -short"
+
+layout:
+  - window: dev
+    panes:
+      - name: editor
+        command: "nvim" # Personal editor preference
+        focus: true
+      - name: ai
+        agent: helper # Use the shared team agent

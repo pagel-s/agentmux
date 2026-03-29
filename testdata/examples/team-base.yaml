@@ -1,0 +1,23 @@
+# This is a shared team base configuration.
+# Team members include this in their personal configs.
+version: 1
+params:
+  project_dir: "."
+  test_command: "go test ./..."
+
+agents:
+  # A standard team agent for project-specific tasks
+  helper:
+    provider: command
+    command: "printf 'Team Helper ready\n'; exec $SHELL"
+    cwd: "{{project_dir}}"
+
+layout:
+  - window: project
+    root: "{{project_dir}}"
+    panes:
+      - name: shell
+        command: "exec $SHELL"
+      - name: tests
+        command: "{{test_command}}"
+        on_exit: remain
