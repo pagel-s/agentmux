@@ -26,9 +26,13 @@ const (
 	paneOnExitOption    = "@agentmux_on_exit"
 	paneStartTimeOption = "@agentmux_start_time"
 	sessionConfigPath   = "@agentmux_config_path"
+	kvPrefix            = "@agentmux_kv_"
 )
 
-var shellEnvRefPattern = regexp.MustCompile(`(^|[^\\])\$(\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)`)
+var (
+	shellEnvRefPattern = regexp.MustCompile(`(^|[^\\])\$(\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)`)
+	kvKeyPattern       = regexp.MustCompile(`^[A-Za-z0-9_]+$`)
+)
 
 type Options struct {
 	Attach  bool
@@ -379,6 +383,75 @@ func KillPaneByName(session string, name string, verbose bool) error {
 
 	if err := run(verbose, "kill-pane", "-t", target.PaneID); err != nil {
 		return fmt.Errorf("kill pane %q: %w", name, err)
+	}
+	return nil
+}
+
+func SetKV(session string, key string, value string, verbose bool) error {
+	if !kvKeyPattern.MatchString(key) {
+		return fmt.Errorf("invalid blackboard key %q; use only alphanumeric characters and underscores", key)
+	}
+	if err := ensureSessionExists(session); err != nil {
+		return err
+	}
+	if err := run(verbose, "set-option", "-t", session, kvPrefix+key, value); err != nil {
+		return fmt.Errorf("set blackboard key %q: %w", key, err)
+	}
+	return nil
+}
+
+func GetKV(session string, key string, verbose bool) (string, error) {
+	if !kvKeyPattern.MatchString(key) {
+		return "", fmt.Errorf("invalid blackboard key %q", key)
+	}
+	if err := ensureSessionExists(session); err != nil {
+		return "", err
+	}
+	value, err := capture(verbose, "show-options", "-qv", "-t", session, kvPrefix+key)
+	if err != nil {
+		return "", fmt.Errorf("get blackboard key %q: %w", key, err)
+	}
+	return strings.TrimSpace(value), nil
+}
+
+func ListKV(session string, verbose bool) (map[string]string, error) {
+	if err := ensureSessionExists(session); err != nil {
+		return nil, err
+	}
+	out, err := captureRaw(verbose, "show-options", "-t", session)
+	if err != nil {
+		return nil, fmt.Errorf("list blackboard: %w", err)
+	}
+
+	kv := make(map[string]string)
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, kvPrefix) {
+			line = strings.TrimPrefix(line, kvPrefix)
+			parts := strings.SplitN(line, " ", 2)
+			if len(parts) == 2 {
+				key := parts[0]
+				val := parts[1]
+				// Tmux might quote the value if it has spaces
+				if len(val) >= 2 && val[0] == '"' && val[len(val)-1] == '"' {
+					val = val[1 : len(val)-1]
+				}
+				kv[key] = val
+			}
+		}
+	}
+	return kv, nil
+}
+
+func DelKV(session string, key string, verbose bool) error {
+	if !kvKeyPattern.MatchString(key) {
+		return fmt.Errorf("invalid blackboard key %q", key)
+	}
+	if err := ensureSessionExists(session); err != nil {
+		return err
+	}
+	if err := run(verbose, "set-option", "-u", "-t", session, kvPrefix+key); err != nil {
+		return fmt.Errorf("delete blackboard key %q: %w", key, err)
 	}
 	return nil
 }

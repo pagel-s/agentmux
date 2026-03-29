@@ -68,6 +68,14 @@ func run(args []string) int {
 		return runStatus(args[1:])
 	case "inspect":
 		return runInspect(args[1:])
+	case "kv-set":
+		return runKVSet(args[1:])
+	case "kv-get":
+		return runKVGet(args[1:])
+	case "kv-list":
+		return runKVList(args[1:])
+	case "kv-del":
+		return runKVDel(args[1:])
 	case "focus":
 		return runFocus(args[1:])
 	case "restart":
@@ -451,6 +459,135 @@ func runInspect(args []string) int {
 	}
 
 	fmt.Print(renderInspect(opts.Session, pane, logs))
+	return exitSuccess
+}
+
+func runKVSet(args []string) int {
+	jsonOut := hasFlag(args, "--json")
+	opts, err := cli.ParseKVSet(args)
+	if err != nil {
+		return printCommandError("kv-set", jsonOut, exitValidation, err, "", "")
+	}
+
+	if err := requireTMux(); err != nil {
+		return printCommandError("kv-set", opts.JSON, exitDependency, err, opts.Session, "")
+	}
+
+	if err := tmux.SetKV(opts.Session, opts.Key, opts.Value, false); err != nil {
+		return printCommandError("kv-set", opts.JSON, exitRuntime, err, opts.Session, "")
+	}
+
+	message := fmt.Sprintf("set blackboard key %q to %q in session %q", opts.Key, opts.Value, opts.Session)
+	if opts.JSON {
+		out, err := renderKVActionJSON("kv-set", opts.Session, opts.Key, opts.Value, message)
+		if err != nil {
+			return printCommandError("kv-set", true, exitRuntime, fmt.Errorf("render kv-set json: %w", err), opts.Session, "")
+		}
+		fmt.Print(out)
+		return exitSuccess
+	}
+
+	fmt.Println(message)
+	return exitSuccess
+}
+
+func runKVGet(args []string) int {
+	jsonOut := hasFlag(args, "--json")
+	opts, err := cli.ParseKVGet(args)
+	if err != nil {
+		return printCommandError("kv-get", jsonOut, exitValidation, err, "", "")
+	}
+
+	if err := requireTMux(); err != nil {
+		return printCommandError("kv-get", opts.JSON, exitDependency, err, opts.Session, "")
+	}
+
+	value, err := tmux.GetKV(opts.Session, opts.Key, false)
+	if err != nil {
+		return printCommandError("kv-get", opts.JSON, exitRuntime, err, opts.Session, "")
+	}
+
+	if opts.JSON {
+		out, err := renderKVJSON(opts.Session, opts.Key, value)
+		if err != nil {
+			return printCommandError("kv-get", true, exitRuntime, fmt.Errorf("render kv-get json: %w", err), opts.Session, "")
+		}
+		fmt.Print(out)
+		return exitSuccess
+	}
+
+	fmt.Println(value)
+	return exitSuccess
+}
+
+func runKVList(args []string) int {
+	jsonOut := hasFlag(args, "--json")
+	opts, err := cli.ParseKVList(args)
+	if err != nil {
+		return printCommandError("kv-list", jsonOut, exitValidation, err, "", "")
+	}
+
+	if err := requireTMux(); err != nil {
+		return printCommandError("kv-list", opts.JSON, exitDependency, err, opts.Session, "")
+	}
+
+	kv, err := tmux.ListKV(opts.Session, false)
+	if err != nil {
+		return printCommandError("kv-list", opts.JSON, exitRuntime, err, opts.Session, "")
+	}
+
+	if opts.JSON {
+		out, err := renderKVListJSON(opts.Session, kv)
+		if err != nil {
+			return printCommandError("kv-list", true, exitRuntime, fmt.Errorf("render kv-list json: %w", err), opts.Session, "")
+		}
+		fmt.Print(out)
+		return exitSuccess
+	}
+
+	if len(kv) == 0 {
+		fmt.Printf("blackboard for session %q is empty\n", opts.Session)
+		return exitSuccess
+	}
+
+	fmt.Printf("blackboard for session %q:\n", opts.Session)
+	keys := make([]string, 0, len(kv))
+	for k := range kv {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		fmt.Printf("  %s: %s\n", k, kv[k])
+	}
+	return exitSuccess
+}
+
+func runKVDel(args []string) int {
+	jsonOut := hasFlag(args, "--json")
+	opts, err := cli.ParseKVDel(args)
+	if err != nil {
+		return printCommandError("kv-del", jsonOut, exitValidation, err, "", "")
+	}
+
+	if err := requireTMux(); err != nil {
+		return printCommandError("kv-del", opts.JSON, exitDependency, err, opts.Session, "")
+	}
+
+	if err := tmux.DelKV(opts.Session, opts.Key, false); err != nil {
+		return printCommandError("kv-del", opts.JSON, exitRuntime, err, opts.Session, "")
+	}
+
+	message := fmt.Sprintf("deleted blackboard key %q from session %q", opts.Key, opts.Session)
+	if opts.JSON {
+		out, err := renderKVActionJSON("kv-del", opts.Session, opts.Key, "", message)
+		if err != nil {
+			return printCommandError("kv-del", true, exitRuntime, fmt.Errorf("render kv-del json: %w", err), opts.Session, "")
+		}
+		fmt.Print(out)
+		return exitSuccess
+	}
+
+	fmt.Println(message)
 	return exitSuccess
 }
 
@@ -977,6 +1114,54 @@ func renderInspectJSON(session string, pane tmux.PaneStatus, logs string) (strin
 	})
 }
 
+func renderKVJSON(session string, key string, value string) (string, error) {
+	return renderJSON(struct {
+		SchemaVersion int    `json:"schema_version"`
+		Kind          string `json:"kind"`
+		Session       string `json:"session"`
+		Key           string `json:"key"`
+		Value         string `json:"value"`
+	}{
+		SchemaVersion: jsonSchemaV1,
+		Kind:          "kv-get",
+		Session:       session,
+		Key:           key,
+		Value:         value,
+	})
+}
+
+func renderKVListJSON(session string, kv map[string]string) (string, error) {
+	return renderJSON(struct {
+		SchemaVersion int               `json:"schema_version"`
+		Kind          string            `json:"kind"`
+		Session       string            `json:"session"`
+		KV            map[string]string `json:"kv"`
+	}{
+		SchemaVersion: jsonSchemaV1,
+		Kind:          "kv-list",
+		Session:       session,
+		KV:            kv,
+	})
+}
+
+func renderKVActionJSON(kind string, session string, key string, value string, message string) (string, error) {
+	return renderJSON(struct {
+		SchemaVersion int    `json:"schema_version"`
+		Kind          string `json:"kind"`
+		Session       string `json:"session"`
+		Key           string `json:"key"`
+		Value         string `json:"value,omitempty"`
+		Message       string `json:"message"`
+	}{
+		SchemaVersion: jsonSchemaV1,
+		Kind:          kind,
+		Session:       session,
+		Key:           key,
+		Value:         value,
+		Message:       message,
+	})
+}
+
 func renderStatusJSON(session string, pane string, panes []tmux.PaneStatus) (string, error) {
 	return renderJSON(struct {
 		SchemaVersion int               `json:"schema_version"`
@@ -1271,6 +1456,10 @@ Usage:
   agentmux list
   agentmux status <session> [--json] [--pane <pane-name>] [--logs [N]]
   agentmux inspect <session> <pane-name> [--json]
+  agentmux kv-set <session> <key> <value> [--json]
+  agentmux kv-get <session> <key> [--json]
+  agentmux kv-list <session> [--json]
+  agentmux kv-del <session> <key> [--json]
   agentmux focus <session> <pane-name> [--json]
   agentmux restart <session> <pane-name> [--json]
   agentmux rerun <session> <pane-name> [--json]

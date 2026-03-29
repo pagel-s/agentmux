@@ -102,6 +102,37 @@ If a session is older and missing that metadata, backfill it:
 ./bin/agentmux edit my-workflow
 ```
 
+## Blackboard (Shared KV-Store)
+
+The "Blackboard" is a shared memory layer for agent coordination. It uses tmux session options to store key-value pairs that are accessible from any pane in the session.
+
+Set a value:
+
+```bash
+./bin/agentmux kv-set my-workflow current_task "fixing-auth-bug"
+```
+
+Get a value:
+
+```bash
+./bin/agentmux kv-get my-workflow current_task
+```
+
+List all values:
+
+```bash
+./bin/agentmux kv-list my-workflow
+./bin/agentmux kv-list my-workflow --json
+```
+
+Delete a value:
+
+```bash
+./bin/agentmux kv-del my-workflow current_task
+```
+
+This mechanism allows isolated terminal agents to signal progress, share file paths, or manage state without a background daemon.
+
 ## Troubleshooting
 
 Missing session:

@@ -1509,3 +1509,69 @@ func TestStatusShowsExitCodeForDeadPanes(t *testing.T) {
 		t.Fatal("pane did not die or exit status not captured")
 	}
 }
+func TestBlackboardKVStore(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed")
+	}
+
+	socket := filepath.Join(t.TempDir(), "agentmux-kv.sock")
+	t.Setenv(envTmuxSocket, socket)
+
+	cfg := resolve.Config{
+		Session: "agentmux-kv",
+		Windows: []resolve.Window{
+			{Name: "main", Panes: []resolve.Pane{{Name: "p1", Command: "sleep 3600"}}},
+		},
+	}
+
+	t.Cleanup(func() {
+		_ = command("kill-server").Run()
+	})
+
+	if err := Execute(cfg, Options{Replace: true}); err != nil {
+		if isTmuxPermissionError(err) {
+			t.Skipf("tmux integration unavailable in this environment: %v", err)
+		}
+		t.Fatalf("Execute returned error: %v", err)
+	}
+
+	// 1. Set
+	if err := SetKV(cfg.Session, "task", "coding", false); err != nil {
+		t.Fatalf("SetKV failed: %v", err)
+	}
+
+	// 2. Get
+	val, err := GetKV(cfg.Session, "task", false)
+	if err != nil {
+		t.Fatalf("GetKV failed: %v", err)
+	}
+	if val != "coding" {
+		t.Fatalf("GetKV task = %q, want coding", val)
+	}
+
+	// 3. Set another with spaces
+	if err := SetKV(cfg.Session, "target_file", "./src/main.go", false); err != nil {
+		t.Fatalf("SetKV target_file failed: %v", err)
+	}
+
+	// 4. List
+	kv, err := ListKV(cfg.Session, false)
+	if err != nil {
+		t.Fatalf("ListKV failed: %v", err)
+	}
+	if len(kv) != 2 {
+		t.Fatalf("ListKV count = %d, want 2", len(kv))
+	}
+	if kv["task"] != "coding" || kv["target_file"] != "./src/main.go" {
+		t.Fatalf("ListKV content mismatch: %v", kv)
+	}
+
+	// 5. Delete
+	if err := DelKV(cfg.Session, "task", false); err != nil {
+		t.Fatalf("DelKV failed: %v", err)
+	}
+	val, _ = GetKV(cfg.Session, "task", false)
+	if val != "" {
+		t.Fatalf("GetKV after DelKV returned %q, want empty", val)
+	}
+}

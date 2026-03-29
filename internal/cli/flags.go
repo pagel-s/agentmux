@@ -36,6 +36,13 @@ type InspectOptions struct {
 	JSON    bool
 }
 
+type KVOptions struct {
+	Session string
+	Key     string
+	Value   string
+	JSON    bool
+}
+
 type PaneTargetOptions struct {
 	Session string
 	Pane    string
@@ -277,6 +284,66 @@ func ParseInspect(args []string) (InspectOptions, error) {
 	return InspectOptions{
 		Session: positional[0],
 		Pane:    positional[1],
+		JSON:    jsonOut,
+	}, nil
+}
+
+func ParseKVSet(args []string) (KVOptions, error) {
+	positional, jsonOut, err := parseOptionalJSONArgs("kv-set", args)
+	if err != nil {
+		return KVOptions{}, err
+	}
+	if len(positional) != 3 {
+		return KVOptions{}, errors.New("kv-set requires session, key, and value")
+	}
+	return KVOptions{
+		Session: positional[0],
+		Key:     positional[1],
+		Value:   positional[2],
+		JSON:    jsonOut,
+	}, nil
+}
+
+func ParseKVGet(args []string) (KVOptions, error) {
+	positional, jsonOut, err := parseOptionalJSONArgs("kv-get", args)
+	if err != nil {
+		return KVOptions{}, err
+	}
+	if len(positional) != 2 {
+		return KVOptions{}, errors.New("kv-get requires session and key")
+	}
+	return KVOptions{
+		Session: positional[0],
+		Key:     positional[1],
+		JSON:    jsonOut,
+	}, nil
+}
+
+func ParseKVList(args []string) (KVOptions, error) {
+	positional, jsonOut, err := parseOptionalJSONArgs("kv-list", args)
+	if err != nil {
+		return KVOptions{}, err
+	}
+	if len(positional) != 1 {
+		return KVOptions{}, errors.New("kv-list requires exactly one session name")
+	}
+	return KVOptions{
+		Session: positional[0],
+		JSON:    jsonOut,
+	}, nil
+}
+
+func ParseKVDel(args []string) (KVOptions, error) {
+	positional, jsonOut, err := parseOptionalJSONArgs("kv-del", args)
+	if err != nil {
+		return KVOptions{}, err
+	}
+	if len(positional) != 2 {
+		return KVOptions{}, errors.New("kv-del requires session and key")
+	}
+	return KVOptions{
+		Session: positional[0],
+		Key:     positional[1],
 		JSON:    jsonOut,
 	}, nil
 }
