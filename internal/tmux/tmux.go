@@ -17,15 +17,15 @@ import (
 )
 
 const (
-	envTmuxBinary     = "AGENTMUX_TMUX_BIN"
-	envTmuxSocket     = "AGENTMUX_TMUX_SOCKET"
-	paneNameOption    = "@agentmux_name"
-	paneStartupOption = "@agentmux_startup_command"
-	paneSourceOption  = "@agentmux_source_type"
-	paneAgentOption   = "@agentmux_agent_name"
-	paneOnExitOption  = "@agentmux_on_exit"
+	envTmuxBinary       = "AGENTMUX_TMUX_BIN"
+	envTmuxSocket       = "AGENTMUX_TMUX_SOCKET"
+	paneNameOption      = "@agentmux_name"
+	paneStartupOption   = "@agentmux_startup_command"
+	paneSourceOption    = "@agentmux_source_type"
+	paneAgentOption     = "@agentmux_agent_name"
+	paneOnExitOption    = "@agentmux_on_exit"
 	paneStartTimeOption = "@agentmux_start_time"
-	sessionConfigPath = "@agentmux_config_path"
+	sessionConfigPath   = "@agentmux_config_path"
 )
 
 var shellEnvRefPattern = regexp.MustCompile(`(^|[^\\])\$(\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)`)
@@ -48,22 +48,22 @@ type paneGeometry struct {
 }
 
 type PaneStatus struct {
-	WindowIndex  int    `json:"window_index"`
-	WindowName   string `json:"window_name"`
-	WindowID     string `json:"window_id"`
-	WindowActive bool   `json:"window_active"`
-	PaneIndex    int    `json:"pane_index"`
-	PaneID       string `json:"pane_id"`
-	PaneActive   bool   `json:"pane_active"`
-	Dead         bool   `json:"dead"`
-	Name         string `json:"name"`
-	Title        string `json:"title"`
-	SourceType   string `json:"source_type,omitempty"`
-	AgentName    string `json:"agent_name,omitempty"`
-	OnExit       string `json:"on_exit,omitempty"`
-	CurrentCmd   string `json:"current_command,omitempty"`
-	StartupCmd   string `json:"startup_command,omitempty"`
-	ExitStatus   int    `json:"exit_status,omitempty"`
+	WindowIndex  int     `json:"window_index"`
+	WindowName   string  `json:"window_name"`
+	WindowID     string  `json:"window_id"`
+	WindowActive bool    `json:"window_active"`
+	PaneIndex    int     `json:"pane_index"`
+	PaneID       string  `json:"pane_id"`
+	PaneActive   bool    `json:"pane_active"`
+	Dead         bool    `json:"dead"`
+	Name         string  `json:"name"`
+	Title        string  `json:"title"`
+	SourceType   string  `json:"source_type,omitempty"`
+	AgentName    string  `json:"agent_name,omitempty"`
+	OnExit       string  `json:"on_exit,omitempty"`
+	CurrentCmd   string  `json:"current_command,omitempty"`
+	StartupCmd   string  `json:"startup_command,omitempty"`
+	ExitStatus   int     `json:"exit_status,omitempty"`
 	Pid          int     `json:"pid,omitempty"`
 	StartTime    string  `json:"start_time,omitempty"`
 	CPU          float64 `json:"cpu_percent,omitempty"`

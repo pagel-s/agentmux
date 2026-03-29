@@ -1,14 +1,31 @@
 # Changelog
 
-## Unreleased
+## v0.6.0 - 2026-03-29
 
-- Added `templates` and `init` so new configs can be created from built-in starter templates instead of copied manually.
-- Added `edit <path-or-session>` with session config-path metadata, so live sessions can reopen the config file they came from.
-- Added a friendly `default` starter alias for the `ai-dev` template and clearer help/output for the starter flow.
-- Added `remember <session> <config>` so existing live sessions can backfill config-path metadata without a reload.
+Sixth private release of Agentmux, focused on config reuse, team workflows, and professional packaging.
+
+- Added `include:` top-level field for splitting configurations and sharing common agents, params, and environment variables across files.
+- Implemented recursive config loading with Parent-Wins merging precedence and circular inclusion detection.
+- Added support for repo-local (`.agentmux/templates/`) and user-global (`~/.config/agentmux/templates/`) template discovery.
+- Updated `templates` command to display template sources ([project], [global], or built-in).
+- Enhanced `doctor` with actionable diagnostics, including tmux version checks and PATH verification.
+- Implemented professional versioning with embedded Git commit hash and build date.
+- Added automated binary distribution via GoReleaser and GitHub Actions.
+- Added `team-standard` starter template and layered config examples.
+
+## v0.5.0 - 2026-03-29
+
+Fifth private release of Agentmux, focused on non-destructive session management and deep live inspection.
+
+- Implemented a non-destructive reconciliation engine for `reload`, surgically updating panes and metadata instead of killing the entire session.
+- Added support for window renaming and layout re-syncing during session reconciliation.
+- Enhanced `status` with a `--logs [N]` dashboard view, showing recent activity for all panes at once.
+- Added deep diagnostics to `status` and new `inspect` command, including PID, CPU/Memory usage, and start time metadata.
+- Implemented exit status tracking for dead panes using `#{pane_dead_status}`.
+- Refined `status` output formatting for better readability and detail.
 
 ## v0.4.0 - 2026-03-24
-
+...
 - Added `status --pane <name>` for targeted single-pane inspection in both human-readable and JSON output.
 - Added `capture --tail N` for smaller, automation-friendly pane reads.
 - Added `capture --strip-empty` for cleaner script-facing reads from shell panes with blank terminal filler rows.

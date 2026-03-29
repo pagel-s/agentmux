@@ -36,14 +36,14 @@ type InitOptions struct {
 }
 
 var descriptions = map[string]string{
-	"ai-dev":          "Multi-window coding workspace with coder and reviewer agents",
-	"coding-starter":  "Minimal copy-and-tweak coding workspace",
-	"minimal":         "Smallest valid starter config",
-	"on-exit":         "Pane exit-policy demo with shell, remain, restart, and kill",
-	"review-loop":     "Coding and review loop with reusable agents",
-	"review-starter":  "Minimal copy-and-tweak review workspace",
-	"ssh-ops":         "Remote operations starter with an SSH-driven agent",
-	"team-standard":   "Team standard workspace pattern (base + personal overrides)",
+	"ai-dev":         "Multi-window coding workspace with coder and reviewer agents",
+	"coding-starter": "Minimal copy-and-tweak coding workspace",
+	"minimal":        "Smallest valid starter config",
+	"on-exit":        "Pane exit-policy demo with shell, remain, restart, and kill",
+	"review-loop":    "Coding and review loop with reusable agents",
+	"review-starter": "Minimal copy-and-tweak review workspace",
+	"ssh-ops":        "Remote operations starter with an SSH-driven agent",
+	"team-standard":  "Team standard workspace pattern (base + personal overrides)",
 }
 
 var aliases = map[string]string{
@@ -113,7 +113,7 @@ func loadFromDir(dir string, m map[string]Template, source TemplateSource) {
 		if err != nil {
 			continue
 		}
-		
+
 		desc := extractDescription(string(content))
 		if desc == "" {
 			if existing, ok := m[name]; ok {
