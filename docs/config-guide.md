@@ -91,6 +91,13 @@ When a file includes another, they are merged with **Parent-Wins** precedence:
 
 - config `params` provide defaults
 - CLI `--param key=value` overrides them
+- **Special `config_dir`**: The absolute path to the directory containing the root configuration file is automatically available as `{{config_dir}}`. Use this to reference local scripts and assets portably.
+
+```yaml
+agents:
+  researcher:
+    command: "python3 {{config_dir}}/scripts/research.py"
+```
 
 ### Env
 

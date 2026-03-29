@@ -1117,7 +1117,7 @@ func resolveCommand(opts cli.CommonOptions) (*resolve.Config, []validate.Issue, 
 		return nil, issues, exitValidation
 	}
 
-	resolved, err := resolve.Project(&doc.Config, opts.Params)
+	resolved, err := resolve.Project(doc, opts.Params)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		return nil, issues, exitValidation

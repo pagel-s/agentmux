@@ -51,9 +51,18 @@ func TestProjectResolvesEnvAndCwdPrecedence(t *testing.T) {
 		},
 	}
 
-	resolved, err := Project(cfg, nil)
+	doc := &config.Document{
+		Path:   "/tmp/project/config.yaml",
+		Config: *cfg,
+	}
+
+	resolved, err := Project(doc, nil)
 	if err != nil {
 		t.Fatalf("Project returned error: %v", err)
+	}
+
+	if got := resolved.Params["config_dir"]; got != "/tmp/project" {
+		t.Fatalf("config_dir = %q, want %q", got, "/tmp/project")
 	}
 
 	pane := resolved.Windows[0].Panes[0]
@@ -100,9 +109,18 @@ func TestProjectResolvesPaneNameTemplates(t *testing.T) {
 		},
 	}
 
-	resolved, err := Project(cfg, nil)
+	doc := &config.Document{
+		Path:   "/tmp/project/config.yaml",
+		Config: *cfg,
+	}
+
+	resolved, err := Project(doc, nil)
 	if err != nil {
 		t.Fatalf("Project returned error: %v", err)
+	}
+
+	if got := resolved.Params["config_dir"]; got != "/tmp/project" {
+		t.Fatalf("config_dir = %q, want %q", got, "/tmp/project")
 	}
 
 	if got := resolved.Windows[0].Panes[0].Name; got != "review-pane" {
@@ -148,9 +166,18 @@ func TestProjectWindowEnvOverridesAgentAndSessionDefaults(t *testing.T) {
 		},
 	}
 
-	resolved, err := Project(cfg, nil)
+	doc := &config.Document{
+		Path:   "/tmp/project/config.yaml",
+		Config: *cfg,
+	}
+
+	resolved, err := Project(doc, nil)
 	if err != nil {
 		t.Fatalf("Project returned error: %v", err)
+	}
+
+	if got := resolved.Params["config_dir"]; got != "/tmp/project" {
+		t.Fatalf("config_dir = %q, want %q", got, "/tmp/project")
 	}
 
 	pane := resolved.Windows[0].Panes[0]
@@ -187,9 +214,18 @@ func TestProjectHandlesPaneEnvWithoutSessionEnv(t *testing.T) {
 		},
 	}
 
-	resolved, err := Project(cfg, nil)
+	doc := &config.Document{
+		Path:   "/tmp/project/config.yaml",
+		Config: *cfg,
+	}
+
+	resolved, err := Project(doc, nil)
 	if err != nil {
 		t.Fatalf("Project returned error: %v", err)
+	}
+
+	if got := resolved.Params["config_dir"]; got != "/tmp/project" {
+		t.Fatalf("config_dir = %q, want %q", got, "/tmp/project")
 	}
 
 	if got := resolved.Windows[0].Panes[0].Env["DEBUG"]; got != "1" {
@@ -237,9 +273,18 @@ func TestProjectResolvesRelativeCwdAgainstLaunchDirectory(t *testing.T) {
 		},
 	}
 
-	resolved, err := Project(cfg, nil)
+	doc := &config.Document{
+		Path:   "/tmp/project/config.yaml",
+		Config: *cfg,
+	}
+
+	resolved, err := Project(doc, nil)
 	if err != nil {
 		t.Fatalf("Project returned error: %v", err)
+	}
+
+	if got := resolved.Params["config_dir"]; got != "/tmp/project" {
+		t.Fatalf("config_dir = %q, want %q", got, "/tmp/project")
 	}
 
 	if got := resolved.Windows[0].Root; got != tempDir {
@@ -283,9 +328,18 @@ func TestProjectResolvesOnExitPrecedence(t *testing.T) {
 		},
 	}
 
-	resolved, err := Project(cfg, nil)
+	doc := &config.Document{
+		Path:   "/tmp/project/config.yaml",
+		Config: *cfg,
+	}
+
+	resolved, err := Project(doc, nil)
 	if err != nil {
 		t.Fatalf("Project returned error: %v", err)
+	}
+
+	if got := resolved.Params["config_dir"]; got != "/tmp/project" {
+		t.Fatalf("config_dir = %q, want %q", got, "/tmp/project")
 	}
 
 	panes := resolved.Windows[0].Panes

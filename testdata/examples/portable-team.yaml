@@ -1,0 +1,23 @@
+# description: A portable team configuration using {{config_dir}}
+# This template shows how to reference local scripts regardless of launch CWD.
+
+version: 1
+session: portable-team
+
+params:
+  # Reference a script in the same directory as the config
+  worker_script: "{{config_dir}}/worker.sh"
+
+agents:
+  worker:
+    provider: command
+    command: "bash {{worker_script}}"
+    cwd: "{{config_dir}}"
+
+layout:
+  - window: main
+    panes:
+      - name: lead
+        command: "printf 'Lead agent starting...\n'; bash {{config_dir}}/lead.sh"
+      - name: support
+        agent: worker

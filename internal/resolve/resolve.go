@@ -63,7 +63,17 @@ type Hooks struct {
 	PostSession string `json:"postSession,omitempty"`
 }
 
-func Project(raw *config.Config, overrides map[string]string) (*Config, error) {
+func Project(doc *config.Document, overrides map[string]string) (*Config, error) {
+	raw := &doc.Config
+	if overrides == nil {
+		overrides = make(map[string]string)
+	}
+
+	// Inject config_dir if not already present
+	if _, ok := overrides["config_dir"]; !ok {
+		overrides["config_dir"] = filepath.Dir(doc.Path)
+	}
+
 	params, err := resolveParams(raw.Params, overrides)
 	if err != nil {
 		return nil, err
