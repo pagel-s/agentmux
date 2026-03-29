@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -15,6 +16,7 @@ var knownTopLevelFields = map[string]struct{}{
 	"name":        {},
 	"session":     {},
 	"description": {},
+	"include":     {},
 	"params":      {},
 	"env":         {},
 	"agents":      {},
@@ -27,6 +29,7 @@ type Config struct {
 	Name        string            `yaml:"name"`
 	Session     string            `yaml:"session"`
 	Description string            `yaml:"description"`
+	Include     []string          `yaml:"include"`
 	Params      map[string]string `yaml:"params"`
 	Env         map[string]string `yaml:"env"`
 	Agents      map[string]Agent  `yaml:"agents"`
@@ -98,30 +101,43 @@ func IsValidOnExit(value string) bool {
 }
 
 func LoadFile(path string) (*Document, error) {
-	data, err := os.ReadFile(path)
+	return loadRecursive(path, make(map[string]bool))
+}
+
+func loadRecursive(path string, seen map[string]bool) (*Document, error) {
+	absPath, err := filepath.Abs(path)
 	if err != nil {
-		return nil, fmt.Errorf("unable to read config %q: %w", path, err)
+		return nil, fmt.Errorf("resolve path %q: %w", path, err)
+	}
+	if seen[absPath] {
+		return nil, fmt.Errorf("circular include detected: %s", absPath)
+	}
+	seen[absPath] = true
+
+	data, err := os.ReadFile(absPath)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read config %q: %w", absPath, err)
 	}
 
 	var node yaml.Node
 	decoder := yaml.NewDecoder(bytes.NewReader(data))
 	if err := decoder.Decode(&node); err != nil {
-		return nil, fmt.Errorf("invalid YAML in %q: %w", path, err)
+		return nil, fmt.Errorf("invalid YAML in %q: %w", absPath, err)
 	}
 
 	var cfg Config
 	if len(node.Content) == 0 {
-		return nil, fmt.Errorf("config %q is empty", path)
+		return nil, fmt.Errorf("config %q is empty", absPath)
 	}
 	if node.Content[0].Kind != yaml.MappingNode {
-		return nil, fmt.Errorf("config %q must be a YAML mapping at the top level", path)
+		return nil, fmt.Errorf("config %q must be a YAML mapping at the top level", absPath)
 	}
 	if err := node.Content[0].Decode(&cfg); err != nil {
-		return nil, fmt.Errorf("invalid config in %q: %w", path, err)
+		return nil, fmt.Errorf("invalid config in %q: %w", absPath, err)
 	}
 
 	doc := &Document{
-		Path:            path,
+		Path:            absPath,
 		Config:          cfg,
 		UnknownTopLevel: unknownTopLevelFields(node.Content[0]),
 	}
@@ -129,7 +145,68 @@ func LoadFile(path string) (*Document, error) {
 		doc.DuplicateAgentIDs = duplicateMappingKeys(agentsNode)
 	}
 
+	// Handle includes
+	baseDir := filepath.Dir(absPath)
+	for _, incPath := range cfg.Include {
+		fullIncPath := incPath
+		if !filepath.IsAbs(incPath) {
+			fullIncPath = filepath.Join(baseDir, incPath)
+		}
+
+		incDoc, err := loadRecursive(fullIncPath, seen)
+		if err != nil {
+			return nil, fmt.Errorf("include %q: %w", incPath, err)
+		}
+
+		mergeConfigs(&doc.Config, &incDoc.Config)
+		doc.UnknownTopLevel = append(doc.UnknownTopLevel, incDoc.UnknownTopLevel...)
+		doc.DuplicateAgentIDs = append(doc.DuplicateAgentIDs, incDoc.DuplicateAgentIDs...)
+	}
+
 	return doc, nil
+}
+
+func mergeConfigs(target, source *Config) {
+	// Params (target wins)
+	if target.Params == nil {
+		target.Params = make(map[string]string)
+	}
+	for k, v := range source.Params {
+		if _, ok := target.Params[k]; !ok {
+			target.Params[k] = v
+		}
+	}
+
+	// Env (target wins)
+	if target.Env == nil {
+		target.Env = make(map[string]string)
+	}
+	for k, v := range source.Env {
+		if _, ok := target.Env[k]; !ok {
+			target.Env[k] = v
+		}
+	}
+
+	// Agents (target wins)
+	if target.Agents == nil {
+		target.Agents = make(map[string]Agent)
+	}
+	for k, v := range source.Agents {
+		if _, ok := target.Agents[k]; !ok {
+			target.Agents[k] = v
+		}
+	}
+
+	// Layout (source appends before target)
+	target.Layout = append(source.Layout, target.Layout...)
+
+	// Hooks (target wins if not empty)
+	if target.Hooks.PreSession == "" {
+		target.Hooks.PreSession = source.Hooks.PreSession
+	}
+	if target.Hooks.PostSession == "" {
+		target.Hooks.PostSession = source.Hooks.PostSession
+	}
 }
 
 func unknownTopLevelFields(root *yaml.Node) []string {

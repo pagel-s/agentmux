@@ -9,6 +9,7 @@ If you want use-case-driven starting points instead of field-by-field reference,
 - `agents`: reusable execution defaults
 - `windows`: layout and context
 - `panes`: actual runtime units
+- `include`: reuse parts of other configs
 
 Panes are what really run. Agents help reduce duplication. Windows group panes and provide shared context.
 
@@ -56,6 +57,33 @@ layout:
       - name: review
         agent: reviewer
 ```
+
+## Reuse and Includes
+
+You can split your configuration across multiple files using the `include` field. This is useful for sharing common `agents`, `params`, or `env` across different projects.
+
+```yaml
+version: 1
+session: project-a
+
+include:
+  - shared/base-agents.yaml
+  - shared/standard-env.yaml
+
+layout:
+  - window: main
+    panes:
+      - agent: shared-agent
+```
+
+### Merging Rules
+
+When a file includes another, they are merged with **Parent-Wins** precedence:
+
+- `params`, `env`, `agents`: Values in the main file override values in included files.
+- `layout`: Windows from included files are appended **before** the windows in the main file.
+- `include` paths are resolved relative to the file they are defined in.
+- Circular includes are detected and rejected.
 
 ## Resolution Rules
 
