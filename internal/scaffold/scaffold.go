@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 //go:embed templates/*.yaml
@@ -40,32 +42,128 @@ var aliases = map[string]string{
 var sessionCharPattern = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
 
 func List() ([]Template, error) {
+	templatesMap := make(map[string]Template)
+
+	// 1. Built-in templates
 	entries, err := templateFS.ReadDir("templates")
-	if err != nil {
-		return nil, err
+	if err == nil {
+		for _, entry := range entries {
+			if entry.IsDir() || filepath.Ext(entry.Name()) != ".yaml" {
+				continue
+			}
+			name := strings.TrimSuffix(entry.Name(), ".yaml")
+			content, err := templateFS.ReadFile(filepath.Join("templates", entry.Name()))
+			if err != nil {
+				continue
+			}
+			templatesMap[name] = Template{
+				Name:        name,
+				Description: descriptions[name],
+				Content:     string(content),
+			}
+		}
 	}
 
-	templates := make([]Template, 0, len(entries))
-	for _, entry := range entries {
-		if entry.IsDir() || filepath.Ext(entry.Name()) != ".yaml" {
-			continue
-		}
-		name := strings.TrimSuffix(entry.Name(), ".yaml")
-		content, err := templateFS.ReadFile(filepath.Join("templates", entry.Name()))
-		if err != nil {
-			return nil, err
-		}
-		templates = append(templates, Template{
-			Name:        name,
-			Description: descriptions[name],
-			Content:     string(content),
-		})
+	// 2. Global templates (~/.config/agentmux/templates)
+	if globalDir := findGlobalTemplatesDir(); globalDir != "" {
+		loadFromDir(globalDir, templatesMap)
+	}
+
+	// 3. Repo templates (.agentmux/templates)
+	if repoDir := findRepoTemplatesDir(); repoDir != "" {
+		loadFromDir(repoDir, templatesMap)
+	}
+
+	templates := make([]Template, 0, len(templatesMap))
+	for _, t := range templatesMap {
+		templates = append(templates, t)
 	}
 
 	sort.Slice(templates, func(i, j int) bool {
 		return templates[i].Name < templates[j].Name
 	})
 	return templates, nil
+}
+
+func loadFromDir(dir string, m map[string]Template) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".yaml" {
+			continue
+		}
+		name := strings.TrimSuffix(entry.Name(), ".yaml")
+		path := filepath.Join(dir, entry.Name())
+		content, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		
+		desc := extractDescription(string(content))
+		if desc == "" {
+			if existing, ok := m[name]; ok {
+				desc = existing.Description
+			} else {
+				desc = "Local template"
+			}
+		}
+
+		m[name] = Template{
+			Name:        name,
+			Description: desc,
+			Content:     string(content),
+		}
+	}
+}
+
+func extractDescription(content string) string {
+	var meta struct {
+		Description string `yaml:"description"`
+	}
+	_ = yaml.Unmarshal([]byte(content), &meta)
+	return strings.TrimSpace(meta.Description)
+}
+
+func findGlobalTemplatesDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	dir := filepath.Join(home, ".config", "agentmux", "templates")
+	if info, err := os.Stat(dir); err == nil && info.IsDir() {
+		return dir
+	}
+	return ""
+}
+
+func findRepoTemplatesDir() string {
+	curr, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+
+	for {
+		target := filepath.Join(curr, ".agentmux", "templates")
+		if info, err := os.Stat(target); err == nil && info.IsDir() {
+			return target
+		}
+
+		// Stop at .git or root
+		if info, err := os.Stat(filepath.Join(curr, ".git")); err == nil && info.IsDir() {
+			break
+		}
+
+		parent := filepath.Dir(curr)
+		if parent == curr {
+			break
+		}
+		curr = parent
+	}
+
+	return ""
 }
 
 func Lookup(name string) (Template, bool, error) {
