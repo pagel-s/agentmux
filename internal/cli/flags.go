@@ -59,6 +59,11 @@ type ScaleOptions struct {
 	JSON    bool
 }
 
+type PackOptions struct {
+	ConfigPath string
+	OutputPath string
+}
+
 type PaneTargetOptions struct {
 	Session string
 	Pane    string
@@ -236,6 +241,22 @@ func ParseRemember(args []string) (RememberOptions, error) {
 	return RememberOptions{
 		Session: args[0],
 		Path:    args[1],
+	}, nil
+}
+
+func ParsePack(args []string) (PackOptions, error) {
+	if len(args) < 1 || len(args) > 2 {
+		return PackOptions{}, errors.New("pack requires exactly one config path and an optional output path")
+	}
+
+	out := ""
+	if len(args) == 2 {
+		out = args[1]
+	}
+
+	return PackOptions{
+		ConfigPath: args[0],
+		OutputPath: out,
 	}, nil
 }
 

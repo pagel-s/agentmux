@@ -37,6 +37,7 @@ type Issue struct {
 func Document(doc *config.Document, cliParams map[string]string) []Issue {
 	var issues []Issue
 	params := mergedParams(doc.Config.Params, cliParams)
+	params["config_dir"] = "/injected" // Built-in param during resolution
 
 	if doc.Config.Version != 1 {
 		issues = append(issues, errorf("version must exist and equal 1"))

@@ -17,6 +17,7 @@ import (
 	"agentmux/internal/config"
 	"agentmux/internal/envcheck"
 	"agentmux/internal/hooks"
+	"agentmux/internal/pack"
 	"agentmux/internal/resolve"
 	"agentmux/internal/scaffold"
 	"agentmux/internal/tmux"
@@ -61,6 +62,8 @@ func run(args []string) int {
 		return runEdit(args[1:])
 	case "remember":
 		return runRemember(args[1:])
+	case "pack":
+		return runPack(args[1:])
 	case "validate":
 		return runValidate(args[1:])
 	case "render":
@@ -256,32 +259,46 @@ func runRemember(args []string) int {
 	return exitSuccess
 }
 
-func runSessionLaunch(mode string, opts cli.LoadOptions, requireExisting bool, replace bool) int {
-	jsonOut := hasFlag(os.Args[1:], "--json")
-
-	// 1. Initial load to check for requirements
-	doc, err := config.LoadFile(opts.ConfigPath)
+func runPack(args []string) int {
+	opts, err := cli.ParsePack(args)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		return exitConfigParse
-	}
-
-	// 2. Setup Wizard (Interactive fulfillment)
-	if opts.Params == nil {
-		opts.Params = make(map[string]string)
-	}
-	report := envcheck.Check(doc.Config.Requires, opts.Params)
-	if err := fulfillRequirements(doc.Config.Session, report, opts.Params, jsonOut); err != nil {
-		// report already printed to stderr in fulfillRequirements
 		return exitValidation
 	}
 
-	// 3. Resolve and Validate
-	resolved, warnings, code := resolveCommand(opts.CommonOptions)
+	path, err := pack.CreateBundle(opts.ConfigPath, opts.OutputPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: pack %s: %v\n", opts.ConfigPath, err)
+		return exitRuntime
+	}
+
+	fmt.Printf("created session bundle: %s\n", path)
+	return exitSuccess
+}
+
+func runSessionLaunch(mode string, opts cli.LoadOptions, requireExisting bool, replace bool) int {
+	jsonOut := hasFlag(os.Args[1:], "--json")
+
+	// 1. Resolve and Validate (handles .amx automatically)
+	resolved, _, code := resolveCommand(opts.CommonOptions)
 	if code != exitSuccess {
 		return code
 	}
-	printWarnings(warnings)
+
+	// 2. Setup Wizard (Interactive fulfillment)
+	// We check for missing items in the resolved config requirements.
+	report := envcheck.Check(resolved.Requires, opts.Params)
+	if err := fulfillRequirements(resolved.Session, report, opts.Params, jsonOut); err != nil {
+		return exitValidation
+	}
+
+	// 3. Re-resolve if setup wizard modified params
+	if report.HasMissing() && !jsonOut {
+		resolved, _, code = resolveCommand(opts.CommonOptions)
+		if code != exitSuccess {
+			return code
+		}
+	}
 
 	if opts.DryRun {
 		fmt.Print(renderPlan(*resolved, opts.Attach, replace))
@@ -1096,7 +1113,17 @@ func runDoctor(args []string) int {
 }
 
 func resolveCommand(opts cli.CommonOptions) (*resolve.Config, []validate.Issue, int) {
-	doc, err := config.LoadFile(opts.ConfigPath)
+	configPath := opts.ConfigPath
+	if strings.HasSuffix(configPath, ".amx") {
+		_, mainYaml, err := pack.UnpackBundle(configPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: unpack bundle %s: %v\n", configPath, err)
+			return nil, nil, exitRuntime
+		}
+		configPath = mainYaml
+	}
+
+	doc, err := config.LoadFile(configPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		return nil, nil, exitConfigParse
@@ -1694,6 +1721,7 @@ Usage:
   agentmux init <template> <path> [--force]
   agentmux edit <path-or-session>
   agentmux remember <session> <config>
+  agentmux pack <config> [<output.amx>]
   agentmux load <config> [--param key=value] [--attach|--no-attach] [--dry-run] [--replace] [--strict] [--verbose]
   agentmux reload <config> [--param key=value] [--attach|--no-attach] [--dry-run] [--strict] [--verbose]
   agentmux validate <config> [--param key=value] [--strict]
