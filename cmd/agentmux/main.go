@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime/debug"
 	"sort"
 	"strings"
 
@@ -28,7 +29,11 @@ const (
 	jsonSchemaV1    = 1
 )
 
-var version = "dev"
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
 
 func main() {
 	os.Exit(run(os.Args[1:]))
@@ -678,33 +683,32 @@ func runDoctor(args []string) int {
 		shell = "/bin/sh"
 	}
 
+	tmuxPath, _ := exec.LookPath(tmux.Binary())
 	tmuxVersion := "not found"
-	tmuxErr := error(nil)
-	if path, err := exec.LookPath(tmux.Binary()); err == nil {
-		tmuxVersion = path
+	vNum := 0.0
+	if tmuxPath != "" {
 		cmd := exec.Command(tmux.Binary(), "-V")
 		out, err := cmd.Output()
 		if err == nil {
 			tmuxVersion = strings.TrimSpace(string(out))
-		} else {
-			tmuxErr = err
+			// Simple version extraction for comparison (e.g., "tmux 3.2a" -> 3.2)
+			parts := strings.Fields(tmuxVersion)
+			if len(parts) >= 2 {
+				fmt.Sscanf(parts[1], "%f", &vNum)
+			}
 		}
-	} else {
-		tmuxErr = err
 	}
 
-	fmt.Printf("shell: %s\n", shell)
-	fmt.Printf("agentmux: %s\n", versionString())
-	fmt.Printf("tmux_binary: %s\n", tmux.Binary())
+	fmt.Printf("shell:         %s\n", shell)
+	fmt.Printf("agentmux:      %s\n", versionString())
+	fmt.Printf("tmux_binary:   %s\n", tmuxPath)
+	fmt.Printf("tmux_version:  %s\n", tmuxVersion)
+
 	if tmux.Socket() != "" {
-		fmt.Printf("tmux_socket: %s\n", tmux.Socket())
+		fmt.Printf("tmux_socket:   %s\n", tmux.Socket())
 	}
-	fmt.Printf("tmux: %s\n", tmuxVersion)
-	if tmuxErr != nil {
-		fmt.Printf("tmux_status: %v\n", tmuxErr)
-		return exitDependency
-	}
-	fmt.Printf("cwd: %s\n", mustGetwd())
+
+	fmt.Printf("cwd:           %s\n", mustGetwd())
 
 	// Check for local/global templates
 	templates, err := scaffold.List()
@@ -722,8 +726,24 @@ func runDoctor(args []string) int {
 			fmt.Printf("project_templates: %d found in .agentmux/templates/\n", projectTemplates)
 		}
 		if globalTemplates > 0 {
-			fmt.Printf("global_templates: %d found in ~/.config/agentmux/templates/\n", globalTemplates)
+			fmt.Printf("global_templates:  %d found in ~/.config/agentmux/templates/\n", globalTemplates)
 		}
+	}
+
+	fmt.Println("\nDiagnostics:")
+	if tmuxPath == "" {
+		fmt.Println("  [!] CRITICAL: tmux is not installed. agentmux requires tmux to function.")
+	} else if vNum < 3.2 {
+		fmt.Printf("  [!] WARNING: tmux version %s detected. 3.2 or newer is recommended for full pane title support.\n", tmuxVersion)
+	} else {
+		fmt.Println("  [✓] tmux version is optimal.")
+	}
+
+	selfPath, err := exec.LookPath("agentmux")
+	if err != nil {
+		fmt.Println("  [!] WARNING: agentmux is not in your PATH. You must call it via absolute path or add its directory to PATH.")
+	} else {
+		fmt.Printf("  [✓] agentmux is in PATH at %s\n", selfPath)
 	}
 
 	return exitSuccess
@@ -1081,6 +1101,25 @@ func hasFlag(args []string, flag string) bool {
 }
 
 func versionString() string {
+	if version == "dev" {
+		if info, ok := debug.ReadBuildInfo(); ok {
+			for _, setting := range info.Settings {
+				if setting.Key == "vcs.revision" && commit == "none" {
+					commit = setting.Value
+				}
+				if setting.Key == "vcs.time" && date == "unknown" {
+					date = setting.Value
+				}
+			}
+			if info.Main.Version != "" && info.Main.Version != "(devel)" {
+				version = info.Main.Version
+			}
+		}
+	}
+
+	if commit != "none" {
+		return fmt.Sprintf("agentmux %s (commit: %s, built: %s)", version, commit, date)
+	}
 	return fmt.Sprintf("agentmux %s", version)
 }
 

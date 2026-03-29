@@ -1,6 +1,8 @@
 GO ?= $(if $(wildcard $(CURDIR)/.tools/go1.26.1/bin/go),$(CURDIR)/.tools/go1.26.1/bin/go,go)
 GOCACHE ?= $(CURDIR)/.cache/go-build
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo none)
+DATE ?= $(shell date -u +%Y-%m-%d)
 BINARY := bin/agentmux
 UNIT_PACKAGES := $(shell GOCACHE=$(GOCACHE) $(GO) list ./... | grep -v '^agentmux/internal/tmux$$')
 
@@ -8,7 +10,7 @@ UNIT_PACKAGES := $(shell GOCACHE=$(GOCACHE) $(GO) list ./... | grep -v '^agentmu
 
 build:
 	mkdir -p bin
-	GOCACHE=$(GOCACHE) $(GO) build -ldflags "-X main.version=$(VERSION)" -o $(BINARY) ./cmd/agentmux
+	GOCACHE=$(GOCACHE) $(GO) build -ldflags "-X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DATE)" -o $(BINARY) ./cmd/agentmux
 
 test: test-unit test-integration
 
