@@ -162,6 +162,12 @@ func Document(doc *config.Document, cliParams map[string]string) []Issue {
 		issues = append(issues, warningf("multiple panes request focus; the last created pane will win"))
 	}
 
+	for _, req := range doc.Config.Requires.Params {
+		if _, ok := params[req]; !ok {
+			issues = append(issues, errorf("missing required param %q", req))
+		}
+	}
+
 	for _, ref := range collectConfigRefs(&doc.Config) {
 		if _, ok := params[ref]; !ok {
 			issues = append(issues, errorf("missing required param %q", ref))

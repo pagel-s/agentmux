@@ -10,9 +10,11 @@ import (
 	"runtime/debug"
 	"sort"
 	"strings"
+	"time"
 
 	"agentmux/internal/cli"
 	"agentmux/internal/config"
+	"agentmux/internal/envcheck"
 	"agentmux/internal/hooks"
 	"agentmux/internal/resolve"
 	"agentmux/internal/scaffold"
@@ -277,6 +279,15 @@ func runSessionLaunch(mode string, opts cli.LoadOptions, requireExisting bool, r
 	if requireExisting && !exists {
 		fmt.Fprintf(os.Stderr, "error: %s requires existing session %q; use `agentmux load %s` to create it\n", mode, resolved.Session, opts.ConfigPath)
 		return exitRuntime
+	}
+
+	// Pre-flight environment check
+	if missing := envcheck.Check(resolved.Requires); len(missing) > 0 {
+		fmt.Fprintf(os.Stderr, "error: pre-flight check failed for session %q:\n", resolved.Session)
+		for _, m := range missing {
+			fmt.Fprintf(os.Stderr, "  - %s\n", m)
+		}
+		return exitValidation
 	}
 
 	if err := hooks.RunPre(resolved.Hooks.PreSession, opts.Verbose); err != nil {
@@ -849,8 +860,11 @@ func runSend(args []string) int {
 }
 
 func runDoctor(args []string) int {
-	if len(args) != 0 {
-		fmt.Fprintln(os.Stderr, "error: doctor does not accept arguments")
+	configPath := ""
+	if len(args) == 1 {
+		configPath = args[0]
+	} else if len(args) > 1 {
+		fmt.Fprintln(os.Stderr, "error: doctor accepts at most one config path")
 		return exitValidation
 	}
 
@@ -920,6 +934,24 @@ func runDoctor(args []string) int {
 		fmt.Println("  [!] WARNING: agentmux is not in your PATH. You must call it via absolute path or add its directory to PATH.")
 	} else {
 		fmt.Printf("  [✓] agentmux is in PATH at %s\n", selfPath)
+	}
+
+	if configPath != "" {
+		fmt.Printf("\nRequirements for %q:\n", configPath)
+		opts := cli.CommonOptions{ConfigPath: configPath}
+		resolved, _, code := resolveCommand(opts)
+		if code != exitSuccess {
+			fmt.Printf("  [!] ERROR: could not resolve config: exit code %d\n", code)
+		} else {
+			missing := envcheck.Check(resolved.Requires)
+			if len(missing) == 0 {
+				fmt.Println("  [✓] all requirements met.")
+			} else {
+				for _, m := range missing {
+					fmt.Printf("  [!] MISSING: %s\n", m)
+				}
+			}
+		}
 	}
 
 	return exitSuccess
@@ -1525,7 +1557,7 @@ Usage:
   agentmux kill <session> <pane-name> [--json]
   agentmux capture <session> <pane-name> [--json] [--tail N] [--strip-empty]
   agentmux send <session> <pane-name> [--json] [--no-enter] <command...>
-  agentmux doctor
+  agentmux doctor [<config>]
   agentmux version`)
 
 	fmt.Println(`

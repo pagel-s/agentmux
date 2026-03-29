@@ -12,15 +12,16 @@ import (
 )
 
 type Config struct {
-	Version     int               `json:"version"`
-	Name        string            `json:"name,omitempty"`
-	Session     string            `json:"session"`
-	Description string            `json:"description,omitempty"`
-	Params      map[string]string `json:"params,omitempty"`
-	Env         map[string]string `json:"env,omitempty"`
-	Agents      map[string]Agent  `json:"agents,omitempty"`
-	Windows     []Window          `json:"windows"`
-	Hooks       Hooks             `json:"hooks"`
+	Version     int                 `json:"version"`
+	Name        string              `json:"name,omitempty"`
+	Session     string              `json:"session"`
+	Description string              `json:"description,omitempty"`
+	Requires    config.Requirements `json:"requires,omitempty"`
+	Params      map[string]string   `json:"params,omitempty"`
+	Env         map[string]string   `json:"env,omitempty"`
+	Agents      map[string]Agent    `json:"agents,omitempty"`
+	Windows     []Window            `json:"windows"`
+	Hooks       Hooks               `json:"hooks"`
 }
 
 type Agent struct {
@@ -117,6 +118,7 @@ func Project(raw *config.Config, overrides map[string]string) (*Config, error) {
 		Name:        name,
 		Session:     session,
 		Description: description,
+		Requires:    raw.Requires,
 		Params:      params,
 		Env:         env,
 		Agents:      agents,

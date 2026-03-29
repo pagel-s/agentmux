@@ -17,6 +17,7 @@ var knownTopLevelFields = map[string]struct{}{
 	"session":     {},
 	"description": {},
 	"include":     {},
+	"requires":    {},
 	"params":      {},
 	"env":         {},
 	"agents":      {},
@@ -25,16 +26,23 @@ var knownTopLevelFields = map[string]struct{}{
 }
 
 type Config struct {
-	Version     int               `yaml:"version"`
-	Name        string            `yaml:"name"`
-	Session     string            `yaml:"session"`
-	Description string            `yaml:"description"`
-	Include     []string          `yaml:"include"`
-	Params      map[string]string `yaml:"params"`
-	Env         map[string]string `yaml:"env"`
-	Agents      map[string]Agent  `yaml:"agents"`
-	Layout      []Window          `yaml:"layout"`
-	Hooks       Hooks             `yaml:"hooks"`
+	Version      int               `yaml:"version"`
+	Name         string            `yaml:"name"`
+	Session      string            `yaml:"session"`
+	Description  string            `yaml:"description"`
+	Include      []string          `yaml:"include"`
+	Requires     Requirements      `yaml:"requires"`
+	Params       map[string]string `yaml:"params"`
+	Env          map[string]string `yaml:"env"`
+	Agents       map[string]Agent  `yaml:"agents"`
+	Layout       []Window          `yaml:"layout"`
+	Hooks        Hooks             `yaml:"hooks"`
+}
+
+type Requirements struct {
+	Binaries []string `yaml:"binaries"`
+	Env      []string `yaml:"env"`
+	Params   []string `yaml:"params"`
 }
 
 type Agent struct {
@@ -167,6 +175,11 @@ func loadRecursive(path string, seen map[string]bool) (*Document, error) {
 }
 
 func mergeConfigs(target, source *Config) {
+	// Requirements (Combine all)
+	target.Requires.Binaries = combineUnique(target.Requires.Binaries, source.Requires.Binaries)
+	target.Requires.Env = combineUnique(target.Requires.Env, source.Requires.Env)
+	target.Requires.Params = combineUnique(target.Requires.Params, source.Requires.Params)
+
 	// Params (target wins)
 	if target.Params == nil {
 		target.Params = make(map[string]string)
@@ -207,6 +220,24 @@ func mergeConfigs(target, source *Config) {
 	if target.Hooks.PostSession == "" {
 		target.Hooks.PostSession = source.Hooks.PostSession
 	}
+}
+
+func combineUnique(target, source []string) []string {
+	seen := make(map[string]bool)
+	result := make([]string, 0, len(target)+len(source))
+	for _, v := range target {
+		if !seen[v] {
+			seen[v] = true
+			result = append(result, v)
+		}
+	}
+	for _, v := range source {
+		if !seen[v] {
+			seen[v] = true
+			result = append(result, v)
+		}
+	}
+	return result
 }
 
 func unknownTopLevelFields(root *yaml.Node) []string {
