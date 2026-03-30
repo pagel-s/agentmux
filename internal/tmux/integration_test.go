@@ -32,19 +32,19 @@ func TestExecuteCreatesIsolatedSession(t *testing.T) {
 					{
 						Name:       "editor-main",
 						SourceType: "command",
-						Command:    "printf 'pane-one-ready\\n'",
+						Command:    "echo 'pane-one-ready' && sleep 3600",
 						Cwd:        t.TempDir(),
 						Title:      "Editor",
 						Focus:      true,
-						OnExit:     config.OnExitRemain,
+						OnExit:     config.OnExitKill,
 					},
 					{
 						Name:       "checks",
 						SourceType: "command",
-						Command:    "printf 'pane-two-ready\\n'",
+						Command:    "echo 'pane-two-ready' && sleep 3600",
 						Cwd:        t.TempDir(),
 						Title:      "Checks",
-						OnExit:     config.OnExitRemain,
+						OnExit:     config.OnExitKill,
 					},
 				},
 			},
@@ -678,7 +678,7 @@ func TestRestartAndRerunNamedPane(t *testing.T) {
 
 	counterFile := filepath.Join(t.TempDir(), "counter.txt")
 	commandText := fmt.Sprintf(
-		"count=$(cat %s 2>/dev/null || echo 0); count=$((count+1)); echo \"$count\" > %s; printf 'run-%%s\\n' \"$count\"",
+		"echo x >> %s; count=$(wc -l < %s | tr -d ' '); printf 'run-%%s\\n' \"$count\"",
 		singleQuote(counterFile),
 		singleQuote(counterFile),
 	)
@@ -733,7 +733,7 @@ func TestRestartAndRerunNamedPane(t *testing.T) {
 		t.Fatalf("rerun output %q does not include run-3", rerun)
 	}
 
-	name := strings.TrimSpace(tmuxOutput(t, "display-message", "-p", "-t", cfg.Session+":main.1", "#{@agentmux_name}"))
+	name := strings.TrimSpace(tmuxOutput(t, "display-message", "-p", "-t", paneID, "#{@agentmux_name}"))
 	if name != "runner" {
 		t.Fatalf("pane metadata name = %q, want %q", name, "runner")
 	}
