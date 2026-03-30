@@ -1138,14 +1138,16 @@ func runDoctor(args []string) int {
 
 func resolveCommand(opts cli.CommonOptions) (*resolve.Config, []validate.Issue, int) {
 	configPath := opts.ConfigPath
+	isRemote := remote.IsRemote(configPath)
 
-	if remote.IsRemote(configPath) {
+	if isRemote {
 		localPath, err := remote.Fetch(configPath)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error: fetch remote config %s: %v\n", configPath, err)
 			return nil, nil, exitRuntime
 		}
 		configPath = localPath
+		defer os.Remove(localPath)
 	}
 
 	if strings.HasSuffix(configPath, ".amx") {

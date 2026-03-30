@@ -27,6 +27,11 @@ func UnpackBundle(bundlePath string) (string, string, error) {
 	for _, f := range r.File {
 		path := filepath.Join(tmpDir, f.Name)
 
+		// Harden against path traversal
+		if !strings.HasPrefix(path, filepath.Clean(tmpDir)+string(os.PathSeparator)) {
+			return "", "", fmt.Errorf("illegal file path in bundle: %s", f.Name)
+		}
+
 		if f.FileInfo().IsDir() {
 			os.MkdirAll(path, f.Mode())
 			continue

@@ -202,6 +202,11 @@ func (m model) View() string {
 }
 
 func RunDashboard(session string) error {
+	// Probe session
+	if _, err := tmux.ListKV(session, false); err != nil {
+		return fmt.Errorf("verify session %q: %w", session, err)
+	}
+
 	p := tea.NewProgram(NewModel(session), tea.WithAltScreen())
 	_, err := p.Run()
 	return err

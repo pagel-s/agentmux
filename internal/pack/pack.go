@@ -44,19 +44,28 @@ func CreateBundle(configPath string, outputPath string) (string, error) {
 		if err != nil {
 			return err
 		}
-		if info.IsDir() {
-			return nil
-		}
 
 		relPath, err := filepath.Rel(baseDir, path)
 		if err != nil {
 			return err
 		}
 
+		// Skip common metadata and self
+		if info.IsDir() {
+			if relPath == ".git" || relPath == ".cache" || relPath == ".tmp" || relPath == "bin" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
 		// Don't include the output bundle itself if it's in the same dir
 		absOut, _ := filepath.Abs(outputPath)
 		absPath, _ := filepath.Abs(path)
 		if absOut == absPath {
+			return nil
+		}
+
+		if strings.HasSuffix(relPath, ".amx") {
 			return nil
 		}
 
