@@ -138,6 +138,27 @@ Examples:
 ./bin/agentmux render my-workflow.yaml --param project_dir=.
 ```
 
+### `pack`
+
+What it does:
+- creates a shareable, self-contained `.amx` bundle (a ZIP archive)
+- bundles the configuration file, any local `include` files, and local scripts
+
+When to use it:
+- when you want to share a complex agentic team setup with someone else
+- to distribute workflows that rely on local assets via `{{config_dir}}`
+
+Examples:
+
+```bash
+./bin/agentmux pack my-workflow.yaml
+./bin/agentmux pack my-workflow.yaml my-team.amx
+```
+
+Useful note:
+- `.amx` bundles can be loaded directly with `agentmux load my-team.amx`
+- you can host `.amx` bundles online and load them directly from a URL
+
 ## Session Commands
 
 ### `load`
@@ -349,6 +370,44 @@ Useful note:
 ## Agentic Commands
 
 These commands enable coordination and orchestration between multiple agents.
+
+### `dashboard`
+
+What it does:
+- launches a full-screen, real-time TUI (Terminal User Interface)
+- provides a "Mission Control" view of all panes, their status, and the shared Blackboard (KV-store)
+
+When to use it:
+- to monitor an agentic team in real-time
+- to see the current state of shared variables without repeatedly running `status`
+
+Examples:
+
+```bash
+./bin/agentmux dashboard my-workflow
+```
+
+Useful shortcuts inside the dashboard:
+- `f`: focus the selected pane in your terminal
+- `r`: restart the selected pane
+- `q`: quit the dashboard
+
+### `inspect`
+
+What it does:
+- provides a deep, comprehensive diagnostic report for a single pane
+- shows real-time metrics (CPU, Memory), lifecycle metadata (start time, exit code), and recent logs
+
+When to use it:
+- when a pane is crashing and you need to see its exact configuration and last output
+- to verify the environment variables injected into a specific agent
+
+Examples:
+
+```bash
+./bin/agentmux inspect my-workflow reviewer
+./bin/agentmux inspect my-workflow reviewer --json
+```
 
 ### `kv-set`
 

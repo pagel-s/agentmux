@@ -85,6 +85,21 @@ When a file includes another, they are merged with **Parent-Wins** precedence:
 - `include` paths are resolved relative to the file they are defined in.
 - Circular includes are detected and rejected.
 
+## Requires (Environment Guards)
+
+You can specify mandatory dependencies that must be present before a session is launched. If any `env` or `params` are missing, Agentmux will launch an **Interactive Setup Wizard** to prompt the user for them. If a binary is missing, it will fail fast with a helpful error.
+
+```yaml
+requires:
+  binaries:
+    - gh
+    - nvim
+  env:
+    - OPENAI_API_KEY
+  params:
+    - project_name
+```
+
 ## Resolution Rules
 
 ### Params
