@@ -1,0 +1,59 @@
+site_name: Agentmux
+repo_url: https://github.com/pagel-s/agentmux
+repo_name: pagel-s/agentmux
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.indexes
+    - content.code.copy
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep purple
+      accent: deep purple
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep purple
+      accent: deep purple
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - admonition
+  - pymdownx.details
+  - attr_list
+  - md_in_html
+
+plugins:
+  - search
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Installation: getting-started/installation.md
+      - Quickstart: getting-started/quickstart.md
+  - Tutorials:
+      - Your First AI Team: tutorials/hello-team.md
+      - Portable Bundles: tutorials/portable-bundles.md
+  - Core Concepts:
+      - Architecture: architecture/mental-model.md
+      - Agentic Coordination: architecture/coordination.md
+  - Reference:
+      - Configuration Guide: config-guide.md
+      - CLI Commands: commands.md
+      - Recipes: recipes.md
+      - Runtime Guide: runtime.md
