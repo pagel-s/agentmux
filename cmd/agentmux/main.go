@@ -284,7 +284,7 @@ func runSessionLaunch(mode string, opts cli.LoadOptions, requireExisting bool, r
 	jsonOut := hasFlag(os.Args[1:], "--json")
 
 	// 1. Resolve and Validate (handles .amx automatically)
-	resolved, _, code := resolveCommand(opts.CommonOptions)
+	resolved, _, _, code := resolveCommand(opts.CommonOptions)
 	if code != exitSuccess {
 		return code
 	}
@@ -298,7 +298,7 @@ func runSessionLaunch(mode string, opts cli.LoadOptions, requireExisting bool, r
 
 	// 3. Re-resolve if setup wizard modified params
 	if report.HasMissing() && !jsonOut {
-		resolved, _, code = resolveCommand(opts.CommonOptions)
+		resolved, _, _, code = resolveCommand(opts.CommonOptions)
 		if code != exitSuccess {
 			return code
 		}
@@ -391,7 +391,8 @@ func runValidate(args []string) int {
 		return exitValidation
 	}
 
-	_, warnings, code := resolveCommand(opts)
+	_, warnings, cleanup, code := resolveCommand(opts)
+	defer cleanup()
 	if code != exitSuccess {
 		return code
 	}
@@ -407,7 +408,8 @@ func runRender(args []string) int {
 		return exitValidation
 	}
 
-	resolved, warnings, code := resolveCommand(opts)
+	resolved, warnings, cleanup, code := resolveCommand(opts)
+	defer cleanup()
 	if code != exitSuccess {
 		return code
 	}
@@ -698,6 +700,10 @@ func runWait(args []string) int {
 		return printCommandError("wait", opts.JSON, exitDependency, err, opts.Session, opts.Pane)
 	}
 
+	if !opts.JSON {
+		fmt.Fprintf(os.Stderr, "waiting for pattern %q in pane %q...\n", opts.Pattern, opts.Pane)
+	}
+
 	match, err := tmux.WaitForPattern(opts.Session, opts.Pane, opts.Pattern, timeout, false)
 	if err != nil {
 		return printCommandError("wait", opts.JSON, exitRuntime, err, opts.Session, opts.Pane)
@@ -733,11 +739,11 @@ func runScale(args []string) int {
 		return printCommandError("scale", opts.JSON, exitRuntime, err, opts.Session, "")
 	}
 	if configPath == "" {
-		return printCommandError("scale", opts.JSON, exitRuntime, fmt.Errorf("session %q has no config path metadata; scaling requires a session launched with agentmux", opts.Session), opts.Session, "")
+		return printCommandError("scale", opts.JSON, exitRuntime, fmt.Errorf("session %q has no config path metadata; run 'agentmux remember %s <config>' to fix this", opts.Session, opts.Session), opts.Session, "")
 	}
 
 	// 2. Resolve config
-	resolved, _, code := resolveCommand(cli.CommonOptions{ConfigPath: configPath})
+	resolved, _, _, code := resolveCommand(cli.CommonOptions{ConfigPath: configPath})
 	if code != exitSuccess {
 		return code
 	}
@@ -1112,7 +1118,8 @@ func runDoctor(args []string) int {
 	if configPath != "" {
 		fmt.Printf("\nRequirements for %q:\n", configPath)
 		opts := cli.CommonOptions{ConfigPath: configPath}
-		resolved, _, code := resolveCommand(opts)
+		resolved, _, cleanup, code := resolveCommand(opts)
+		defer cleanup()
 		if code != exitSuccess {
 			fmt.Printf("  [!] ERROR: could not resolve config: exit code %d\n", code)
 		} else {
@@ -1136,33 +1143,40 @@ func runDoctor(args []string) int {
 	return exitSuccess
 }
 
-func resolveCommand(opts cli.CommonOptions) (*resolve.Config, []validate.Issue, int) {
+func resolveCommand(opts cli.CommonOptions) (*resolve.Config, []validate.Issue, func(), int) {
 	configPath := opts.ConfigPath
 	isRemote := remote.IsRemote(configPath)
+
+	cleanup := func() {}
 
 	if isRemote {
 		localPath, err := remote.Fetch(configPath)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error: fetch remote config %s: %v\n", configPath, err)
-			return nil, nil, exitRuntime
+			return nil, nil, cleanup, exitRuntime
 		}
 		configPath = localPath
-		defer os.Remove(localPath)
+		cleanup = func() { os.Remove(localPath) }
 	}
 
 	if strings.HasSuffix(configPath, ".amx") {
-		_, mainYaml, err := pack.UnpackBundle(configPath)
+		tmpDir, mainYaml, err := pack.UnpackBundle(configPath)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error: unpack bundle %s: %v\n", configPath, err)
-			return nil, nil, exitRuntime
+			return nil, nil, cleanup, exitRuntime
 		}
 		configPath = mainYaml
+		prevCleanup := cleanup
+		cleanup = func() {
+			os.RemoveAll(tmpDir)
+			prevCleanup()
+		}
 	}
 
 	doc, err := config.LoadFile(configPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		return nil, nil, exitConfigParse
+		return nil, nil, cleanup, exitConfigParse
 	}
 
 	issues := validate.Document(doc, opts.Params)
@@ -1170,23 +1184,23 @@ func resolveCommand(opts cli.CommonOptions) (*resolve.Config, []validate.Issue, 
 
 	if validate.HasErrors(issues) {
 		printWarnings(issues)
-		return nil, issues, exitValidation
+		return nil, issues, cleanup, exitValidation
 	}
 	if opts.Strict && validate.HasWarnings(issues) {
 		printWarnings(issues)
 		if opts.Strict && validate.HasWarnings(issues) && !validate.HasErrors(issues) {
 			fmt.Fprintln(os.Stderr, "error: strict mode enabled; warnings treated as errors")
 		}
-		return nil, issues, exitValidation
+		return nil, issues, cleanup, exitValidation
 	}
 
 	resolved, err := resolve.Project(doc, opts.Params)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		return nil, issues, exitValidation
+		return nil, issues, cleanup, exitValidation
 	}
 
-	return resolved, issues, exitSuccess
+	return resolved, issues, cleanup, exitSuccess
 }
 
 func printErrors(issues []validate.Issue) {
