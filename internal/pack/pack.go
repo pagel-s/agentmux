@@ -30,7 +30,7 @@ func CreateBundle(configPath string, outputPath string) (string, error) {
 	}
 
 	baseDir := filepath.Dir(doc.Path)
-	
+
 	outFile, err := os.Create(outputPath)
 	if err != nil {
 		return "", err

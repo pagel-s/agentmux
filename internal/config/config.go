@@ -26,17 +26,17 @@ var knownTopLevelFields = map[string]struct{}{
 }
 
 type Config struct {
-	Version      int               `yaml:"version"`
-	Name         string            `yaml:"name"`
-	Session      string            `yaml:"session"`
-	Description  string            `yaml:"description"`
-	Include      []string          `yaml:"include"`
-	Requires     Requirements      `yaml:"requires"`
-	Params       map[string]string `yaml:"params"`
-	Env          map[string]string `yaml:"env"`
-	Agents       map[string]Agent  `yaml:"agents"`
-	Layout       []Window          `yaml:"layout"`
-	Hooks        Hooks             `yaml:"hooks"`
+	Version     int               `yaml:"version"`
+	Name        string            `yaml:"name"`
+	Session     string            `yaml:"session"`
+	Description string            `yaml:"description"`
+	Include     []string          `yaml:"include"`
+	Requires    Requirements      `yaml:"requires"`
+	Params      map[string]string `yaml:"params"`
+	Env         map[string]string `yaml:"env"`
+	Agents      map[string]Agent  `yaml:"agents"`
+	Layout      []Window          `yaml:"layout"`
+	Hooks       Hooks             `yaml:"hooks"`
 }
 
 type Requirements struct {

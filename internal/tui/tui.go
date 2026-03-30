@@ -145,7 +145,7 @@ func (m model) View() string {
 	}
 
 	header := titleStyle.Render("Agentmux Mission Control") + "  Session: " + headerStyle.Render(m.session)
-	
+
 	// Left column: Panes
 	var paneList strings.Builder
 	paneList.WriteString(headerStyle.Render("AGENTS / PANES") + "\n\n")
@@ -191,7 +191,7 @@ func (m model) View() string {
 	// Combine columns
 	left := paneBoxStyle.Width(m.width/2 - 2).Height(m.height - 10).Render(paneList.String())
 	right := kvBoxStyle.Width(m.width/2 - 2).Height(m.height - 10).Render(kvList.String())
-	
+
 	body := lipgloss.JoinHorizontal(lipgloss.Top, left, right)
 
 	// Footer: Help

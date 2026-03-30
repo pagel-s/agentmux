@@ -9,7 +9,7 @@ import (
 func TestProjectResolvesConfigDir(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "my-session.yaml")
-	
+
 	cfg := &config.Config{
 		Version: 1,
 		Session: "test",
