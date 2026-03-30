@@ -32,7 +32,7 @@ func TestExecuteCreatesIsolatedSession(t *testing.T) {
 					{
 						Name:       "editor-main",
 						SourceType: "command",
-						Command:    "printf 'pane-one-ready\n'",
+						Command:    "printf 'pane-one-ready\\n'",
 						Cwd:        t.TempDir(),
 						Title:      "Editor",
 						Focus:      true,
@@ -40,7 +40,7 @@ func TestExecuteCreatesIsolatedSession(t *testing.T) {
 					{
 						Name:       "checks",
 						SourceType: "command",
-						Command:    "printf 'pane-two-ready\n'",
+						Command:    "printf 'pane-two-ready\\n'",
 						Cwd:        t.TempDir(),
 						Title:      "Checks",
 					},
@@ -70,12 +70,13 @@ func TestExecuteCreatesIsolatedSession(t *testing.T) {
 		t.Fatalf("expected 2 panes, got output %q", paneCount)
 	}
 
-	paneName := strings.TrimSpace(tmuxOutput(t, "display-message", "-p", "-t", cfg.Session+":editor.1", "#{@agentmux_name}"))
+	paneID := getPaneID(t, cfg.Session, "editor-main")
+	paneName := strings.TrimSpace(tmuxOutput(t, "display-message", "-p", "-t", paneID, "#{@agentmux_name}"))
 	if paneName != "editor-main" {
 		t.Fatalf("pane metadata name = %q, want %q", paneName, "editor-main")
 	}
 
-	captured := waitForPaneContains(t, cfg.Session+":editor.1", "pane-one-ready")
+	captured := waitForPaneContains(t, paneID, "pane-one-ready")
 	if !strings.Contains(captured, "pane-one-ready") {
 		t.Fatalf("capture-pane output %q does not include pane-one-ready", captured)
 	}
@@ -358,11 +359,12 @@ func TestExecuteRemainOnExitKeepsPaneAvailable(t *testing.T) {
 		t.Fatalf("Execute returned error: %v", err)
 	}
 
-	if out := waitForPaneContains(t, cfg.Session+":main.1", "remain-done"); !strings.Contains(out, "remain-done") {
+	paneID := getPaneID(t, cfg.Session, "remain")
+	if out := waitForPaneContains(t, paneID, "remain-done"); !strings.Contains(out, "remain-done") {
 		t.Fatalf("remain output %q does not include remain-done", out)
 	}
 
-	if got := strings.TrimSpace(tmuxOutput(t, "show-options", "-p", "-v", "-t", cfg.Session+":main.1", "remain-on-exit")); got != "on" {
+	if got := strings.TrimSpace(tmuxOutput(t, "show-options", "-p", "-v", "-t", paneID, "remain-on-exit")); got != "on" {
 		t.Fatalf("remain-on-exit = %q, want on", got)
 	}
 
@@ -423,7 +425,8 @@ func TestExecuteRestartOnExitRestartsCommand(t *testing.T) {
 		t.Fatalf("Execute returned error: %v", err)
 	}
 
-	out := waitForPaneContainsWithin(t, cfg.Session+":main.1", "auto-run-2", 4*time.Second)
+	paneID := getPaneID(t, cfg.Session, "runner")
+	out := waitForPaneContainsWithin(t, paneID, "auto-run-2", 4*time.Second)
 	if !strings.Contains(out, "auto-run-2") {
 		t.Fatalf("restart output %q does not include auto-run-2", out)
 	}
@@ -706,7 +709,8 @@ func TestRestartAndRerunNamedPane(t *testing.T) {
 		t.Fatalf("Execute returned error: %v", err)
 	}
 
-	initial := waitForPaneContains(t, cfg.Session+":main.1", "run-1")
+	paneID := getPaneID(t, cfg.Session, "runner")
+	initial := waitForPaneContains(t, paneID, "run-1")
 	if !strings.Contains(initial, "run-1") {
 		t.Fatalf("initial output %q does not include run-1", initial)
 	}
@@ -714,7 +718,7 @@ func TestRestartAndRerunNamedPane(t *testing.T) {
 	if err := RestartPaneByName(cfg.Session, "runner", false); err != nil {
 		t.Fatalf("RestartPaneByName returned error: %v", err)
 	}
-	restarted := waitForPaneContains(t, cfg.Session+":main.1", "run-2")
+	restarted := waitForPaneContains(t, paneID, "run-2")
 	if !strings.Contains(restarted, "run-2") {
 		t.Fatalf("restarted output %q does not include run-2", restarted)
 	}
@@ -722,7 +726,7 @@ func TestRestartAndRerunNamedPane(t *testing.T) {
 	if err := RerunPaneByName(cfg.Session, "runner", false); err != nil {
 		t.Fatalf("RerunPaneByName returned error: %v", err)
 	}
-	rerun := waitForPaneContains(t, cfg.Session+":main.1", "run-3")
+	rerun := waitForPaneContains(t, paneID, "run-3")
 	if !strings.Contains(rerun, "run-3") {
 		t.Fatalf("rerun output %q does not include run-3", rerun)
 	}
@@ -769,7 +773,8 @@ func TestSendCommandToNamedPane(t *testing.T) {
 		t.Fatalf("Execute returned error: %v", err)
 	}
 
-	if out := waitForPaneContains(t, cfg.Session+":main.1", "ready"); !strings.Contains(out, "ready") {
+	paneID := getPaneID(t, cfg.Session, "runner")
+	if out := waitForPaneContains(t, paneID, "ready"); !strings.Contains(out, "ready") {
 		t.Fatalf("initial output %q does not include ready", out)
 	}
 
@@ -777,9 +782,8 @@ func TestSendCommandToNamedPane(t *testing.T) {
 		t.Fatalf("SendCommandToPaneByName returned error: %v", err)
 	}
 
-	sent := waitForPaneContains(t, cfg.Session+":main.1", "sent-from-test")
-	if !strings.Contains(sent, "sent-from-test") {
-		t.Fatalf("sent output %q does not include sent-from-test", sent)
+	if out := waitForPaneContains(t, paneID, "sent-from-test"); !strings.Contains(out, "sent-from-test") {
+		t.Fatalf("sent output %q does not include sent-from-test", out)
 	}
 }
 
@@ -967,7 +971,8 @@ func TestSendCommandToNamedPaneWithoutEnter(t *testing.T) {
 		t.Fatalf("SendCommandToPaneByName returned error: %v", err)
 	}
 
-	captured := waitForPaneContainsWithin(t, cfg.Session+":main.1", "printf 'queued-only\\n'", 2*time.Second)
+	paneID := getPaneID(t, cfg.Session, "runner")
+	captured := waitForPaneContainsWithin(t, paneID, "printf 'queued-only\\n'", 2*time.Second)
 	if !strings.Contains(captured, "printf 'queued-only\\n'") {
 		t.Fatalf("captured output %q does not include queued command text", captured)
 	}
@@ -1012,7 +1017,8 @@ func TestStopNamedPaneLeavesShellUsable(t *testing.T) {
 		t.Fatalf("Execute returned error: %v", err)
 	}
 
-	if out := waitForPaneContains(t, cfg.Session+":main.1", "running"); !strings.Contains(out, "running") {
+	paneID := getPaneID(t, cfg.Session, "runner")
+	if out := waitForPaneContains(t, paneID, "running"); !strings.Contains(out, "running") {
 		t.Fatalf("initial output %q does not include running", out)
 	}
 
@@ -1023,7 +1029,7 @@ func TestStopNamedPaneLeavesShellUsable(t *testing.T) {
 		t.Fatalf("SendCommandToPaneByName after stop returned error: %v", err)
 	}
 
-	afterStop := waitForPaneContains(t, cfg.Session+":main.1", "after-stop")
+	afterStop := waitForPaneContains(t, paneID, "after-stop")
 	if !strings.Contains(afterStop, "after-stop") {
 		t.Fatalf("output after stop %q does not include after-stop", afterStop)
 	}
@@ -1102,6 +1108,15 @@ func tmuxOutput(t *testing.T, args ...string) string {
 		t.Fatalf("tmux %v returned error: %v", args, err)
 	}
 	return out
+}
+
+func getPaneID(t *testing.T, session string, name string) string {
+	t.Helper()
+	p, err := StatusPaneByName(session, name)
+	if err != nil {
+		t.Fatalf("getPaneID(%q, %q): %v", session, name, err)
+	}
+	return p.PaneID
 }
 
 func waitForPaneContains(t *testing.T, target string, want string) string {

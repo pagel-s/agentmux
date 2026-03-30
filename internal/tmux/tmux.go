@@ -213,13 +213,13 @@ func Status(session string) ([]PaneStatus, error) {
 			PaneID:       fields[6],
 			PaneActive:   fields[7] == "1",
 			Dead:         fields[8] == "1",
-			Name:         fields[9],
+			Name:         unescapeOptionValue(fields[9]),
 			Title:        fields[10],
 			SourceType:   fields[11],
 			AgentName:    fields[12],
 			OnExit:       fields[13],
 			CurrentCmd:   fields[14],
-			StartupCmd:   fields[15],
+			StartupCmd:   unescapeOptionValue(fields[15]),
 			ExitStatus:   exitStatus,
 			Pid:          pid,
 			StartTime:    fields[18],
@@ -246,6 +246,12 @@ func Status(session string) ([]PaneStatus, error) {
 	})
 
 	return panes, nil
+}
+
+func unescapeOptionValue(v string) string {
+	v = strings.ReplaceAll(v, "\\n", "\n")
+	v = strings.ReplaceAll(v, "\\t", "\t")
+	return v
 }
 
 func getProcessMetrics(pid int) (float64, float64, error) {
@@ -1267,12 +1273,16 @@ func applyPaneMetadata(paneID string, metadata paneMetadata, verbose bool) error
 	}
 
 	if strings.TrimSpace(metadata.StartupCommand) != "" {
-		if err := run(verbose, "set-option", "-p", "-t", paneID, paneStartupOption, metadata.StartupCommand); err != nil {
+		sanitized := strings.ReplaceAll(metadata.StartupCommand, "\n", "\\n")
+		sanitized = strings.ReplaceAll(sanitized, "\t", "\\t")
+		if err := run(verbose, "set-option", "-p", "-t", paneID, paneStartupOption, sanitized); err != nil {
 			return fmt.Errorf("set startup command for pane %s: %w", paneID, err)
 		}
 	}
 	if metadata.Name != "" {
-		if err := run(verbose, "set-option", "-p", "-t", paneID, paneNameOption, metadata.Name); err != nil {
+		sanitized := strings.ReplaceAll(metadata.Name, "\n", "\\n")
+		sanitized = strings.ReplaceAll(sanitized, "\t", "\\t")
+		if err := run(verbose, "set-option", "-p", "-t", paneID, paneNameOption, sanitized); err != nil {
 			return fmt.Errorf("set name for pane %s: %w", paneID, err)
 		}
 	}
