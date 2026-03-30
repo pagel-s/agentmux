@@ -354,14 +354,7 @@ func StopPaneByName(session string, name string, verbose bool) error {
 		return err
 	}
 
-	startupCommand, err := showPaneOption(target.PaneID, paneStartupOption, verbose)
-	if err != nil {
-		return fmt.Errorf("load startup command for pane %q before stop: %w", name, err)
-	}
-	onExit, err := showPaneOption(target.PaneID, paneOnExitOption, verbose)
-	if err != nil {
-		return fmt.Errorf("load on_exit for pane %q before stop: %w", name, err)
-	}
+	onExit := target.OnExit
 	if err := applyPaneLifecycle(target.PaneID, onExit, verbose); err != nil {
 		return fmt.Errorf("apply on_exit for pane %q before stop: %w", name, err)
 	}
@@ -371,7 +364,7 @@ func StopPaneByName(session string, name string, verbose bool) error {
 	}
 	if err := applyPaneMetadata(target.PaneID, paneMetadata{
 		Name:           target.Name,
-		StartupCommand: startupCommand,
+		StartupCommand: target.StartupCmd,
 		SourceType:     target.SourceType,
 		AgentName:      target.AgentName,
 		OnExit:         config.NormalizeOnExit(onExit),
@@ -1226,17 +1219,11 @@ func respawnPaneByName(session string, name string, verbose bool) error {
 		return err
 	}
 
-	startupCommand, err := showPaneOption(target.PaneID, paneStartupOption, verbose)
-	if err != nil {
-		return fmt.Errorf("load startup command for pane %q: %w", name, err)
-	}
+	startupCommand := target.StartupCmd
 	if strings.TrimSpace(startupCommand) == "" {
 		return fmt.Errorf("pane %q in session %q is missing startup command metadata", name, session)
 	}
-	onExit, err := showPaneOption(target.PaneID, paneOnExitOption, verbose)
-	if err != nil {
-		return fmt.Errorf("load on_exit for pane %q: %w", name, err)
-	}
+	onExit := target.OnExit
 	if err := applyPaneLifecycle(target.PaneID, onExit, verbose); err != nil {
 		return fmt.Errorf("apply on_exit for pane %q: %w", name, err)
 	}

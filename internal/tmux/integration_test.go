@@ -36,6 +36,7 @@ func TestExecuteCreatesIsolatedSession(t *testing.T) {
 						Cwd:        t.TempDir(),
 						Title:      "Editor",
 						Focus:      true,
+						OnExit:     config.OnExitRemain,
 					},
 					{
 						Name:       "checks",
@@ -43,6 +44,7 @@ func TestExecuteCreatesIsolatedSession(t *testing.T) {
 						Command:    "printf 'pane-two-ready\\n'",
 						Cwd:        t.TempDir(),
 						Title:      "Checks",
+						OnExit:     config.OnExitRemain,
 					},
 				},
 			},
