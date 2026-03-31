@@ -14,13 +14,28 @@ sudo apt install tmux
 
 ## Installing Agentmux
 
-The easiest way to install Agentmux is using Go:
+### For Users (Recommended)
+
+The easiest way to install the latest version of Agentmux is using Go:
 
 ```bash
 go install github.com/pagel-s/agentmux/cmd/agentmux@latest
 ```
 
 This will place the `agentmux` binary in your `$GOPATH/bin` directory (usually `~/go/bin`). Ensure this directory is in your system's `$PATH`.
+
+### For Developers
+
+If you are contributing to Agentmux or want to build from source:
+
+1. Clone the repository.
+2. Run the build command:
+
+```bash
+make build
+```
+
+This will create a `bin/agentmux` binary with the current Git commit and build date embedded.
 
 ## Verifying Installation
 
