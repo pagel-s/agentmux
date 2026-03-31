@@ -16,18 +16,18 @@ Most AI agent frameworks are "black boxes." Agentmux brings agency to the surfac
 
 ---
 
-## 📖 Sophisticated Documentation
+## 📖 Documentation
 
 Technical reference, tutorials, and architectural deep-dives are available on our official site:
 
 👉 **[https://pagel-s.github.io/agentmux/](https://pagel-s.github.io/agentmux/)**
 
 ### Core Resources:
-*   **[Installation](https://pagel-s.github.io/agentmux/getting-started/installation/)**: How to get Agentmux on your machine.
-*   **[Quickstart Guide](https://pagel-s.github.io/agentmux/getting-started/quickstart/)**: Launch your first session in 60 seconds.
-*   **[Your First AI Team](https://pagel-s.github.io/agentmux/tutorials/hello-team/)**: A tutorial on building a coordinated 2-agent workflow.
-*   **[Architecture Mental Model](https://pagel-s.github.io/agentmux/architecture/mental-model/)**: Understand the stateless "compiler" design.
-*   **[Portable Bundles](https://pagel-s.github.io/agentmux/tutorials/portable-bundles/)**: How to package and share your sessions.
+*   **[Installation](docs/getting-started/installation.md)**: How to get Agentmux on your machine.
+*   **[Quickstart Guide](docs/getting-started/quickstart.md)**: Launch your first session in 60 seconds.
+*   **[Your First AI Team](docs/tutorials/hello-team.md)**: A tutorial on building a coordinated 2-agent workflow.
+*   **[Architecture Mental Model](docs/architecture/mental-model.md)**: Understand the stateless "compiler" design.
+*   **[Portable Bundles](docs/tutorials/portable-bundles.md)**: How to package and share your sessions.
 
 ---
 

@@ -1,5 +1,6 @@
 site_name: Agentmux
-repo_url: https://github.com/pagel-s/agentmux
+site_url: https://pagel-s.github.io/agentmux/
+repo_url: https://github.com/pagel-s/agentmux/
 repo_name: pagel-s/agentmux
 
 theme:

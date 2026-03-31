@@ -19,18 +19,6 @@ It's not just a window manager—it's a **stateless orchestrator** for terminal-
 
 ---
 
-## Getting Started
-
-Check out these guides to get up and running:
-
-*   **[Installation](getting-started/installation.md)**: How to get Agentmux on your machine.
-*   **[Quickstart Guide](getting-started/quickstart.md)**: Launch your first session in 60 seconds.
-*   **[Your First AI Team](tutorials/hello-team.md)**: A tutorial on building a coordinated 2-agent workflow.
-*   **[Architecture Mental Model](architecture/mental-model.md)**: Understand the stateless "compiler" design.
-*   **[Portable Bundles](tutorials/portable-bundles.md)**: How to package and share your sessions.
-
----
-
 ## The Agentic Team Protocol
 
 Agentmux provides the core pillars required for professional AI team orchestration in the terminal:
@@ -44,12 +32,10 @@ Agentmux provides the core pillars required for professional AI team orchestrati
 
 ---
 
-## Current Status
+## Next Steps
 
-This repository builds on the v1 foundation with:
+To get started, follow our guides:
 
-- **Agentic Orchestration:** `wait`, `kv-set`, and `scale`.
-- **Remote Loading:** Fetch and launch configurations directly from URLs.
-- **Declarative Workspaces:** YAML configs with `include` for modular reuse.
-- **Non-destructive Management:** `reload` surgically updates panes without killing sessions.
-- **Mission Control:** A full-screen TUI for real-time monitoring.
+1.  **[Installation](getting-started/installation.md)**: How to get Agentmux on your machine.
+2.  **[Quickstart Guide](getting-started/quickstart.md)**: Launch your first session in 60 seconds.
+3.  **[Your First AI Team](tutorials/hello-team.md)**: A tutorial on building a coordinated 2-agent workflow.
