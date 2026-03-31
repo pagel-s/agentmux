@@ -32,7 +32,7 @@ func TestExecuteCreatesIsolatedSession(t *testing.T) {
 					{
 						Name:       "editor-main",
 						SourceType: "command",
-						Command:    "echo 'pane-one-ready' && sleep 3600",
+						Command:    "sleep 0.5; echo 'pane-one-ready' && sleep 3600",
 						Cwd:        t.TempDir(),
 						Title:      "Editor",
 						Focus:      true,
@@ -41,7 +41,7 @@ func TestExecuteCreatesIsolatedSession(t *testing.T) {
 					{
 						Name:       "checks",
 						SourceType: "command",
-						Command:    "echo 'pane-two-ready' && sleep 3600",
+						Command:    "sleep 0.5; echo 'pane-two-ready' && sleep 3600",
 						Cwd:        t.TempDir(),
 						Title:      "Checks",
 						OnExit:     config.OnExitKill,
@@ -678,7 +678,7 @@ func TestRestartAndRerunNamedPane(t *testing.T) {
 
 	counterFile := filepath.Join(t.TempDir(), "counter.txt")
 	commandText := fmt.Sprintf(
-		"echo x >> %s; count=$(wc -l < %s | tr -d ' '); printf 'run-%%s\\n' \"$count\"",
+		"echo x >> %s; printf 'run-'; cat %s | wc -l | tr -d ' '; printf '\\n'",
 		singleQuote(counterFile),
 		singleQuote(counterFile),
 	)

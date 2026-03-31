@@ -18,11 +18,12 @@ Most AI agent frameworks are "black boxes." Agentmux brings agency to the surfac
 
 ## 📖 Sophisticated Documentation
 
-We have moved our technical reference, tutorials, and architectural deep-dives to our official documentation site:
+Technical reference, tutorials, and architectural deep-dives are available on our official site:
 
 👉 **[https://pagel-s.github.io/agentmux/](https://pagel-s.github.io/agentmux/)**
 
-### What you'll find there:
+### Core Resources:
+*   **[Installation](https://pagel-s.github.io/agentmux/getting-started/installation/)**: How to get Agentmux on your machine.
 *   **[Quickstart Guide](https://pagel-s.github.io/agentmux/getting-started/quickstart/)**: Launch your first session in 60 seconds.
 *   **[Your First AI Team](https://pagel-s.github.io/agentmux/tutorials/hello-team/)**: A tutorial on building a coordinated 2-agent workflow.
 *   **[Architecture Mental Model](https://pagel-s.github.io/agentmux/architecture/mental-model/)**: Understand the stateless "compiler" design.
