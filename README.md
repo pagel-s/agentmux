@@ -62,5 +62,3 @@ go install github.com/pagel-s/agentmux/cmd/agentmux@latest
 ## 🤝 Contributing
 
 Agentmux is built on the Unix philosophy: simple, composable tools that work together. We welcome contributions that strengthen the **Workspace Manager** identity or improve **Agentic Orchestration** primitives.
-
-See the [Milestone Board](milestones_2026.md) for the 2026 roadmap.
