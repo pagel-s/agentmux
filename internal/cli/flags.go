@@ -86,6 +86,10 @@ type SendOptions struct {
 	JSON    bool
 }
 
+type ToolsOptions struct {
+	Format string
+}
+
 type InitOptions struct {
 	Template string
 	Path     string
@@ -582,6 +586,31 @@ func ParseSend(args []string) (SendOptions, error) {
 		NoEnter: noEnter,
 		JSON:    jsonOut,
 	}, nil
+}
+
+func ParseTools(args []string) (ToolsOptions, error) {
+	format := "openai"
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch arg {
+		case "--format":
+			if i+1 >= len(args) {
+				return ToolsOptions{}, fmt.Errorf("tools flag %q requires a value", arg)
+			}
+			format = args[i+1]
+			i++
+		default:
+			return ToolsOptions{}, fmt.Errorf("tools does not accept flag or argument %q", arg)
+		}
+	}
+	return ToolsOptions{Format: format}, nil
+}
+
+func ParsePrompt(args []string) error {
+	if len(args) > 0 {
+		return errors.New("prompt does not accept any arguments")
+	}
+	return nil
 }
 
 func parsePaneTarget(name string, args []string) (PaneTargetOptions, error) {

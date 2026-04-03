@@ -67,7 +67,7 @@ func Reconcile(cfg resolve.Config, opts Options) error {
 				return fmt.Errorf("%w: pane at window %d index %d name changed from %q to %q", ErrStructuralChange, windowIndex, paneIndex, live.Name, pane.Name)
 			}
 
-			targetStartupCmd := buildPaneCommand(pane)
+			targetStartupCmd := buildPaneCommand(cfg.Session, pane)
 
 			needsRespawn := live.StartupCmd != targetStartupCmd
 			needsMetaUpdate := false

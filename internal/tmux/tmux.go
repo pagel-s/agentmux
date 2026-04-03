@@ -117,7 +117,7 @@ func Execute(cfg resolve.Config, opts Options) error {
 
 		for paneIndex, paneID := range created.Panes {
 			pane := window.Panes[paneIndex]
-			if err := configurePane(paneID, pane, opts.Verbose); err != nil {
+			if err := configurePane(cfg.Session, paneID, pane, opts.Verbose); err != nil {
 				return err
 			}
 			if pane.Focus {
@@ -482,13 +482,13 @@ func ScaleAgent(session string, agentName string, targetCount int, preferredWind
 			}
 
 			// Split window
-			newPaneID, err := splitPane(liveWindowID, pane, targetWindow.Root, false, opts.Verbose)
+			newPaneID, err := splitPane(session, liveWindowID, pane, targetWindow.Root, false, opts.Verbose)
 			if err != nil {
 				return fmt.Errorf("scale up: split pane: %w", err)
 			}
 
 			// Configure new pane
-			if err := configurePane(newPaneID, pane, opts.Verbose); err != nil {
+			if err := configurePane(session, newPaneID, pane, opts.Verbose); err != nil {
 				return fmt.Errorf("scale up: configure pane %s: %w", newPaneID, err)
 			}
 		}
@@ -729,7 +729,7 @@ func createWindow(session string, first bool, window resolve.Window, verbose boo
 	} else if window.Root != "" {
 		args = append(args, "-c", window.Root)
 	}
-	args = append(args, paneCreateCommand(firstPane))
+	args = append(args, paneCreateCommand(session, firstPane))
 
 	out, err := capture(verbose, args...)
 	if err != nil {
@@ -754,7 +754,7 @@ func createWindow(session string, first bool, window resolve.Window, verbose boo
 		} else if window.Root != "" {
 			args = append(args, "-c", window.Root)
 		}
-		args = append(args, paneCreateCommand(pane))
+		args = append(args, paneCreateCommand(session, pane))
 
 		out, err := capture(verbose, args...)
 		if err != nil {
@@ -788,7 +788,7 @@ func createGridWindow(session string, first bool, window resolve.Window, verbose
 	rowAnchor := firstPaneID
 	for row := 1; row < rows; row++ {
 		pane := window.Panes[row*cols]
-		if _, err := splitPane(rowAnchor, pane, window.Root, true, verbose); err != nil {
+		if _, err := splitPane(session, rowAnchor, pane, window.Root, true, verbose); err != nil {
 			return createdWindow{}, fmt.Errorf("create row %d in window %q: %w", row+1, window.Name, err)
 		}
 	}
@@ -810,7 +810,7 @@ func createGridWindow(session string, first bool, window resolve.Window, verbose
 		anchor := rowPanes[row].ID
 		for col := 1; col < cols; col++ {
 			pane := window.Panes[row*cols+col]
-			if _, err := splitPane(anchor, pane, window.Root, false, verbose); err != nil {
+			if _, err := splitPane(session, anchor, pane, window.Root, false, verbose); err != nil {
 				return createdWindow{}, fmt.Errorf("create column %d in row %d for window %q: %w", col+1, row+1, window.Name, err)
 			}
 		}
@@ -848,7 +848,7 @@ func createFirstPane(session string, first bool, window resolve.Window, pane res
 	} else if window.Root != "" {
 		args = append(args, "-c", window.Root)
 	}
-	args = append(args, paneCreateCommand(pane))
+	args = append(args, paneCreateCommand(session, pane))
 
 	out, err := capture(verbose, args...)
 	if err != nil {
@@ -857,7 +857,7 @@ func createFirstPane(session string, first bool, window resolve.Window, pane res
 	return parseWindowAndPane(out)
 }
 
-func splitPane(targetPaneID string, pane resolve.Pane, windowRoot string, vertical bool, verbose bool) (string, error) {
+func splitPane(session string, targetPaneID string, pane resolve.Pane, windowRoot string, vertical bool, verbose bool) (string, error) {
 	args := []string{"split-window"}
 	if vertical {
 		args = append(args, "-v")
@@ -865,12 +865,13 @@ func splitPane(targetPaneID string, pane resolve.Pane, windowRoot string, vertic
 		args = append(args, "-h")
 	}
 	args = append(args, "-t", targetPaneID, "-P", "-F", "#{pane_id}")
+
 	if pane.Cwd != "" {
 		args = append(args, "-c", pane.Cwd)
 	} else if windowRoot != "" {
 		args = append(args, "-c", windowRoot)
 	}
-	args = append(args, paneCreateCommand(pane))
+	args = append(args, paneCreateCommand(session, pane))
 
 	out, err := capture(verbose, args...)
 	if err != nil {
@@ -879,8 +880,8 @@ func splitPane(targetPaneID string, pane resolve.Pane, windowRoot string, vertic
 	return strings.TrimSpace(out), nil
 }
 
-func configurePane(paneID string, pane resolve.Pane, verbose bool) error {
-	startupCommand := buildPaneCommand(pane)
+func configurePane(session string, paneID string, pane resolve.Pane, verbose bool) error {
+	startupCommand := buildPaneCommand(session, pane)
 	if err := applyPaneLifecycle(paneID, pane.OnExit, verbose); err != nil {
 		return err
 	}
@@ -913,11 +914,20 @@ func configurePane(paneID string, pane resolve.Pane, verbose bool) error {
 	return nil
 }
 
-func buildPaneCommand(pane resolve.Pane) string {
+func buildPaneCommand(session string, pane resolve.Pane) string {
 	parts := make([]string, 0, 3)
 	if pane.Cwd != "" {
 		parts = append(parts, "cd "+singleQuote(pane.Cwd))
 	}
+	
+	if pane.Env == nil {
+		pane.Env = make(map[string]string)
+	}
+	pane.Env["AGENTMUX_SESSION"] = session
+	if pane.Name != "" {
+		pane.Env["AGENTMUX_PANE"] = pane.Name
+	}
+
 	if len(pane.Env) > 0 {
 		keys := make([]string, 0, len(pane.Env))
 		for key := range pane.Env {
@@ -949,11 +959,11 @@ func buildPaneCommand(pane resolve.Pane) string {
 	return strings.Join(parts, " && ") + "; exec " + singleQuote(interactiveShell())
 }
 
-func paneCreateCommand(pane resolve.Pane) string {
+func paneCreateCommand(session string, pane resolve.Pane) string {
 	if needsDeferredStart(pane) {
 		return "exec sleep 3600"
 	}
-	return buildPaneCommand(pane)
+	return buildPaneCommand(session, pane)
 }
 
 func needsDeferredStart(pane resolve.Pane) bool {

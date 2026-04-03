@@ -11,7 +11,7 @@ import (
 func TestBuildPaneCommand(t *testing.T) {
 	t.Setenv("SHELL", "/bin/bash")
 
-	command := buildPaneCommand(resolve.Pane{
+	command := buildPaneCommand("test-session", resolve.Pane{
 		Command: "echo ${OPENAI_API_KEY}",
 		Cwd:     "/tmp/project",
 		Env: map[string]string{
@@ -42,7 +42,7 @@ func TestBuildPaneCommand(t *testing.T) {
 func TestBuildPaneCommandRemainOmitsFallbackShell(t *testing.T) {
 	t.Setenv("SHELL", "/bin/bash")
 
-	command := buildPaneCommand(resolve.Pane{
+	command := buildPaneCommand("test-session", resolve.Pane{
 		Command: "printf 'done\\n'",
 		Cwd:     "/tmp/project",
 		OnExit:  config.OnExitRemain,
@@ -59,7 +59,7 @@ func TestBuildPaneCommandRemainOmitsFallbackShell(t *testing.T) {
 func TestBuildPaneCommandRestartWrapsCommandInLoop(t *testing.T) {
 	t.Setenv("SHELL", "/bin/bash")
 
-	command := buildPaneCommand(resolve.Pane{
+	command := buildPaneCommand("test-session", resolve.Pane{
 		Command: "printf 'done\\n'",
 		OnExit:  config.OnExitRestart,
 	})

@@ -22,6 +22,7 @@ import (
 	"agentmux/internal/resolve"
 	"agentmux/internal/scaffold"
 	"agentmux/internal/tmux"
+	"agentmux/internal/tools"
 	"agentmux/internal/tui"
 	"agentmux/internal/validate"
 )
@@ -66,6 +67,10 @@ func run(args []string) int {
 		return runRemember(args[1:])
 	case "pack":
 		return runPack(args[1:])
+	case "tools":
+		return runTools(args[1:])
+	case "prompt":
+		return runPrompt(args[1:])
 	case "validate":
 		return runValidate(args[1:])
 	case "render":
@@ -277,6 +282,33 @@ func runPack(args []string) int {
 	}
 
 	fmt.Printf("created session bundle: %s\n", path)
+	return exitSuccess
+}
+
+func runTools(args []string) int {
+	opts, err := cli.ParseTools(args)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return exitValidation
+	}
+
+	out, err := tools.Definitions(opts.Format)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: generate tools: %v\n", err)
+		return exitRuntime
+	}
+
+	fmt.Println(out)
+	return exitSuccess
+}
+
+func runPrompt(args []string) int {
+	if err := cli.ParsePrompt(args); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return exitValidation
+	}
+
+	fmt.Println(tools.Prompt())
 	return exitSuccess
 }
 
@@ -1772,6 +1804,8 @@ Usage:
   agentmux edit <path-or-session>
   agentmux remember <session> <config>
   agentmux pack <config> [<output.amx>]
+  agentmux tools [--format <openai>]
+  agentmux prompt
   agentmux load <config> [--param key=value] [--attach|--no-attach] [--dry-run] [--replace] [--strict] [--verbose]
   agentmux reload <config> [--param key=value] [--attach|--no-attach] [--dry-run] [--strict] [--verbose]
   agentmux validate <config> [--param key=value] [--strict]
