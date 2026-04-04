@@ -943,8 +943,12 @@ func buildPaneCommand(session string, pane resolve.Pane) string {
 	}
 
 	command := pane.Command
+	if providerCmd := compileProviderCommand(session, pane); providerCmd != "" {
+		command = providerCmd
+	}
+
 	if pane.Shell != "" {
-		command = singleQuote(pane.Shell) + " -lc " + singleQuote(pane.Command)
+		command = singleQuote(pane.Shell) + " -lc " + singleQuote(command)
 	}
 	switch config.NormalizeOnExit(pane.OnExit) {
 	case config.OnExitRemain, config.OnExitKill:

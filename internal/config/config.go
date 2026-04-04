@@ -48,6 +48,8 @@ type Requirements struct {
 type Agent struct {
 	Provider string            `yaml:"provider"`
 	Command  string            `yaml:"command"`
+	Persona  string            `yaml:"persona"`
+	Model    string            `yaml:"model"`
 	Cwd      string            `yaml:"cwd"`
 	Env      map[string]string `yaml:"env"`
 	Title    string            `yaml:"title"`
@@ -69,6 +71,8 @@ type Pane struct {
 	Name    string            `yaml:"name"`
 	Agent   string            `yaml:"agent"`
 	Command string            `yaml:"command"`
+	Persona string            `yaml:"persona"`
+	Model   string            `yaml:"model"`
 	Title   string            `yaml:"title"`
 	Cwd     string            `yaml:"cwd"`
 	Env     map[string]string `yaml:"env"`

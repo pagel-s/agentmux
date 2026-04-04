@@ -28,6 +28,8 @@ type Agent struct {
 	Name     string            `json:"name"`
 	Provider string            `json:"provider"`
 	Command  string            `json:"command"`
+	Persona  string            `json:"persona,omitempty"`
+	Model    string            `json:"model,omitempty"`
 	Cwd      string            `json:"cwd,omitempty"`
 	Env      map[string]string `json:"env,omitempty"`
 	Title    string            `json:"title,omitempty"`
@@ -49,7 +51,10 @@ type Pane struct {
 	Name       string            `json:"name,omitempty"`
 	SourceType string            `json:"sourceType"`
 	AgentName  string            `json:"agentName,omitempty"`
+	Provider   string            `json:"provider,omitempty"`
 	Command    string            `json:"command"`
+	Persona    string            `json:"persona,omitempty"`
+	Model      string            `json:"model,omitempty"`
 	Cwd        string            `json:"cwd,omitempty"`
 	Env        map[string]string `json:"env,omitempty"`
 	Title      string            `json:"title,omitempty"`
@@ -149,6 +154,14 @@ func resolveAgent(name string, raw config.Agent, params map[string]string) (Agen
 	if err != nil {
 		return Agent{}, err
 	}
+	persona, err := expand(raw.Persona, params)
+	if err != nil {
+		return Agent{}, err
+	}
+	model, err := expand(raw.Model, params)
+	if err != nil {
+		return Agent{}, err
+	}
 	cwd, err := expand(raw.Cwd, params)
 	if err != nil {
 		return Agent{}, err
@@ -174,6 +187,8 @@ func resolveAgent(name string, raw config.Agent, params map[string]string) (Agen
 		Name:     name,
 		Provider: provider,
 		Command:  command,
+		Persona:  persona,
+		Model:    model,
 		Cwd:      cleanPath(cwd),
 		Env:      env,
 		Title:    title,
@@ -233,6 +248,14 @@ func resolvePane(raw config.Pane, agents map[string]Agent, sessionEnv map[string
 	if err != nil {
 		return Pane{}, err
 	}
+	persona, err := expand(raw.Persona, params)
+	if err != nil {
+		return Pane{}, err
+	}
+	model, err := expand(raw.Model, params)
+	if err != nil {
+		return Pane{}, err
+	}
 	title, err := expand(raw.Title, params)
 	if err != nil {
 		return Pane{}, err
@@ -261,7 +284,10 @@ func resolvePane(raw config.Pane, agents map[string]Agent, sessionEnv map[string
 		agent := agents[agentName]
 		resolved.SourceType = "agent"
 		resolved.AgentName = agentName
+		resolved.Provider = agent.Provider
 		resolved.Command = agent.Command
+		resolved.Persona = agent.Persona
+		resolved.Model = agent.Model
 		resolved.Shell = agent.Shell
 		resolved.OnExit = effectiveOnExit(onExit, agent.OnExit, config.OnExitShell)
 		mergeInto(resolved.Env, agent.Env)
@@ -271,6 +297,8 @@ func resolvePane(raw config.Pane, agents map[string]Agent, sessionEnv map[string
 	} else {
 		resolved.SourceType = "command"
 		resolved.Command = command
+		resolved.Persona = persona
+		resolved.Model = model
 		resolved.OnExit = effectiveOnExit(onExit, config.OnExitShell)
 		mergeInto(resolved.Env, windowEnv)
 		resolved.Cwd = firstNonEmpty(cleanPath(cwd), windowRoot, mustGetwd())
@@ -280,6 +308,12 @@ func resolvePane(raw config.Pane, agents map[string]Agent, sessionEnv map[string
 	mergeInto(resolved.Env, paneEnv)
 	if resolved.Command == "" {
 		resolved.Command = command
+	}
+	if resolved.Persona == "" {
+		resolved.Persona = persona
+	}
+	if resolved.Model == "" {
+		resolved.Model = model
 	}
 	if resolved.Cwd == "" {
 		resolved.Cwd = mustGetwd()
