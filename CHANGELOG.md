@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.9.0 - 2026-03-31
+
+Ninth private release, introducing **Native LLM Providers** and the **JIT Shell Compiler**.
+
+- Implemented **Native Provider Support**: Agentmux now natively understands `claude`, `gemini`, `openai`, and `gptme`.
+- Added **JIT Shell Compiler**: Automatically compiles optimized CLI commands for specific LLM providers, injecting personas and tool schemas.
+- Added **Persona Support**: New `persona` field allows linking to Markdown files for agent instructions, optimizing for prompt caching and clarity.
+- Added **Model Selection**: New `model` field for specifying LLM model identifiers directly in the agent or pane config.
+- Refactored `internal/resolve` to handle deep provider and persona resolution across agents and panes.
+
+## v0.8.0 - 2026-03-31
+
+Eighth private release, enabling **Native LLM Awareness** and coordination tool-calling.
+
+- Added **`agentmux tools`**: Generates JSON Schemas for all coordination primitives (kv-store, wait, scale), enabling native LLM function-calling.
+- Added **`agentmux prompt`**: Generates a standardized environment-awareness system prompt for AI agents.
+- Implemented **Automatic Self-Awareness**: Injects `$AGENTMUX_SESSION` and `$AGENTMUX_PANE` environment variables into every spawned pane automatically.
+- Hardened integration tests against CI race conditions and shell expansion quirks.
+
 ## v0.7.0 - 2026-03-29
 
 Seventh private release of Agentmux, introducing the **Agentic Team Protocol** for coordination and portable session sharing.

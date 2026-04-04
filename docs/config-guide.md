@@ -136,13 +136,16 @@ Working directory precedence is:
 
 Each pane must specify exactly one of:
 
-- `command`
-- `agent`
+- `command`: raw shell command
+- `agent`: reference to a named agent
+- `provider`: native LLM provider (e.g., `claude`, `gemini`)
 
 Useful pane fields:
 
 - `name`: stable runtime identifier
 - `title`: best-effort pane title
+- `persona`: path to a Markdown file containing agent instructions
+- `model`: specific LLM model ID
 - `focus: true`: start focused here
 - `env`
 - `cwd`
@@ -154,14 +157,32 @@ Agents are reusable pane templates, not shared background runtimes.
 
 Current useful agent fields:
 
-- `provider`
-- `command`
+- `provider`: `command` (default), `claude`, `gemini`, `openai`, or `gptme`
+- `command`: raw shell command
+- `persona`: path to a Markdown file containing agent instructions
+- `model`: specific LLM model ID
 - `cwd`
 - `env`
 - `title`
 - `on_exit`
 
 If two panes reference the same agent, you still get two separate pane processes.
+
+### Native LLM Providers
+
+When you use a native provider like `claude` or `gemini`, Agentmux acts as a **JIT Shell Compiler**. It automatically constructs the optimized shell command for that CLI, injecting:
+1. Your `persona` file content.
+2. The `agentmux prompt` (environmental awareness).
+3. The `agentmux tools` JSON schema (native function calling).
+
+Example:
+```yaml
+agents:
+  expert:
+    provider: claude
+    persona: "prompts/expert.md"
+    model: "claude-3-5-sonnet"
+```
 
 ## Layouts
 

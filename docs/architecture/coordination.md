@@ -48,3 +48,11 @@ graph TD;
 ```
 
 The `scale` command safely injects new panes into the running session, using the original configuration context, and automatically handles re-applying the window layout.
+
+## 4. LLM Native Awareness
+
+For an LLM to coordinate effectively, it must "know" about these primitives and the session context. Agentmux provides three mechanisms for this:
+
+1.  **Environment Injection:** Every pane automatically receives `$AGENTMUX_SESSION` and `$AGENTMUX_PANE` environment variables.
+2.  **Tool Schemas:** The `agentmux tools` command generates standard JSON schemas for function-calling, compatible with OpenAI, Anthropic, and Gemini.
+3.  **JIT Compilation:** Using the `provider` and `persona` fields, Agentmux compiles optimized CLI commands that bridge the Markdown instructions and JSON tools directly into the LLM's native API context.

@@ -159,6 +159,36 @@ Useful note:
 - `.amx` bundles can be loaded directly with `agentmux load my-team.amx`
 - you can host `.amx` bundles online and load them directly from a URL
 
+### `tools`
+
+What it does:
+- generates a JSON Schema array of Agentmux coordination tools
+- output is compatible with OpenAI, Anthropic, and Google tool-calling formats
+
+When to use it:
+- when configuring an LLM CLI to use Agentmux primitives as native "functions"
+
+Examples:
+
+```bash
+./bin/agentmux tools --format openai
+```
+
+### `prompt`
+
+What it does:
+- generates a specialized system prompt for AI agents
+- instructs the agent on how to use Agentmux tools and environment variables
+
+When to use it:
+- as a system prompt prefix for your LLM agents to ensure they understand their environment
+
+Examples:
+
+```bash
+./bin/agentmux prompt
+```
+
 ## Session Commands
 
 ### `load`
