@@ -2,6 +2,8 @@ package validate
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -64,21 +66,34 @@ func Document(doc *config.Document, cliParams map[string]string) []Issue {
 	}
 
 	for name, agent := range agents {
-		provider := strings.TrimSpace(agent.Provider)
+		provider := strings.ToLower(strings.TrimSpace(agent.Provider))
 		if provider == "" {
 			issues = append(issues, errorf("agent %q is missing provider", name))
 		}
 		switch provider {
-		case "command", "shell", "ssh":
+		case "command", "shell", "ssh", "claude", "claude-cli", "gemini", "gemini-cli", "openai", "aichat", "gptme":
 		case "":
 		default:
 			issues = append(issues, errorf("agent %q has unsupported provider %q", name, agent.Provider))
 		}
-		if strings.TrimSpace(agent.Command) == "" {
-			issues = append(issues, errorf("agent %q has an empty command", name))
+		if provider == "command" || provider == "shell" || provider == "" {
+			if strings.TrimSpace(agent.Command) == "" {
+				issues = append(issues, errorf("agent %q has an empty command", name))
+			}
 		}
 		if onExit := resolvedOnExit(agent.OnExit, params); onExit != "" && !config.IsValidOnExit(onExit) {
 			issues = append(issues, errorf("agent %q has unsupported on_exit %q; use shell, remain, restart, or kill", name, onExit))
+		}
+		if agent.Persona != "" {
+			personaPath, _ := tpl.ExpandString(agent.Persona, params)
+			if personaPath != "" && !filepath.IsAbs(personaPath) && !strings.HasPrefix(personaPath, "~") && personaPath != "/injected" {
+				personaPath = filepath.Join(filepath.Dir(doc.Path), personaPath)
+			}
+			if personaPath != "" && personaPath != "/injected" {
+				if _, err := os.Stat(personaPath); err != nil {
+					issues = append(issues, errorf("agent %q persona file not found: %s", name, personaPath))
+				}
+			}
 		}
 	}
 
@@ -119,16 +134,24 @@ func Document(doc *config.Document, cliParams map[string]string) []Issue {
 					paneNames[paneName] = window.Window
 				}
 			}
-			if pane.Agent == "" && pane.Command == "" {
-				issues = append(issues, errorf("pane %d in window %q must specify exactly one of agent or command", paneIndex+1, window.Window))
+			if pane.Agent == "" && pane.Command == "" && pane.Provider == "" {
+				issues = append(issues, errorf("pane %d in window %q must specify exactly one of agent, command, or provider", paneIndex+1, window.Window))
 				continue
 			}
-			if pane.Agent != "" && pane.Command != "" {
-				issues = append(issues, errorf("pane %d in window %q specifies both agent and command; reject this in v1 for clarity", paneIndex+1, window.Window))
+			if pane.Agent != "" && (pane.Command != "" || pane.Provider != "") {
+				issues = append(issues, errorf("pane %d in window %q specifies multiple sources; use exactly one of agent, command, or provider", paneIndex+1, window.Window))
 			}
 			if pane.Agent != "" {
 				if _, ok := agents[pane.Agent]; !ok {
 					issues = append(issues, errorf("pane %d in window %q references unknown agent %q", paneIndex+1, window.Window, pane.Agent))
+				}
+			}
+			if pane.Provider != "" {
+				provider := strings.ToLower(strings.TrimSpace(pane.Provider))
+				switch provider {
+				case "command", "shell", "ssh", "claude", "claude-cli", "gemini", "gemini-cli", "openai", "aichat", "gptme":
+				default:
+					issues = append(issues, errorf("pane %d in window %q has unsupported provider %q", paneIndex+1, window.Window, pane.Provider))
 				}
 			}
 			if pane.Command != "" && strings.TrimSpace(pane.Command) == "" {
@@ -136,6 +159,17 @@ func Document(doc *config.Document, cliParams map[string]string) []Issue {
 			}
 			if onExit := resolvedOnExit(pane.OnExit, params); onExit != "" && !config.IsValidOnExit(onExit) {
 				issues = append(issues, errorf("pane %d in window %q has unsupported on_exit %q; use shell, remain, restart, or kill", paneIndex+1, window.Window, onExit))
+			}
+			if pane.Persona != "" {
+				personaPath, _ := tpl.ExpandString(pane.Persona, params)
+				if personaPath != "" && !filepath.IsAbs(personaPath) && !strings.HasPrefix(personaPath, "~") && personaPath != "/injected" {
+					personaPath = filepath.Join(filepath.Dir(doc.Path), personaPath)
+				}
+				if personaPath != "" && personaPath != "/injected" {
+					if _, err := os.Stat(personaPath); err != nil {
+						issues = append(issues, errorf("pane %d in window %q persona file not found: %s", paneIndex+1, window.Window, personaPath))
+					}
+				}
 			}
 			if pane.Focus {
 				focusCount++
@@ -223,6 +257,8 @@ func collectConfigRefs(cfg *config.Config) []string {
 	for _, agent := range cfg.Agents {
 		add(agent.Provider)
 		add(agent.Command)
+		add(agent.Persona)
+		add(agent.Model)
 		add(agent.Cwd)
 		add(agent.Title)
 		add(agent.Shell)
@@ -241,7 +277,10 @@ func collectConfigRefs(cfg *config.Config) []string {
 		for _, pane := range window.Panes {
 			add(pane.Name)
 			add(pane.Agent)
+			add(pane.Provider)
 			add(pane.Command)
+			add(pane.Persona)
+			add(pane.Model)
 			add(pane.Title)
 			add(pane.Cwd)
 			add(pane.OnExit)

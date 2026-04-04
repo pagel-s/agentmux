@@ -1351,6 +1351,12 @@ func renderStatus(session string, panes []tmux.PaneStatus) string {
 			if pane.AgentName != "" {
 				fmt.Fprintf(&b, " (%s)", pane.AgentName)
 			}
+			if pane.Provider != "" {
+				fmt.Fprintf(&b, " provider=%s", pane.Provider)
+			}
+			if pane.Model != "" {
+				fmt.Fprintf(&b, " model=%s", pane.Model)
+			}
 			fmt.Fprintln(&b)
 		}
 		if pane.OnExit != "" {

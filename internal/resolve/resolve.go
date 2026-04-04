@@ -128,7 +128,7 @@ func Project(doc *config.Document, overrides map[string]string) (*Config, error)
 		return nil, err
 	}
 
-	return &Config{
+	config := &Config{
 		Version:     raw.Version,
 		Name:        name,
 		Session:     session,
@@ -142,10 +142,46 @@ func Project(doc *config.Document, overrides map[string]string) (*Config, error)
 			PreSession:  preSession,
 			PostSession: postSession,
 		},
-	}, nil
+	}
+	config.finalizeRequirements()
+	return config, nil
+}
+
+func (c *Config) finalizeRequirements() {
+	// Implicitly add binaries for native providers
+	addImplicitBinary := func(provider string) {
+		bin := ""
+		p := strings.ToLower(strings.TrimSpace(provider))
+		switch {
+		case strings.HasPrefix(p, "claude"):
+			bin = "claude-cli"
+			if strings.Contains(p, "code") {
+				bin = "claude-code"
+			}
+		case strings.HasPrefix(p, "gemini"):
+			bin = "gemini-cli"
+		case p == "openai" || p == "aichat":
+			bin = "aichat"
+		case p == "gptme":
+			bin = "gptme"
+		}
+		if bin != "" {
+			c.Requires.Binaries = combineUnique(c.Requires.Binaries, []string{bin})
+		}
+	}
+
+	for _, agent := range c.Agents {
+		addImplicitBinary(agent.Provider)
+	}
+	for _, window := range c.Windows {
+		for _, pane := range window.Panes {
+			addImplicitBinary(pane.Provider)
+		}
+	}
 }
 
 func resolveAgent(name string, raw config.Agent, params map[string]string) (Agent, error) {
+	configDir := params["config_dir"]
 	provider, err := expand(raw.Provider, params)
 	if err != nil {
 		return Agent{}, err
@@ -187,7 +223,7 @@ func resolveAgent(name string, raw config.Agent, params map[string]string) (Agen
 		Name:     name,
 		Provider: provider,
 		Command:  command,
-		Persona:  persona,
+		Persona:  resolvePersonaPath(persona, configDir),
 		Model:    model,
 		Cwd:      cleanPath(cwd),
 		Env:      env,
@@ -195,6 +231,19 @@ func resolveAgent(name string, raw config.Agent, params map[string]string) (Agen
 		Shell:    shell,
 		OnExit:   effectiveOnExit(onExit, config.OnExitShell),
 	}, nil
+}
+
+func resolvePersonaPath(rawPath string, configDir string) string {
+	if rawPath == "" {
+		return ""
+	}
+	if filepath.IsAbs(rawPath) || strings.HasPrefix(rawPath, "~") {
+		return cleanPath(rawPath)
+	}
+	if configDir != "" && configDir != "/injected" {
+		return filepath.Join(configDir, rawPath)
+	}
+	return cleanPath(rawPath)
 }
 
 func resolveWindow(raw config.Window, agents map[string]Agent, sessionEnv map[string]string, params map[string]string) (Window, error) {
@@ -244,6 +293,10 @@ func resolvePane(raw config.Pane, agents map[string]Agent, sessionEnv map[string
 	if err != nil {
 		return Pane{}, err
 	}
+	provider, err := expand(raw.Provider, params)
+	if err != nil {
+		return Pane{}, err
+	}
 	command, err := expand(raw.Command, params)
 	if err != nil {
 		return Pane{}, err
@@ -280,6 +333,8 @@ func resolvePane(raw config.Pane, agents map[string]Agent, sessionEnv map[string
 		OnExit: config.OnExitShell,
 	}
 
+	configDir := params["config_dir"]
+
 	if agentName != "" {
 		agent := agents[agentName]
 		resolved.SourceType = "agent"
@@ -296,8 +351,9 @@ func resolvePane(raw config.Pane, agents map[string]Agent, sessionEnv map[string
 		resolved.Title = firstNonEmpty(title, agent.Title, name, agentName, commandFallback(agent.Command))
 	} else {
 		resolved.SourceType = "command"
+		resolved.Provider = provider
 		resolved.Command = command
-		resolved.Persona = persona
+		resolved.Persona = resolvePersonaPath(persona, configDir)
 		resolved.Model = model
 		resolved.OnExit = effectiveOnExit(onExit, config.OnExitShell)
 		mergeInto(resolved.Env, windowEnv)
@@ -387,6 +443,24 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func combineUnique(target, source []string) []string {
+	seen := make(map[string]bool)
+	result := make([]string, 0, len(target)+len(source))
+	for _, v := range target {
+		if !seen[v] {
+			seen[v] = true
+			result = append(result, v)
+		}
+	}
+	for _, v := range source {
+		if !seen[v] {
+			seen[v] = true
+			result = append(result, v)
+		}
+	}
+	return result
 }
 
 func effectiveOnExit(values ...string) string {

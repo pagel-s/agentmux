@@ -26,97 +26,106 @@ type PropertyDef struct {
 	Description string `json:"description"`
 }
 
+type AnthropicTool struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	InputSchema ParameterSchema `json:"input_schema"`
+}
+
 func Definitions(format string) (string, error) {
-	// For now, we output standard JSON Schema (OpenAI format).
-	
-	tools := []Tool{
+	props := []struct {
+		name string
+		desc string
+		params map[string]PropertyDef
+		req []string
+	}{
 		{
-			Type: "function",
-			Function: FunctionSchema{
-				Name:        "agentmux_kv_set",
-				Description: "Sets a shared key-value pair in the session's Blackboard.",
-				Parameters: ParameterSchema{
-					Type: "object",
-					Properties: map[string]PropertyDef{
-						"session": PropertyDef{Type: "string", Description: "The name of the current tmux session (available in $AGENTMUX_SESSION)."},
-						"key":     PropertyDef{Type: "string", Description: "The key to set (alphanumeric and underscores only)."},
-						"value":   PropertyDef{Type: "string", Description: "The value to store."},
-					},
-					Required: []string{"session", "key", "value"},
-				},
+			"agentmux_kv_set",
+			"Sets a shared key-value pair in the session's Blackboard.",
+			map[string]PropertyDef{
+				"session": {Type: "string", Description: "The name of the current tmux session (available in $AGENTMUX_SESSION)."},
+				"key":     {Type: "string", Description: "The key to set (alphanumeric and underscores only)."},
+				"value":   {Type: "string", Description: "The value to store."},
 			},
+			[]string{"session", "key", "value"},
 		},
 		{
-			Type: "function",
-			Function: FunctionSchema{
-				Name:        "agentmux_kv_get",
-				Description: "Retrieves a shared value from the session's Blackboard.",
-				Parameters: ParameterSchema{
-					Type: "object",
-					Properties: map[string]PropertyDef{
-						"session": PropertyDef{Type: "string", Description: "The name of the current tmux session."},
-						"key":     PropertyDef{Type: "string", Description: "The key to retrieve."},
-					},
-					Required: []string{"session", "key"},
-				},
+			"agentmux_kv_get",
+			"Retrieves a shared value from the session's Blackboard.",
+			map[string]PropertyDef{
+				"session": {Type: "string", Description: "The name of the current tmux session."},
+				"key":     {Type: "string", Description: "The key to retrieve."},
 			},
+			[]string{"session", "key"},
 		},
 		{
-			Type: "function",
-			Function: FunctionSchema{
-				Name:        "agentmux_wait",
-				Description: "Blocks until a specific regex pattern appears in a target pane's terminal output.",
-				Parameters: ParameterSchema{
-					Type: "object",
-					Properties: map[string]PropertyDef{
-						"session": PropertyDef{Type: "string", Description: "The name of the current tmux session."},
-						"pane":    PropertyDef{Type: "string", Description: "The name of the target pane to observe."},
-						"pattern": PropertyDef{Type: "string", Description: "The regular expression pattern to wait for."},
-						"timeout": PropertyDef{Type: "string", Description: "Optional timeout (e.g., '30s', '5m')."},
-					},
-					Required: []string{"session", "pane", "pattern"},
-				},
+			"agentmux_wait",
+			"Blocks until a specific regex pattern appears in a target pane's terminal output.",
+			map[string]PropertyDef{
+				"session": {Type: "string", Description: "The name of the current tmux session."},
+				"pane":    {Type: "string", Description: "The name of the target pane to observe."},
+				"pattern": {Type: "string", Description: "The regular expression pattern to wait for."},
+				"timeout": {Type: "string", Description: "Optional timeout (e.g., '30s', '5m')."},
 			},
+			[]string{"session", "pane", "pattern"},
 		},
 		{
-			Type: "function",
-			Function: FunctionSchema{
-				Name:        "agentmux_scale",
-				Description: "Dynamically adds or removes instances of a specific agent in the session.",
-				Parameters: ParameterSchema{
-					Type: "object",
-					Properties: map[string]PropertyDef{
-						"session": PropertyDef{Type: "string", Description: "The name of the current tmux session."},
-						"agent":   PropertyDef{Type: "string", Description: "The name of the agent to scale."},
-						"count":   PropertyDef{Type: "string", Description: "The target number of instances for this agent (e.g., '3')."},
-					},
-					Required: []string{"session", "agent", "count"},
-				},
+			"agentmux_scale",
+			"Dynamically adds or removes instances of a specific agent in the session.",
+			map[string]PropertyDef{
+				"session": {Type: "string", Description: "The name of the current tmux session."},
+				"agent":   {Type: "string", Description: "The name of the agent to scale."},
+				"count":   {Type: "string", Description: "The target number of instances for this agent (e.g., '3')."},
 			},
+			[]string{"session", "agent", "count"},
 		},
 		{
-			Type: "function",
-			Function: FunctionSchema{
-				Name:        "agentmux_send",
-				Description: "Sends a command or text directly to a target pane.",
-				Parameters: ParameterSchema{
-					Type: "object",
-					Properties: map[string]PropertyDef{
-						"session": PropertyDef{Type: "string", Description: "The name of the current tmux session."},
-						"pane":    PropertyDef{Type: "string", Description: "The name of the target pane."},
-						"command": PropertyDef{Type: "string", Description: "The text or command to send."},
-					},
-					Required: []string{"session", "pane", "command"},
-				},
+			"agentmux_send",
+			"Sends a command or text directly to a target pane.",
+			map[string]PropertyDef{
+				"session": {Type: "string", Description: "The name of the current tmux session."},
+				"pane":    {Type: "string", Description: "The name of the target pane."},
+				"command": {Type: "string", Description: "The text or command to send."},
 			},
+			[]string{"session", "pane", "command"},
 		},
 	}
 
-	b, err := json.MarshalIndent(tools, "", "  ")
-	if err != nil {
-		return "", err
+	if format == "anthropic" || format == "claude" {
+		tools := make([]AnthropicTool, 0, len(props))
+		for _, p := range props {
+			tools = append(tools, AnthropicTool{
+				Name:        p.name,
+				Description: p.desc,
+				InputSchema: ParameterSchema{
+					Type:       "object",
+					Properties: p.params,
+					Required:   p.req,
+				},
+			})
+		}
+		b, err := json.MarshalIndent(tools, "", "  ")
+		return string(b), err
 	}
-	return string(b), nil
+
+	// Default: OpenAI format
+	tools := make([]Tool, 0, len(props))
+	for _, p := range props {
+		tools = append(tools, Tool{
+			Type: "function",
+			Function: FunctionSchema{
+				Name:        p.name,
+				Description: p.desc,
+				Parameters: ParameterSchema{
+					Type:       "object",
+					Properties: p.params,
+					Required:   p.req,
+				},
+			},
+		})
+	}
+	b, err := json.MarshalIndent(tools, "", "  ")
+	return string(b), err
 }
 
 func Prompt() string {

@@ -10,37 +10,41 @@ import (
 // If the provider is not recognized, it returns an empty string.
 func compileProviderCommand(session string, pane resolve.Pane) string {
 	provider := strings.ToLower(strings.TrimSpace(pane.Provider))
-	
+
 	if provider == "" || provider == "command" || provider == "shell" {
 		return ""
 	}
 
-	switch provider {
-	case "claude", "claude-cli":
+	switch {
+	case strings.HasPrefix(provider, "claude"):
 		return compileClaudeCommand(pane)
-	case "gemini", "gemini-cli":
+	case strings.HasPrefix(provider, "gemini"):
 		return compileGeminiCommand(pane)
-	case "openai", "aichat":
+	case provider == "openai" || provider == "aichat":
 		return compileAIChatCommand(pane)
-	case "gptme":
+	case provider == "gptme":
 		return compileGPTMeCommand(pane)
 	default:
-		// Not a built-in JIT provider, let the standard command handling take over
 		return ""
 	}
 }
 
 func compileClaudeCommand(pane resolve.Pane) string {
-	cmd := []string{"claude-cli", "chat"}
-	
+	binary := "claude-cli"
+	if strings.Contains(pane.Provider, "code") {
+		binary = "claude-code"
+	}
+
+	cmd := []string{binary, "chat"}
+
 	if pane.Persona != "" {
 		cmd = append(cmd, "--system", fmt.Sprintf(`"$(cat %s) ; agentmux prompt"`, singleQuote(pane.Persona)))
 	} else {
 		cmd = append(cmd, "--system", `"$(agentmux prompt)"`)
 	}
-	
+
 	cmd = append(cmd, "--tools", `"$(agentmux tools --format anthropic)"`)
-	
+
 	if pane.Model != "" {
 		cmd = append(cmd, "--model", singleQuote(pane.Model))
 	}

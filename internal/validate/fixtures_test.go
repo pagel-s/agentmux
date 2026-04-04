@@ -46,7 +46,7 @@ func TestValidationFixtures(t *testing.T) {
 		{
 			name:       "both agent and command",
 			path:       fixturePath("invalid", "both-agent-and-command.yaml"),
-			wantErrors: []string{`specifies both agent and command`},
+			wantErrors: []string{`specifies multiple sources`},
 		},
 		{
 			name:         "warning fixture",

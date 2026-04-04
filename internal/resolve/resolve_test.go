@@ -353,3 +353,57 @@ func TestProjectResolvesOnExitPrecedence(t *testing.T) {
 		t.Fatalf("command-default on_exit = %q, want %q", got, config.OnExitShell)
 	}
 }
+
+func TestProjectImplicitRequirements(t *testing.T) {
+	cfg := &config.Config{
+		Version: 1,
+		Session: "demo",
+		Agents: map[string]config.Agent{
+			"ai": {
+				Provider: "claude-cli",
+			},
+		},
+		Layout: []config.Window{
+			{
+				Window: "main",
+				Panes: []config.Pane{
+					{
+						Agent: "ai",
+					},
+					{
+						Provider: "gemini",
+					},
+				},
+			},
+		},
+	}
+
+	doc := &config.Document{
+		Path:   "/tmp/project/config.yaml",
+		Config: *cfg,
+	}
+
+	resolved, err := Project(doc, nil)
+	if err != nil {
+		t.Fatalf("Project returned error: %v", err)
+	}
+
+	bins := resolved.Requires.Binaries
+	seenClaude := false
+	seenGemini := false
+	for _, b := range bins {
+		if b == "claude-cli" {
+			seenClaude = true
+		}
+		if b == "gemini-cli" {
+			seenGemini = true
+		}
+	}
+
+	if !seenClaude {
+		t.Errorf("missing implicit requirement: claude-cli")
+	}
+	if !seenGemini {
+		t.Errorf("missing implicit requirement: gemini-cli")
+	}
+}

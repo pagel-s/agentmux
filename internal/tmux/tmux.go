@@ -23,6 +23,9 @@ const (
 	paneStartupOption   = "@agentmux_startup_command"
 	paneSourceOption    = "@agentmux_source_type"
 	paneAgentOption     = "@agentmux_agent_name"
+	paneProviderOption  = "@agentmux_provider"
+	paneModelOption     = "@agentmux_model"
+	panePersonaOption   = "@agentmux_persona"
 	paneOnExitOption    = "@agentmux_on_exit"
 	paneStartTimeOption = "@agentmux_start_time"
 	sessionConfigPath   = "@agentmux_config_path"
@@ -64,6 +67,9 @@ type PaneStatus struct {
 	Title        string  `json:"title"`
 	SourceType   string  `json:"source_type,omitempty"`
 	AgentName    string  `json:"agent_name,omitempty"`
+	Provider     string  `json:"provider,omitempty"`
+	Model        string  `json:"model,omitempty"`
+	Persona      string  `json:"persona,omitempty"`
 	OnExit       string  `json:"on_exit,omitempty"`
 	CurrentCmd   string  `json:"current_command,omitempty"`
 	StartupCmd   string  `json:"startup_command,omitempty"`
@@ -79,6 +85,9 @@ type paneMetadata struct {
 	StartupCommand string
 	SourceType     string
 	AgentName      string
+	Provider       string
+	Model          string
+	Persona        string
 	OnExit         string
 	StartTime      string
 }
@@ -174,7 +183,7 @@ func Status(session string) ([]PaneStatus, error) {
 		return nil, err
 	}
 
-	out, err := captureRaw(false, "list-panes", "-a", "-F", "#{session_name}\t#{window_index}\t#{window_name}\t#{window_id}\t#{window_active}\t#{pane_index}\t#{pane_id}\t#{pane_active}\t#{pane_dead}\t#{"+paneNameOption+"}\t#{pane_title}\t#{"+paneSourceOption+"}\t#{"+paneAgentOption+"}\t#{"+paneOnExitOption+"}\t#{pane_current_command}\t#{"+paneStartupOption+"}\t#{pane_dead_status}\t#{pane_pid}\t#{"+paneStartTimeOption+"}")
+	out, err := captureRaw(false, "list-panes", "-a", "-F", "#{session_name}\t#{window_index}\t#{window_name}\t#{window_id}\t#{window_active}\t#{pane_index}\t#{pane_id}\t#{pane_active}\t#{pane_dead}\t#{"+paneNameOption+"}\t#{pane_title}\t#{"+paneSourceOption+"}\t#{"+paneAgentOption+"}\t#{"+paneOnExitOption+"}\t#{pane_current_command}\t#{"+paneStartupOption+"}\t#{pane_dead_status}\t#{pane_pid}\t#{"+paneStartTimeOption+"}\t#{"+paneProviderOption+"}\t#{"+paneModelOption+"}\t#{"+panePersonaOption+"}")
 	if err != nil {
 		return nil, err
 	}
@@ -186,8 +195,8 @@ func Status(session string) ([]PaneStatus, error) {
 	panes := make([]PaneStatus, 0, len(lines))
 	for _, line := range lines {
 		fields := strings.Split(line, "\t")
-		if len(fields) != 19 {
-			return nil, fmt.Errorf("unexpected pane status output %q (fields=%d, want 19)", line, len(fields))
+		if len(fields) != 22 {
+			return nil, fmt.Errorf("unexpected pane status output %q (fields=%d, want 22)", line, len(fields))
 		}
 		if fields[0] != session {
 			continue
@@ -223,6 +232,9 @@ func Status(session string) ([]PaneStatus, error) {
 			ExitStatus:   exitStatus,
 			Pid:          pid,
 			StartTime:    fields[18],
+			Provider:     fields[19],
+			Model:        fields[20],
+			Persona:      fields[21],
 		}
 
 		if !status.Dead && status.Pid > 0 {
@@ -367,6 +379,9 @@ func StopPaneByName(session string, name string, verbose bool) error {
 		StartupCommand: target.StartupCmd,
 		SourceType:     target.SourceType,
 		AgentName:      target.AgentName,
+		Provider:       target.Provider,
+		Model:          target.Model,
+		Persona:        target.Persona,
 		OnExit:         config.NormalizeOnExit(onExit),
 	}, verbose); err != nil {
 		return fmt.Errorf("restore metadata for pane %q after stop: %w", name, err)
@@ -890,6 +905,9 @@ func configurePane(session string, paneID string, pane resolve.Pane, verbose boo
 		StartupCommand: startupCommand,
 		SourceType:     pane.SourceType,
 		AgentName:      pane.AgentName,
+		Provider:       pane.Provider,
+		Model:          pane.Model,
+		Persona:        pane.Persona,
 		OnExit:         pane.OnExit,
 	}, verbose); err != nil {
 		return err
@@ -1250,6 +1268,9 @@ func respawnPaneByName(session string, name string, verbose bool) error {
 		StartupCommand: startupCommand,
 		SourceType:     target.SourceType,
 		AgentName:      target.AgentName,
+		Provider:       target.Provider,
+		Model:          target.Model,
+		Persona:        target.Persona,
 		OnExit:         config.NormalizeOnExit(onExit),
 	}, verbose); err != nil {
 		return fmt.Errorf("restore metadata for pane %q after respawn: %w", name, err)
@@ -1295,6 +1316,21 @@ func applyPaneMetadata(paneID string, metadata paneMetadata, verbose bool) error
 	if metadata.AgentName != "" {
 		if err := run(verbose, "set-option", "-p", "-t", paneID, paneAgentOption, metadata.AgentName); err != nil {
 			return fmt.Errorf("set agent name for pane %s: %w", paneID, err)
+		}
+	}
+	if metadata.Provider != "" {
+		if err := run(verbose, "set-option", "-p", "-t", paneID, paneProviderOption, metadata.Provider); err != nil {
+			return fmt.Errorf("set provider for pane %s: %w", paneID, err)
+		}
+	}
+	if metadata.Model != "" {
+		if err := run(verbose, "set-option", "-p", "-t", paneID, paneModelOption, metadata.Model); err != nil {
+			return fmt.Errorf("set model for pane %s: %w", paneID, err)
+		}
+	}
+	if metadata.Persona != "" {
+		if err := run(verbose, "set-option", "-p", "-t", paneID, panePersonaOption, metadata.Persona); err != nil {
+			return fmt.Errorf("set persona for pane %s: %w", paneID, err)
 		}
 	}
 	if metadata.OnExit != "" {

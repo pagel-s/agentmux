@@ -165,7 +165,15 @@ func (m model) View() string {
 			name = fmt.Sprintf("unnamed (%s)", p.PaneID)
 		}
 
-		line := fmt.Sprintf("%s %s %-15s [%s]", cursor, status, name, p.PaneID)
+		provider := p.Provider
+		if provider == "" {
+			provider = "cmd"
+		}
+		if p.Model != "" {
+			provider += ":" + p.Model
+		}
+
+		line := fmt.Sprintf("%s %s %-15s %-15s [%s]", cursor, status, name, provider, p.PaneID)
 		if i == m.cursor {
 			paneList.WriteString(selectedStyle.Render(line) + "\n")
 		} else {

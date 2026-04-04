@@ -68,16 +68,17 @@ type Window struct {
 }
 
 type Pane struct {
-	Name    string            `yaml:"name"`
-	Agent   string            `yaml:"agent"`
-	Command string            `yaml:"command"`
-	Persona string            `yaml:"persona"`
-	Model   string            `yaml:"model"`
-	Title   string            `yaml:"title"`
-	Cwd     string            `yaml:"cwd"`
-	Env     map[string]string `yaml:"env"`
-	Focus   bool              `yaml:"focus"`
-	OnExit  string            `yaml:"on_exit"`
+	Name     string            `yaml:"name"`
+	Agent    string            `yaml:"agent"`
+	Provider string            `yaml:"provider"`
+	Command  string            `yaml:"command"`
+	Persona  string            `yaml:"persona"`
+	Model    string            `yaml:"model"`
+	Title    string            `yaml:"title"`
+	Cwd      string            `yaml:"cwd"`
+	Env      map[string]string `yaml:"env"`
+	Focus    bool              `yaml:"focus"`
+	OnExit   string            `yaml:"on_exit"`
 }
 
 type Hooks struct {
