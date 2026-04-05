@@ -34,7 +34,7 @@ func compileClaudeCommand(pane resolve.Pane) string {
 	cmd := []string{"claude"}
 	
 	if pane.Persona != "" {
-		cmd = append(cmd, "--system-prompt-file", singleQuote(pane.Persona))
+		cmd = append(cmd, "--system-prompt", fmt.Sprintf(`"$(cat %s)"`, singleQuote(pane.Persona)))
 	}
 	
 	// Append Agentmux context and tool descriptions to the system prompt
@@ -54,21 +54,27 @@ func compileGeminiCommand(pane resolve.Pane) string {
 	// Google's Gemini CLI (binary: gemini)
 	cmd := []string{"gemini"}
 	
-	if pane.Persona != "" {
-		// Gemini CLI allows concatenating prompts or using a system flag
-		cmd = append(cmd, "--system", fmt.Sprintf(`"$(cat %s)
-
-$(agentmux prompt)"`, singleQuote(pane.Persona)))
-	} else {
-		cmd = append(cmd, "--system", `"$(agentmux prompt)"`)
-	}
-	
-	// Gemini CLI supports dynamic tool discovery via a command that outputs JSON
-	cmd = append(cmd, "--discovery-command", `"agentmux tools"`)
-	
 	if pane.Model != "" {
 		cmd = append(cmd, "--model", singleQuote(pane.Model))
 	}
+
+	// Gemini takes the prompt as a positional argument.
+	// We inject the persona, environment awareness, and tools directly into the initial prompt.
+	var prompt string
+	if pane.Persona != "" {
+		prompt = fmt.Sprintf(`"$(cat %s)
+
+$(agentmux prompt)
+
+Available Coordination Tools:
+$(agentmux tools)"`, singleQuote(pane.Persona))
+	} else {
+		prompt = `"$(agentmux prompt)
+
+Available Coordination Tools:
+$(agentmux tools)"`
+	}
+	cmd = append(cmd, prompt)
 	
 	return strings.Join(cmd, " ")
 }
@@ -77,16 +83,27 @@ func compileCodexCommand(pane resolve.Pane) string {
 	// OpenAI's Codex CLI (binary: codex)
 	cmd := []string{"codex"}
 	
-	if pane.Persona != "" {
-		cmd = append(cmd, "--system-prompt-file", singleQuote(pane.Persona))
-	}
-	
-	// Append environment awareness
-	cmd = append(cmd, "--append-system-prompt", `"$(agentmux prompt)"`)
-	
 	if pane.Model != "" {
 		cmd = append(cmd, "--model", singleQuote(pane.Model))
 	}
+	
+	// Codex takes the prompt as a positional argument.
+	// We inject the persona, environment awareness, and tools directly into the initial prompt.
+	var prompt string
+	if pane.Persona != "" {
+		prompt = fmt.Sprintf(`"$(cat %s)
+
+$(agentmux prompt)
+
+Available Coordination Tools:
+$(agentmux tools)"`, singleQuote(pane.Persona))
+	} else {
+		prompt = `"$(agentmux prompt)
+
+Available Coordination Tools:
+$(agentmux tools)"`
+	}
+	cmd = append(cmd, prompt)
 	
 	return strings.Join(cmd, " ")
 }

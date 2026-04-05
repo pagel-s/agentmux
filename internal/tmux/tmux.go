@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -948,6 +949,17 @@ func buildPaneCommand(session string, pane resolve.Pane) string {
 	pane.Env["AGENTMUX_SESSION"] = session
 	if pane.Name != "" {
 		pane.Env["AGENTMUX_PANE"] = pane.Name
+	}
+
+	// Auto-Path Injection: Ensure agents can call 'agentmux' tools/prompt 
+	// even if the binary isn't in the user's global PATH.
+	if exe, err := os.Executable(); err == nil {
+		binDir := filepath.Dir(exe)
+		if currentPath := os.Getenv("PATH"); currentPath != "" {
+			pane.Env["PATH"] = binDir + string(os.PathListSeparator) + currentPath
+		} else {
+			pane.Env["PATH"] = binDir
+		}
 	}
 
 	if len(pane.Env) > 0 {
