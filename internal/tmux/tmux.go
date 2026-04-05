@@ -932,6 +932,10 @@ func configurePane(session string, paneID string, pane resolve.Pane, verbose boo
 	return nil
 }
 
+func BuildPaneCommand(session string, pane resolve.Pane) string {
+	return buildPaneCommand(session, pane)
+}
+
 func buildPaneCommand(session string, pane resolve.Pane) string {
 	parts := make([]string, 0, 3)
 	if pane.Cwd != "" {

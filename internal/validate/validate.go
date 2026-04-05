@@ -71,7 +71,7 @@ func Document(doc *config.Document, cliParams map[string]string) []Issue {
 			issues = append(issues, errorf("agent %q is missing provider", name))
 		}
 		switch provider {
-		case "command", "shell", "ssh", "claude", "claude-cli", "gemini", "gemini-cli", "openai", "aichat", "gptme":
+		case "command", "shell", "ssh", "claude", "claude-cli", "gemini", "gemini-cli", "openai", "aichat", "gptme", "codex":
 		case "":
 		default:
 			issues = append(issues, errorf("agent %q has unsupported provider %q", name, agent.Provider))

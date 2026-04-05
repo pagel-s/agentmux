@@ -1300,7 +1300,7 @@ func renderPlan(resolved resolve.Config, attach bool, replace bool) string {
 			if pane.Focus {
 				fmt.Fprintf(&b, " focus=true")
 			}
-			fmt.Fprintf(&b, "\n      command: %s\n", pane.Command)
+			fmt.Fprintf(&b, "\n      command: %s\n", tmux.BuildPaneCommand(resolved.Session, pane))
 		}
 	}
 	if resolved.Hooks.PostSession != "" {

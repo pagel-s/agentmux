@@ -1,0 +1,41 @@
+version: 1
+session: ui-factory
+name: UI Engineering Team
+
+params:
+  project_root: "./src"
+
+agents:
+  # The Architect (Claude)
+  architect:
+    provider: claude
+    persona: "personas/architect.md"
+    model: "claude-3-5-sonnet"
+    cwd: "{{project_root}}"
+
+  # The Designer (Gemini)
+  designer:
+    provider: gemini
+    persona: "personas/designer.md"
+    model: "gemini-1.5-pro"
+
+  # The Coder (OpenAI/codex)
+  coder:
+    provider: codex
+    persona: "personas/coder.md"
+    model: "gpt-4o"
+
+layout:
+  - window: design-office
+    layout: even-horizontal
+    panes:
+      - name: lead-architect
+        agent: architect
+        focus: true
+      - name: visual-designer
+        agent: designer
+
+  - window: engineering
+    panes:
+      - name: senior-coder
+        agent: coder

@@ -154,14 +154,11 @@ func (c *Config) finalizeRequirements() {
 		p := strings.ToLower(strings.TrimSpace(provider))
 		switch {
 		case strings.HasPrefix(p, "claude"):
-			bin = "claude-cli"
-			if strings.Contains(p, "code") {
-				bin = "claude-code"
-			}
+			bin = "claude"
 		case strings.HasPrefix(p, "gemini"):
-			bin = "gemini-cli"
-		case p == "openai" || p == "aichat":
-			bin = "aichat"
+			bin = "gemini"
+		case p == "openai" || p == "codex":
+			bin = "codex"
 		case p == "gptme":
 			bin = "gptme"
 		}

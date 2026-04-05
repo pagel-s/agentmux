@@ -19,19 +19,22 @@ func TestCompileProviderCommand(t *testing.T) {
 			provider: "claude",
 			persona:  "arch.md",
 			model:    "claude-3-5-sonnet",
-			want:     `claude-cli chat --system "$(cat arch.md) ; agentmux prompt" --tools "$(agentmux tools --format anthropic)" --model 'claude-3-5-sonnet'`,
+			want: `claude --system-prompt-file arch.md --append-system-prompt "$(agentmux prompt)
+
+Available Coordination Tools:
+$(agentmux tools)" --model 'claude-3-5-sonnet'`,
 		},
 		{
 			name:     "gemini no persona",
 			provider: "gemini",
 			persona:  "",
-			want:     `gemini-cli chat --system "$(agentmux prompt)" --tools "$(agentmux tools --format openai)"`,
+			want:     `gemini --system "$(agentmux prompt)" --discovery-command "agentmux tools"`,
 		},
 		{
-			name:     "openai (aichat) with persona",
+			name:     "openai (codex) with persona",
 			provider: "openai",
 			persona:  "coder.md",
-			want:     `aichat --role "$(cat coder.md) ; agentmux prompt" --tools "$(agentmux tools --format openai)"`,
+			want:     `codex --system-prompt-file coder.md --append-system-prompt "$(agentmux prompt)"`,
 		},
 		{
 			name:     "gptme with model",

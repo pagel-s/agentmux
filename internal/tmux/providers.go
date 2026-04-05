@@ -10,7 +10,7 @@ import (
 // If the provider is not recognized, it returns an empty string.
 func compileProviderCommand(session string, pane resolve.Pane) string {
 	provider := strings.ToLower(strings.TrimSpace(pane.Provider))
-
+	
 	if provider == "" || provider == "command" || provider == "shell" {
 		return ""
 	}
@@ -20,8 +20,8 @@ func compileProviderCommand(session string, pane resolve.Pane) string {
 		return compileClaudeCommand(pane)
 	case strings.HasPrefix(provider, "gemini"):
 		return compileGeminiCommand(pane)
-	case provider == "openai" || provider == "aichat":
-		return compileAIChatCommand(pane)
+	case provider == "openai" || provider == "codex":
+		return compileCodexCommand(pane)
 	case provider == "gptme":
 		return compileGPTMeCommand(pane)
 	default:
@@ -30,21 +30,19 @@ func compileProviderCommand(session string, pane resolve.Pane) string {
 }
 
 func compileClaudeCommand(pane resolve.Pane) string {
-	binary := "claude-cli"
-	if strings.Contains(pane.Provider, "code") {
-		binary = "claude-code"
-	}
-
-	cmd := []string{binary, "chat"}
-
+	// Anthropic's Claude Code (binary: claude)
+	cmd := []string{"claude"}
+	
 	if pane.Persona != "" {
-		cmd = append(cmd, "--system", fmt.Sprintf(`"$(cat %s) ; agentmux prompt"`, singleQuote(pane.Persona)))
-	} else {
-		cmd = append(cmd, "--system", `"$(agentmux prompt)"`)
+		cmd = append(cmd, "--system-prompt-file", singleQuote(pane.Persona))
 	}
+	
+	// Append Agentmux context and tool descriptions to the system prompt
+	cmd = append(cmd, "--append-system-prompt", fmt.Sprintf(`"$(agentmux prompt)
 
-	cmd = append(cmd, "--tools", `"$(agentmux tools --format anthropic)"`)
-
+Available Coordination Tools:
+$(agentmux tools)"`))
+	
 	if pane.Model != "" {
 		cmd = append(cmd, "--model", singleQuote(pane.Model))
 	}
@@ -53,15 +51,20 @@ func compileClaudeCommand(pane resolve.Pane) string {
 }
 
 func compileGeminiCommand(pane resolve.Pane) string {
-	cmd := []string{"gemini-cli", "chat"}
+	// Google's Gemini CLI (binary: gemini)
+	cmd := []string{"gemini"}
 	
 	if pane.Persona != "" {
-		cmd = append(cmd, "--system", fmt.Sprintf(`"$(cat %s) ; agentmux prompt"`, singleQuote(pane.Persona)))
+		// Gemini CLI allows concatenating prompts or using a system flag
+		cmd = append(cmd, "--system", fmt.Sprintf(`"$(cat %s)
+
+$(agentmux prompt)"`, singleQuote(pane.Persona)))
 	} else {
 		cmd = append(cmd, "--system", `"$(agentmux prompt)"`)
 	}
 	
-	cmd = append(cmd, "--tools", `"$(agentmux tools --format openai)"`)
+	// Gemini CLI supports dynamic tool discovery via a command that outputs JSON
+	cmd = append(cmd, "--discovery-command", `"agentmux tools"`)
 	
 	if pane.Model != "" {
 		cmd = append(cmd, "--model", singleQuote(pane.Model))
@@ -70,17 +73,16 @@ func compileGeminiCommand(pane resolve.Pane) string {
 	return strings.Join(cmd, " ")
 }
 
-func compileAIChatCommand(pane resolve.Pane) string {
-	cmd := []string{"aichat"}
+func compileCodexCommand(pane resolve.Pane) string {
+	// OpenAI's Codex CLI (binary: codex)
+	cmd := []string{"codex"}
 	
 	if pane.Persona != "" {
-		cmd = append(cmd, "--role", fmt.Sprintf(`"$(cat %s) ; agentmux prompt"`, singleQuote(pane.Persona)))
-	} else {
-		cmd = append(cmd, "--role", `"$(agentmux prompt)"`)
+		cmd = append(cmd, "--system-prompt-file", singleQuote(pane.Persona))
 	}
 	
-	// Assuming aichat supports a --tools flag like this, or we might need to adjust for its specific syntax
-	cmd = append(cmd, "--tools", `"$(agentmux tools --format openai)"`)
+	// Append environment awareness
+	cmd = append(cmd, "--append-system-prompt", `"$(agentmux prompt)"`)
 	
 	if pane.Model != "" {
 		cmd = append(cmd, "--model", singleQuote(pane.Model))
