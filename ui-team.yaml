@@ -3,7 +3,7 @@ session: ui-factory
 name: UI Engineering Team
 
 params:
-  project_root: "./src"
+  project_root: "."
 
 agents:
   # The Architect (Claude)
@@ -18,12 +18,15 @@ agents:
     provider: gemini
     persona: "personas/designer.md"
     model: "gemini-2.5-pro"
+    cwd: "{{project_root}}"
 
   # The Coder (OpenAI/codex)
   coder:
     provider: codex
     persona: "personas/coder.md"
     model: "gpt-5-codex"
+    reasoning_effort: "high"
+    cwd: "{{project_root}}"
 
 layout:
   - window: design-office
