@@ -11,7 +11,7 @@ env:
 
 agents:
   coder:
-    # Use native providers for zero-config tool integration
+    # Use native providers for zero-config tool integration and strongest persona delivery
     # provider: claude
     # persona: "PERSONA.md"
     provider: command
@@ -22,7 +22,7 @@ agents:
   reviewer:
     # JIT-compiled providers handle tools and prompts automatically
     # provider: gemini
-    # model: "gemini-1.5-pro"
+    # model: "gemini-2.5-pro"
     provider: command
     command: "openai api chat.completions.create -m gpt-5"
     cwd: "{{project_dir}}"

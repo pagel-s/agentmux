@@ -51,8 +51,15 @@ The `scale` command safely injects new panes into the running session, using the
 
 ## 4. LLM Native Awareness
 
-For an LLM to coordinate effectively, it must "know" about these primitives and the session context. Agentmux provides three mechanisms for this:
+For an LLM to coordinate effectively, it must "know" about these primitives and the session context. Agentmux provides five mechanisms for this:
 
 1.  **Environment Injection:** Every pane automatically receives `$AGENTMUX_SESSION` and `$AGENTMUX_PANE` environment variables.
-2.  **Tool Schemas:** The `agentmux tools` command generates standard JSON schemas for function-calling, compatible with OpenAI, Anthropic, and Gemini.
-3.  **JIT Compilation:** Using the `provider` and `persona` fields, Agentmux compiles optimized CLI commands that bridge the Markdown instructions and JSON tools directly into the LLM's native API context.
+2.  **CLI Tool Bridge:** Models call real coordination actions through `agentmux tool-call`, using `--from-stdin`, `--from-file`, or `--from-json`, which wraps the existing Agentmux CLI in a machine-stable JSON envelope.
+3.  **Native MCP Surface:** Agentmux can expose the same coordination registry through `agentmux mcp-server`, allowing providers with verified MCP support to use the tools natively instead of shelling out.
+4.  **Schema Export For Compatibility:** The `agentmux tools` command still generates provider-friendly JSON schemas (`openai`, `codex`, `gemini`, `claude`) for debugging or compatibility exports, but it is no longer the primary runtime contract.
+5.  **JIT Compilation:** Using the `provider`, `persona`, and optional `reasoning_effort` fields, Agentmux compiles provider-specific CLI commands that deliver persona and operational coordination through the strongest real surfaces available, selecting `native-mcp` or `cli-bridge` per provider at launch time.
+
+Persona delivery is intentionally provider-specific:
+- Claude uses a native system prompt.
+- Gemini uses a native workspace context file via a session-scoped runtime artifact.
+- Codex and GPTMe currently use bootstrap prompt delivery.

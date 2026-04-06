@@ -33,7 +33,7 @@ Technical reference, tutorials, and architectural deep-dives are available on ou
 
 ## 🛠 Status
 
-Agentmux is production-ready (`v0.7.0`) with:
+Agentmux is production-ready and currently ships with:
 - **Agentic Orchestration:** `wait`, `kv-set`, and `scale`.
 - **Remote Loading:** Fetch and launch configurations directly from URLs.
 - **Declarative Workspaces:** YAML configs with `include` for modular reuse.
@@ -44,7 +44,7 @@ Agentmux is production-ready (`v0.7.0`) with:
 
 ## 💻 Build and Run
 
-Agentmux requires Go 1.21 or newer and **tmux 3.2+**.
+Agentmux requires Go 1.24 or newer and **tmux 3.2+**. `make` will prefer a repo-local toolchain under `.tools/` when it is Go 1.24+; otherwise it uses `go` from your `PATH`.
 
 ```bash
 # Build locally

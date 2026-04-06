@@ -4,6 +4,8 @@
 
 Agentmux requires **tmux** to be installed on your system. We recommend version `3.2` or higher for the best experience with pane titles.
 
+If you are building Agentmux from source, use **Go 1.24 or newer**. The repo `Makefile` will prefer a compatible toolchain under `.tools/` when present, then fall back to `go` from your `PATH`.
+
 ```bash
 # macOS
 brew install tmux
@@ -45,4 +47,4 @@ Run the built-in diagnostic tool to ensure everything is set up correctly:
 agentmux doctor
 ```
 
-You should see output indicating that both `agentmux` and `tmux` are found in your path.
+You should see output indicating that `agentmux` and `tmux` are available, and if you pass a config path it will also inspect provider CLI compatibility for any configured native models.

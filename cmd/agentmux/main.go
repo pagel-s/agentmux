@@ -2,9 +2,11 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,13 +17,17 @@ import (
 
 	"agentmux/internal/cli"
 	"agentmux/internal/config"
+	"agentmux/internal/doctor"
 	"agentmux/internal/envcheck"
 	"agentmux/internal/hooks"
+	"agentmux/internal/mcp"
 	"agentmux/internal/pack"
+	"agentmux/internal/provider"
 	"agentmux/internal/remote"
 	"agentmux/internal/resolve"
 	"agentmux/internal/scaffold"
 	"agentmux/internal/tmux"
+	"agentmux/internal/toolruntime"
 	"agentmux/internal/tools"
 	"agentmux/internal/tui"
 	"agentmux/internal/validate"
@@ -37,9 +43,12 @@ const (
 )
 
 var (
-	version = "dev"
-	commit  = "none"
-	date    = "unknown"
+	version             = "dev"
+	commit              = "none"
+	date                = "unknown"
+	toolExecutorFactory = func() toolruntime.Executor {
+		return toolruntime.New(requireTMux, resolveScaleConfigForTools)
+	}
 )
 
 func main() {
@@ -71,6 +80,10 @@ func run(args []string) int {
 		return runTools(args[1:])
 	case "prompt":
 		return runPrompt(args[1:])
+	case "tool-call":
+		return runToolCall(args[1:])
+	case "mcp-server":
+		return runMCPServer(args[1:])
 	case "validate":
 		return runValidate(args[1:])
 	case "render":
@@ -303,23 +316,145 @@ func runTools(args []string) int {
 }
 
 func runPrompt(args []string) int {
-	if err := cli.ParsePrompt(args); err != nil {
+	opts, err := cli.ParsePrompt(args)
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		return exitValidation
 	}
 
-	fmt.Println(tools.Prompt())
+	out, err := tools.Prompt(tools.PromptOptions{
+		Provider: opts.Provider,
+		Mode:     opts.Mode,
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: generate prompt: %v\n", err)
+		return exitRuntime
+	}
+
+	fmt.Println(out)
 	return exitSuccess
+}
+
+func runToolCall(args []string) int {
+	opts, err := cli.ParseToolCall(args)
+	if err != nil {
+		return printToolCallError("", exitValidation, err, nil)
+	}
+
+	spec, ok := tools.Lookup(opts.Tool)
+	if !ok {
+		return printToolCallError(opts.Tool, exitValidation, fmt.Errorf("unsupported tool %q", opts.Tool), nil)
+	}
+
+	raw, source, err := loadToolCallPayload(opts)
+	if err != nil {
+		return printToolCallError(spec.Name, exitValidation, err, nil)
+	}
+
+	result, execErr := toolExecutorFactory().Execute(spec.Name, []byte(raw), source)
+	if execErr != nil {
+		return printToolCallError(spec.Name, execErr.ExitCode, errors.New(execErr.Message), execErr.DetailsJSON())
+	}
+
+	out, err := renderToolCallJSON(spec.Name, true, result, nil)
+	if err != nil {
+		return printToolCallError(spec.Name, exitRuntime, fmt.Errorf("render tool-call json: %w", err), nil)
+	}
+	fmt.Print(out)
+	return exitSuccess
+}
+
+func runMCPServer(args []string) int {
+	if len(args) != 0 {
+		fmt.Fprintln(os.Stderr, "error: mcp-server does not accept arguments")
+		return exitValidation
+	}
+
+	server := mcp.New(versionString(), toolExecutorFactory())
+	if err := server.Serve(os.Stdin, os.Stdout); err != nil {
+		fmt.Fprintf(os.Stderr, "error: mcp-server: %v\n", err)
+		return exitRuntime
+	}
+	return exitSuccess
+}
+
+func loadToolCallPayload(opts cli.ToolCallOptions) (string, string, error) {
+	switch {
+	case strings.TrimSpace(opts.FromJSON) != "":
+		return opts.FromJSON, "--from-json", nil
+	case opts.FromFile != "":
+		data, err := os.ReadFile(opts.FromFile)
+		if err != nil {
+			return "", "--from-file", fmt.Errorf("read --from-file %q: %w", opts.FromFile, err)
+		}
+		return string(data), "--from-file", nil
+	case opts.FromStdin:
+		data, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return "", "--from-stdin", fmt.Errorf("read --from-stdin payload: %w", err)
+		}
+		return string(data), "--from-stdin", nil
+	default:
+		return "", "", errors.New("tool-call requires an input mode")
+	}
+}
+
+type toolCallError struct {
+	Code     string          `json:"code"`
+	ExitCode int             `json:"exit_code"`
+	Message  string          `json:"message"`
+	Details  json.RawMessage `json:"details,omitempty"`
+}
+
+func renderToolCallJSON(tool string, ok bool, result json.RawMessage, callErr *toolCallError) (string, error) {
+	return renderJSON(struct {
+		SchemaVersion int             `json:"schema_version"`
+		Kind          string          `json:"kind"`
+		Ok            bool            `json:"ok"`
+		Tool          string          `json:"tool"`
+		Result        json.RawMessage `json:"result,omitempty"`
+		Error         *toolCallError  `json:"error,omitempty"`
+	}{
+		SchemaVersion: jsonSchemaV1,
+		Kind:          "tool-call",
+		Ok:            ok,
+		Tool:          tool,
+		Result:        result,
+		Error:         callErr,
+	})
+}
+
+func printToolCallError(tool string, exitCode int, err error, details json.RawMessage) int {
+	code := exitCodeName(exitCode)
+	if code == "unknown" {
+		code = "runtime"
+	}
+	out, renderErr := renderToolCallJSON(tool, false, nil, &toolCallError{
+		Code:     code,
+		ExitCode: exitCode,
+		Message:  err.Error(),
+		Details:  details,
+	})
+	if renderErr == nil {
+		fmt.Print(out)
+		return exitCode
+	}
+	fmt.Fprintf(os.Stderr, "error: render tool-call error json: %v\n", renderErr)
+	fmt.Fprintf(os.Stderr, "error: %v\n", err)
+	return exitCode
 }
 
 func runSessionLaunch(mode string, opts cli.LoadOptions, requireExisting bool, replace bool) int {
 	jsonOut := hasFlag(os.Args[1:], "--json")
 
 	// 1. Resolve and Validate (handles .amx automatically)
-	resolved, _, _, code := resolveCommand(opts.CommonOptions)
+	resolved, warnings, cleanup, code := resolveCommand(opts.CommonOptions)
 	if code != exitSuccess {
 		return code
 	}
+	cleanupFn := cleanup
+	defer func() { cleanupFn() }()
+	printWarnings(warnings)
 
 	// 2. Setup Wizard (Interactive fulfillment)
 	// We check for missing items in the resolved config requirements.
@@ -330,10 +465,13 @@ func runSessionLaunch(mode string, opts cli.LoadOptions, requireExisting bool, r
 
 	// 3. Re-resolve if setup wizard modified params
 	if report.HasMissing() && !jsonOut {
-		resolved, _, _, code = resolveCommand(opts.CommonOptions)
+		cleanupFn()
+		resolved, warnings, cleanup, code = resolveCommand(opts.CommonOptions)
+		cleanupFn = cleanup
 		if code != exitSuccess {
 			return code
 		}
+		printWarnings(warnings)
 	}
 
 	if opts.DryRun {
@@ -375,6 +513,10 @@ func runSessionLaunch(mode string, opts cli.LoadOptions, requireExisting bool, r
 			}
 		}
 		return exitValidation
+	}
+
+	if ok := preflightProviders(*resolved); !ok {
+		return exitDependency
 	}
 
 	if err := hooks.RunPre(resolved.Hooks.PreSession, opts.Verbose); err != nil {
@@ -765,23 +907,12 @@ func runScale(args []string) int {
 		return printCommandError("scale", opts.JSON, exitDependency, err, opts.Session, "")
 	}
 
-	// 1. Get config path from session
-	configPath, err := tmux.SessionConfigPath(opts.Session, false)
-	if err != nil {
-		return printCommandError("scale", opts.JSON, exitRuntime, err, opts.Session, "")
-	}
-	if configPath == "" {
-		return printCommandError("scale", opts.JSON, exitRuntime, fmt.Errorf("session %q has no config path metadata; run 'agentmux remember %s <config>' to fix this", opts.Session, opts.Session), opts.Session, "")
+	resolved, execErr := resolveScaleConfigForTools(opts.Session)
+	if execErr != nil {
+		return printCommandError("scale", opts.JSON, execErr.ExitCode, execErr, opts.Session, "")
 	}
 
-	// 2. Resolve config
-	resolved, _, _, code := resolveCommand(cli.CommonOptions{ConfigPath: configPath})
-	if code != exitSuccess {
-		return code
-	}
-
-	// 3. Apply scaling
-	if err := tmux.ScaleAgent(opts.Session, opts.Agent, opts.Count, opts.Window, *resolved, tmux.Options{Verbose: false}); err != nil {
+	if err := tmux.ScaleAgent(opts.Session, opts.Agent, opts.Count, opts.Window, resolved, tmux.Options{Verbose: false}); err != nil {
 		return printCommandError("scale", opts.JSON, exitRuntime, err, opts.Session, "")
 	}
 
@@ -1079,99 +1210,22 @@ func runDoctor(args []string) int {
 		return exitValidation
 	}
 
-	shell := os.Getenv("SHELL")
-	if shell == "" {
-		shell = "/bin/sh"
+	input := doctor.Input{
+		AgentmuxVersion: versionString(),
+		ConfigPath:      configPath,
 	}
-
-	tmuxPath, _ := exec.LookPath(tmux.Binary())
-	tmuxVersion := "not found"
-	vNum := 0.0
-	if tmuxPath != "" {
-		cmd := exec.Command(tmux.Binary(), "-V")
-		out, err := cmd.Output()
-		if err == nil {
-			tmuxVersion = strings.TrimSpace(string(out))
-			// Simple version extraction for comparison (e.g., "tmux 3.2a" -> 3.2)
-			parts := strings.Fields(tmuxVersion)
-			if len(parts) >= 2 {
-				fmt.Sscanf(parts[1], "%f", &vNum)
-			}
-		}
-	}
-
-	fmt.Printf("shell:         %s\n", shell)
-	fmt.Printf("agentmux:      %s\n", versionString())
-	fmt.Printf("tmux_binary:   %s\n", tmuxPath)
-	fmt.Printf("tmux_version:  %s\n", tmuxVersion)
-
-	if tmux.Socket() != "" {
-		fmt.Printf("tmux_socket:   %s\n", tmux.Socket())
-	}
-
-	fmt.Printf("cwd:           %s\n", mustGetwd())
-
-	// Check for local/global templates
-	templates, err := scaffold.List()
-	if err == nil {
-		projectTemplates := 0
-		globalTemplates := 0
-		for _, t := range templates {
-			if t.Source == scaffold.SourceRepo {
-				projectTemplates++
-			} else if t.Source == scaffold.SourceGlobal {
-				globalTemplates++
-			}
-		}
-		if projectTemplates > 0 {
-			fmt.Printf("project_templates: %d found in .agentmux/templates/\n", projectTemplates)
-		}
-		if globalTemplates > 0 {
-			fmt.Printf("global_templates:  %d found in ~/.config/agentmux/templates/\n", globalTemplates)
-		}
-	}
-
-	fmt.Println("\nDiagnostics:")
-	if tmuxPath == "" {
-		fmt.Println("  [!] CRITICAL: tmux is not installed. agentmux requires tmux to function.")
-	} else if vNum < 3.2 {
-		fmt.Printf("  [!] WARNING: tmux version %s detected. 3.2 or newer is recommended for full pane title support.\n", tmuxVersion)
-	} else {
-		fmt.Println("  [✓] tmux version is optimal.")
-	}
-
-	selfPath, err := exec.LookPath("agentmux")
-	if err != nil {
-		fmt.Println("  [!] WARNING: agentmux is not in your PATH. You must call it via absolute path or add its directory to PATH.")
-	} else {
-		fmt.Printf("  [✓] agentmux is in PATH at %s\n", selfPath)
-	}
-
 	if configPath != "" {
-		fmt.Printf("\nRequirements for %q:\n", configPath)
 		opts := cli.CommonOptions{ConfigPath: configPath}
-		resolved, _, cleanup, code := resolveCommand(opts)
+		resolved, issues, cleanup, code := resolveCommand(opts)
 		defer cleanup()
-		if code != exitSuccess {
-			fmt.Printf("  [!] ERROR: could not resolve config: exit code %d\n", code)
-		} else {
-			report := envcheck.Check(resolved.Requires, resolved.Params)
-			if !report.HasMissing() {
-				fmt.Println("  [✓] all requirements met.")
-			} else {
-				for _, m := range report.MissingBinaries {
-					fmt.Printf("  [!] MISSING BINARY: %s\n", m)
-				}
-				for _, m := range report.MissingEnv {
-					fmt.Printf("  [!] MISSING ENV:    %s\n", m)
-				}
-				for _, m := range report.MissingParams {
-					fmt.Printf("  [!] MISSING PARAM:  %s\n", m)
-				}
-			}
+		input.Issues = issues
+		input.ResolveExitCode = code
+		if code == exitSuccess {
+			input.Resolved = resolved
 		}
 	}
 
+	fmt.Print(doctor.RenderText(doctor.Collect(input, doctor.DefaultProbes())))
 	return exitSuccess
 }
 
@@ -1251,6 +1305,131 @@ func printWarnings(issues []validate.Issue) {
 	}
 }
 
+func resolveScaleConfigForTools(session string) (resolve.Config, *toolruntime.Error) {
+	configPath, err := tmux.SessionConfigPath(session, false)
+	if err != nil {
+		return resolve.Config{}, &toolruntime.Error{
+			Code:     exitCodeName(exitRuntime),
+			ExitCode: exitRuntime,
+			Message:  err.Error(),
+			Command:  "scale",
+			Session:  session,
+		}
+	}
+	if configPath == "" {
+		return resolve.Config{}, &toolruntime.Error{
+			Code:     exitCodeName(exitRuntime),
+			ExitCode: exitRuntime,
+			Message:  fmt.Sprintf("session %q has no config path metadata; run 'agentmux remember %s <config>' to fix this", session, session),
+			Command:  "scale",
+			Session:  session,
+		}
+	}
+
+	doc, err := config.LoadFile(configPath)
+	if err != nil {
+		return resolve.Config{}, &toolruntime.Error{
+			Code:     exitCodeName(exitConfigParse),
+			ExitCode: exitConfigParse,
+			Message:  err.Error(),
+			Command:  "scale",
+			Session:  session,
+		}
+	}
+
+	issues := validate.Document(doc, nil)
+	if validate.HasErrors(issues) {
+		messages := make([]string, 0, len(issues))
+		for _, issue := range issues {
+			if issue.Severity == validate.SeverityError {
+				messages = append(messages, issue.Message)
+			}
+		}
+		if len(messages) == 0 {
+			messages = append(messages, "config validation failed")
+		}
+		return resolve.Config{}, &toolruntime.Error{
+			Code:     exitCodeName(exitValidation),
+			ExitCode: exitValidation,
+			Message:  strings.Join(messages, "; "),
+			Command:  "scale",
+			Session:  session,
+		}
+	}
+
+	resolved, err := resolve.Project(doc, nil)
+	if err != nil {
+		return resolve.Config{}, &toolruntime.Error{
+			Code:     exitCodeName(exitValidation),
+			ExitCode: exitValidation,
+			Message:  err.Error(),
+			Command:  "scale",
+			Session:  session,
+		}
+	}
+	return *resolved, nil
+}
+
+func preflightProviders(resolved resolve.Config) bool {
+	reports := make([]provider.HealthReport, 0)
+	for _, name := range collectNativeProviders(resolved) {
+		report := provider.CheckCLI(name)
+		reports = append(reports, report)
+	}
+
+	ok := true
+	for _, report := range reports {
+		for _, issue := range report.Issues {
+			line := fmt.Sprintf("provider %q: %s", report.Spec.ID, issue.Message)
+			if issue.Severity == "error" {
+				fmt.Fprintf(os.Stderr, "error: %s\n", line)
+				ok = false
+				continue
+			}
+			fmt.Fprintf(os.Stderr, "warning: %s\n", line)
+		}
+	}
+	return ok
+}
+
+func collectNativeProviders(resolved resolve.Config) []string {
+	seen := make(map[string]struct{})
+	add := func(name string) {
+		name = provider.Normalize(name)
+		if name == "" || !provider.UsesNativeIntegration(name) {
+			return
+		}
+		seen[name] = struct{}{}
+	}
+
+	for _, agent := range resolved.Agents {
+		add(agent.Provider)
+	}
+	for _, window := range resolved.Windows {
+		for _, pane := range window.Panes {
+			add(pane.Provider)
+		}
+	}
+
+	names := make([]string, 0, len(seen))
+	for name := range seen {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func launchProfileForRender(name string) provider.LaunchProfile {
+	return provider.ResolveLaunchWith(name, exec.LookPath, func(path string, args ...string) (string, error) {
+		cmd := exec.Command(path, args...)
+		var buf bytes.Buffer
+		cmd.Stdout = &buf
+		cmd.Stderr = &buf
+		err := cmd.Run()
+		return buf.String(), err
+	})
+}
+
 func renderPlan(resolved resolve.Config, attach bool, replace bool) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "plan:\n")
@@ -1296,6 +1475,36 @@ func renderPlan(resolved resolve.Config, attach bool, replace bool) string {
 			}
 			if pane.OnExit != "" {
 				fmt.Fprintf(&b, " on_exit=%s", pane.OnExit)
+			}
+			if pane.Provider != "" {
+				fmt.Fprintf(&b, " provider=%s", pane.Provider)
+			}
+			if pane.Model != "" {
+				fmt.Fprintf(&b, " model=%s", pane.Model)
+			}
+			if pane.ReasoningEffort != "" {
+				fmt.Fprintf(&b, " reasoning_effort=%s", pane.ReasoningEffort)
+			}
+			if profile := launchProfileForRender(pane.Provider); profile.Mode != "" {
+				fmt.Fprintf(&b, " integration=%s", profile.Mode)
+				if profile.PersonaChannel != "" {
+					fmt.Fprintf(&b, " persona_channel=%s", profile.PersonaChannel)
+				}
+				if profile.PersonaSource != "" && pane.Persona != "" {
+					fmt.Fprintf(&b, " persona_source=%s", profile.PersonaSource)
+				}
+				if profile.ToolChannel != "" {
+					fmt.Fprintf(&b, " tool_channel=%s", profile.ToolChannel)
+				}
+				if profile.PreferredInput != "" {
+					fmt.Fprintf(&b, " tool_input=%s", profile.PreferredInput)
+				}
+				if profile.FallbackReason != "" {
+					fmt.Fprintf(&b, " integration_fallback=%q", profile.FallbackReason)
+				}
+			}
+			if runtime := tmux.DescribeProviderRuntime(resolved.Session, pane); runtime.PersonaArtifact != "" {
+				fmt.Fprintf(&b, " persona_artifact=%s", runtime.PersonaArtifact)
 			}
 			if pane.Focus {
 				fmt.Fprintf(&b, " focus=true")
@@ -1353,9 +1562,33 @@ func renderStatus(session string, panes []tmux.PaneStatus) string {
 			}
 			if pane.Provider != "" {
 				fmt.Fprintf(&b, " provider=%s", pane.Provider)
+				if pane.IntegrationMode != "" {
+					fmt.Fprintf(&b, " integration=%s", pane.IntegrationMode)
+				}
+				if pane.PersonaChannel != "" {
+					fmt.Fprintf(&b, " persona_channel=%s", pane.PersonaChannel)
+				}
+				if pane.PersonaSource != "" {
+					fmt.Fprintf(&b, " persona_source=%s", pane.PersonaSource)
+				}
+				if pane.PersonaArtifact != "" {
+					fmt.Fprintf(&b, " persona_artifact=%s", pane.PersonaArtifact)
+				}
+				if pane.ToolChannel != "" {
+					fmt.Fprintf(&b, " tool_channel=%s", pane.ToolChannel)
+				}
+				if pane.ToolInput != "" {
+					fmt.Fprintf(&b, " tool_input=%s", pane.ToolInput)
+				}
+				if pane.IntegrationFallback != "" {
+					fmt.Fprintf(&b, " integration_fallback=%q", pane.IntegrationFallback)
+				}
 			}
 			if pane.Model != "" {
 				fmt.Fprintf(&b, " model=%s", pane.Model)
+			}
+			if pane.ReasoningEffort != "" {
+				fmt.Fprintf(&b, " reasoning_effort=%s", pane.ReasoningEffort)
 			}
 			fmt.Fprintln(&b)
 		}
@@ -1401,6 +1634,36 @@ func renderInspect(session string, pane tmux.PaneStatus, logs string) string {
 		fmt.Fprintf(&b, " (%s)", pane.AgentName)
 	}
 	fmt.Fprintf(&b, "\n")
+	if pane.Provider != "" {
+		fmt.Fprintf(&b, "    provider: %s\n", pane.Provider)
+	}
+	if pane.Model != "" {
+		fmt.Fprintf(&b, "    model:    %s\n", pane.Model)
+	}
+	if pane.IntegrationMode != "" {
+		fmt.Fprintf(&b, "    integration: %s\n", pane.IntegrationMode)
+	}
+	if pane.PersonaChannel != "" {
+		fmt.Fprintf(&b, "    persona_channel: %s\n", pane.PersonaChannel)
+	}
+	if pane.PersonaSource != "" {
+		fmt.Fprintf(&b, "    persona_source: %s\n", pane.PersonaSource)
+	}
+	if pane.PersonaArtifact != "" {
+		fmt.Fprintf(&b, "    persona_artifact: %s\n", pane.PersonaArtifact)
+	}
+	if pane.ToolChannel != "" {
+		fmt.Fprintf(&b, "    tool_channel: %s\n", pane.ToolChannel)
+	}
+	if pane.ToolInput != "" {
+		fmt.Fprintf(&b, "    tool_input: %s\n", pane.ToolInput)
+	}
+	if pane.IntegrationFallback != "" {
+		fmt.Fprintf(&b, "    integration_fallback: %s\n", pane.IntegrationFallback)
+	}
+	if pane.ReasoningEffort != "" {
+		fmt.Fprintf(&b, "    reasoning_effort: %s\n", pane.ReasoningEffort)
+	}
 	fmt.Fprintf(&b, "    on_exit: %s\n", pane.OnExit)
 	fmt.Fprintf(&b, "\n")
 
@@ -1810,8 +2073,10 @@ Usage:
   agentmux edit <path-or-session>
   agentmux remember <session> <config>
   agentmux pack <config> [<output.amx>]
-  agentmux tools [--format <openai>]
-  agentmux prompt
+  agentmux tools [--format <openai|codex|gemini|claude>]
+  agentmux prompt [--provider <provider>] [--mode <cli-bridge|native-mcp>]
+  agentmux tool-call <tool-name> (--from-json <json> | --from-file <path> | --from-stdin)
+  agentmux mcp-server
   agentmux load <config> [--param key=value] [--attach|--no-attach] [--dry-run] [--replace] [--strict] [--verbose]
   agentmux reload <config> [--param key=value] [--attach|--no-attach] [--dry-run] [--strict] [--verbose]
   agentmux validate <config> [--param key=value] [--strict]

@@ -138,7 +138,7 @@ Each pane must specify exactly one of:
 
 - `command`: raw shell command
 - `agent`: reference to a named agent
-- `provider`: native LLM provider (e.g., `claude`, `gemini`)
+- `provider`: native LLM provider (e.g., `claude`, `gemini`, `codex`)
 
 Useful pane fields:
 
@@ -157,10 +157,12 @@ Agents are reusable pane templates, not shared background runtimes.
 
 Current useful agent fields:
 
-- `provider`: `command` (default), `claude`, `gemini`, `openai`, or `gptme`
+- `provider`: `command` (default), `shell`, `ssh`, `claude`, `gemini`, `codex`, `gptme`, or `aichat`
+- aliases: `claude-cli` -> `claude`, `gemini-cli` -> `gemini`, `openai` -> `codex`
 - `command`: raw shell command
 - `persona`: path to a Markdown file containing agent instructions
 - `model`: specific LLM model ID
+- `reasoning_effort`: optional provider-specific reasoning control for providers that support it
 - `cwd`
 - `env`
 - `title`
@@ -170,10 +172,29 @@ If two panes reference the same agent, you still get two separate pane processes
 
 ### Native LLM Providers
 
-When you use a native provider like `claude` or `gemini`, Agentmux acts as a **JIT Shell Compiler**. It automatically constructs the optimized shell command for that CLI, injecting:
-1. Your `persona` file content.
-2. The `agentmux prompt` (environmental awareness).
-3. The `agentmux tools` JSON schema (native function calling).
+When you use a native provider like `claude`, `gemini`, or `codex`, Agentmux acts as a **JIT Shell Compiler**. It automatically constructs the shell command for that CLI, injecting:
+1. Your `persona` file content through the strongest provider-native surface that CLI actually supports.
+2. The `agentmux prompt` runtime contract, which carries the operational coordination instructions separately from the persona.
+3. Provider-specific launch wiring so persona lands in the strongest available instruction channel for that CLI without pretending every provider has the same system-prompt model.
+4. Provider-specific coordination details such as resolved integration mode, tool channel, preferred tool-call input mode, and optional reasoning controls.
+
+Current persona delivery defaults:
+
+- `claude`: native `system-prompt`
+- `gemini`: native workspace context file from a session-scoped runtime artifact
+- `codex`: bootstrap prompt
+- `gptme`: bootstrap prompt
+
+`agentmux tools --format ...` still exists, but it is now an export/debug surface rather than the primary runtime path.
+
+Current integration defaults:
+
+- `claude`: prefers `native-mcp`, falls back to `cli-bridge`
+- `codex`: prefers `native-mcp`, falls back to `cli-bridge`
+- `gemini`: prefers `native-mcp`, falls back to `cli-bridge`
+- `gptme`: uses `cli-bridge`
+
+Direct pane `provider:` usage is intended for native providers. Command-style providers like `ssh` should be defined on an agent alongside `command:`.
 
 Example:
 ```yaml
@@ -181,7 +202,8 @@ agents:
   expert:
     provider: claude
     persona: "prompts/expert.md"
-    model: "claude-3-5-sonnet"
+    model: "sonnet"
+    reasoning_effort: "high"
 ```
 
 ## Layouts

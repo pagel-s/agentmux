@@ -1,126 +1,175 @@
 package tmux
 
 import (
-	"agentmux/internal/resolve"
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"os/exec"
 	"strings"
+
+	prov "agentmux/internal/provider"
+	"agentmux/internal/resolve"
+)
+
+var (
+	providerLookPath = exec.LookPath
+	providerRun      = func(path string, args ...string) (string, error) {
+		cmd := exec.Command(path, args...)
+		var buf bytes.Buffer
+		cmd.Stdout = &buf
+		cmd.Stderr = &buf
+		err := cmd.Run()
+		return buf.String(), err
+	}
 )
 
 // compileProviderCommand returns a shell command string for recognized LLM providers.
 // If the provider is not recognized, it returns an empty string.
 func compileProviderCommand(session string, pane resolve.Pane) string {
-	provider := strings.ToLower(strings.TrimSpace(pane.Provider))
-	
-	if provider == "" || provider == "command" || provider == "shell" {
+	return compileProviderCommandWithProfile(session, pane, resolveLaunchProfile(pane.Provider))
+}
+
+func resolveLaunchProfile(name string) prov.LaunchProfile {
+	return prov.ResolveLaunchWith(name, providerLookPath, providerRun)
+}
+
+func compileProviderCommandWithProfile(session string, pane resolve.Pane, profile prov.LaunchProfile) string {
+	_ = session
+
+	spec, ok := prov.Lookup(pane.Provider)
+	if !ok || spec.Mode != prov.ModeNative {
 		return ""
 	}
+	if profile.Spec.ID == "" {
+		profile = prov.ResolveLaunch(pane.Provider)
+	}
 
-	switch {
-	case strings.HasPrefix(provider, "claude"):
-		return compileClaudeCommand(pane)
-	case strings.HasPrefix(provider, "gemini"):
-		return compileGeminiCommand(pane)
-	case provider == "openai" || provider == "codex":
-		return compileCodexCommand(pane)
-	case provider == "gptme":
-		return compileGPTMeCommand(pane)
+	switch spec.ID {
+	case "claude":
+		return compileClaudeCommand(spec, pane, profile)
+	case "gemini":
+		return compileGeminiCommand(spec, pane, profile, session)
+	case "codex":
+		return compileCodexCommand(spec, pane, profile)
+	case "gptme":
+		return compileGPTMeCommand(spec, pane, profile)
 	default:
 		return ""
 	}
 }
 
-func compileClaudeCommand(pane resolve.Pane) string {
-	// Anthropic's Claude Code (binary: claude)
+func compileClaudeCommand(spec prov.Spec, pane resolve.Pane, profile prov.LaunchProfile) string {
 	cmd := []string{"claude"}
-	
+
 	if pane.Persona != "" {
 		cmd = append(cmd, "--system-prompt", fmt.Sprintf(`"$(cat %s)"`, singleQuote(pane.Persona)))
 	}
-	
-	// Append Agentmux context and tool descriptions to the system prompt
-	cmd = append(cmd, "--append-system-prompt", fmt.Sprintf(`"$(agentmux prompt)
+	if profile.Mode == string(prov.LaunchModeNativeMCP) {
+		cmd = append(cmd, "--mcp-config", singleQuote(claudeMCPConfigJSON()), "--strict-mcp-config")
+	}
 
-Available Coordination Tools:
-$(agentmux tools)"`))
-	
+	cmd = append(cmd, "--append-system-prompt", providerContextPrompt(spec.ID, profile.Mode))
+
 	if pane.Model != "" {
 		cmd = append(cmd, "--model", singleQuote(pane.Model))
 	}
-	
+	if pane.ReasoningEffort != "" {
+		cmd = append(cmd, "--effort", singleQuote(pane.ReasoningEffort))
+	}
+
 	return strings.Join(cmd, " ")
 }
 
-func compileGeminiCommand(pane resolve.Pane) string {
-	// Google's Gemini CLI (binary: gemini)
+func compileGeminiCommand(spec prov.Spec, pane resolve.Pane, profile prov.LaunchProfile, session string) string {
 	cmd := []string{"gemini"}
-	
+	runtime := describeProviderRuntime(session, pane, profile)
+
 	if pane.Model != "" {
 		cmd = append(cmd, "--model", singleQuote(pane.Model))
 	}
-
-	// Gemini takes the prompt as a positional argument.
-	// We inject the persona, environment awareness, and tools directly into the initial prompt.
-	var prompt string
-	if pane.Persona != "" {
-		prompt = fmt.Sprintf(`"$(cat %s)
-
-$(agentmux prompt)
-
-Available Coordination Tools:
-$(agentmux tools)"`, singleQuote(pane.Persona))
-	} else {
-		prompt = `"$(agentmux prompt)
-
-Available Coordination Tools:
-$(agentmux tools)"`
+	if profile.Mode == string(prov.LaunchModeNativeMCP) {
+		cmd = append(cmd, "--allowed-mcp-server-names", singleQuote("agentmux"))
 	}
-	cmd = append(cmd, prompt)
-	
+	for _, dir := range runtime.IncludeDirectories {
+		cmd = append(cmd, "--include-directories", singleQuote(dir))
+	}
+
+	cmd = append(cmd, "--prompt-interactive", providerInitialPrompt(pane, spec.ID, profile))
+
 	return strings.Join(cmd, " ")
 }
 
-func compileCodexCommand(pane resolve.Pane) string {
-	// OpenAI's Codex CLI (binary: codex)
+func compileCodexCommand(spec prov.Spec, pane resolve.Pane, profile prov.LaunchProfile) string {
 	cmd := []string{"codex"}
-	
+
 	if pane.Model != "" {
 		cmd = append(cmd, "--model", singleQuote(pane.Model))
 	}
-	
-	// Codex takes the prompt as a positional argument.
-	// We inject the persona, environment awareness, and tools directly into the initial prompt.
-	var prompt string
-	if pane.Persona != "" {
-		prompt = fmt.Sprintf(`"$(cat %s)
-
-$(agentmux prompt)
-
-Available Coordination Tools:
-$(agentmux tools)"`, singleQuote(pane.Persona))
-	} else {
-		prompt = `"$(agentmux prompt)
-
-Available Coordination Tools:
-$(agentmux tools)"`
+	if profile.Mode == string(prov.LaunchModeNativeMCP) {
+		cmd = append(cmd, codexMCPConfigArgs()...)
 	}
-	cmd = append(cmd, prompt)
-	
+	if pane.ReasoningEffort != "" {
+		cmd = append(cmd, "-c", singleQuote("model_reasoning_effort="+pane.ReasoningEffort))
+	}
+
+	cmd = append(cmd, providerInitialPrompt(pane, spec.ID, profile))
+
 	return strings.Join(cmd, " ")
 }
 
-func compileGPTMeCommand(pane resolve.Pane) string {
+func compileGPTMeCommand(spec prov.Spec, pane resolve.Pane, profile prov.LaunchProfile) string {
 	cmd := []string{"gptme"}
-	
-	// GPTMe typically takes prompt directly or via files
-	if pane.Persona != "" {
-		cmd = append(cmd, fmt.Sprintf(`"$(cat %s) ; agentmux prompt"`, singleQuote(pane.Persona)))
-	} else {
-		cmd = append(cmd, `"$(agentmux prompt)"`)
-	}
-	
+
+	cmd = append(cmd, providerInitialPrompt(pane, spec.ID, profile))
+
 	if pane.Model != "" {
 		cmd = append(cmd, "--model", singleQuote(pane.Model))
 	}
-	
+
 	return strings.Join(cmd, " ")
+}
+
+func providerInitialPrompt(pane resolve.Pane, providerName string, profile prov.LaunchProfile) string {
+	if pane.Persona != "" && profile.PersonaChannel == "bootstrap-prompt" {
+		return fmt.Sprintf(`"$(cat %s)
+
+$(%s)"`, singleQuote(pane.Persona), providerPromptCommand(providerName, profile.Mode))
+	}
+
+	return providerContextPrompt(providerName, profile.Mode)
+}
+
+func providerContextPrompt(providerName string, mode string) string {
+	return fmt.Sprintf(`"$(%s)"`, providerPromptCommand(providerName, mode))
+}
+
+func providerPromptCommand(providerName string, mode string) string {
+	cmd := []string{"agentmux", "prompt", "--provider", singleQuote(providerName)}
+	if strings.TrimSpace(mode) != "" {
+		cmd = append(cmd, "--mode", singleQuote(mode))
+	}
+	return strings.Join(cmd, " ")
+}
+
+func claudeMCPConfigJSON() string {
+	cfg := map[string]any{
+		"mcpServers": map[string]any{
+			"agentmux": map[string]any{
+				"command": "agentmux",
+				"args":    []string{"mcp-server"},
+			},
+		},
+	}
+	data, err := json.Marshal(cfg)
+	if err != nil {
+		return `{"mcpServers":{"agentmux":{"command":"agentmux","args":["mcp-server"]}}}`
+	}
+	return string(data)
+}
+
+func codexMCPConfigArgs() []string {
+	return []string{
+		"-c", singleQuote(`mcp_servers.agentmux.command="agentmux"`),
+		"-c", singleQuote(`mcp_servers.agentmux.args=["mcp-server"]`),
+	}
 }

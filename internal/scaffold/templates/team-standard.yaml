@@ -6,13 +6,13 @@
 version: 1
 params:
   project_dir: "."
-  ai_model: "gpt-4o"
+  ai_model: "gpt-5-codex"
 
 agents:
   # Standard team agent
   coder:
-    provider: command
-    command: "openai chat --model {{ai_model}}"
+    provider: codex
+    model: "{{ai_model}}"
     cwd: "{{project_dir}}"
     on_exit: restart
 
@@ -33,7 +33,7 @@ layout:
 #   - team-standard.yaml
 #
 # params:
-#   ai_model: "claude-3-5-sonnet" # Personal model preference
+#   ai_model: "gpt-5-codex-mini" # Personal model preference
 #
 # layout:
 #   - window: code

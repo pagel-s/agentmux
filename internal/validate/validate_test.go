@@ -234,6 +234,139 @@ func TestDocumentAcceptsTemplatedPaneNameWithResolvedSlug(t *testing.T) {
 	}
 }
 
+func TestDocumentAcceptsCodexPaneProviderAlias(t *testing.T) {
+	doc := &config.Document{
+		Config: config.Config{
+			Version: 1,
+			Session: "demo",
+			Layout: []config.Window{
+				{
+					Window: "main",
+					Panes: []config.Pane{
+						{Provider: "openai"},
+					},
+				},
+			},
+		},
+	}
+
+	issues := Document(doc, nil)
+	if HasErrors(issues) {
+		t.Fatalf("Document returned errors for openai provider alias: %v", issues)
+	}
+
+	found := false
+	for _, issue := range issues {
+		if issue.Message == `pane 1 in window "main" uses provider alias "openai"; prefer "codex"` {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("issues missing alias warning: %v", issues)
+	}
+}
+
+func TestDocumentWarnsForAgentProviderAlias(t *testing.T) {
+	doc := &config.Document{
+		Config: config.Config{
+			Version: 1,
+			Session: "demo",
+			Agents: map[string]config.Agent{
+				"reviewer": {
+					Provider: "claude-cli",
+				},
+			},
+			Layout: []config.Window{
+				{
+					Window: "main",
+					Panes: []config.Pane{
+						{Agent: "reviewer"},
+					},
+				},
+			},
+		},
+	}
+
+	issues := Document(doc, nil)
+
+	found := false
+	for _, issue := range issues {
+		if issue.Message == `agent "reviewer" uses provider alias "claude-cli"; prefer "claude"` {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("issues missing agent alias warning: %v", issues)
+	}
+}
+
+func TestDocumentRejectsDirectSSHPaneProvider(t *testing.T) {
+	doc := &config.Document{
+		Config: config.Config{
+			Version: 1,
+			Session: "demo",
+			Layout: []config.Window{
+				{
+					Window: "main",
+					Panes: []config.Pane{
+						{Provider: "ssh"},
+					},
+				},
+			},
+		},
+	}
+
+	issues := Document(doc, nil)
+
+	found := false
+	for _, issue := range issues {
+		if issue.Message == `pane 1 in window "main" provider "ssh" cannot be used directly; use command or define an agent with command` {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("issues missing direct-ssh-provider error: %v", issues)
+	}
+}
+
+func TestDocumentRejectsSSHAgentWithoutCommand(t *testing.T) {
+	doc := &config.Document{
+		Config: config.Config{
+			Version: 1,
+			Session: "demo",
+			Agents: map[string]config.Agent{
+				"ops": {
+					Provider: "ssh",
+				},
+			},
+			Layout: []config.Window{
+				{
+					Window: "main",
+					Panes: []config.Pane{
+						{Agent: "ops"},
+					},
+				},
+			},
+		},
+	}
+
+	issues := Document(doc, nil)
+
+	found := false
+	for _, issue := range issues {
+		if issue.Message == `agent "ops" provider "ssh" requires command` {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("issues missing ssh-command requirement error: %v", issues)
+	}
+}
+
 func TestDocumentRejectsInvalidOnExit(t *testing.T) {
 	doc := &config.Document{
 		Config: config.Config{
@@ -269,5 +402,40 @@ func TestDocumentRejectsInvalidOnExit(t *testing.T) {
 	}
 	if !got[`pane 1 in window "main" has unsupported on_exit "linger"; use shell, remain, restart, or kill`] {
 		t.Fatalf("issues missing invalid pane on_exit error: %v", issues)
+	}
+}
+
+func TestDocumentRejectsUnsupportedReasoningEffort(t *testing.T) {
+	doc := &config.Document{
+		Config: config.Config{
+			Version: 1,
+			Session: "demo",
+			Agents: map[string]config.Agent{
+				"reviewer": {
+					Provider:        "gemini",
+					ReasoningEffort: "high",
+				},
+			},
+			Layout: []config.Window{
+				{
+					Window: "main",
+					Panes: []config.Pane{
+						{Provider: "claude", ReasoningEffort: "ultra"},
+					},
+				},
+			},
+		},
+	}
+
+	issues := Document(doc, nil)
+	got := map[string]bool{}
+	for _, issue := range issues {
+		got[issue.Message] = true
+	}
+	if !got[`agent "reviewer" provider "gemini" does not support reasoning_effort`] {
+		t.Fatalf("issues missing unsupported gemini reasoning error: %v", issues)
+	}
+	if !got[`pane 1 in window "main" provider "claude" reasoning_effort "ultra" is unsupported; allowed values: low, medium, high, max`] {
+		t.Fatalf("issues missing invalid claude reasoning error: %v", issues)
 	}
 }

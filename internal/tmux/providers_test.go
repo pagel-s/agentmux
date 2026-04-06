@@ -1,54 +1,91 @@
 package tmux
 
 import (
-	"agentmux/internal/resolve"
+	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"agentmux/internal/resolve"
 )
 
 func TestCompileProviderCommand(t *testing.T) {
+	originalLookPath := providerLookPath
+	originalRun := providerRun
+	t.Cleanup(func() {
+		providerLookPath = originalLookPath
+		providerRun = originalRun
+	})
+
+	providerLookPath = func(name string) (string, error) {
+		return "/usr/bin/" + name, nil
+	}
+	providerRun = func(path string, args ...string) (string, error) {
+		switch {
+		case strings.Contains(path, "claude"):
+			return "--mcp-config\n--strict-mcp-config\n--append-system-prompt\n--model\n--effort\n", nil
+		case strings.Contains(path, "codex"):
+			return "--model\n--config\nmcp\n", nil
+		case strings.Contains(path, "gemini"):
+			return "--model\n--prompt-interactive\n--allowed-mcp-server-names\ngemini mcp\n", nil
+		case strings.Contains(path, "gptme"):
+			return "--model\n", nil
+		default:
+			return "", errors.New("unexpected provider")
+		}
+	}
+
 	tests := []struct {
-		name     string
-		provider string
-		persona  string
-		model    string
-		want     string
+		name      string
+		provider  string
+		persona   string
+		model     string
+		reasoning string
+		want      string
 	}{
 		{
-			name:     "claude with persona and model",
+			name:     "claude native mcp with persona and model",
 			provider: "claude",
 			persona:  "arch.md",
-			model:    "claude-3-5-sonnet",
-			want: `claude --system-prompt "$(cat arch.md)" --append-system-prompt "$(agentmux prompt)
-
-Available Coordination Tools:
-$(agentmux tools)" --model 'claude-3-5-sonnet'`,
+			model:    "sonnet",
+			want:     `claude --system-prompt "$(cat 'arch.md')" --mcp-config ` + singleQuote(claudeMCPConfigJSON()) + ` --strict-mcp-config --append-system-prompt "$(agentmux prompt --provider 'claude' --mode 'native-mcp')" --model 'sonnet'`,
 		},
 		{
-			name:     "gemini no persona",
-			provider: "gemini",
-			persona:  "",
-			want: `gemini "$(agentmux prompt)
-
-Available Coordination Tools:
-$(agentmux tools)"`,
+			name:      "claude native mcp with reasoning effort",
+			provider:  "claude",
+			model:     "sonnet",
+			reasoning: "high",
+			want:      `claude --mcp-config ` + singleQuote(claudeMCPConfigJSON()) + ` --strict-mcp-config --append-system-prompt "$(agentmux prompt --provider 'claude' --mode 'native-mcp')" --model 'sonnet' --effort 'high'`,
 		},
 		{
-			name:     "openai (codex) with persona",
+			name:     "gemini native mcp",
+			provider: "gemini-cli",
+			persona:  "design.md",
+			want:     `gemini --allowed-mcp-server-names 'agentmux' --include-directories ` + singleQuote(filepath.Dir(geminiPersonaPath("test-session", resolve.Pane{Provider: "gemini", Persona: "design.md"}))) + ` --prompt-interactive "$(agentmux prompt --provider 'gemini' --mode 'native-mcp')"`,
+		},
+		{
+			name:     "codex native mcp with persona",
 			provider: "openai",
 			persona:  "coder.md",
-			want: `codex "$(cat coder.md)
+			want: `codex -c 'mcp_servers.agentmux.command="agentmux"' -c 'mcp_servers.agentmux.args=["mcp-server"]' "$(cat 'coder.md')
 
-$(agentmux prompt)
-
-Available Coordination Tools:
-$(agentmux tools)"`,
+$(agentmux prompt --provider 'codex' --mode 'native-mcp')"`,
 		},
 		{
-			name:     "gptme with model",
+			name:      "codex native mcp with reasoning effort",
+			provider:  "codex",
+			model:     "gpt-5-codex",
+			reasoning: "high",
+			want:      `codex --model 'gpt-5-codex' -c 'mcp_servers.agentmux.command="agentmux"' -c 'mcp_servers.agentmux.args=["mcp-server"]' -c 'model_reasoning_effort=high' "$(agentmux prompt --provider 'codex' --mode 'native-mcp')"`,
+		},
+		{
+			name:     "gptme cli bridge with model and persona",
 			provider: "gptme",
+			persona:  "review.md",
 			model:    "gpt-4o",
-			want:     `gptme "$(agentmux prompt)" --model 'gpt-4o'`,
+			want: `gptme "$(cat 'review.md')
+
+$(agentmux prompt --provider 'gptme' --mode 'cli-bridge')" --model 'gpt-4o'`,
 		},
 		{
 			name:     "unknown provider",
@@ -60,26 +97,56 @@ $(agentmux tools)"`,
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			pane := resolve.Pane{
-				Provider: tc.provider,
-				Persona:  tc.persona,
-				Model:    tc.model,
+				Provider:        tc.provider,
+				Persona:         tc.persona,
+				Model:           tc.model,
+				ReasoningEffort: tc.reasoning,
 			}
-			
+
 			got := compileProviderCommand("test-session", pane)
-			
-			// Simple exact match check. We might need to adjust quotes depending on how singleQuote handles it, 
-			// but compileProviderCommand mostly uses double quotes around the raw string except for singleQuote(pane.Persona)
-			
-			// Let's manually construct what we expect with singleQuotes correctly evaluated if needed
-			// Wait, compileClaudeCommand uses singleQuote(pane.Persona). So "arch.md" becomes "'arch.md'"
-			want := tc.want
-			if tc.persona != "" {
-				want = strings.ReplaceAll(want, tc.persona, singleQuote(tc.persona))
-			}
-			
-			if got != want {
-				t.Errorf("\ngot:  %q\nwant: %q", got, want)
+			if got != tc.want {
+				t.Errorf("\ngot:  %q\nwant: %q", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestCompileProviderCommandFallsBackToCLIBridge(t *testing.T) {
+	originalLookPath := providerLookPath
+	originalRun := providerRun
+	t.Cleanup(func() {
+		providerLookPath = originalLookPath
+		providerRun = originalRun
+	})
+
+	providerLookPath = func(name string) (string, error) {
+		return "/usr/bin/" + name, nil
+	}
+	providerRun = func(path string, args ...string) (string, error) {
+		switch {
+		case strings.Contains(path, "claude"):
+			return "--append-system-prompt\n--model\n--effort\n", nil
+		case strings.Contains(path, "codex"):
+			return "--model\n", nil
+		case strings.Contains(path, "gemini"):
+			return "--model\n--prompt-interactive\n", nil
+		default:
+			return "", nil
+		}
+	}
+
+	claude := compileProviderCommand("test-session", resolve.Pane{Provider: "claude"})
+	if got, want := claude, `claude --append-system-prompt "$(agentmux prompt --provider 'claude' --mode 'cli-bridge')"`; got != want {
+		t.Fatalf("claude fallback command = %q, want %q", got, want)
+	}
+
+	codex := compileProviderCommand("test-session", resolve.Pane{Provider: "codex"})
+	if got, want := codex, `codex "$(agentmux prompt --provider 'codex' --mode 'cli-bridge')"`; got != want {
+		t.Fatalf("codex fallback command = %q, want %q", got, want)
+	}
+
+	gemini := compileProviderCommand("test-session", resolve.Pane{Provider: "gemini"})
+	if got, want := gemini, `gemini --prompt-interactive "$(agentmux prompt --provider 'gemini' --mode 'cli-bridge')"`; got != want {
+		t.Fatalf("gemini fallback command = %q, want %q", got, want)
 	}
 }

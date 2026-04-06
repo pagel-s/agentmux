@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"agentmux/internal/config"
+	prov "agentmux/internal/provider"
 	tpl "agentmux/internal/template"
 )
 
@@ -25,16 +26,17 @@ type Config struct {
 }
 
 type Agent struct {
-	Name     string            `json:"name"`
-	Provider string            `json:"provider"`
-	Command  string            `json:"command"`
-	Persona  string            `json:"persona,omitempty"`
-	Model    string            `json:"model,omitempty"`
-	Cwd      string            `json:"cwd,omitempty"`
-	Env      map[string]string `json:"env,omitempty"`
-	Title    string            `json:"title,omitempty"`
-	Shell    string            `json:"shell,omitempty"`
-	OnExit   string            `json:"onExit"`
+	Name            string            `json:"name"`
+	Provider        string            `json:"provider"`
+	Command         string            `json:"command"`
+	Persona         string            `json:"persona,omitempty"`
+	Model           string            `json:"model,omitempty"`
+	ReasoningEffort string            `json:"reasoningEffort,omitempty"`
+	Cwd             string            `json:"cwd,omitempty"`
+	Env             map[string]string `json:"env,omitempty"`
+	Title           string            `json:"title,omitempty"`
+	Shell           string            `json:"shell,omitempty"`
+	OnExit          string            `json:"onExit"`
 }
 
 type Window struct {
@@ -48,19 +50,20 @@ type Window struct {
 }
 
 type Pane struct {
-	Name       string            `json:"name,omitempty"`
-	SourceType string            `json:"sourceType"`
-	AgentName  string            `json:"agentName,omitempty"`
-	Provider   string            `json:"provider,omitempty"`
-	Command    string            `json:"command"`
-	Persona    string            `json:"persona,omitempty"`
-	Model      string            `json:"model,omitempty"`
-	Cwd        string            `json:"cwd,omitempty"`
-	Env        map[string]string `json:"env,omitempty"`
-	Title      string            `json:"title,omitempty"`
-	Focus      bool              `json:"focus,omitempty"`
-	Shell      string            `json:"shell,omitempty"`
-	OnExit     string            `json:"onExit"`
+	Name            string            `json:"name,omitempty"`
+	SourceType      string            `json:"sourceType"`
+	AgentName       string            `json:"agentName,omitempty"`
+	Provider        string            `json:"provider,omitempty"`
+	Command         string            `json:"command"`
+	Persona         string            `json:"persona,omitempty"`
+	Model           string            `json:"model,omitempty"`
+	ReasoningEffort string            `json:"reasoningEffort,omitempty"`
+	Cwd             string            `json:"cwd,omitempty"`
+	Env             map[string]string `json:"env,omitempty"`
+	Title           string            `json:"title,omitempty"`
+	Focus           bool              `json:"focus,omitempty"`
+	Shell           string            `json:"shell,omitempty"`
+	OnExit          string            `json:"onExit"`
 }
 
 type Hooks struct {
@@ -148,21 +151,8 @@ func Project(doc *config.Document, overrides map[string]string) (*Config, error)
 }
 
 func (c *Config) finalizeRequirements() {
-	// Implicitly add binaries for native providers
-	addImplicitBinary := func(provider string) {
-		bin := ""
-		p := strings.ToLower(strings.TrimSpace(provider))
-		switch {
-		case strings.HasPrefix(p, "claude"):
-			bin = "claude"
-		case strings.HasPrefix(p, "gemini"):
-			bin = "gemini"
-		case p == "openai" || p == "codex":
-			bin = "codex"
-		case p == "gptme":
-			bin = "gptme"
-		}
-		if bin != "" {
+	addImplicitBinary := func(name string) {
+		if bin := prov.ImplicitBinary(name); bin != "" {
 			c.Requires.Binaries = combineUnique(c.Requires.Binaries, []string{bin})
 		}
 	}
@@ -179,7 +169,7 @@ func (c *Config) finalizeRequirements() {
 
 func resolveAgent(name string, raw config.Agent, params map[string]string) (Agent, error) {
 	configDir := params["config_dir"]
-	provider, err := expand(raw.Provider, params)
+	providerName, err := expand(raw.Provider, params)
 	if err != nil {
 		return Agent{}, err
 	}
@@ -192,6 +182,10 @@ func resolveAgent(name string, raw config.Agent, params map[string]string) (Agen
 		return Agent{}, err
 	}
 	model, err := expand(raw.Model, params)
+	if err != nil {
+		return Agent{}, err
+	}
+	reasoningEffort, err := expand(raw.ReasoningEffort, params)
 	if err != nil {
 		return Agent{}, err
 	}
@@ -217,16 +211,17 @@ func resolveAgent(name string, raw config.Agent, params map[string]string) (Agen
 	}
 
 	return Agent{
-		Name:     name,
-		Provider: provider,
-		Command:  command,
-		Persona:  resolvePersonaPath(persona, configDir),
-		Model:    model,
-		Cwd:      cleanPath(cwd),
-		Env:      env,
-		Title:    title,
-		Shell:    shell,
-		OnExit:   effectiveOnExit(onExit, config.OnExitShell),
+		Name:            name,
+		Provider:        prov.Normalize(providerName),
+		Command:         command,
+		Persona:         resolvePersonaPath(persona, configDir),
+		Model:           model,
+		ReasoningEffort: strings.ToLower(strings.TrimSpace(reasoningEffort)),
+		Cwd:             cleanPath(cwd),
+		Env:             env,
+		Title:           title,
+		Shell:           shell,
+		OnExit:          effectiveOnExit(onExit, config.OnExitShell),
 	}, nil
 }
 
@@ -290,7 +285,7 @@ func resolvePane(raw config.Pane, agents map[string]Agent, sessionEnv map[string
 	if err != nil {
 		return Pane{}, err
 	}
-	provider, err := expand(raw.Provider, params)
+	providerName, err := expand(raw.Provider, params)
 	if err != nil {
 		return Pane{}, err
 	}
@@ -303,6 +298,10 @@ func resolvePane(raw config.Pane, agents map[string]Agent, sessionEnv map[string
 		return Pane{}, err
 	}
 	model, err := expand(raw.Model, params)
+	if err != nil {
+		return Pane{}, err
+	}
+	reasoningEffort, err := expand(raw.ReasoningEffort, params)
 	if err != nil {
 		return Pane{}, err
 	}
@@ -331,6 +330,8 @@ func resolvePane(raw config.Pane, agents map[string]Agent, sessionEnv map[string
 	}
 
 	configDir := params["config_dir"]
+	paneProvider := prov.Normalize(providerName)
+	panePersona := resolvePersonaPath(persona, configDir)
 
 	if agentName != "" {
 		agent := agents[agentName]
@@ -338,8 +339,9 @@ func resolvePane(raw config.Pane, agents map[string]Agent, sessionEnv map[string
 		resolved.AgentName = agentName
 		resolved.Provider = agent.Provider
 		resolved.Command = agent.Command
-		resolved.Persona = agent.Persona
-		resolved.Model = agent.Model
+		resolved.Persona = firstNonEmpty(panePersona, agent.Persona)
+		resolved.Model = firstNonEmpty(model, agent.Model)
+		resolved.ReasoningEffort = firstNonEmpty(strings.ToLower(strings.TrimSpace(reasoningEffort)), agent.ReasoningEffort)
 		resolved.Shell = agent.Shell
 		resolved.OnExit = effectiveOnExit(onExit, agent.OnExit, config.OnExitShell)
 		mergeInto(resolved.Env, agent.Env)
@@ -348,10 +350,11 @@ func resolvePane(raw config.Pane, agents map[string]Agent, sessionEnv map[string
 		resolved.Title = firstNonEmpty(title, agent.Title, name, agentName, commandFallback(agent.Command))
 	} else {
 		resolved.SourceType = "command"
-		resolved.Provider = provider
+		resolved.Provider = paneProvider
 		resolved.Command = command
-		resolved.Persona = resolvePersonaPath(persona, configDir)
+		resolved.Persona = panePersona
 		resolved.Model = model
+		resolved.ReasoningEffort = strings.ToLower(strings.TrimSpace(reasoningEffort))
 		resolved.OnExit = effectiveOnExit(onExit, config.OnExitShell)
 		mergeInto(resolved.Env, windowEnv)
 		resolved.Cwd = firstNonEmpty(cleanPath(cwd), windowRoot, mustGetwd())
@@ -363,10 +366,13 @@ func resolvePane(raw config.Pane, agents map[string]Agent, sessionEnv map[string
 		resolved.Command = command
 	}
 	if resolved.Persona == "" {
-		resolved.Persona = persona
+		resolved.Persona = panePersona
 	}
 	if resolved.Model == "" {
 		resolved.Model = model
+	}
+	if resolved.ReasoningEffort == "" {
+		resolved.ReasoningEffort = strings.ToLower(strings.TrimSpace(reasoningEffort))
 	}
 	if resolved.Cwd == "" {
 		resolved.Cwd = mustGetwd()

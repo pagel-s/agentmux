@@ -162,32 +162,74 @@ Useful note:
 ### `tools`
 
 What it does:
-- generates a JSON Schema array of Agentmux coordination tools
-- output is compatible with OpenAI, Anthropic, and Google tool-calling formats
+- generates a JSON Schema export of Agentmux coordination tools
+- output can be rendered in provider-friendly shapes such as `openai`, `codex`, `gemini`, or `claude`
 
 When to use it:
-- when configuring an LLM CLI to use Agentmux primitives as native "functions"
+- when you need a compatibility/debug export of the coordination tool schemas
+- when comparing Agentmux tool shapes across provider formats
 
 Examples:
 
 ```bash
 ./bin/agentmux tools --format openai
+./bin/agentmux tools --format claude
 ```
 
 ### `prompt`
 
 What it does:
-- generates a specialized system prompt for AI agents
-- instructs the agent on how to use Agentmux tools and environment variables
+- generates the Agentmux operational runtime contract for AI agents
+- describes either the native MCP tool path or the CLI bridge path, depending on `--mode`
 
 When to use it:
-- as a system prompt prefix for your LLM agents to ensure they understand their environment
+- as the operational system/bootstrap prompt prefix for LLM agents that run inside an Agentmux pane
+- when you want to inspect the exact coordination contract a pane will receive
+
+Useful note:
+- this command describes coordination behavior, not necessarily persona delivery
+- persona may be delivered separately through a native provider channel such as Claude `system-prompt` or a Gemini workspace context file
 
 Examples:
 
 ```bash
 ./bin/agentmux prompt
+./bin/agentmux prompt --provider claude
+./bin/agentmux prompt --provider claude --mode native-mcp
+./bin/agentmux prompt --provider gemini --mode native-mcp
 ```
+
+### `tool-call`
+
+What it does:
+- executes a real Agentmux coordination action through a stable JSON envelope
+- maps canonical tool names like `kv_set`, `wait`, or `send` onto the existing CLI subcommands
+- accepts payloads from `--from-json`, `--from-file`, or `--from-stdin`
+
+When to use it:
+- from LLM/provider runtimes that need machine-stable coordination behavior
+- when you want structured JSON success/error output without scraping human text
+
+Examples:
+
+```bash
+./bin/agentmux tool-call kv_set --from-json '{"session":"demo","key":"task","value":"review"}'
+./bin/agentmux tool-call kv_get --from-stdin <<EOF
+{"session":"demo","key":"task"}
+EOF
+./bin/agentmux tool-call kv_set --from-file /tmp/agentmux-tool.json
+./bin/agentmux tool-call wait --from-json '{"session":"demo","pane":"planner","pattern":"PLAN_READY","timeout":"30s"}'
+```
+
+### `mcp-server`
+
+What it does:
+- exposes the Agentmux tool registry as an MCP stdio server
+- backs the native MCP integrations for supported providers
+
+When to use it:
+- indirectly through provider-native launch paths such as Claude, Gemini, or Codex
+- directly only when testing MCP integration by hand
 
 ## Session Commands
 
@@ -529,6 +571,7 @@ Useful note:
 What it does:
 - prints environment and dependency information
 - can check requirements for a specific config file
+- inspects configured provider CLIs, alias warnings, and likely stale model hints
 
 When to use it:
 - when tmux or environment issues look suspicious

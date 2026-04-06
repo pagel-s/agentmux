@@ -14,23 +14,32 @@ import (
 	"time"
 
 	"agentmux/internal/config"
+	prov "agentmux/internal/provider"
 	"agentmux/internal/resolve"
 )
 
 const (
-	envTmuxBinary       = "AGENTMUX_TMUX_BIN"
-	envTmuxSocket       = "AGENTMUX_TMUX_SOCKET"
-	paneNameOption      = "@agentmux_name"
-	paneStartupOption   = "@agentmux_startup_command"
-	paneSourceOption    = "@agentmux_source_type"
-	paneAgentOption     = "@agentmux_agent_name"
-	paneProviderOption  = "@agentmux_provider"
-	paneModelOption     = "@agentmux_model"
-	panePersonaOption   = "@agentmux_persona"
-	paneOnExitOption    = "@agentmux_on_exit"
-	paneStartTimeOption = "@agentmux_start_time"
-	sessionConfigPath   = "@agentmux_config_path"
-	kvPrefix            = "@agentmux_kv_"
+	envTmuxBinary             = "AGENTMUX_TMUX_BIN"
+	envTmuxSocket             = "AGENTMUX_TMUX_SOCKET"
+	paneNameOption            = "@agentmux_name"
+	paneStartupOption         = "@agentmux_startup_command"
+	paneSourceOption          = "@agentmux_source_type"
+	paneAgentOption           = "@agentmux_agent_name"
+	paneProviderOption        = "@agentmux_provider"
+	paneModelOption           = "@agentmux_model"
+	panePersonaOption         = "@agentmux_persona"
+	paneIntegrationOption     = "@agentmux_integration_mode"
+	panePersonaChannelOption  = "@agentmux_persona_channel"
+	panePersonaSourceOption   = "@agentmux_persona_source"
+	panePersonaArtifactOption = "@agentmux_persona_artifact"
+	paneToolChannelOption     = "@agentmux_tool_channel"
+	paneToolInputOption       = "@agentmux_tool_input"
+	paneFallbackOption        = "@agentmux_integration_fallback"
+	paneReasoningOption       = "@agentmux_reasoning_effort"
+	paneOnExitOption          = "@agentmux_on_exit"
+	paneStartTimeOption       = "@agentmux_start_time"
+	sessionConfigPath         = "@agentmux_config_path"
+	kvPrefix                  = "@agentmux_kv_"
 )
 
 var (
@@ -56,41 +65,57 @@ type paneGeometry struct {
 }
 
 type PaneStatus struct {
-	WindowIndex  int     `json:"window_index"`
-	WindowName   string  `json:"window_name"`
-	WindowID     string  `json:"window_id"`
-	WindowActive bool    `json:"window_active"`
-	PaneIndex    int     `json:"pane_index"`
-	PaneID       string  `json:"pane_id"`
-	PaneActive   bool    `json:"pane_active"`
-	Dead         bool    `json:"dead"`
-	Name         string  `json:"name"`
-	Title        string  `json:"title"`
-	SourceType   string  `json:"source_type,omitempty"`
-	AgentName    string  `json:"agent_name,omitempty"`
-	Provider     string  `json:"provider,omitempty"`
-	Model        string  `json:"model,omitempty"`
-	Persona      string  `json:"persona,omitempty"`
-	OnExit       string  `json:"on_exit,omitempty"`
-	CurrentCmd   string  `json:"current_command,omitempty"`
-	StartupCmd   string  `json:"startup_command,omitempty"`
-	ExitStatus   int     `json:"exit_status,omitempty"`
-	Pid          int     `json:"pid,omitempty"`
-	StartTime    string  `json:"start_time,omitempty"`
-	CPU          float64 `json:"cpu_percent,omitempty"`
-	Memory       float64 `json:"memory_percent,omitempty"`
+	WindowIndex         int     `json:"window_index"`
+	WindowName          string  `json:"window_name"`
+	WindowID            string  `json:"window_id"`
+	WindowActive        bool    `json:"window_active"`
+	PaneIndex           int     `json:"pane_index"`
+	PaneID              string  `json:"pane_id"`
+	PaneActive          bool    `json:"pane_active"`
+	Dead                bool    `json:"dead"`
+	Name                string  `json:"name"`
+	Title               string  `json:"title"`
+	SourceType          string  `json:"source_type,omitempty"`
+	AgentName           string  `json:"agent_name,omitempty"`
+	Provider            string  `json:"provider,omitempty"`
+	Model               string  `json:"model,omitempty"`
+	Persona             string  `json:"persona,omitempty"`
+	IntegrationMode     string  `json:"integration_mode,omitempty"`
+	PersonaChannel      string  `json:"persona_channel,omitempty"`
+	PersonaSource       string  `json:"persona_source,omitempty"`
+	PersonaArtifact     string  `json:"persona_artifact,omitempty"`
+	ToolChannel         string  `json:"tool_channel,omitempty"`
+	ToolInput           string  `json:"tool_input,omitempty"`
+	IntegrationFallback string  `json:"integration_fallback,omitempty"`
+	ReasoningEffort     string  `json:"reasoning_effort,omitempty"`
+	OnExit              string  `json:"on_exit,omitempty"`
+	CurrentCmd          string  `json:"current_command,omitempty"`
+	StartupCmd          string  `json:"startup_command,omitempty"`
+	ExitStatus          int     `json:"exit_status,omitempty"`
+	Pid                 int     `json:"pid,omitempty"`
+	StartTime           string  `json:"start_time,omitempty"`
+	CPU                 float64 `json:"cpu_percent,omitempty"`
+	Memory              float64 `json:"memory_percent,omitempty"`
 }
 
 type paneMetadata struct {
-	Name           string
-	StartupCommand string
-	SourceType     string
-	AgentName      string
-	Provider       string
-	Model          string
-	Persona        string
-	OnExit         string
-	StartTime      string
+	Name                string
+	StartupCommand      string
+	SourceType          string
+	AgentName           string
+	Provider            string
+	Model               string
+	Persona             string
+	IntegrationMode     string
+	PersonaChannel      string
+	PersonaSource       string
+	PersonaArtifact     string
+	ToolChannel         string
+	ToolInput           string
+	IntegrationFallback string
+	ReasoningEffort     string
+	OnExit              string
+	StartTime           string
 }
 
 func Execute(cfg resolve.Config, opts Options) error {
@@ -184,7 +209,7 @@ func Status(session string) ([]PaneStatus, error) {
 		return nil, err
 	}
 
-	out, err := captureRaw(false, "list-panes", "-a", "-F", "#{session_name}\t#{window_index}\t#{window_name}\t#{window_id}\t#{window_active}\t#{pane_index}\t#{pane_id}\t#{pane_active}\t#{pane_dead}\t#{"+paneNameOption+"}\t#{pane_title}\t#{"+paneSourceOption+"}\t#{"+paneAgentOption+"}\t#{"+paneOnExitOption+"}\t#{pane_current_command}\t#{"+paneStartupOption+"}\t#{pane_dead_status}\t#{pane_pid}\t#{"+paneStartTimeOption+"}\t#{"+paneProviderOption+"}\t#{"+paneModelOption+"}\t#{"+panePersonaOption+"}")
+	out, err := captureRaw(false, "list-panes", "-a", "-F", "#{session_name}\t#{window_index}\t#{window_name}\t#{window_id}\t#{window_active}\t#{pane_index}\t#{pane_id}\t#{pane_active}\t#{pane_dead}\t#{"+paneNameOption+"}\t#{pane_title}\t#{"+paneSourceOption+"}\t#{"+paneAgentOption+"}\t#{"+paneOnExitOption+"}\t#{pane_current_command}\t#{"+paneStartupOption+"}\t#{pane_dead_status}\t#{pane_pid}\t#{"+paneStartTimeOption+"}\t#{"+paneProviderOption+"}\t#{"+paneModelOption+"}\t#{"+panePersonaOption+"}\t#{"+paneIntegrationOption+"}\t#{"+panePersonaChannelOption+"}\t#{"+panePersonaSourceOption+"}\t#{"+panePersonaArtifactOption+"}\t#{"+paneToolChannelOption+"}\t#{"+paneToolInputOption+"}\t#{"+paneFallbackOption+"}\t#{"+paneReasoningOption+"}")
 	if err != nil {
 		return nil, err
 	}
@@ -196,8 +221,8 @@ func Status(session string) ([]PaneStatus, error) {
 	panes := make([]PaneStatus, 0, len(lines))
 	for _, line := range lines {
 		fields := strings.Split(line, "\t")
-		if len(fields) != 22 {
-			return nil, fmt.Errorf("unexpected pane status output %q (fields=%d, want 22)", line, len(fields))
+		if len(fields) != 30 {
+			return nil, fmt.Errorf("unexpected pane status output %q (fields=%d, want 30)", line, len(fields))
 		}
 		if fields[0] != session {
 			continue
@@ -215,27 +240,66 @@ func Status(session string) ([]PaneStatus, error) {
 		pid, _ := strconv.Atoi(fields[17])
 
 		status := PaneStatus{
-			WindowIndex:  windowIndex,
-			WindowName:   fields[2],
-			WindowID:     fields[3],
-			WindowActive: fields[4] == "1",
-			PaneIndex:    paneIndex,
-			PaneID:       fields[6],
-			PaneActive:   fields[7] == "1",
-			Dead:         fields[8] == "1",
-			Name:         unescapeOptionValue(fields[9]),
-			Title:        fields[10],
-			SourceType:   fields[11],
-			AgentName:    fields[12],
-			OnExit:       fields[13],
-			CurrentCmd:   fields[14],
-			StartupCmd:   unescapeOptionValue(fields[15]),
-			ExitStatus:   exitStatus,
-			Pid:          pid,
-			StartTime:    fields[18],
-			Provider:     fields[19],
-			Model:        fields[20],
-			Persona:      fields[21],
+			WindowIndex:         windowIndex,
+			WindowName:          fields[2],
+			WindowID:            fields[3],
+			WindowActive:        fields[4] == "1",
+			PaneIndex:           paneIndex,
+			PaneID:              fields[6],
+			PaneActive:          fields[7] == "1",
+			Dead:                fields[8] == "1",
+			Name:                unescapeOptionValue(fields[9]),
+			Title:               fields[10],
+			SourceType:          fields[11],
+			AgentName:           fields[12],
+			OnExit:              fields[13],
+			CurrentCmd:          fields[14],
+			StartupCmd:          unescapeOptionValue(fields[15]),
+			ExitStatus:          exitStatus,
+			Pid:                 pid,
+			StartTime:           fields[18],
+			Provider:            fields[19],
+			Model:               fields[20],
+			Persona:             fields[21],
+			IntegrationMode:     unescapeOptionValue(fields[22]),
+			PersonaChannel:      unescapeOptionValue(fields[23]),
+			PersonaSource:       unescapeOptionValue(fields[24]),
+			PersonaArtifact:     unescapeOptionValue(fields[25]),
+			ToolChannel:         unescapeOptionValue(fields[26]),
+			ToolInput:           unescapeOptionValue(fields[27]),
+			IntegrationFallback: unescapeOptionValue(fields[28]),
+			ReasoningEffort:     fields[29],
+		}
+		if status.Provider != "" && status.IntegrationMode == "" {
+			if profile := resolveLaunchProfile(status.Provider); profile.Mode != "" {
+				status.IntegrationMode = profile.Mode
+				status.PersonaChannel = profile.PersonaChannel
+				status.PersonaSource = profile.PersonaSource
+				status.ToolChannel = profile.ToolChannel
+				status.ToolInput = profile.PreferredInput
+				status.IntegrationFallback = profile.FallbackReason
+			} else if spec, ok := prov.Lookup(status.Provider); ok {
+				status.IntegrationMode = spec.IntegrationMode
+				status.PersonaChannel = spec.PersonaChannel
+				status.PersonaSource = spec.PersonaSource
+				status.ToolChannel = spec.ToolChannel
+				status.ToolInput = spec.PreferredToolInput
+			}
+		}
+		if status.Provider != "" && status.Persona != "" && (status.PersonaSource == "" || status.PersonaArtifact == "") {
+			profile := prov.ProfileForMode(status.Provider, status.IntegrationMode)
+			runtime := describeProviderRuntime(session, resolve.Pane{
+				Name:      status.Name,
+				AgentName: status.AgentName,
+				Provider:  status.Provider,
+				Persona:   status.Persona,
+			}, profile)
+			if status.PersonaSource == "" {
+				status.PersonaSource = runtime.PersonaSource
+			}
+			if status.PersonaArtifact == "" {
+				status.PersonaArtifact = runtime.PersonaArtifact
+			}
 		}
 
 		if !status.Dead && status.Pid > 0 {
@@ -376,14 +440,22 @@ func StopPaneByName(session string, name string, verbose bool) error {
 		return fmt.Errorf("stop pane %q: %w", name, err)
 	}
 	if err := applyPaneMetadata(target.PaneID, paneMetadata{
-		Name:           target.Name,
-		StartupCommand: target.StartupCmd,
-		SourceType:     target.SourceType,
-		AgentName:      target.AgentName,
-		Provider:       target.Provider,
-		Model:          target.Model,
-		Persona:        target.Persona,
-		OnExit:         config.NormalizeOnExit(onExit),
+		Name:                target.Name,
+		StartupCommand:      target.StartupCmd,
+		SourceType:          target.SourceType,
+		AgentName:           target.AgentName,
+		Provider:            target.Provider,
+		Model:               target.Model,
+		Persona:             target.Persona,
+		IntegrationMode:     target.IntegrationMode,
+		PersonaChannel:      target.PersonaChannel,
+		PersonaSource:       target.PersonaSource,
+		PersonaArtifact:     target.PersonaArtifact,
+		ToolChannel:         target.ToolChannel,
+		ToolInput:           target.ToolInput,
+		IntegrationFallback: target.IntegrationFallback,
+		ReasoningEffort:     target.ReasoningEffort,
+		OnExit:              config.NormalizeOnExit(onExit),
 	}, verbose); err != nil {
 		return fmt.Errorf("restore metadata for pane %q after stop: %w", name, err)
 	}
@@ -897,19 +969,32 @@ func splitPane(session string, targetPaneID string, pane resolve.Pane, windowRoo
 }
 
 func configurePane(session string, paneID string, pane resolve.Pane, verbose bool) error {
-	startupCommand := buildPaneCommand(session, pane)
+	profile := resolveLaunchProfile(pane.Provider)
+	runtime := describeProviderRuntime(session, pane, profile)
+	if err := prepareProviderRuntime(session, pane, profile); err != nil {
+		return err
+	}
+	startupCommand := buildPaneCommandWithProfile(session, pane, profile)
 	if err := applyPaneLifecycle(paneID, pane.OnExit, verbose); err != nil {
 		return err
 	}
 	if err := applyPaneMetadata(paneID, paneMetadata{
-		Name:           pane.Name,
-		StartupCommand: startupCommand,
-		SourceType:     pane.SourceType,
-		AgentName:      pane.AgentName,
-		Provider:       pane.Provider,
-		Model:          pane.Model,
-		Persona:        pane.Persona,
-		OnExit:         pane.OnExit,
+		Name:                pane.Name,
+		StartupCommand:      startupCommand,
+		SourceType:          pane.SourceType,
+		AgentName:           pane.AgentName,
+		Provider:            pane.Provider,
+		Model:               pane.Model,
+		Persona:             pane.Persona,
+		IntegrationMode:     profile.Mode,
+		PersonaChannel:      profile.PersonaChannel,
+		PersonaSource:       runtime.PersonaSource,
+		PersonaArtifact:     runtime.PersonaArtifact,
+		ToolChannel:         profile.ToolChannel,
+		ToolInput:           profile.PreferredInput,
+		IntegrationFallback: profile.FallbackReason,
+		ReasoningEffort:     pane.ReasoningEffort,
+		OnExit:              pane.OnExit,
 	}, verbose); err != nil {
 		return err
 	}
@@ -938,20 +1023,28 @@ func BuildPaneCommand(session string, pane resolve.Pane) string {
 }
 
 func buildPaneCommand(session string, pane resolve.Pane) string {
+	return buildPaneCommandWithProfile(session, pane, resolveLaunchProfile(pane.Provider))
+}
+
+func buildPaneCommandWithProfile(session string, pane resolve.Pane, profile prov.LaunchProfile) string {
 	parts := make([]string, 0, 3)
 	if pane.Cwd != "" {
 		parts = append(parts, "cd "+singleQuote(pane.Cwd))
 	}
-	
+	runtime := describeProviderRuntime(session, pane, profile)
+
 	if pane.Env == nil {
 		pane.Env = make(map[string]string)
+	}
+	for key, value := range runtime.Env {
+		pane.Env[key] = value
 	}
 	pane.Env["AGENTMUX_SESSION"] = session
 	if pane.Name != "" {
 		pane.Env["AGENTMUX_PANE"] = pane.Name
 	}
 
-	// Auto-Path Injection: Ensure agents can call 'agentmux' tools/prompt 
+	// Auto-Path Injection: Ensure agents can call 'agentmux' tools/prompt
 	// even if the binary isn't in the user's global PATH.
 	if exe, err := os.Executable(); err == nil {
 		binDir := filepath.Dir(exe)
@@ -977,7 +1070,7 @@ func buildPaneCommand(session string, pane resolve.Pane) string {
 	}
 
 	command := pane.Command
-	if providerCmd := compileProviderCommand(session, pane); providerCmd != "" {
+	if providerCmd := compileProviderCommandWithProfile(session, pane, profile); providerCmd != "" {
 		command = providerCmd
 	}
 
@@ -1266,6 +1359,9 @@ func respawnPaneByName(session string, name string, verbose bool) error {
 	if err != nil {
 		return err
 	}
+	if err := prepareProviderRuntimeForPaneStatus(session, target); err != nil {
+		return fmt.Errorf("prepare provider runtime for pane %q: %w", name, err)
+	}
 
 	startupCommand := target.StartupCmd
 	if strings.TrimSpace(startupCommand) == "" {
@@ -1280,14 +1376,22 @@ func respawnPaneByName(session string, name string, verbose bool) error {
 		return fmt.Errorf("respawn pane %q: %w", name, err)
 	}
 	if err := applyPaneMetadata(target.PaneID, paneMetadata{
-		Name:           target.Name,
-		StartupCommand: startupCommand,
-		SourceType:     target.SourceType,
-		AgentName:      target.AgentName,
-		Provider:       target.Provider,
-		Model:          target.Model,
-		Persona:        target.Persona,
-		OnExit:         config.NormalizeOnExit(onExit),
+		Name:                target.Name,
+		StartupCommand:      startupCommand,
+		SourceType:          target.SourceType,
+		AgentName:           target.AgentName,
+		Provider:            target.Provider,
+		Model:               target.Model,
+		Persona:             target.Persona,
+		IntegrationMode:     target.IntegrationMode,
+		PersonaChannel:      target.PersonaChannel,
+		PersonaSource:       target.PersonaSource,
+		PersonaArtifact:     target.PersonaArtifact,
+		ToolChannel:         target.ToolChannel,
+		ToolInput:           target.ToolInput,
+		IntegrationFallback: target.IntegrationFallback,
+		ReasoningEffort:     target.ReasoningEffort,
+		OnExit:              config.NormalizeOnExit(onExit),
 	}, verbose); err != nil {
 		return fmt.Errorf("restore metadata for pane %q after respawn: %w", name, err)
 	}
@@ -1310,56 +1414,69 @@ func applyPaneMetadata(paneID string, metadata paneMetadata, verbose bool) error
 		metadata.StartTime = time.Now().Format(time.RFC3339)
 	}
 
-	if strings.TrimSpace(metadata.StartupCommand) != "" {
-		sanitized := strings.ReplaceAll(metadata.StartupCommand, "\n", "\\n")
-		sanitized = strings.ReplaceAll(sanitized, "\t", "\\t")
-		if err := run(verbose, "set-option", "-p", "-t", paneID, paneStartupOption, sanitized); err != nil {
-			return fmt.Errorf("set startup command for pane %s: %w", paneID, err)
-		}
+	if err := setPaneOptionValue(paneID, paneStartupOption, metadata.StartupCommand, true, verbose); err != nil {
+		return fmt.Errorf("set startup command for pane %s: %w", paneID, err)
 	}
-	if metadata.Name != "" {
-		sanitized := strings.ReplaceAll(metadata.Name, "\n", "\\n")
-		sanitized = strings.ReplaceAll(sanitized, "\t", "\\t")
-		if err := run(verbose, "set-option", "-p", "-t", paneID, paneNameOption, sanitized); err != nil {
-			return fmt.Errorf("set name for pane %s: %w", paneID, err)
-		}
+	if err := setPaneOptionValue(paneID, paneNameOption, metadata.Name, true, verbose); err != nil {
+		return fmt.Errorf("set name for pane %s: %w", paneID, err)
 	}
-	if metadata.SourceType != "" {
-		if err := run(verbose, "set-option", "-p", "-t", paneID, paneSourceOption, metadata.SourceType); err != nil {
-			return fmt.Errorf("set source type for pane %s: %w", paneID, err)
-		}
+	if err := setPaneOptionValue(paneID, paneSourceOption, metadata.SourceType, false, verbose); err != nil {
+		return fmt.Errorf("set source type for pane %s: %w", paneID, err)
 	}
-	if metadata.AgentName != "" {
-		if err := run(verbose, "set-option", "-p", "-t", paneID, paneAgentOption, metadata.AgentName); err != nil {
-			return fmt.Errorf("set agent name for pane %s: %w", paneID, err)
-		}
+	if err := setPaneOptionValue(paneID, paneAgentOption, metadata.AgentName, false, verbose); err != nil {
+		return fmt.Errorf("set agent name for pane %s: %w", paneID, err)
 	}
-	if metadata.Provider != "" {
-		if err := run(verbose, "set-option", "-p", "-t", paneID, paneProviderOption, metadata.Provider); err != nil {
-			return fmt.Errorf("set provider for pane %s: %w", paneID, err)
-		}
+	if err := setPaneOptionValue(paneID, paneProviderOption, metadata.Provider, false, verbose); err != nil {
+		return fmt.Errorf("set provider for pane %s: %w", paneID, err)
 	}
-	if metadata.Model != "" {
-		if err := run(verbose, "set-option", "-p", "-t", paneID, paneModelOption, metadata.Model); err != nil {
-			return fmt.Errorf("set model for pane %s: %w", paneID, err)
-		}
+	if err := setPaneOptionValue(paneID, paneModelOption, metadata.Model, false, verbose); err != nil {
+		return fmt.Errorf("set model for pane %s: %w", paneID, err)
 	}
-	if metadata.Persona != "" {
-		if err := run(verbose, "set-option", "-p", "-t", paneID, panePersonaOption, metadata.Persona); err != nil {
-			return fmt.Errorf("set persona for pane %s: %w", paneID, err)
-		}
+	if err := setPaneOptionValue(paneID, panePersonaOption, metadata.Persona, false, verbose); err != nil {
+		return fmt.Errorf("set persona for pane %s: %w", paneID, err)
 	}
-	if metadata.OnExit != "" {
-		if err := run(verbose, "set-option", "-p", "-t", paneID, paneOnExitOption, metadata.OnExit); err != nil {
-			return fmt.Errorf("set on_exit for pane %s: %w", paneID, err)
-		}
+	if err := setPaneOptionValue(paneID, paneIntegrationOption, metadata.IntegrationMode, false, verbose); err != nil {
+		return fmt.Errorf("set integration mode for pane %s: %w", paneID, err)
 	}
-	if metadata.StartTime != "" {
-		if err := run(verbose, "set-option", "-p", "-t", paneID, paneStartTimeOption, metadata.StartTime); err != nil {
-			return fmt.Errorf("set start time for pane %s: %w", paneID, err)
-		}
+	if err := setPaneOptionValue(paneID, panePersonaChannelOption, metadata.PersonaChannel, false, verbose); err != nil {
+		return fmt.Errorf("set persona channel for pane %s: %w", paneID, err)
+	}
+	if err := setPaneOptionValue(paneID, panePersonaSourceOption, metadata.PersonaSource, false, verbose); err != nil {
+		return fmt.Errorf("set persona source for pane %s: %w", paneID, err)
+	}
+	if err := setPaneOptionValue(paneID, panePersonaArtifactOption, metadata.PersonaArtifact, false, verbose); err != nil {
+		return fmt.Errorf("set persona artifact for pane %s: %w", paneID, err)
+	}
+	if err := setPaneOptionValue(paneID, paneToolChannelOption, metadata.ToolChannel, false, verbose); err != nil {
+		return fmt.Errorf("set tool channel for pane %s: %w", paneID, err)
+	}
+	if err := setPaneOptionValue(paneID, paneToolInputOption, metadata.ToolInput, false, verbose); err != nil {
+		return fmt.Errorf("set tool input for pane %s: %w", paneID, err)
+	}
+	if err := setPaneOptionValue(paneID, paneFallbackOption, metadata.IntegrationFallback, true, verbose); err != nil {
+		return fmt.Errorf("set integration fallback for pane %s: %w", paneID, err)
+	}
+	if err := setPaneOptionValue(paneID, paneReasoningOption, metadata.ReasoningEffort, false, verbose); err != nil {
+		return fmt.Errorf("set reasoning_effort for pane %s: %w", paneID, err)
+	}
+	if err := setPaneOptionValue(paneID, paneOnExitOption, metadata.OnExit, false, verbose); err != nil {
+		return fmt.Errorf("set on_exit for pane %s: %w", paneID, err)
+	}
+	if err := setPaneOptionValue(paneID, paneStartTimeOption, metadata.StartTime, false, verbose); err != nil {
+		return fmt.Errorf("set start time for pane %s: %w", paneID, err)
 	}
 	return nil
+}
+
+func setPaneOptionValue(paneID string, option string, value string, sanitize bool, verbose bool) error {
+	if strings.TrimSpace(value) == "" {
+		return run(verbose, "set-option", "-u", "-p", "-t", paneID, option)
+	}
+	if sanitize {
+		value = strings.ReplaceAll(value, "\n", "\\n")
+		value = strings.ReplaceAll(value, "\t", "\\t")
+	}
+	return run(verbose, "set-option", "-p", "-t", paneID, option, value)
 }
 
 func showPaneOption(targetPaneID string, option string, verbose bool) (string, error) {

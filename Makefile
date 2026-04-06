@@ -1,4 +1,6 @@
-GO ?= $(if $(wildcard $(CURDIR)/.tools/go1.26.1/bin/go),$(CURDIR)/.tools/go1.26.1/bin/go,go)
+MIN_GO_VERSION := 1.24
+LOCAL_GO ?= $(shell sh ./scripts/select-go.sh "$(CURDIR)/.tools" "$(MIN_GO_VERSION)")
+GO ?= $(if $(LOCAL_GO),$(LOCAL_GO),go)
 GOCACHE ?= $(CURDIR)/.cache/go-build
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo none)

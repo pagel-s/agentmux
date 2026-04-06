@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"agentmux/internal/config"
+	prov "agentmux/internal/provider"
 	tpl "agentmux/internal/template"
 )
 
@@ -66,20 +67,26 @@ func Document(doc *config.Document, cliParams map[string]string) []Issue {
 	}
 
 	for name, agent := range agents {
-		provider := strings.ToLower(strings.TrimSpace(agent.Provider))
-		if provider == "" {
+		providerName := strings.TrimSpace(agent.Provider)
+		if providerName == "" {
 			issues = append(issues, errorf("agent %q is missing provider", name))
 		}
-		switch provider {
-		case "command", "shell", "ssh", "claude", "claude-cli", "gemini", "gemini-cli", "openai", "aichat", "gptme", "codex":
-		case "":
-		default:
+		if canonical, ok := prov.AliasTarget(providerName); ok {
+			issues = append(issues, warningf("agent %q uses provider alias %q; prefer %q", name, agent.Provider, canonical))
+		}
+		if providerName != "" && !prov.Supported(providerName) {
 			issues = append(issues, errorf("agent %q has unsupported provider %q", name, agent.Provider))
 		}
-		if provider == "command" || provider == "shell" || provider == "" {
+		if prov.RequiresCommand(providerName) && strings.TrimSpace(agent.Command) == "" {
+			issues = append(issues, errorf("agent %q provider %q requires command", name, agent.Provider))
+		}
+		if prov.Normalize(providerName) == "" {
 			if strings.TrimSpace(agent.Command) == "" {
 				issues = append(issues, errorf("agent %q has an empty command", name))
 			}
+		}
+		if err := validateReasoningEffort(providerName, agent.ReasoningEffort); err != nil {
+			issues = append(issues, errorf("agent %q %v", name, err))
 		}
 		if onExit := resolvedOnExit(agent.OnExit, params); onExit != "" && !config.IsValidOnExit(onExit) {
 			issues = append(issues, errorf("agent %q has unsupported on_exit %q; use shell, remain, restart, or kill", name, onExit))
@@ -147,11 +154,23 @@ func Document(doc *config.Document, cliParams map[string]string) []Issue {
 				}
 			}
 			if pane.Provider != "" {
-				provider := strings.ToLower(strings.TrimSpace(pane.Provider))
-				switch provider {
-				case "command", "shell", "ssh", "claude", "claude-cli", "gemini", "gemini-cli", "openai", "aichat", "gptme":
-				default:
+				providerName := strings.TrimSpace(pane.Provider)
+				if canonical, ok := prov.AliasTarget(providerName); ok {
+					issues = append(issues, warningf("pane %d in window %q uses provider alias %q; prefer %q", paneIndex+1, window.Window, pane.Provider, canonical))
+				}
+				switch {
+				case !prov.Supported(providerName):
 					issues = append(issues, errorf("pane %d in window %q has unsupported provider %q", paneIndex+1, window.Window, pane.Provider))
+				case !prov.AllowsDirectPaneProvider(providerName):
+					issues = append(issues, errorf("pane %d in window %q provider %q cannot be used directly; use command or define an agent with command", paneIndex+1, window.Window, pane.Provider))
+				}
+				if err := validateReasoningEffort(providerName, pane.ReasoningEffort); err != nil {
+					issues = append(issues, errorf("pane %d in window %q %v", paneIndex+1, window.Window, err))
+				}
+			} else if pane.Agent != "" && pane.ReasoningEffort != "" {
+				agentProvider := strings.TrimSpace(agents[pane.Agent].Provider)
+				if err := validateReasoningEffort(agentProvider, pane.ReasoningEffort); err != nil {
+					issues = append(issues, errorf("pane %d in window %q %v", paneIndex+1, window.Window, err))
 				}
 			}
 			if pane.Command != "" && strings.TrimSpace(pane.Command) == "" {
@@ -235,6 +254,15 @@ func HasWarnings(issues []Issue) bool {
 		}
 	}
 	return false
+}
+
+func validateReasoningEffort(providerName string, effort string) error {
+	providerName = strings.TrimSpace(providerName)
+	effort = strings.TrimSpace(effort)
+	if providerName == "" || effort == "" {
+		return nil
+	}
+	return prov.ValidateReasoningEffort(providerName, effort)
 }
 
 func collectConfigRefs(cfg *config.Config) []string {

@@ -2,15 +2,18 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"agentmux/internal/resolve"
 	"agentmux/internal/tmux"
+	"agentmux/internal/toolruntime"
 )
 
 func TestVersionString(t *testing.T) {
@@ -154,18 +157,27 @@ func TestRenderErrorJSON(t *testing.T) {
 func TestRenderStatusIncludesRuntimeMetadata(t *testing.T) {
 	out := renderStatus("dogfood", []tmux.PaneStatus{
 		{
-			WindowIndex: 1,
-			WindowName:  "grid",
-			PaneIndex:   5,
-			PaneID:      "%10",
-			Name:        "resolve",
-			Title:       "Resolve",
-			SourceType:  "agent",
-			AgentName:   "reviewer",
-			OnExit:      "restart",
-			CurrentCmd:  "bash",
-			Dead:        true,
-			PaneActive:  true,
+			WindowIndex:     1,
+			WindowName:      "grid",
+			PaneIndex:       5,
+			PaneID:          "%10",
+			Name:            "resolve",
+			Title:           "Resolve",
+			SourceType:      "agent",
+			AgentName:       "reviewer",
+			Provider:        "codex",
+			Model:           "gpt-5-codex",
+			IntegrationMode: "cli-bridge",
+			PersonaChannel:  "bootstrap-prompt",
+			PersonaSource:   "config-file",
+			PersonaArtifact: "/tmp/agentmux/persona.md",
+			ToolChannel:     "bootstrap-prompt",
+			ToolInput:       "stdin",
+			ReasoningEffort: "high",
+			OnExit:          "restart",
+			CurrentCmd:      "bash",
+			Dead:            true,
+			PaneActive:      true,
 		},
 	})
 
@@ -174,6 +186,15 @@ func TestRenderStatusIncludesRuntimeMetadata(t *testing.T) {
 		"id=%10",
 		"source: agent",
 		"(reviewer)",
+		"provider=codex",
+		"integration=cli-bridge",
+		"persona_channel=bootstrap-prompt",
+		"persona_source=config-file",
+		"persona_artifact=/tmp/agentmux/persona.md",
+		"tool_channel=bootstrap-prompt",
+		"tool_input=stdin",
+		"model=gpt-5-codex",
+		"reasoning_effort=high",
 		"on_exit: restart",
 		"command: bash",
 		"DEAD (status 0)",
@@ -182,6 +203,184 @@ func TestRenderStatusIncludesRuntimeMetadata(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Fatalf("renderStatus output %q does not include %q", out, want)
 		}
+	}
+}
+
+func TestRunToolCallWrapsSuccessfulJSON(t *testing.T) {
+	original := toolExecutorFactory
+	t.Cleanup(func() { toolExecutorFactory = original })
+
+	toolExecutorFactory = func() toolruntime.Executor {
+		return toolruntime.Executor{
+			GetKV: func(session string, key string, verbose bool) (string, error) {
+				if session != "demo" || key != "task" {
+					t.Fatalf("GetKV(%q, %q) called, want (%q, %q)", session, key, "demo", "task")
+				}
+				return "go", nil
+			},
+		}
+	}
+
+	code, stdout, stderr := captureRunOutput(t, []string{"tool-call", "kv_get", "--from-json", `{"session":"demo","key":"task"}`})
+	if code != exitSuccess {
+		t.Fatalf("code = %d, want %d", code, exitSuccess)
+	}
+	if strings.TrimSpace(stderr) != "" {
+		t.Fatalf("stderr = %q, want empty", stderr)
+	}
+
+	var decoded struct {
+		Kind   string `json:"kind"`
+		Ok     bool   `json:"ok"`
+		Tool   string `json:"tool"`
+		Result struct {
+			Kind    string `json:"kind"`
+			Session string `json:"session"`
+			Key     string `json:"key"`
+			Value   string `json:"value"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &decoded); err != nil {
+		t.Fatalf("json.Unmarshal returned error: %v", err)
+	}
+	if decoded.Kind != "tool-call" || !decoded.Ok || decoded.Tool != "kv_get" {
+		t.Fatalf("decoded = %#v, want successful tool-call envelope", decoded)
+	}
+	if decoded.Result.Kind != "kv-get" || decoded.Result.Session != "demo" || decoded.Result.Key != "task" || decoded.Result.Value != "go" {
+		t.Fatalf("decoded result = %#v, want kv-get payload", decoded.Result)
+	}
+}
+
+func TestRunToolCallDefaultsSessionFromEnv(t *testing.T) {
+	original := toolExecutorFactory
+	t.Cleanup(func() { toolExecutorFactory = original })
+	t.Setenv("AGENTMUX_SESSION", "demo")
+
+	toolExecutorFactory = func() toolruntime.Executor {
+		return toolruntime.Executor{
+			Getenv: os.Getenv,
+			GetKV: func(session string, key string, verbose bool) (string, error) {
+				if session != "demo" || key != "task" {
+					t.Fatalf("GetKV(%q, %q) called, want (%q, %q)", session, key, "demo", "task")
+				}
+				return "go", nil
+			},
+		}
+	}
+
+	code, stdout, stderr := captureRunOutput(t, []string{"tool-call", "kv_get", "--from-json", `{"key":"task"}`})
+	if code != exitSuccess {
+		t.Fatalf("code = %d, want %d", code, exitSuccess)
+	}
+	if strings.TrimSpace(stderr) != "" {
+		t.Fatalf("stderr = %q, want empty", stderr)
+	}
+	if !strings.Contains(stdout, `"ok": true`) {
+		t.Fatalf("stdout = %q, want success envelope", stdout)
+	}
+}
+
+func TestRunToolCallReadsPayloadFromFile(t *testing.T) {
+	original := toolExecutorFactory
+	t.Cleanup(func() { toolExecutorFactory = original })
+
+	toolExecutorFactory = func() toolruntime.Executor {
+		return toolruntime.Executor{
+			GetKV: func(session string, key string, verbose bool) (string, error) {
+				if session != "demo" || key != "task" {
+					t.Fatalf("GetKV(%q, %q) called, want (%q, %q)", session, key, "demo", "task")
+				}
+				return "go", nil
+			},
+		}
+	}
+
+	path := filepath.Join(t.TempDir(), "payload.json")
+	if err := os.WriteFile(path, []byte(`{"session":"demo","key":"task"}`), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	code, stdout, stderr := captureRunOutput(t, []string{"tool-call", "kv_get", "--from-file", path})
+	if code != exitSuccess {
+		t.Fatalf("code = %d, want %d", code, exitSuccess)
+	}
+	if strings.TrimSpace(stderr) != "" {
+		t.Fatalf("stderr = %q, want empty", stderr)
+	}
+	if !strings.Contains(stdout, `"ok": true`) {
+		t.Fatalf("stdout = %q, want successful tool-call envelope", stdout)
+	}
+}
+
+func TestRunToolCallReadsPayloadFromStdin(t *testing.T) {
+	original := toolExecutorFactory
+	t.Cleanup(func() { toolExecutorFactory = original })
+
+	toolExecutorFactory = func() toolruntime.Executor {
+		return toolruntime.Executor{
+			GetKV: func(session string, key string, verbose bool) (string, error) {
+				if session != "demo" || key != "task" {
+					t.Fatalf("GetKV(%q, %q) called, want (%q, %q)", session, key, "demo", "task")
+				}
+				return "go", nil
+			},
+		}
+	}
+
+	code, stdout, stderr := captureRunOutputWithStdin(t, []string{"tool-call", "kv_get", "--from-stdin"}, `{"session":"demo","key":"task"}`)
+	if code != exitSuccess {
+		t.Fatalf("code = %d, want %d", code, exitSuccess)
+	}
+	if strings.TrimSpace(stderr) != "" {
+		t.Fatalf("stderr = %q, want empty", stderr)
+	}
+	if !strings.Contains(stdout, `"ok": true`) {
+		t.Fatalf("stdout = %q, want successful tool-call envelope", stdout)
+	}
+}
+
+func TestRunToolCallWrapsStructuredErrors(t *testing.T) {
+	original := toolExecutorFactory
+	t.Cleanup(func() { toolExecutorFactory = original })
+
+	toolExecutorFactory = func() toolruntime.Executor {
+		return toolruntime.Executor{
+			WaitForPattern: func(session string, pane string, pattern string, timeout time.Duration, verbose bool) (string, error) {
+				return "", errors.New("pattern not found")
+			},
+		}
+	}
+
+	code, stdout, stderr := captureRunOutput(t, []string{"tool-call", "wait", "--from-json", `{"session":"demo","pane":"review","pattern":"DONE"}`})
+	if code != exitRuntime {
+		t.Fatalf("code = %d, want %d", code, exitRuntime)
+	}
+	if strings.TrimSpace(stderr) != "" {
+		t.Fatalf("stderr = %q, want empty", stderr)
+	}
+
+	var decoded struct {
+		Kind  string `json:"kind"`
+		Ok    bool   `json:"ok"`
+		Tool  string `json:"tool"`
+		Error struct {
+			Code     string          `json:"code"`
+			ExitCode int             `json:"exit_code"`
+			Message  string          `json:"message"`
+			Details  json.RawMessage `json:"details"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &decoded); err != nil {
+		t.Fatalf("json.Unmarshal returned error: %v", err)
+	}
+	if decoded.Kind != "tool-call" || decoded.Ok || decoded.Tool != "wait" {
+		t.Fatalf("decoded = %#v, want failing tool-call envelope", decoded)
+	}
+	if decoded.Error.Code != "runtime" || decoded.Error.ExitCode != exitRuntime || decoded.Error.Message != "pattern not found" {
+		t.Fatalf("decoded error = %#v, want structured runtime error", decoded.Error)
+	}
+	if !json.Valid(decoded.Error.Details) {
+		t.Fatalf("decoded details = %q, want embedded error json", decoded.Error.Details)
 	}
 }
 
@@ -557,6 +756,29 @@ func captureRunOutput(t *testing.T, args []string) (code int, stdout string, std
 	_ = stderrReader.Close()
 
 	return code, string(stdoutBytes), string(stderrBytes)
+}
+
+func captureRunOutputWithStdin(t *testing.T, args []string, stdin string) (code int, stdout string, stderr string) {
+	t.Helper()
+
+	originalStdin := os.Stdin
+	file, err := os.CreateTemp(t.TempDir(), "stdin-*")
+	if err != nil {
+		t.Fatalf("CreateTemp returned error: %v", err)
+	}
+	if _, err := file.WriteString(stdin); err != nil {
+		t.Fatalf("WriteString returned error: %v", err)
+	}
+	if _, err := file.Seek(0, 0); err != nil {
+		t.Fatalf("Seek returned error: %v", err)
+	}
+	os.Stdin = file
+	t.Cleanup(func() {
+		os.Stdin = originalStdin
+		_ = file.Close()
+	})
+
+	return captureRunOutput(t, args)
 }
 
 func isTMUXPermissionError(err error) bool {

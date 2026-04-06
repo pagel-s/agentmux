@@ -362,6 +362,10 @@ func TestProjectImplicitRequirements(t *testing.T) {
 			"ai": {
 				Provider: "claude-cli",
 			},
+			"ops": {
+				Provider: "ssh",
+				Command:  "ssh prod",
+			},
 		},
 		Layout: []config.Window{
 			{
@@ -372,6 +376,9 @@ func TestProjectImplicitRequirements(t *testing.T) {
 					},
 					{
 						Provider: "gemini",
+					},
+					{
+						Agent: "ops",
 					},
 				},
 			},
@@ -391,19 +398,78 @@ func TestProjectImplicitRequirements(t *testing.T) {
 	bins := resolved.Requires.Binaries
 	seenClaude := false
 	seenGemini := false
+	seenSSH := false
 	for _, b := range bins {
-		if b == "claude-cli" {
+		if b == "claude" {
 			seenClaude = true
 		}
-		if b == "gemini-cli" {
+		if b == "gemini" {
 			seenGemini = true
+		}
+		if b == "ssh" {
+			seenSSH = true
 		}
 	}
 
 	if !seenClaude {
-		t.Errorf("missing implicit requirement: claude-cli")
+		t.Errorf("missing implicit requirement: claude")
 	}
 	if !seenGemini {
-		t.Errorf("missing implicit requirement: gemini-cli")
+		t.Errorf("missing implicit requirement: gemini")
+	}
+	if !seenSSH {
+		t.Errorf("missing implicit requirement: ssh")
+	}
+}
+
+func TestProjectPaneOverridesAgentModelAndPersona(t *testing.T) {
+	cfg := &config.Config{
+		Version: 1,
+		Session: "demo",
+		Agents: map[string]config.Agent{
+			"coder": {
+				Provider:        "openai",
+				Persona:         "personas/base.md",
+				Model:           "gpt-5",
+				ReasoningEffort: "medium",
+			},
+		},
+		Layout: []config.Window{
+			{
+				Window: "main",
+				Panes: []config.Pane{
+					{
+						Agent:           "coder",
+						Persona:         "personas/review.md",
+						Model:           "gpt-5-codex",
+						ReasoningEffort: "high",
+					},
+				},
+			},
+		},
+	}
+
+	doc := &config.Document{
+		Path:   "/tmp/project/config.yaml",
+		Config: *cfg,
+	}
+
+	resolved, err := Project(doc, nil)
+	if err != nil {
+		t.Fatalf("Project returned error: %v", err)
+	}
+
+	pane := resolved.Windows[0].Panes[0]
+	if got := pane.Provider; got != "codex" {
+		t.Fatalf("pane.Provider = %q, want %q", got, "codex")
+	}
+	if got := pane.Model; got != "gpt-5-codex" {
+		t.Fatalf("pane.Model = %q, want %q", got, "gpt-5-codex")
+	}
+	if got := pane.Persona; got != "/tmp/project/personas/review.md" {
+		t.Fatalf("pane.Persona = %q, want %q", got, "/tmp/project/personas/review.md")
+	}
+	if got := pane.ReasoningEffort; got != "high" {
+		t.Fatalf("pane.ReasoningEffort = %q, want %q", got, "high")
 	}
 }

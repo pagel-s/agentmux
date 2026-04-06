@@ -90,6 +90,18 @@ type ToolsOptions struct {
 	Format string
 }
 
+type PromptOptions struct {
+	Provider string
+	Mode     string
+}
+
+type ToolCallOptions struct {
+	Tool      string
+	FromJSON  string
+	FromFile  string
+	FromStdin bool
+}
+
 type InitOptions struct {
 	Template string
 	Path     string
@@ -606,11 +618,90 @@ func ParseTools(args []string) (ToolsOptions, error) {
 	return ToolsOptions{Format: format}, nil
 }
 
-func ParsePrompt(args []string) error {
-	if len(args) > 0 {
-		return errors.New("prompt does not accept any arguments")
+func ParsePrompt(args []string) (PromptOptions, error) {
+	opts := PromptOptions{}
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch arg {
+		case "--provider":
+			if i+1 >= len(args) {
+				return PromptOptions{}, fmt.Errorf("prompt flag %q requires a value", arg)
+			}
+			opts.Provider = strings.TrimSpace(args[i+1])
+			if opts.Provider == "" {
+				return PromptOptions{}, fmt.Errorf("prompt flag %q requires a non-empty value", arg)
+			}
+			i++
+		case "--mode":
+			if i+1 >= len(args) {
+				return PromptOptions{}, fmt.Errorf("prompt flag %q requires a value", arg)
+			}
+			opts.Mode = strings.TrimSpace(args[i+1])
+			if opts.Mode == "" {
+				return PromptOptions{}, fmt.Errorf("prompt flag %q requires a non-empty value", arg)
+			}
+			i++
+		default:
+			return PromptOptions{}, fmt.Errorf("prompt does not accept flag or argument %q", arg)
+		}
 	}
-	return nil
+	return opts, nil
+}
+
+func ParseToolCall(args []string) (ToolCallOptions, error) {
+	opts := ToolCallOptions{}
+	positional := make([]string, 0, 1)
+
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch arg {
+		case "--from-json":
+			if i+1 >= len(args) {
+				return ToolCallOptions{}, fmt.Errorf("tool-call flag %q requires a value", arg)
+			}
+			opts.FromJSON = args[i+1]
+			i++
+		case "--from-file":
+			if i+1 >= len(args) {
+				return ToolCallOptions{}, fmt.Errorf("tool-call flag %q requires a value", arg)
+			}
+			opts.FromFile = strings.TrimSpace(args[i+1])
+			if opts.FromFile == "" {
+				return ToolCallOptions{}, fmt.Errorf("tool-call flag %q requires a non-empty value", arg)
+			}
+			i++
+		case "--from-stdin":
+			opts.FromStdin = true
+		default:
+			if strings.HasPrefix(arg, "-") {
+				return ToolCallOptions{}, fmt.Errorf("tool-call does not accept flag %q", arg)
+			}
+			positional = append(positional, arg)
+		}
+	}
+
+	if len(positional) != 1 {
+		return ToolCallOptions{}, errors.New("tool-call requires exactly one tool name")
+	}
+	inputModes := 0
+	if strings.TrimSpace(opts.FromJSON) != "" {
+		inputModes++
+	}
+	if opts.FromFile != "" {
+		inputModes++
+	}
+	if opts.FromStdin {
+		inputModes++
+	}
+	if inputModes == 0 {
+		return ToolCallOptions{}, errors.New("tool-call requires exactly one input mode: --from-json <json>, --from-file <path>, or --from-stdin")
+	}
+	if inputModes > 1 {
+		return ToolCallOptions{}, errors.New("tool-call accepts exactly one input mode: --from-json <json>, --from-file <path>, or --from-stdin")
+	}
+
+	opts.Tool = positional[0]
+	return opts, nil
 }
 
 func parsePaneTarget(name string, args []string) (PaneTargetOptions, error) {

@@ -268,6 +268,59 @@ func TestParseStopRequiresSessionAndPaneName(t *testing.T) {
 	}
 }
 
+func TestParsePromptAcceptsProviderAndMode(t *testing.T) {
+	opts, err := ParsePrompt([]string{"--provider", "claude", "--mode", "native-mcp"})
+	if err != nil {
+		t.Fatalf("ParsePrompt returned error: %v", err)
+	}
+	if opts.Provider != "claude" {
+		t.Fatalf("Provider = %q, want %q", opts.Provider, "claude")
+	}
+	if opts.Mode != "native-mcp" {
+		t.Fatalf("Mode = %q, want %q", opts.Mode, "native-mcp")
+	}
+}
+
+func TestParsePromptRejectsUnexpectedArgs(t *testing.T) {
+	if _, err := ParsePrompt([]string{"claude"}); err == nil {
+		t.Fatal("ParsePrompt returned nil error for positional arg")
+	}
+}
+
+func TestParseToolCallAcceptsFlagsBeforeOrAfterTool(t *testing.T) {
+	tests := [][]string{
+		{"kv_set", "--from-json", `{"session":"demo","key":"task","value":"go"}`},
+		{"--from-json", `{"session":"demo","key":"task","value":"go"}`, "kv_set"},
+		{"kv_set", "--from-file", "/tmp/payload.json"},
+		{"--from-stdin", "kv_set"},
+	}
+
+	for _, args := range tests {
+		opts, err := ParseToolCall(args)
+		if err != nil {
+			t.Fatalf("ParseToolCall(%v) returned error: %v", args, err)
+		}
+		if opts.Tool != "kv_set" {
+			t.Fatalf("Tool = %q, want %q", opts.Tool, "kv_set")
+		}
+		if !opts.FromStdin && opts.FromJSON == "" && opts.FromFile == "" {
+			t.Fatal("tool-call input mode is empty, want payload source")
+		}
+	}
+}
+
+func TestParseToolCallRequiresToolAndJSON(t *testing.T) {
+	if _, err := ParseToolCall([]string{"kv_set"}); err == nil {
+		t.Fatal("ParseToolCall returned nil error without input mode")
+	}
+	if _, err := ParseToolCall([]string{"--from-json", `{"session":"demo"}`}); err == nil {
+		t.Fatal("ParseToolCall returned nil error without tool name")
+	}
+	if _, err := ParseToolCall([]string{"kv_set", "--from-json", `{}`, "--from-stdin"}); err == nil {
+		t.Fatal("ParseToolCall returned nil error for multiple input modes")
+	}
+}
+
 func TestParseKillRequiresSessionAndPaneName(t *testing.T) {
 	opts, err := ParseKill([]string{"dogfood", "resolve"})
 	if err != nil {
