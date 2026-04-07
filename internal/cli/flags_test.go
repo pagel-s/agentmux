@@ -217,6 +217,25 @@ func TestParseFocusAcceptsJSONFlagBeforeOrAfterTarget(t *testing.T) {
 	}
 }
 
+func TestParseWaitAcceptsScopeAndTimeout(t *testing.T) {
+	opts, err := ParseWait([]string{"demo", "coder", "DONE", "--scope", "visible", "--timeout", "30s", "--json"})
+	if err != nil {
+		t.Fatalf("ParseWait returned error: %v", err)
+	}
+	if opts.Session != "demo" || opts.Pane != "coder" || opts.Pattern != "DONE" {
+		t.Fatalf("opts = %#v, want parsed wait target", opts)
+	}
+	if opts.Scope != "visible" {
+		t.Fatalf("Scope = %q, want %q", opts.Scope, "visible")
+	}
+	if opts.Timeout != "30s" {
+		t.Fatalf("Timeout = %q, want %q", opts.Timeout, "30s")
+	}
+	if !opts.JSON {
+		t.Fatal("JSON = false, want true")
+	}
+}
+
 func TestParseRestartRequiresSessionAndPaneName(t *testing.T) {
 	opts, err := ParseRestart([]string{"dogfood", "resolve"})
 	if err != nil {

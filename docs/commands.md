@@ -447,10 +447,11 @@ These commands enable coordination and orchestration between multiple agents.
 
 What it does:
 - launches a full-screen, real-time TUI (Terminal User Interface)
-- provides a "Mission Control" view of all panes, their status, and the shared Blackboard (KV-store)
+- provides a "Mission Control" view of all panes, the selected pane's live output, and the shared Blackboard (KV-store)
 
 When to use it:
 - to monitor an agentic team in real-time
+- to see live pane activity, including provider MCP/tool traces, without repeatedly running `capture` and `inspect`
 - to see the current state of shared variables without repeatedly running `status`
 
 Examples:
@@ -460,9 +461,10 @@ Examples:
 ```
 
 Useful shortcuts inside the dashboard:
-- `f`: focus the selected pane in your terminal
+- `f`: quit the dashboard and attach/switch to the selected pane
 - `r`: restart the selected pane
 - `q`: quit the dashboard
+- `up/down`: change the selected pane and refresh its live output
 
 ### `inspect`
 
@@ -534,15 +536,21 @@ Examples:
 ### `wait`
 
 What it does:
-- blocks until a specific regex pattern appears in a pane's terminal output
+- blocks until a specific regex pattern appears in a pane's emitted output
+- by default ignores active input/composer text in interactive panes
+- line anchors like `^...$` work against output lines by default
+- supports `--scope visible` for legacy raw screen matching
 
 When to use it:
 - to synchronize handoffs (e.g., wait for "BUILD SUCCESSFUL")
+- to wait for real agent output rather than matching text still sitting in the input composer
 
 Examples:
 
 ```bash
 ./bin/agentmux wait my-team builder "SUCCESS" --timeout 5m
+./bin/agentmux wait my-team reviewer '^• REVIEW_DONE$' --timeout 2m
+./bin/agentmux wait my-team builder "SUCCESS" --scope visible --timeout 5m
 ```
 
 ### `scale`

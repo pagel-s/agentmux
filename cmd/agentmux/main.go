@@ -869,22 +869,26 @@ func runWait(args []string) int {
 			return printCommandError("wait", opts.JSON, exitValidation, fmt.Errorf("invalid timeout %q: %w", opts.Timeout, err), opts.Session, opts.Pane)
 		}
 	}
+	scope, err := tmux.ParseWaitScope(opts.Scope)
+	if err != nil {
+		return printCommandError("wait", opts.JSON, exitValidation, err, opts.Session, opts.Pane)
+	}
 
 	if err := requireTMux(); err != nil {
 		return printCommandError("wait", opts.JSON, exitDependency, err, opts.Session, opts.Pane)
 	}
 
 	if !opts.JSON {
-		fmt.Fprintf(os.Stderr, "waiting for pattern %q in pane %q...\n", opts.Pattern, opts.Pane)
+		fmt.Fprintf(os.Stderr, "waiting for pattern %q in pane %q (%s scope)...\n", opts.Pattern, opts.Pane, scope)
 	}
 
-	match, err := tmux.WaitForPattern(opts.Session, opts.Pane, opts.Pattern, timeout, false)
+	match, err := tmux.WaitForPattern(opts.Session, opts.Pane, opts.Pattern, timeout, scope, false)
 	if err != nil {
 		return printCommandError("wait", opts.JSON, exitRuntime, err, opts.Session, opts.Pane)
 	}
 
 	if opts.JSON {
-		out, err := renderWaitJSON(opts.Session, opts.Pane, opts.Pattern, match)
+		out, err := renderWaitJSON(opts.Session, opts.Pane, opts.Pattern, string(scope), match)
 		if err != nil {
 			return printCommandError("wait", true, exitRuntime, fmt.Errorf("render wait json: %w", err), opts.Session, opts.Pane)
 		}
@@ -892,7 +896,7 @@ func runWait(args []string) int {
 		return exitSuccess
 	}
 
-	fmt.Printf("matched pattern %q in pane %q: %s\n", opts.Pattern, opts.Pane, match)
+	fmt.Printf("matched pattern %q in pane %q (%s scope): %s\n", opts.Pattern, opts.Pane, scope, match)
 	return exitSuccess
 }
 
@@ -1749,13 +1753,14 @@ func renderKVActionJSON(kind string, session string, key string, value string, m
 	})
 }
 
-func renderWaitJSON(session string, pane string, pattern string, match string) (string, error) {
+func renderWaitJSON(session string, pane string, pattern string, scope string, match string) (string, error) {
 	return renderJSON(struct {
 		SchemaVersion int    `json:"schema_version"`
 		Kind          string `json:"kind"`
 		Session       string `json:"session"`
 		Pane          string `json:"pane"`
 		Pattern       string `json:"pattern"`
+		Scope         string `json:"scope"`
 		Match         string `json:"match"`
 	}{
 		SchemaVersion: jsonSchemaV1,
@@ -1763,6 +1768,7 @@ func renderWaitJSON(session string, pane string, pattern string, match string) (
 		Session:       session,
 		Pane:          pane,
 		Pattern:       pattern,
+		Scope:         scope,
 		Match:         match,
 	})
 }
@@ -2089,7 +2095,7 @@ Usage:
   agentmux kv-get <session> <key> [--json]
   agentmux kv-list <session> [--json]
   agentmux kv-del <session> <key> [--json]
-  agentmux wait <session> <pane> <pattern> [--timeout <duration>] [--json]
+  agentmux wait <session> <pane> <pattern> [--scope <output|visible>] [--timeout <duration>] [--json]
   agentmux scale <session> <agent-name> <count> [--window <name>] [--json]
   agentmux focus <session> <pane-name> [--json]
   agentmux restart <session> <pane-name> [--json]

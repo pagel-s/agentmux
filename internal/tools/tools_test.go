@@ -71,6 +71,7 @@ func TestPromptUsesCLIContractByDefault(t *testing.T) {
 		"--from-stdin",
 		"--from-file",
 		"Preferred tool-call input mode for this provider: stdin.",
+		"The `wait` tool ignores active input/composer text by default;",
 		"- kv_set",
 		"- kv_get",
 		"- wait",
@@ -94,6 +95,7 @@ func TestPromptSupportsNativeMCPMode(t *testing.T) {
 	for _, want := range []string{
 		"Agentmux coordination tools are available natively through MCP in this session.",
 		"Use the provided tools directly instead of shelling out to `agentmux tool-call`.",
+		"The `wait` tool ignores active input/composer text by default;",
 		"Call `kv_get` directly with `key=current_task`.",
 	} {
 		if !strings.Contains(out, want) {

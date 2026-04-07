@@ -85,12 +85,13 @@ var registry = []ToolSpec{
 		Name:        "wait",
 		SchemaName:  "agentmux_wait",
 		Command:     "wait",
-		Description: "Blocks until a regex pattern appears in a target pane's terminal output.",
+		Description: "Blocks until a regex pattern appears in a target pane's emitted output. By default, active input/composer text is ignored.",
 		Aliases:     []string{"agentmux_wait"},
 		Parameters: []ToolParameter{
 			{Name: "session", Type: "string", Description: "Optional tmux session name. Defaults to $AGENTMUX_SESSION when omitted.", Required: false},
 			{Name: "pane", Type: "string", Description: "The name of the target pane to observe.", Required: true},
 			{Name: "pattern", Type: "string", Description: "The regular expression pattern to wait for.", Required: true},
+			{Name: "scope", Type: "string", Description: "Optional wait scope: output (default) ignores active input/composer text; visible matches any visible pane text."},
 			{Name: "timeout", Type: "string", Description: "Optional timeout such as 30s or 5m."},
 		},
 	},
@@ -231,6 +232,7 @@ func Prompt(opts PromptOptions) (string, error) {
 		b.WriteString("Agentmux coordination tools are available natively through MCP in this session.\n")
 		b.WriteString("Use the provided tools directly instead of shelling out to `agentmux tool-call`.\n")
 		b.WriteString("If a tool accepts `session`, you may omit it and Agentmux will default to $AGENTMUX_SESSION.\n")
+		b.WriteString("The `wait` tool ignores active input/composer text by default; use `scope=visible` only when you truly want raw screen matching.\n")
 		b.WriteString("Use normal shell commands for work and MCP tools only for coordination.\n\n")
 	default:
 		b.WriteString("Agentmux coordination actions are real CLI operations, not native function calls.\n")
@@ -240,6 +242,7 @@ func Prompt(opts PromptOptions) (string, error) {
 		b.WriteString("  --from-file    preferred for larger or multiline payloads\n")
 		b.WriteString("  --from-json    acceptable only for short inline payloads\n")
 		b.WriteString("If `session` is omitted, Agentmux will default it from $AGENTMUX_SESSION.\n")
+		b.WriteString("The `wait` tool ignores active input/composer text by default; use `scope=visible` only for raw screen matching.\n")
 		b.WriteString("Use normal shell commands for work; use Agentmux tool calls only for coordination.\n\n")
 		fmt.Fprintf(&b, "Preferred tool-call input mode for this provider: %s.\n\n", preferredInput)
 	}

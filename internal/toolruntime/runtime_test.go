@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"agentmux/internal/resolve"
 	"agentmux/internal/tmux"
@@ -86,5 +87,27 @@ func TestExecuteScaleUsesSharedResolver(t *testing.T) {
 	}
 	if !strings.Contains(string(result), `"kind":"scale"`) {
 		t.Fatalf("result = %s, want scale payload", result)
+	}
+}
+
+func TestExecuteWaitDefaultsToOutputScope(t *testing.T) {
+	executor := Executor{
+		WaitForPattern: func(session string, pane string, pattern string, timeout time.Duration, scope tmux.WaitScope, verbose bool) (string, error) {
+			if session != "demo" || pane != "review" || pattern != "DONE" {
+				t.Fatalf("WaitForPattern(%q, %q, %q) unexpected", session, pane, pattern)
+			}
+			if scope != tmux.WaitScopeOutput {
+				t.Fatalf("scope = %q, want %q", scope, tmux.WaitScopeOutput)
+			}
+			return "DONE", nil
+		},
+	}
+
+	result, execErr := executor.Execute("wait", []byte(`{"session":"demo","pane":"review","pattern":"DONE"}`), "--from-json")
+	if execErr != nil {
+		t.Fatalf("Execute returned error: %#v", execErr)
+	}
+	if !strings.Contains(string(result), `"scope":"output"`) {
+		t.Fatalf("result = %s, want output scope in payload", result)
 	}
 }

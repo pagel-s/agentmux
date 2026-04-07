@@ -1625,7 +1625,7 @@ func TestWaitCondition(t *testing.T) {
 	}()
 
 	// Wait for the pattern
-	match, err := WaitForPattern(cfg.Session, "p1", "FINISHED", 5*time.Second, false)
+	match, err := WaitForPattern(cfg.Session, "p1", "FINISHED", 5*time.Second, WaitScopeOutput, false)
 	if err != nil {
 		t.Fatalf("WaitForPattern failed: %v", err)
 	}
@@ -1661,12 +1661,66 @@ func TestWaitTimeout(t *testing.T) {
 	}
 
 	// Wait for a pattern that will never appear with a short timeout
-	_, err := WaitForPattern(cfg.Session, "p1", "NEVER", 1*time.Second, false)
+	_, err := WaitForPattern(cfg.Session, "p1", "NEVER", 1*time.Second, WaitScopeOutput, false)
 	if err == nil {
 		t.Fatal("expected timeout error, got nil")
 	}
 	if !strings.Contains(err.Error(), "timeout") {
 		t.Fatalf("expected timeout error message, got %q", err.Error())
+	}
+}
+
+func TestWaitScopeOutputIgnoresQueuedInput(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed")
+	}
+
+	socket := filepath.Join(t.TempDir(), "agentmux-wait-output.sock")
+	t.Setenv(envTmuxSocket, socket)
+
+	cfg := resolve.Config{
+		Session: "agentmux-wait-output",
+		Windows: []resolve.Window{
+			{Name: "main", Panes: []resolve.Pane{{Name: "p1", Command: "exec $SHELL"}}},
+		},
+	}
+
+	t.Cleanup(func() {
+		_ = command("kill-server").Run()
+	})
+
+	if err := Execute(cfg, Options{Replace: true}); err != nil {
+		if isTmuxPermissionError(err) {
+			t.Skipf("tmux integration unavailable in this environment: %v", err)
+		}
+		t.Fatalf("Execute returned error: %v", err)
+	}
+
+	if err := SendCommandToPaneByName(cfg.Session, "p1", "echo WAIT_FALSE_POSITIVE", false, false); err != nil {
+		t.Fatalf("SendCommandToPaneByName returned error: %v", err)
+	}
+
+	if match, err := WaitForPattern(cfg.Session, "p1", "WAIT_FALSE_POSITIVE", 500*time.Millisecond, WaitScopeVisible, false); err != nil {
+		t.Fatalf("WaitForPattern visible returned error: %v", err)
+	} else if match != "WAIT_FALSE_POSITIVE" {
+		t.Fatalf("visible match = %q, want %q", match, "WAIT_FALSE_POSITIVE")
+	}
+
+	if _, err := WaitForPattern(cfg.Session, "p1", "WAIT_FALSE_POSITIVE", 1*time.Second, WaitScopeOutput, false); err == nil {
+		t.Fatal("WaitForPattern output returned nil error for queued-only text, want timeout")
+	}
+	target, err := findPaneByName(cfg.Session, "p1")
+	if err != nil {
+		t.Fatalf("findPaneByName returned error: %v", err)
+	}
+	if err := run(false, "send-keys", "-t", target.PaneID, "Enter"); err != nil {
+		t.Fatalf("send Enter returned error: %v", err)
+	}
+
+	if match, err := WaitForPattern(cfg.Session, "p1", "WAIT_FALSE_POSITIVE", 5*time.Second, WaitScopeOutput, false); err != nil {
+		t.Fatalf("WaitForPattern output after enter returned error: %v", err)
+	} else if match != "WAIT_FALSE_POSITIVE" {
+		t.Fatalf("output match = %q, want %q", match, "WAIT_FALSE_POSITIVE")
 	}
 }
 func TestScaleAgent(t *testing.T) {

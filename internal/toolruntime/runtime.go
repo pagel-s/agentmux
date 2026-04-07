@@ -76,7 +76,7 @@ type Executor struct {
 	ResolveScaleConfig      ScaleConfigResolver
 	SetKV                   func(session string, key string, value string, verbose bool) error
 	GetKV                   func(session string, key string, verbose bool) (string, error)
-	WaitForPattern          func(session string, pane string, pattern string, timeout time.Duration, verbose bool) (string, error)
+	WaitForPattern          func(session string, pane string, pattern string, timeout time.Duration, scope tmux.WaitScope, verbose bool) (string, error)
 	ScaleAgent              func(session string, agentName string, targetCount int, preferredWindow string, cfg resolve.Config, opts tmux.Options) error
 	SendCommandToPaneByName func(session string, name string, commandText string, pressEnter bool, verbose bool) error
 }
@@ -209,6 +209,7 @@ func (e Executor) execute(spec tools.ToolSpec, raw string, source string) (json.
 			Session string `json:"session"`
 			Pane    string `json:"pane"`
 			Pattern string `json:"pattern"`
+			Scope   string `json:"scope"`
 			Timeout string `json:"timeout"`
 		}
 		if err := decodeJSON(raw, source, &input); err != nil {
@@ -226,10 +227,14 @@ func (e Executor) execute(spec tools.ToolSpec, raw string, source string) (json.
 			}
 			timeout = parsed
 		}
+		scope, err := tmux.ParseWaitScope(input.Scope)
+		if err != nil {
+			return nil, validationError(spec.Command, err.Error(), input.Session, input.Pane)
+		}
 		if err := e.RequireTMux(); err != nil {
 			return nil, dependencyError(spec.Command, err, input.Session, input.Pane)
 		}
-		match, err := e.WaitForPattern(input.Session, input.Pane, input.Pattern, timeout, false)
+		match, err := e.WaitForPattern(input.Session, input.Pane, input.Pattern, timeout, scope, false)
 		if err != nil {
 			return nil, runtimeError(spec.Command, err, input.Session, input.Pane)
 		}
@@ -239,6 +244,7 @@ func (e Executor) execute(spec tools.ToolSpec, raw string, source string) (json.
 			Session       string `json:"session"`
 			Pane          string `json:"pane"`
 			Pattern       string `json:"pattern"`
+			Scope         string `json:"scope"`
 			Match         string `json:"match"`
 		}{
 			SchemaVersion: jsonSchemaV1,
@@ -246,6 +252,7 @@ func (e Executor) execute(spec tools.ToolSpec, raw string, source string) (json.
 			Session:       input.Session,
 			Pane:          input.Pane,
 			Pattern:       input.Pattern,
+			Scope:         string(scope),
 			Match:         match,
 		})
 	case "scale":

@@ -105,3 +105,79 @@ func TestTailLinesFromCaptureDropsTrailingBlankRows(t *testing.T) {
 		t.Fatalf("tailLinesFromCapture(..., 1) = %q, want %q", got, "line-2\n")
 	}
 }
+
+func TestParseWaitScopeDefaultsToOutput(t *testing.T) {
+	scope, err := ParseWaitScope("")
+	if err != nil {
+		t.Fatalf("ParseWaitScope returned error: %v", err)
+	}
+	if scope != WaitScopeOutput {
+		t.Fatalf("scope = %q, want %q", scope, WaitScopeOutput)
+	}
+
+	if _, err := ParseWaitScope("bogus"); err == nil {
+		t.Fatal("ParseWaitScope(bogus) returned nil error, want validation failure")
+	}
+}
+
+func TestCompileWaitPatternUsesMultilineAnchors(t *testing.T) {
+	re, err := compileWaitPattern("^ARCH_DONE$")
+	if err != nil {
+		t.Fatalf("compileWaitPattern returned error: %v", err)
+	}
+	if match := re.FindString("before\nARCH_DONE\nafter\n"); match != "ARCH_DONE" {
+		t.Fatalf("FindString returned %q, want %q", match, "ARCH_DONE")
+	}
+}
+
+func TestStripActiveInputBlockRemovesCodexComposer(t *testing.T) {
+	content := strings.Join([]string{
+		"• Prior output",
+		"",
+		"› Read blackboard key \"probe\" and print exactly TOOL_OK:ok-42",
+		"",
+		"  gpt-5-codex high · 98% left · ~/code/agentmux",
+	}, "\n") + "\n"
+
+	filtered, stripped := stripActiveInputBlock(content, PaneStatus{Provider: "codex"}, paneCursorInfo{Visible: true, Y: 4})
+	if !stripped {
+		t.Fatal("stripActiveInputBlock reported no strip, want active composer removed")
+	}
+	if strings.Contains(filtered, "Read blackboard key") {
+		t.Fatalf("filtered content still includes active Codex composer: %q", filtered)
+	}
+	if !strings.Contains(filtered, "Prior output") {
+		t.Fatalf("filtered content removed prior output unexpectedly: %q", filtered)
+	}
+}
+
+func TestIsAmbiguousInteractiveShellCapture(t *testing.T) {
+	content := "echo WAIT_FALSE_POSITIVE\n\n\n"
+	if !isAmbiguousInteractiveShellCapture(content, PaneStatus{CurrentCmd: "bash"}, paneCursorInfo{Visible: true, Y: 1}) {
+		t.Fatal("queued shell input should be treated as ambiguous visible text")
+	}
+
+	executed := "echo WAIT_FALSE_POSITIVE\nWAIT_FALSE_POSITIVE\n\n"
+	if isAmbiguousInteractiveShellCapture(executed, PaneStatus{CurrentCmd: "bash"}, paneCursorInfo{Visible: true, Y: 2}) {
+		t.Fatal("executed shell output should not be treated as ambiguous")
+	}
+}
+
+func TestStripActiveInputBlockKeepsShellOutputBeforeFreshPrompt(t *testing.T) {
+	content := strings.Join([]string{
+		"$ echo WAIT_FALSE_POSITIVE",
+		"WAIT_FALSE_POSITIVE",
+		"$",
+	}, "\n") + "\n"
+
+	filtered, stripped := stripActiveInputBlock(content, PaneStatus{CurrentCmd: "bash"}, paneCursorInfo{Visible: true, Y: 2})
+	if !stripped {
+		t.Fatal("stripActiveInputBlock reported no strip, want fresh prompt removed")
+	}
+	if !strings.Contains(filtered, "WAIT_FALSE_POSITIVE") {
+		t.Fatalf("filtered content removed shell output unexpectedly: %q", filtered)
+	}
+	if strings.HasSuffix(strings.TrimSpace(filtered), "$") {
+		t.Fatalf("filtered content still includes the fresh prompt: %q", filtered)
+	}
+}

@@ -42,10 +42,31 @@ const (
 	kvPrefix                  = "@agentmux_kv_"
 )
 
+type WaitScope string
+
+const (
+	WaitScopeOutput  WaitScope = "output"
+	WaitScopeVisible WaitScope = "visible"
+)
+
 var (
 	shellEnvRefPattern = regexp.MustCompile(`(^|[^\\])\$(\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)`)
 	kvKeyPattern       = regexp.MustCompile(`^[A-Za-z0-9_]+$`)
+	shellPromptPattern = regexp.MustCompile(`(?:^|[\p{L}\p{N}~/._:@-])[#$%❯❱➜>]\s`)
+	sendKeysPause      = time.Sleep
 )
+
+type paneCursorInfo struct {
+	Visible bool
+	Y       int
+	X       int
+	Height  int
+}
+
+type waitCapture struct {
+	Text      string
+	Ambiguous bool
+}
 
 type Options struct {
 	Attach  bool
@@ -418,6 +439,10 @@ func SendCommandToPaneByName(session string, name string, commandText string, pr
 		return fmt.Errorf("send command to pane %q: %w", name, err)
 	}
 	if pressEnter {
+		// Full-screen TUIs like Codex can miss an immediate submit key if it arrives
+		// in the same burst as a pasted prompt. Give the application one frame to
+		// process the literal text before sending Enter.
+		sendKeysPause(75 * time.Millisecond)
 		if err := run(verbose, "send-keys", "-t", target.PaneID, "Enter"); err != nil {
 			return fmt.Errorf("send enter to pane %q: %w", name, err)
 		}
@@ -708,20 +733,61 @@ func CapturePaneByName(session string, name string, tailLines int, stripEmpty bo
 	return out, nil
 }
 
-func WaitForPattern(session string, name string, pattern string, timeout time.Duration, verbose bool) (string, error) {
-	re, err := regexp.Compile(pattern)
+func ParseWaitScope(value string) (WaitScope, error) {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	switch normalized {
+	case "", string(WaitScopeOutput):
+		return WaitScopeOutput, nil
+	case string(WaitScopeVisible):
+		return WaitScopeVisible, nil
+	default:
+		return "", fmt.Errorf("invalid wait scope %q; must be %q or %q", value, WaitScopeOutput, WaitScopeVisible)
+	}
+}
+
+func compileWaitPattern(pattern string) (*regexp.Regexp, error) {
+	// `wait` is primarily used to match lines in pane output, so enable multiline
+	// anchors by default. Users can still override flags explicitly with inline
+	// modifiers like (?-m:...).
+	return regexp.Compile("(?m)" + pattern)
+}
+
+func WaitForPattern(session string, name string, pattern string, timeout time.Duration, scope WaitScope, verbose bool) (string, error) {
+	re, err := compileWaitPattern(pattern)
 	if err != nil {
 		return "", fmt.Errorf("invalid pattern %q: %w", pattern, err)
 	}
+	scope, err = ParseWaitScope(string(scope))
+	if err != nil {
+		return "", err
+	}
 
 	start := time.Now()
+	ambiguousBaseline := ""
+	haveAmbiguousBaseline := false
 	for {
-		out, err := CapturePaneByName(session, name, 100, true, verbose)
+		snapshot, err := capturePaneForWait(session, name, scope, verbose)
 		if err != nil {
 			return "", err
 		}
 
-		if match := re.FindString(out); match != "" {
+		matchText := snapshot.Text
+		if snapshot.Ambiguous {
+			if !haveAmbiguousBaseline {
+				ambiguousBaseline = snapshot.Text
+				haveAmbiguousBaseline = true
+				matchText = ""
+			} else if snapshot.Text == ambiguousBaseline {
+				matchText = ""
+			} else {
+				matchText = waitNewContent(ambiguousBaseline, snapshot.Text)
+			}
+		} else {
+			ambiguousBaseline = ""
+			haveAmbiguousBaseline = false
+		}
+
+		if match := re.FindString(matchText); match != "" {
 			return match, nil
 		}
 
@@ -731,6 +797,284 @@ func WaitForPattern(session string, name string, pattern string, timeout time.Du
 
 		time.Sleep(500 * time.Millisecond)
 	}
+}
+
+func capturePaneForWait(session string, name string, scope WaitScope, verbose bool) (waitCapture, error) {
+	target, err := findPaneByName(session, name)
+	if err != nil {
+		return waitCapture{}, err
+	}
+
+	switch scope {
+	case WaitScopeVisible:
+		out, err := CapturePaneByName(session, name, 100, true, verbose)
+		return waitCapture{Text: out}, err
+	case WaitScopeOutput:
+		out, err := captureRaw(verbose, "capture-pane", "-p", "-t", target.PaneID)
+		if err != nil {
+			return waitCapture{}, fmt.Errorf("capture pane %q: %w", name, err)
+		}
+		ambiguous := false
+		cursor, err := paneCursor(target.PaneID, verbose)
+		if err == nil {
+			var stripped bool
+			out, stripped = stripActiveInputBlock(out, target, cursor)
+			ambiguous = !stripped && isAmbiguousInteractiveShellCapture(out, target, cursor)
+		}
+		out = stripEmptyLinesFromCapture(out)
+		out = tailLinesFromCapture(out, 100)
+		return waitCapture{Text: out, Ambiguous: ambiguous}, nil
+	default:
+		return waitCapture{}, fmt.Errorf("invalid wait scope %q", scope)
+	}
+}
+
+func paneCursor(paneID string, verbose bool) (paneCursorInfo, error) {
+	out, err := capture(verbose, "display-message", "-p", "-t", paneID, "#{cursor_flag}\t#{cursor_y}\t#{cursor_x}\t#{pane_height}")
+	if err != nil {
+		return paneCursorInfo{}, err
+	}
+	fields := strings.Split(out, "\t")
+	if len(fields) != 4 {
+		return paneCursorInfo{}, fmt.Errorf("unexpected pane cursor output %q", out)
+	}
+	cursorY, err := strconv.Atoi(fields[1])
+	if err != nil {
+		return paneCursorInfo{}, fmt.Errorf("parse cursor_y %q: %w", fields[1], err)
+	}
+	cursorX, err := strconv.Atoi(fields[2])
+	if err != nil {
+		return paneCursorInfo{}, fmt.Errorf("parse cursor_x %q: %w", fields[2], err)
+	}
+	height, err := strconv.Atoi(fields[3])
+	if err != nil {
+		return paneCursorInfo{}, fmt.Errorf("parse pane_height %q: %w", fields[3], err)
+	}
+	return paneCursorInfo{
+		Visible: strings.TrimSpace(fields[0]) == "1",
+		Y:       cursorY,
+		X:       cursorX,
+		Height:  height,
+	}, nil
+}
+
+func stripActiveInputBlock(content string, target PaneStatus, cursor paneCursorInfo) (string, bool) {
+	lines, trailingNewline := splitCaptureLines(content)
+	if len(lines) == 0 {
+		return content, false
+	}
+
+	cursorIndex := cursor.Y
+	if cursorIndex < 0 {
+		cursorIndex = 0
+	}
+	if cursorIndex >= len(lines) {
+		cursorIndex = len(lines) - 1
+	}
+
+	cutStart := findActiveInputStart(lines, target, cursorIndex)
+	if cutStart < 0 && cursor.Visible {
+		cutStart = cursorIndex
+	}
+	if cutStart < 0 || cutStart >= len(lines) {
+		return content, false
+	}
+
+	filtered := lines[:cutStart]
+	if len(filtered) == 0 {
+		return "", true
+	}
+	out := strings.Join(filtered, "\n")
+	if trailingNewline {
+		return out + "\n", true
+	}
+	return out, true
+}
+
+func splitCaptureLines(content string) ([]string, bool) {
+	if content == "" {
+		return nil, false
+	}
+	trailingNewline := strings.HasSuffix(content, "\n")
+	trimmed := strings.TrimSuffix(content, "\n")
+	if trimmed == "" {
+		return []string{""}, trailingNewline
+	}
+	return strings.Split(trimmed, "\n"), trailingNewline
+}
+
+func findActiveInputStart(lines []string, target PaneStatus, cursorIndex int) int {
+	upper := cursorIndex
+	if upper >= len(lines) {
+		upper = len(lines) - 1
+	}
+	lower := upper - 12
+	if lower < 0 {
+		lower = 0
+	}
+	for idx := upper; idx >= lower; idx-- {
+		if isInteractivePromptLine(lines[idx], target) {
+			if isInteractiveShellCommand(target.CurrentCmd) && strings.TrimSpace(target.Provider) == "" {
+				return findShellPromptBlockStart(lines, idx, lower)
+			}
+			for start := idx; start > lower; start-- {
+				if strings.TrimSpace(lines[start-1]) == "" {
+					return start
+				}
+			}
+			return lower
+		}
+	}
+	return -1
+}
+
+func findShellPromptBlockStart(lines []string, promptIndex int, lower int) int {
+	start := promptIndex
+	command := shellPromptCommand(lines[promptIndex])
+	for start > lower {
+		previous := lines[start-1]
+		if strings.TrimSpace(previous) == "" {
+			break
+		}
+		if command != "" {
+			if strings.Contains(previous, command) || isShellPromptDecorationLine(previous) {
+				start--
+				continue
+			}
+			break
+		}
+		if isShellPromptDecorationLine(previous) {
+			start--
+			continue
+		}
+		break
+	}
+	return start
+}
+
+func isInteractivePromptLine(line string, target PaneStatus) bool {
+	trimmed := strings.TrimLeft(line, " ")
+	switch strings.ToLower(strings.TrimSpace(target.Provider)) {
+	case "codex":
+		return strings.HasPrefix(trimmed, "› ")
+	case "gemini":
+		return strings.HasPrefix(trimmed, ">") || strings.Contains(trimmed, "Type your message or @path/to/file")
+	case "claude":
+		return strings.HasPrefix(trimmed, ">")
+	default:
+		if strings.HasPrefix(trimmed, "› ") || strings.HasPrefix(trimmed, ">") {
+			return true
+		}
+		if !isInteractiveShellCommand(target.CurrentCmd) {
+			return false
+		}
+		return shellPromptPattern.MatchString(trimmed) || hasShellPromptSuffix(trimmed)
+	}
+}
+
+func shellPromptCommand(line string) string {
+	trimmed := strings.TrimLeft(line, " ")
+	for _, marker := range []string{"❯ ", "❱ ", "➜ ", "$ ", "# ", "% ", "> "} {
+		if idx := strings.LastIndex(trimmed, marker); idx >= 0 {
+			return strings.TrimSpace(trimmed[idx+len(marker):])
+		}
+	}
+	return ""
+}
+
+func isShellPromptDecorationLine(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" {
+		return false
+	}
+	if containsPrivateUseRune(trimmed) {
+		return true
+	}
+	maybeTime := strings.TrimLeft(trimmed, " ")
+	if len(maybeTime) >= len("00:00:00") && maybeTime[2] == ':' && maybeTime[5] == ':' {
+		return true
+	}
+	return false
+}
+
+func containsPrivateUseRune(line string) bool {
+	for _, r := range line {
+		if r >= '\uE000' && r <= '\uF8FF' {
+			return true
+		}
+	}
+	return false
+}
+
+func hasShellPromptSuffix(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	for _, marker := range []string{"❯", "❱", "➜", ">", "$", "#", "%"} {
+		if strings.HasSuffix(trimmed, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func isAmbiguousInteractiveShellCapture(content string, target PaneStatus, cursor paneCursorInfo) bool {
+	if !cursor.Visible || !isInteractiveShellCommand(target.CurrentCmd) {
+		return false
+	}
+
+	lines, _ := splitCaptureLines(content)
+	if len(lines) == 0 {
+		return false
+	}
+
+	cursorIndex := cursor.Y
+	if cursorIndex < 0 {
+		cursorIndex = 0
+	}
+	if cursorIndex >= len(lines) {
+		cursorIndex = len(lines) - 1
+	}
+
+	start := cursorIndex - 3
+	if start < 0 {
+		start = 0
+	}
+
+	nonEmptyIndexes := make([]int, 0, 2)
+	for idx := start; idx < len(lines); idx++ {
+		if strings.TrimSpace(lines[idx]) != "" {
+			nonEmptyIndexes = append(nonEmptyIndexes, idx)
+			if len(nonEmptyIndexes) > 1 {
+				return false
+			}
+		}
+	}
+	if len(nonEmptyIndexes) != 1 {
+		return false
+	}
+
+	last := nonEmptyIndexes[0]
+	return last <= cursorIndex && cursorIndex-last <= 1
+}
+
+func isInteractiveShellCommand(command string) bool {
+	switch strings.ToLower(filepath.Base(strings.TrimSpace(command))) {
+	case "bash", "sh", "zsh", "fish", "dash", "ksh", "mksh", "nu", "ash":
+		return true
+	default:
+		return false
+	}
+}
+
+func waitNewContent(previous string, current string) string {
+	maxPrefix := len(previous)
+	if len(current) < maxPrefix {
+		maxPrefix = len(current)
+	}
+	idx := 0
+	for idx < maxPrefix && previous[idx] == current[idx] {
+		idx++
+	}
+	return current[idx:]
 }
 
 func stripEmptyLinesFromCapture(content string) string {
@@ -1015,6 +1359,16 @@ func configurePane(session string, paneID string, pane resolve.Pane, verbose boo
 		}
 	}
 
+	return nil
+}
+
+func AttachToPaneByName(session string, name string, verbose bool) error {
+	if err := FocusPaneByName(session, name, verbose); err != nil {
+		return err
+	}
+	if err := attachSession(session, verbose); err != nil {
+		return fmt.Errorf("attach session %q after focusing pane %q: %w", session, name, err)
+	}
 	return nil
 }
 

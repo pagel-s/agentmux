@@ -47,6 +47,7 @@ type WaitOptions struct {
 	Session string
 	Pane    string
 	Pattern string
+	Scope   string
 	Timeout string
 	JSON    bool
 }
@@ -403,6 +404,7 @@ func ParseKVDel(args []string) (KVOptions, error) {
 
 func ParseWait(args []string) (WaitOptions, error) {
 	timeout := ""
+	scope := ""
 	positional := make([]string, 0, 3)
 	jsonOut := false
 
@@ -416,6 +418,12 @@ func ParseWait(args []string) (WaitOptions, error) {
 				return WaitOptions{}, fmt.Errorf("wait flag %q requires a value", arg)
 			}
 			timeout = args[i+1]
+			i++
+		case "--scope":
+			if i+1 >= len(args) {
+				return WaitOptions{}, fmt.Errorf("wait flag %q requires a value", arg)
+			}
+			scope = args[i+1]
 			i++
 		default:
 			if strings.HasPrefix(arg, "-") {
@@ -433,6 +441,7 @@ func ParseWait(args []string) (WaitOptions, error) {
 		Session: positional[0],
 		Pane:    positional[1],
 		Pattern: positional[2],
+		Scope:   scope,
 		Timeout: timeout,
 		JSON:    jsonOut,
 	}, nil

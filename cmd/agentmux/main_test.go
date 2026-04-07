@@ -345,7 +345,7 @@ func TestRunToolCallWrapsStructuredErrors(t *testing.T) {
 
 	toolExecutorFactory = func() toolruntime.Executor {
 		return toolruntime.Executor{
-			WaitForPattern: func(session string, pane string, pattern string, timeout time.Duration, verbose bool) (string, error) {
+			WaitForPattern: func(session string, pane string, pattern string, timeout time.Duration, scope tmux.WaitScope, verbose bool) (string, error) {
 				return "", errors.New("pattern not found")
 			},
 		}
