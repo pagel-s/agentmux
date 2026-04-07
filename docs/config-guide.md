@@ -194,6 +194,11 @@ Current integration defaults:
 - `gemini`: prefers `native-mcp`, falls back to `cli-bridge`
 - `gptme`: uses `cli-bridge`
 
+Codex-specific runtime notes:
+
+- Agentmux launches Codex with `--no-alt-screen` to behave better inside tmux panes and preserve scrollback.
+- Agentmux launches Codex with `--sandbox workspace-write --ask-for-approval never` so Agentmux-orchestrated panes can use MCP tools and shell commands without interactive approval popups while still staying sandboxed.
+
 Direct pane `provider:` usage is intended for native providers. Command-style providers like `ssh` should be defined on an agent alongside `command:`.
 
 Example:

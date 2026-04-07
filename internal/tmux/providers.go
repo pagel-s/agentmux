@@ -10,6 +10,7 @@ import (
 
 	prov "agentmux/internal/provider"
 	"agentmux/internal/resolve"
+	"agentmux/internal/tools"
 )
 
 var (
@@ -101,7 +102,7 @@ func compileGeminiCommand(spec prov.Spec, pane resolve.Pane, profile prov.Launch
 }
 
 func compileCodexCommand(spec prov.Spec, pane resolve.Pane, profile prov.LaunchProfile, session string) string {
-	cmd := []string{"codex"}
+	cmd := []string{"codex", "--no-alt-screen", "--sandbox", "workspace-write", "--ask-for-approval", "never"}
 
 	if pane.Model != "" {
 		cmd = append(cmd, "--model", singleQuote(pane.Model))
@@ -203,6 +204,11 @@ func codexMCPConfigArgs(session string, pane resolve.Pane) []string {
 		"-c", singleQuote(`mcp_servers.agentmux.command=` + tomlStringLiteral(server.Command)),
 		"-c", singleQuote(`mcp_servers.agentmux.args=` + jsonArrayLiteral(server.Args)),
 		"-c", singleQuote(`mcp_servers.agentmux.env=` + tomlInlineStringTable(server.Env)),
+	}
+	for _, spec := range tools.Specs() {
+		args = append(args,
+			"-c", singleQuote(fmt.Sprintf(`mcp_servers.agentmux.tools.%s.approval_mode=%s`, spec.Name, tomlStringLiteral("approve"))),
+		)
 	}
 	return args
 }

@@ -72,7 +72,7 @@ func TestCompileProviderCommand(t *testing.T) {
 			provider: "openai",
 			paneName: "senior-coder",
 			persona:  "coder.md",
-			want: `codex -c 'mcp_servers.agentmux.command="agentmux"' -c 'mcp_servers.agentmux.args=["mcp-server"]' -c 'mcp_servers.agentmux.env={AGENTMUX_PANE="senior-coder", AGENTMUX_SESSION="test-session"}' "$(cat 'coder.md')
+			want: `codex --no-alt-screen --sandbox workspace-write --ask-for-approval never -c 'mcp_servers.agentmux.command="agentmux"' -c 'mcp_servers.agentmux.args=["mcp-server"]' -c 'mcp_servers.agentmux.env={AGENTMUX_PANE="senior-coder", AGENTMUX_SESSION="test-session"}' -c 'mcp_servers.agentmux.tools.kv_set.approval_mode="approve"' -c 'mcp_servers.agentmux.tools.kv_get.approval_mode="approve"' -c 'mcp_servers.agentmux.tools.wait.approval_mode="approve"' -c 'mcp_servers.agentmux.tools.scale.approval_mode="approve"' -c 'mcp_servers.agentmux.tools.send.approval_mode="approve"' "$(cat 'coder.md')
 
 $(agentmux prompt --provider 'codex' --mode 'native-mcp')"`,
 		},
@@ -82,7 +82,7 @@ $(agentmux prompt --provider 'codex' --mode 'native-mcp')"`,
 			paneName:  "senior-coder",
 			model:     "gpt-5-codex",
 			reasoning: "high",
-			want:      `codex --model 'gpt-5-codex' -c 'mcp_servers.agentmux.command="agentmux"' -c 'mcp_servers.agentmux.args=["mcp-server"]' -c 'mcp_servers.agentmux.env={AGENTMUX_PANE="senior-coder", AGENTMUX_SESSION="test-session"}' -c 'model_reasoning_effort=high' "$(agentmux prompt --provider 'codex' --mode 'native-mcp')"`,
+			want:      `codex --no-alt-screen --sandbox workspace-write --ask-for-approval never --model 'gpt-5-codex' -c 'mcp_servers.agentmux.command="agentmux"' -c 'mcp_servers.agentmux.args=["mcp-server"]' -c 'mcp_servers.agentmux.env={AGENTMUX_PANE="senior-coder", AGENTMUX_SESSION="test-session"}' -c 'mcp_servers.agentmux.tools.kv_set.approval_mode="approve"' -c 'mcp_servers.agentmux.tools.kv_get.approval_mode="approve"' -c 'mcp_servers.agentmux.tools.wait.approval_mode="approve"' -c 'mcp_servers.agentmux.tools.scale.approval_mode="approve"' -c 'mcp_servers.agentmux.tools.send.approval_mode="approve"' -c 'model_reasoning_effort=high' "$(agentmux prompt --provider 'codex' --mode 'native-mcp')"`,
 		},
 		{
 			name:     "gptme cli bridge with model and persona",
@@ -148,7 +148,7 @@ func TestCompileProviderCommandFallsBackToCLIBridge(t *testing.T) {
 	}
 
 	codex := compileProviderCommand("test-session", resolve.Pane{Provider: "codex"})
-	if got, want := codex, `codex "$(agentmux prompt --provider 'codex' --mode 'cli-bridge')"`; got != want {
+	if got, want := codex, `codex --no-alt-screen --sandbox workspace-write --ask-for-approval never "$(agentmux prompt --provider 'codex' --mode 'cli-bridge')"`; got != want {
 		t.Fatalf("codex fallback command = %q, want %q", got, want)
 	}
 
