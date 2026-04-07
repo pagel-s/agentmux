@@ -57,3 +57,32 @@ func TestHandleToolCallReturnsStructuredContent(t *testing.T) {
 		t.Fatalf("content text = %q, want pretty JSON result", content[0]["text"])
 	}
 }
+
+func TestHandleToolCallDefaultsSessionFromEnv(t *testing.T) {
+	server := New("agentmux test", toolruntime.Executor{
+		Getenv: func(key string) string {
+			if key == "AGENTMUX_SESSION" {
+				return "demo"
+			}
+			return ""
+		},
+		GetKV: func(session string, key string, verbose bool) (string, error) {
+			if session != "demo" || key != "task" {
+				t.Fatalf("GetKV(%q, %q) called, want (%q, %q)", session, key, "demo", "task")
+			}
+			return "go", nil
+		},
+	})
+
+	result, err := server.handleToolCall(json.RawMessage(`{"name":"kv_get","arguments":{"key":"task"}}`))
+	if err != nil {
+		t.Fatalf("handleToolCall returned error: %v", err)
+	}
+	content, ok := result["content"].([]map[string]any)
+	if !ok || len(content) != 1 {
+		t.Fatalf("content = %#v, want one text entry", result["content"])
+	}
+	if !strings.Contains(content[0]["text"].(string), `"session": "demo"`) {
+		t.Fatalf("content text = %q, want defaulted session in result", content[0]["text"])
+	}
+}

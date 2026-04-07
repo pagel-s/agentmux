@@ -38,6 +38,7 @@ func TestCompileProviderCommand(t *testing.T) {
 	tests := []struct {
 		name      string
 		provider  string
+		paneName  string
 		persona   string
 		model     string
 		reasoning string
@@ -46,37 +47,42 @@ func TestCompileProviderCommand(t *testing.T) {
 		{
 			name:     "claude native mcp with persona and model",
 			provider: "claude",
+			paneName: "lead-architect",
 			persona:  "arch.md",
 			model:    "sonnet",
-			want:     `claude --system-prompt "$(cat 'arch.md')" --mcp-config ` + singleQuote(claudeMCPConfigJSON()) + ` --strict-mcp-config --append-system-prompt "$(agentmux prompt --provider 'claude' --mode 'native-mcp')" --model 'sonnet'`,
+			want:     `claude --system-prompt "$(cat 'arch.md')" --mcp-config ` + singleQuote(claudeMCPConfigJSON("test-session", resolve.Pane{Name: "lead-architect", Provider: "claude", Persona: "arch.md", Model: "sonnet"})) + ` --strict-mcp-config --append-system-prompt "$(agentmux prompt --provider 'claude' --mode 'native-mcp')" --model 'sonnet'`,
 		},
 		{
 			name:      "claude native mcp with reasoning effort",
 			provider:  "claude",
+			paneName:  "lead-architect",
 			model:     "sonnet",
 			reasoning: "high",
-			want:      `claude --mcp-config ` + singleQuote(claudeMCPConfigJSON()) + ` --strict-mcp-config --append-system-prompt "$(agentmux prompt --provider 'claude' --mode 'native-mcp')" --model 'sonnet' --effort 'high'`,
+			want:      `claude --mcp-config ` + singleQuote(claudeMCPConfigJSON("test-session", resolve.Pane{Name: "lead-architect", Provider: "claude", Model: "sonnet", ReasoningEffort: "high"})) + ` --strict-mcp-config --append-system-prompt "$(agentmux prompt --provider 'claude' --mode 'native-mcp')" --model 'sonnet' --effort 'high'`,
 		},
 		{
 			name:     "gemini native mcp",
 			provider: "gemini-cli",
+			paneName: "visual-designer",
 			persona:  "design.md",
-			want:     `gemini --allowed-mcp-server-names 'agentmux' --include-directories ` + singleQuote(filepath.Dir(geminiPersonaPath("test-session", resolve.Pane{Provider: "gemini", Persona: "design.md"}))) + ` --prompt-interactive "$(agentmux prompt --provider 'gemini' --mode 'native-mcp')"`,
+			want:     `gemini --allowed-mcp-server-names 'agentmux' --include-directories ` + singleQuote(filepath.Dir(geminiPersonaPath("test-session", resolve.Pane{Name: "visual-designer", Provider: "gemini", Persona: "design.md"}))) + ` --prompt-interactive "$(agentmux prompt --provider 'gemini' --mode 'native-mcp')"`,
 		},
 		{
 			name:     "codex native mcp with persona",
 			provider: "openai",
+			paneName: "senior-coder",
 			persona:  "coder.md",
-			want: `codex -c 'mcp_servers.agentmux.command="agentmux"' -c 'mcp_servers.agentmux.args=["mcp-server"]' "$(cat 'coder.md')
+			want: `codex -c 'mcp_servers.agentmux.command="agentmux"' -c 'mcp_servers.agentmux.args=["mcp-server"]' -c 'mcp_servers.agentmux.env={AGENTMUX_PANE="senior-coder", AGENTMUX_SESSION="test-session"}' "$(cat 'coder.md')
 
 $(agentmux prompt --provider 'codex' --mode 'native-mcp')"`,
 		},
 		{
 			name:      "codex native mcp with reasoning effort",
 			provider:  "codex",
+			paneName:  "senior-coder",
 			model:     "gpt-5-codex",
 			reasoning: "high",
-			want:      `codex --model 'gpt-5-codex' -c 'mcp_servers.agentmux.command="agentmux"' -c 'mcp_servers.agentmux.args=["mcp-server"]' -c 'model_reasoning_effort=high' "$(agentmux prompt --provider 'codex' --mode 'native-mcp')"`,
+			want:      `codex --model 'gpt-5-codex' -c 'mcp_servers.agentmux.command="agentmux"' -c 'mcp_servers.agentmux.args=["mcp-server"]' -c 'mcp_servers.agentmux.env={AGENTMUX_PANE="senior-coder", AGENTMUX_SESSION="test-session"}' -c 'model_reasoning_effort=high' "$(agentmux prompt --provider 'codex' --mode 'native-mcp')"`,
 		},
 		{
 			name:     "gptme cli bridge with model and persona",
@@ -97,6 +103,7 @@ $(agentmux prompt --provider 'gptme' --mode 'cli-bridge')" --model 'gpt-4o'`,
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			pane := resolve.Pane{
+				Name:            tc.paneName,
 				Provider:        tc.provider,
 				Persona:         tc.persona,
 				Model:           tc.model,

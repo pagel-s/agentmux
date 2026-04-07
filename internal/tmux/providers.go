@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"sort"
 	"strings"
 
 	prov "agentmux/internal/provider"
@@ -46,11 +47,11 @@ func compileProviderCommandWithProfile(session string, pane resolve.Pane, profil
 
 	switch spec.ID {
 	case "claude":
-		return compileClaudeCommand(spec, pane, profile)
+		return compileClaudeCommand(spec, pane, profile, session)
 	case "gemini":
 		return compileGeminiCommand(spec, pane, profile, session)
 	case "codex":
-		return compileCodexCommand(spec, pane, profile)
+		return compileCodexCommand(spec, pane, profile, session)
 	case "gptme":
 		return compileGPTMeCommand(spec, pane, profile)
 	default:
@@ -58,14 +59,14 @@ func compileProviderCommandWithProfile(session string, pane resolve.Pane, profil
 	}
 }
 
-func compileClaudeCommand(spec prov.Spec, pane resolve.Pane, profile prov.LaunchProfile) string {
+func compileClaudeCommand(spec prov.Spec, pane resolve.Pane, profile prov.LaunchProfile, session string) string {
 	cmd := []string{"claude"}
 
 	if pane.Persona != "" {
 		cmd = append(cmd, "--system-prompt", fmt.Sprintf(`"$(cat %s)"`, singleQuote(pane.Persona)))
 	}
 	if profile.Mode == string(prov.LaunchModeNativeMCP) {
-		cmd = append(cmd, "--mcp-config", singleQuote(claudeMCPConfigJSON()), "--strict-mcp-config")
+		cmd = append(cmd, "--mcp-config", singleQuote(claudeMCPConfigJSON(session, pane)), "--strict-mcp-config")
 	}
 
 	cmd = append(cmd, "--append-system-prompt", providerContextPrompt(spec.ID, profile.Mode))
@@ -99,14 +100,14 @@ func compileGeminiCommand(spec prov.Spec, pane resolve.Pane, profile prov.Launch
 	return strings.Join(cmd, " ")
 }
 
-func compileCodexCommand(spec prov.Spec, pane resolve.Pane, profile prov.LaunchProfile) string {
+func compileCodexCommand(spec prov.Spec, pane resolve.Pane, profile prov.LaunchProfile, session string) string {
 	cmd := []string{"codex"}
 
 	if pane.Model != "" {
 		cmd = append(cmd, "--model", singleQuote(pane.Model))
 	}
 	if profile.Mode == string(prov.LaunchModeNativeMCP) {
-		cmd = append(cmd, codexMCPConfigArgs()...)
+		cmd = append(cmd, codexMCPConfigArgs(session, pane)...)
 	}
 	if pane.ReasoningEffort != "" {
 		cmd = append(cmd, "-c", singleQuote("model_reasoning_effort="+pane.ReasoningEffort))
@@ -151,25 +152,93 @@ func providerPromptCommand(providerName string, mode string) string {
 	return strings.Join(cmd, " ")
 }
 
-func claudeMCPConfigJSON() string {
+type mcpServerConfig struct {
+	Command string
+	Args    []string
+	Env     map[string]string
+}
+
+func agentmuxMCPServerConfig(session string, pane resolve.Pane) mcpServerConfig {
+	env := map[string]string{
+		"AGENTMUX_SESSION": session,
+	}
+	if strings.TrimSpace(pane.Name) != "" {
+		env["AGENTMUX_PANE"] = pane.Name
+	}
+	return mcpServerConfig{
+		Command: "agentmux",
+		Args:    []string{"mcp-server"},
+		Env:     env,
+	}
+}
+
+func claudeMCPConfigJSON(session string, pane resolve.Pane) string {
+	server := agentmuxMCPServerConfig(session, pane)
 	cfg := map[string]any{
 		"mcpServers": map[string]any{
 			"agentmux": map[string]any{
-				"command": "agentmux",
-				"args":    []string{"mcp-server"},
+				"command": server.Command,
+				"args":    server.Args,
+				"env":     server.Env,
 			},
 		},
 	}
 	data, err := json.Marshal(cfg)
 	if err != nil {
-		return `{"mcpServers":{"agentmux":{"command":"agentmux","args":["mcp-server"]}}}`
+		return fmt.Sprintf(`{"mcpServers":{"agentmux":{"command":"agentmux","args":["mcp-server"],"env":{"AGENTMUX_SESSION":%s%s}}}}`, jsonStringLiteral(session), claudePaneEnvFallback(pane.Name))
 	}
 	return string(data)
 }
 
-func codexMCPConfigArgs() []string {
-	return []string{
-		"-c", singleQuote(`mcp_servers.agentmux.command="agentmux"`),
-		"-c", singleQuote(`mcp_servers.agentmux.args=["mcp-server"]`),
+func claudePaneEnvFallback(pane string) string {
+	if strings.TrimSpace(pane) == "" {
+		return ""
 	}
+	return `,"AGENTMUX_PANE":` + jsonStringLiteral(pane)
+}
+
+func codexMCPConfigArgs(session string, pane resolve.Pane) []string {
+	server := agentmuxMCPServerConfig(session, pane)
+	args := []string{
+		"-c", singleQuote(`mcp_servers.agentmux.command=` + tomlStringLiteral(server.Command)),
+		"-c", singleQuote(`mcp_servers.agentmux.args=` + jsonArrayLiteral(server.Args)),
+		"-c", singleQuote(`mcp_servers.agentmux.env=` + tomlInlineStringTable(server.Env)),
+	}
+	return args
+}
+
+func jsonStringLiteral(value string) string {
+	data, err := json.Marshal(value)
+	if err != nil {
+		return `""`
+	}
+	return string(data)
+}
+
+func jsonArrayLiteral(values []string) string {
+	data, err := json.Marshal(values)
+	if err != nil {
+		return "[]"
+	}
+	return string(data)
+}
+
+func tomlStringLiteral(value string) string {
+	return jsonStringLiteral(value)
+}
+
+func tomlInlineStringTable(values map[string]string) string {
+	if len(values) == 0 {
+		return "{}"
+	}
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, key := range keys {
+		parts = append(parts, key+"="+tomlStringLiteral(values[key]))
+	}
+	return "{" + strings.Join(parts, ", ") + "}"
 }

@@ -34,11 +34,11 @@ func prepareProviderRuntime(session string, pane resolve.Pane, profile prov.Laun
 	descriptor := describeProviderRuntime(session, pane, profile)
 
 	if profile.Spec.ID == "gemini" && profile.Mode == string(prov.LaunchModeNativeMCP) {
-		path := geminiSystemSettingsPath(session)
+		path := geminiSystemSettingsPath(session, pane)
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			return fmt.Errorf("create Gemini runtime settings directory: %w", err)
 		}
-		if err := os.WriteFile(path, []byte(geminiSystemSettingsJSON()), 0o644); err != nil {
+		if err := os.WriteFile(path, []byte(geminiSystemSettingsJSON(session, pane)), 0o644); err != nil {
 			return fmt.Errorf("write Gemini runtime settings: %w", err)
 		}
 	}
@@ -97,7 +97,7 @@ func describeProviderRuntime(session string, pane resolve.Pane, profile prov.Lau
 	switch {
 	case profile.Spec.ID == "gemini" && profile.Mode == string(prov.LaunchModeNativeMCP):
 		descriptor.Env = map[string]string{
-			"GEMINI_CLI_SYSTEM_SETTINGS_PATH": geminiSystemSettingsPath(session),
+			"GEMINI_CLI_SYSTEM_SETTINGS_PATH": geminiSystemSettingsPath(session, pane),
 		}
 		if strings.TrimSpace(pane.Persona) != "" {
 			artifact := geminiPersonaPath(session, resolve.Pane{
@@ -114,21 +114,23 @@ func describeProviderRuntime(session string, pane resolve.Pane, profile prov.Lau
 	return descriptor
 }
 
-func geminiSystemSettingsPath(session string) string {
+func geminiSystemSettingsPath(session string, pane resolve.Pane) string {
 	root := filepath.Join(os.TempDir(), "agentmux", "gemini")
-	name := sanitizeRuntimeComponent(session)
-	if name == "" {
-		name = "default"
+	sessionName := sanitizeRuntimeComponent(session)
+	if sessionName == "" {
+		sessionName = "default"
 	}
-	return filepath.Join(root, name, "settings.json")
+	return filepath.Join(root, sessionName, "panes", runtimePaneKey(pane.Name, pane.AgentName, prov.Normalize(pane.Provider), pane.Persona), "settings.json")
 }
 
-func geminiSystemSettingsJSON() string {
+func geminiSystemSettingsJSON(session string, pane resolve.Pane) string {
+	server := agentmuxMCPServerConfig(session, pane)
 	payload := map[string]any{
 		"mcpServers": map[string]any{
 			"agentmux": map[string]any{
-				"command": "agentmux",
-				"args":    []string{"mcp-server"},
+				"command": server.Command,
+				"args":    server.Args,
+				"env":     server.Env,
 			},
 		},
 		"context": map[string]any{
@@ -138,7 +140,7 @@ func geminiSystemSettingsJSON() string {
 	}
 	data, err := json.MarshalIndent(payload, "", "  ")
 	if err != nil {
-		return "{\n  \"mcpServers\": {\n    \"agentmux\": {\n      \"command\": \"agentmux\",\n      \"args\": [\n        \"mcp-server\"\n      ]\n    }\n  },\n  \"context\": {\n    \"fileName\": [\n      \"AGENTMUX_PERSONA.md\",\n      \"GEMINI.md\"\n    ],\n    \"loadMemoryFromIncludeDirectories\": true\n  }\n}"
+		return "{\n  \"mcpServers\": {\n    \"agentmux\": {\n      \"command\": \"agentmux\",\n      \"args\": [\n        \"mcp-server\"\n      ],\n      \"env\": {\n        \"AGENTMUX_SESSION\": \"default\"\n      }\n    }\n  },\n  \"context\": {\n    \"fileName\": [\n      \"AGENTMUX_PERSONA.md\",\n      \"GEMINI.md\"\n    ],\n    \"loadMemoryFromIncludeDirectories\": true\n  }\n}"
 	}
 	return string(data)
 }

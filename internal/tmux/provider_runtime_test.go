@@ -19,11 +19,12 @@ func TestPrepareProviderRuntimeWritesGeminiSettings(t *testing.T) {
 	if err := os.WriteFile(personaPath, []byte("# persona\n"), 0o644); err != nil {
 		t.Fatalf("WriteFile persona returned error: %v", err)
 	}
-	if err := prepareProviderRuntime("ui-factory", resolve.Pane{Provider: "gemini", Persona: personaPath}, profile); err != nil {
+	pane := resolve.Pane{Name: "visual-designer", Provider: "gemini", Persona: personaPath}
+	if err := prepareProviderRuntime("ui-factory", pane, profile); err != nil {
 		t.Fatalf("prepareProviderRuntime returned error: %v", err)
 	}
 
-	path := geminiSystemSettingsPath("ui-factory")
+	path := geminiSystemSettingsPath("ui-factory", pane)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("ReadFile(%q) returned error: %v", path, err)
@@ -45,6 +46,16 @@ func TestPrepareProviderRuntimeWritesGeminiSettings(t *testing.T) {
 	if got := agentmux["command"]; got != "agentmux" {
 		t.Fatalf("agentmux command = %#v, want %q", got, "agentmux")
 	}
+	env, ok := agentmux["env"].(map[string]any)
+	if !ok {
+		t.Fatalf("agentmux env = %#v, want object", agentmux["env"])
+	}
+	if got := env["AGENTMUX_SESSION"]; got != "ui-factory" {
+		t.Fatalf("env.AGETNMUX_SESSION = %#v, want %q", got, "ui-factory")
+	}
+	if got := env["AGENTMUX_PANE"]; got != "visual-designer" {
+		t.Fatalf("env.AGENTMUX_PANE = %#v, want %q", got, "visual-designer")
+	}
 
 	context, ok := decoded["context"].(map[string]any)
 	if !ok {
@@ -55,7 +66,7 @@ func TestPrepareProviderRuntimeWritesGeminiSettings(t *testing.T) {
 		t.Fatalf("context.fileName = %#v, want %q first", context["fileName"], geminiPersonaFileName)
 	}
 
-	artifactPath := geminiPersonaPath("ui-factory", resolve.Pane{Provider: "gemini", Persona: personaPath})
+	artifactPath := geminiPersonaPath("ui-factory", pane)
 	artifact, err := os.ReadFile(artifactPath)
 	if err != nil {
 		t.Fatalf("ReadFile(%q) returned error: %v", artifactPath, err)
@@ -70,17 +81,18 @@ func TestBuildPaneCommandIncludesGeminiSettingsEnvInNativeMode(t *testing.T) {
 	t.Setenv("SHELL", "/bin/bash")
 
 	command := buildPaneCommandWithProfile("ui-factory", resolve.Pane{
+		Name:     "visual-designer",
 		Provider: "gemini",
 		Persona:  "personas/ui.md",
 		Cwd:      "/tmp/project",
 		OnExit:   "shell",
 	}, prov.ProfileForMode("gemini", "native-mcp"))
 
-	path := geminiSystemSettingsPath("ui-factory")
+	path := geminiSystemSettingsPath("ui-factory", resolve.Pane{Name: "visual-designer", Provider: "gemini", Persona: "personas/ui.md"})
 	if !strings.Contains(command, "GEMINI_CLI_SYSTEM_SETTINGS_PATH="+quoteEnvValue(path)) {
 		t.Fatalf("command missing Gemini settings env: %q", command)
 	}
-	if !strings.Contains(command, "--include-directories "+singleQuote(filepath.Dir(geminiPersonaPath("ui-factory", resolve.Pane{Provider: "gemini", Persona: "personas/ui.md"})))) {
+	if !strings.Contains(command, "--include-directories "+singleQuote(filepath.Dir(geminiPersonaPath("ui-factory", resolve.Pane{Name: "visual-designer", Provider: "gemini", Persona: "personas/ui.md"})))) {
 		t.Fatalf("command missing Gemini include directory: %q", command)
 	}
 	if strings.Contains(command, `$(cat 'personas/ui.md')`) {
@@ -95,11 +107,14 @@ func TestGeminiSystemSettingsPathUsesTempDir(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("TMPDIR", tmp)
 
-	path := geminiSystemSettingsPath("ui factory")
+	path := geminiSystemSettingsPath("ui factory", resolve.Pane{Name: "designer", Provider: "gemini"})
 	if !strings.HasPrefix(path, filepath.Join(tmp, "agentmux", "gemini")+string(os.PathSeparator)) {
 		t.Fatalf("geminiSystemSettingsPath = %q, want prefix under TMPDIR", path)
 	}
 	if !strings.Contains(path, "ui_factory") {
 		t.Fatalf("geminiSystemSettingsPath = %q, want sanitized session component", path)
+	}
+	if !strings.Contains(path, "designer") {
+		t.Fatalf("geminiSystemSettingsPath = %q, want pane-specific path", path)
 	}
 }
