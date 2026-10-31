@@ -97,6 +97,31 @@ func TestConsoleDetachNeverSelectsAnotherClientsNativePane(t *testing.T) {
 	}
 }
 
+func TestConsoleFiltersRegisteredObservationsWithoutLosingRoutingMetadata(t *testing.T) {
+	agents := []managed.AgentInfo{{ID: "bridge", State: "active", External: true, ExternalRef: "known"}, {ID: "old", State: "revoked", External: true, ExternalRef: "unregistered"}}
+	raw := []sessioninventory.Session{{ID: "known", TTY: "pts/1"}, {ID: "unregistered", TTY: "pts/2"}, {ID: "selected", TTY: "pts/3"}}
+	m := console{tab: 5, agents: agents, observedSelected: 1, data: consoleData{selected: "bridge", observed: raw}}
+	visible := m.observedSessions()
+	if len(visible) != 2 || visible[0].ID != "unregistered" || visible[1].ID != "selected" {
+		t.Fatalf("wrong terminal inventory: %+v", visible)
+	}
+	if len(m.data.observed) != 3 || m.data.observed[0].ID != "known" {
+		t.Fatal("presentation filter destroyed external-attach/reconnect metadata")
+	}
+	if observationStatus("known", m.data.observed) != "native observed" || !strings.Contains(observationStatus("missing", m.data.observed), "not currently observed") {
+		t.Fatal("bridge liveness confused observation with readiness")
+	}
+	next, _ := m.Update(consoleData{selected: "bridge", agents: agents, observed: []sessioninventory.Session{raw[2], raw[1], raw[0]}})
+	m = next.(console)
+	if m.observedSelected != 0 || m.observedSessions()[m.observedSelected].ID != "selected" || len(m.data.observed) != 3 {
+		t.Fatal("inventory refresh changed the selected process or discarded raw observations")
+	}
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if !strings.Contains(next.(console).details, "selected") || strings.Contains(next.(console).details, "pts/1") {
+		t.Fatal("Sessions details targeted a hidden registered process")
+	}
+}
+
 func TestConsoleKeepsCurrentSelectionOnLateSnapshot(t *testing.T) {
 	m := console{agents: []managed.AgentInfo{{ID: "alice"}, {ID: "bob"}}, selected: 1, data: consoleData{selected: "bob"}}
 	updated, _ := m.Update(consoleData{agents: m.agents, selected: "alice", boundaries: managed.Boundaries{Agent: "alice"}})

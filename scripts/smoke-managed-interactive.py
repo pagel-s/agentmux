@@ -173,6 +173,7 @@ done
         run("attach", "lead", "--state", state, env=first_env)
         assert current_window(first_view) == "agent-lead", "contextual attach focused the wrong client"
         assert current_window(second_view) == "agent-worker", "contextual attach moved another terminal client"
+        drain()
         os.write(terminal_fd, b"\x02b")  # prefix, board popup
         # Popup contents are in the client screen, outside normal window panes.
         popup_output = bytearray()
@@ -181,8 +182,12 @@ done
                 popup_output.extend(os.read(terminal_fd, 65536))
             except BlockingIOError:
                 pass
-            return b"AGENTMUX" in popup_output and b"Board" in popup_output
-        until(popup_ready)
+            return b"AGENTMUX" in popup_output and b"Board" in popup_output and b"peer note" in popup_output
+        try:
+            until(popup_ready)
+        except RuntimeError:
+            (Path(root.name) / "popup-screen.bin").write_bytes(popup_output)
+            raise
         os.write(terminal_fd, b"b")
         # Wait for composer before typing; the owner view uses asynchronous polling.
         popup_output.clear()
@@ -205,6 +210,21 @@ done
             return b"NATIVE_TTY_READY" in popup_output
         until(native_visible)
         assert current_window(first_view) == "agent-lead"
+        for key, marker in ((b"\x02P", b"Workspace groups"), (b"\x02m", b"Shared boundaries"), (b"\x02t", b"No managed tasks yet")):
+            drain()
+            popup_output.clear()
+            os.write(terminal_fd, key)
+            def other_popup_ready(marker=marker):
+                try:
+                    popup_output.extend(os.read(terminal_fd, 65536))
+                except BlockingIOError:
+                    pass
+                return marker in popup_output
+            until(other_popup_ready)
+            assert current_window(second_view) == "agent-worker", "popup moved the other terminal client"
+            popup_output.clear()
+            os.write(terminal_fd, b"q")
+            until(native_visible)
         os.write(terminal_fd, b"\x1bOP")
         until(lambda: current_window(first_view) == "dashboard")
         os.write(terminal_fd, b"q")
@@ -255,7 +275,7 @@ done
         print(json.dumps({"ok": True, "model_calls": 0, "agent_sandboxes": 2, "broker_sandbox": "bubblewrap",
             "native_tty_input": True, "inbox_does_not_inject": True, "live_permission_revoke_and_restore": True,
             "attach_focus": True, "independent_terminal_clients": True, "contextual_focus": True, "owned_view_cleanup": True, "owned_process_tree_stopped": True,
-            "terminal_dashboard": True, "workbench_hotkey": True, "board_popup_composition": True, "detach_keeps_workbench": True, "authenticated_web_controls": True}, indent=2))
+            "terminal_dashboard": True, "workbench_hotkey": True, "all_popup_shortcuts": True, "board_popup_composition": True, "detach_keeps_workbench": True, "authenticated_web_controls": True}, indent=2))
     finally:
         if attached and attached.poll() is None:
             attached.terminate()

@@ -1,8 +1,10 @@
 package managedlaunch
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -38,6 +40,9 @@ func TestAttachAgentRealClientsHaveIndependentViewsAndOwnedCleanup(t *testing.T)
 		command := exec.CommandContext(ctx, realTMux, args...)
 		command.Env = withoutTMux(os.Environ())
 		output, err := command.CombinedOutput()
+		if err != nil {
+			err = fmt.Errorf("tmux %q failed: %w: %s", args, err, output)
+		}
 		return string(output), err
 	}
 	wrapperDir := t.TempDir()
@@ -96,7 +101,12 @@ func TestAttachAgentRealClientsHaveIndependentViewsAndOwnedCleanup(t *testing.T)
 		reader, writer := io.Pipe()
 		done := make(chan error, 1)
 		go func() {
-			done <- l.AttachAgent(ctx, runtime, agent, reader, io.Discard, io.Discard)
+			var diagnostics bytes.Buffer
+			err := l.AttachAgent(ctx, runtime, agent, reader, io.Discard, &diagnostics)
+			if err != nil {
+				err = fmt.Errorf("%w: %s", err, diagnostics.String())
+			}
+			done <- err
 			_ = reader.Close()
 		}()
 		t.Cleanup(func() { _ = writer.Close() })
@@ -107,10 +117,24 @@ func TestAttachAgentRealClientsHaveIndependentViewsAndOwnedCleanup(t *testing.T)
 		return strings.Fields(out)
 	}
 	firstInput, firstDone := attach("alice")
-	wait("first attached view", func() bool { return len(clientSessions()) == 1 })
+	wait("first attached view", func() bool {
+		select {
+		case err := <-firstDone:
+			t.Fatalf("first AttachAgent exited before attaching: %v", err)
+		default:
+		}
+		return len(clientSessions()) == 1
+	})
 	first := clientSessions()[0]
 	secondInput, secondDone := attach("bob")
-	wait("second attached view", func() bool { return len(clientSessions()) == 2 })
+	wait("second attached view", func() bool {
+		select {
+		case err := <-secondDone:
+			t.Fatalf("second AttachAgent exited before attaching: %v", err)
+		default:
+		}
+		return len(clientSessions()) == 2
+	})
 	second := ""
 	for _, view := range clientSessions() {
 		if view != first {

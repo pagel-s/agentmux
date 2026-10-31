@@ -76,6 +76,35 @@ type consoleMemory struct {
 	err       error
 }
 
+// Keep the raw observations for native-terminal routing and reconnect checks;
+// only the human inventory omits processes already represented by a live bridge.
+func unconnectedObservations(agents []managed.AgentInfo, observations []sessioninventory.Session) []sessioninventory.Session {
+	registered := map[string]bool{}
+	for _, a := range agents {
+		if a.External && a.State == "active" && a.ExternalRef != "" {
+			registered[a.ExternalRef] = true
+		}
+	}
+	visible := make([]sessioninventory.Session, 0, len(observations))
+	for _, v := range observations {
+		if !registered[v.ID] {
+			visible = append(visible, v)
+		}
+	}
+	return visible
+}
+func (m console) observedSessions() []sessioninventory.Session {
+	return unconnectedObservations(m.agents, m.data.observed)
+}
+func observationStatus(reference string, observations []sessioninventory.Session) string {
+	for _, v := range observations {
+		if reference != "" && v.ID == reference {
+			return "native observed"
+		}
+	}
+	return "native not currently observed"
+}
+
 func consoleTimer() tea.Cmd {
 	return tea.Tick(time.Second, func(t time.Time) tea.Msg { return consoleTick(t) })
 }
@@ -223,6 +252,10 @@ func (m console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.message = "Refresh failed: " + activityText(msg.err.Error(), 160)
 			return m, nil
 		}
+		observedID := ""
+		if observations := m.observedSessions(); len(observations) > 0 {
+			observedID = observations[m.observedSelected%len(observations)].ID
+		}
 		oldID := m.selectedID()
 		m.agents = msg.agents
 		for i, a := range m.agents {
@@ -240,10 +273,6 @@ func (m console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Ignore a stale selection result. Its terminal or ACLs must never be
 		// shown as belonging to a different agent during rapid navigation.
 		if msg.selected == m.selectedID() {
-			observedID := ""
-			if len(m.data.observed) > 0 {
-				observedID = m.data.observed[m.observedSelected%len(m.data.observed)].ID
-			}
 			var messageID, taskID string
 			oldMessages := m.boardMessages()
 			if m.messageIndex > 0 && m.messageIndex < len(oldMessages) {
@@ -253,9 +282,9 @@ func (m console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				taskID = m.data.activity.Tasks[m.task].ID
 			}
 			m.data = msg
-			if len(msg.observed) > 0 {
-				m.observedSelected %= len(msg.observed)
-				for i, v := range msg.observed {
+			if observations := m.observedSessions(); len(observations) > 0 {
+				m.observedSelected %= len(observations)
+				for i, v := range observations {
 					if v.ID == observedID {
 						m.observedSelected = i
 						break

@@ -48,6 +48,8 @@ func runWorkInventory(args []string, out, diagnostics io.Writer) int {
 		return exitValidation
 	}
 	credential, err := managed.LoadCredential(managed.CredentialPath(o.state, ""))
+	observations := discoverWorkSessions(context.Background(), o.state)
+	var registered []managed.AgentInfo
 	if err == nil {
 		raw, e := workCall(context.Background(), managed.NewClient(credential), "agent.list", map[string]any{"limit": 200})
 		if e == nil {
@@ -55,16 +57,17 @@ func runWorkInventory(args []string, out, diagnostics io.Writer) int {
 				Agents []managed.AgentInfo `json:"agents"`
 			}
 			_ = json.Unmarshal(raw, &registry)
+			registered = registry.Agents
 			for _, a := range registry.Agents {
 				mode := "connected"
 				if a.External {
-					mode = "external bridge"
+					mode = "external bridge · " + observationStatus(a.ExternalRef, observations)
 				}
 				fmt.Fprintf(out, "%-24s %-8s %-16s %-8s %s\n", a.ID, a.Config.Harness, mode, a.State, a.Config.Workdir)
 			}
 		}
 	}
-	for _, s := range discoverWorkSessions(context.Background(), o.state) {
+	for _, s := range unconnectedObservations(registered, observations) {
 		fmt.Fprintf(out, "%-24s %-8s %-16s %s\n", s.ID, s.Harness, "observed", s.Project)
 	}
 	fmt.Fprintln(out, "Observed sessions keep their original terminals. Connect: agentmux connect OBSERVED_ID --name NAME")

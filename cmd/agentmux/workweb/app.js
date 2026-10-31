@@ -660,6 +660,8 @@ $("retry").onclick = refresh;
 $("clear-reply").onclick = clearReply;
 $("target-agent").onchange = (event) => {
   peer = event.target.value;
+  if (graphSelection?.kind === "edge")
+    graphSelection = { ...graphSelection, target: peer };
   renderBoundaries();
   graphInspector();
   drawGraph();

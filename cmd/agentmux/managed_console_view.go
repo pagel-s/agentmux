@@ -67,6 +67,9 @@ func (m console) roster(width, height int) string {
 			mode = "managed"
 		}
 		status := a.State
+		if a.External && a.State == "active" {
+			status = observationStatus(a.ExternalRef, m.data.observed)
+		}
 		if pane, ok := m.data.runtime.Agents[a.ID]; ok {
 			status = pane.State
 		}
@@ -123,7 +126,7 @@ func (m console) panel(width, height int) string {
 			a := m.agents[m.selected%len(m.agents)]
 			fmt.Fprintf(&out, "%s\n%s\n%s\n\n", consoleContent(a.Config.Role, 300), consoleMuted.Render(consoleContent(a.Config.Workdir, 200)), consoleMuted.Render(a.Config.Harness+" · "+a.Config.Sandbox+" · network "+a.Config.Network))
 			if a.External {
-				fmt.Fprintf(&out, "%s\n\n%s\n\n%s\n", consoleAccent.Render("EXTERNAL NATIVE SESSION"), consoleContent("Use its original terminal. Helper: "+m.bridgeHelper(a.ID), 500), consoleMuted.Render("Registration prepares a bridge; it does not prove the native agent read the setup.\nCopy the setup below into its existing conversation yourself."))
+				fmt.Fprintf(&out, "%s  %s\n\n%s\n\n%s\n", consoleAccent.Render("EXTERNAL NATIVE SESSION"), consoleMuted.Render(observationStatus(a.ExternalRef, m.data.observed)), consoleContent("Use its original terminal. Helper: "+m.bridgeHelper(a.ID), 500), consoleMuted.Render("Registration prepares a bridge; it does not prove the native agent read the setup.\nCopy the setup below into its existing conversation yourself."))
 				out.WriteString("\n" + consoleContent(bridgeInstructions(m.state, a.ID), 6000))
 				break
 			}
@@ -227,17 +230,18 @@ func (m console) panel(width, height int) string {
 			out.WriteString(consoleMuted.Render("No managed tasks yet.\nHuman-led native sessions use their own conversation UI."))
 		}
 	case 5:
+		observations := m.observedSessions()
 		out.WriteString(consoleAccent.Render("Existing sessions") + consoleMuted.Render("  ↑/↓ select · Enter details · c prepare bridge\n\n"))
 		out.WriteString(consoleMuted.Render("Observed live terminals keep their native conversation and tools.\nObservation grants no communication rights and sends no input.\n\n"))
-		if len(m.data.observed) == 0 {
-			out.WriteString(consoleMuted.Render("No other recognizable live TTY sessions found.\nN creates a native session. Generic interpreter wrappers may not be identifiable.\nDiscovery is local and best effort; custom tmux servers may be absent."))
+		if len(observations) == 0 {
+			out.WriteString(consoleMuted.Render("No unregistered live TTY sessions found.\nRegistered bridges appear in Agents under their assigned names.\nN creates a native session. Generic interpreter wrappers may not be identifiable.\nDiscovery is local and best effort; custom tmux servers may be absent."))
 		}
 		first, count := max(0, m.observedSelected-4), 5
 		if m.details != "" {
 			first, count = m.observedSelected, 1
 		}
-		for i := first; i < len(m.data.observed) && i < first+count; i++ {
-			v := m.data.observed[i]
+		for i := first; i < len(observations) && i < first+count; i++ {
+			v := observations[i]
 			line := fmt.Sprintf("  %s · %s · %s", v.Harness, v.Source, v.TTY)
 			if i == m.observedSelected {
 				line = consoleSelected.Render(line)

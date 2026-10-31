@@ -173,7 +173,7 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "down", "j":
 		if m.tab == 5 {
-			if m.observedSelected+1 < len(m.data.observed) {
+			if m.observedSelected+1 < len(m.observedSessions()) {
 				m.observedSelected++
 				m.details = ""
 			}
@@ -193,8 +193,8 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.tab = int(key[0] - '1')
 	case "enter":
 		if m.tab == 5 {
-			if len(m.data.observed) > 0 {
-				v := m.data.observed[m.observedSelected%len(m.data.observed)]
+			if observations := m.observedSessions(); len(observations) > 0 {
+				v := observations[m.observedSelected%len(observations)]
 				m.details = "Observed ID: " + v.ID + "\nOriginal terminal: " + v.TTY + "\n" + v.AttachCommand + "\nConnect bridge: press c, then copy the displayed setup into the existing native conversation. No terminal input is injected."
 			}
 			return m, nil
@@ -334,8 +334,8 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.mutate("control.update", map[string]any{"version": m.data.boundaries.Version, "kind": "edge", "from": m.selectedID(), "to": target, "action": action, "allow": allow}, "Permissions saved and enforced immediately.")
 		}
 	case "c":
-		if m.tab == 5 && !m.busy && len(m.data.observed) > 0 {
-			v := m.data.observed[m.observedSelected%len(m.data.observed)]
+		if observations := m.observedSessions(); m.tab == 5 && !m.busy && len(observations) > 0 {
+			v := observations[m.observedSelected%len(observations)]
 			state := m.state
 			id := fmt.Sprintf("%s_%d", v.Harness, v.PID)
 			m.busy = true
