@@ -12,6 +12,8 @@ import (
 	"os"
 	"sort"
 	"strings"
+
+	"agentmux/internal/modelmeta"
 )
 
 // Spec describes a process. Env contains the complete child environment.
@@ -62,6 +64,16 @@ type Request struct {
 	// automatically selected after a native sandbox failure.
 	ExternalSandbox bool
 	Conversation    *Conversation
+	ModelMetadata   modelmeta.Metadata
+	// OnEvent receives an independent copy after each structured stdout event
+	// has been validated and consumed, before the next event is read. Returning
+	// an error stops the process; the partial result still contains that event.
+	// Command harness output is returned in Result.Text rather than streamed.
+	OnEvent func(json.RawMessage) error
+	// AfterProcess runs once after process execution/wait has finished and
+	// before native transcript verification. It can commit a private bounded
+	// checkpoint. Its failure fails the turn; Build never invokes callbacks.
+	AfterProcess func() error
 }
 
 type Result struct {
@@ -80,12 +92,18 @@ var (
 // Build validates a request and constructs argv. It does not create files or
 // launch a process. Pi endpoint configuration is prepared privately by Run.
 func Build(req Request) (Spec, error) {
+	if err := req.ModelMetadata.Validate(); err != nil {
+		return Spec{}, err
+	}
 	name := strings.ToLower(strings.TrimSpace(req.Harness))
 	switch name {
 	case "agy":
 		name = "antigravity"
 	case "claude-code":
 		name = "claude"
+	}
+	if !req.ModelMetadata.Empty() && (name != "pi" || req.BaseURL == "") {
+		return Spec{}, errors.New("model metadata overrides require a Pi compatible endpoint")
 	}
 	if len(req.Prompt) > maxPromptBytes {
 		return Spec{}, fmt.Errorf("prompt exceeds %d bytes", maxPromptBytes)
@@ -177,6 +195,9 @@ func Build(req Request) (Spec, error) {
 			}
 		} else if req.APIKeyEnv != "" {
 			return Spec{}, errors.New("pi api_key_env requires base_url; otherwise configure the selected provider's environment explicitly")
+		}
+		if req.ModelMetadata.Tools != nil && !*req.ModelMetadata.Tools {
+			spec.Args = append(spec.Args, "--no-tools")
 		}
 	default:
 		return Spec{}, fmt.Errorf("unsupported managed harness %q (supported: command, claude, codex, antigravity, pi)", req.Harness)
@@ -293,6 +314,11 @@ func Run(ctx context.Context, req Request) (Result, error) {
 		}
 	}
 	result, err := run(ctx, req, spec)
+	if req.AfterProcess != nil {
+		if finishErr := req.AfterProcess(); finishErr != nil {
+			err = errors.Join(err, fmt.Errorf("finish private process checkpoint: %w", finishErr))
+		}
+	}
 	if err == nil && conversation != nil {
 		err = verifyConversation(spec.Name, conversation, result.SessionID)
 	}

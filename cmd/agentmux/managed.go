@@ -47,6 +47,29 @@ func runManaged(args []string) int {
 }
 
 func runManagedIO(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	if len(args) > 0 && args[0] == "trace" {
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		return runManagedTrace(ctx, args[1:], stdout, stderr)
+	}
+	if len(args) > 0 && (args[0] == "remote" || args[0] == "capsule") {
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		if args[0] == "remote" {
+			return runManagedRemote(ctx, args[1:], stdout, stderr)
+		}
+		return runManagedCapsule(ctx, args[1:], stdout, stderr)
+	}
+	if len(args) > 0 && args[0] == "memory" {
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		return runManagedMemory(ctx, args[1:], stdout, stderr)
+	}
+	if len(args) > 0 && args[0] == "setup" {
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		return runManagedSetup(ctx, args[1:], stdout, stderr)
+	}
 	if len(args) == 0 {
 		printManagedUsage(stderr)
 		return managedCLIError(stdout, "help", "", exitValidation, errors.New("managed subcommand is required"))
@@ -116,7 +139,7 @@ func runManagedIO(args []string, stdin io.Reader, stdout, stderr io.Writer) int 
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 		defer stop()
 		fmt.Fprintf(stderr, "Managed worker %s: waiting for authorized tasks; use status or the broker API to inspect work.\n", options.values["agent"])
-		if err := managed.RunWorker(ctx, managed.WorkerOptions{StateDir: state, AgentID: options.values["agent"], Once: options.once, Executable: executable}); err != nil && !errors.Is(err, context.Canceled) {
+		if err := managed.RunWorker(ctx, managed.WorkerOptions{StateDir: state, AgentID: options.values["agent"], Once: options.once, Executable: executable, DefinitionFile: options.values["definition"]}); err != nil && !errors.Is(err, context.Canceled) {
 			return managedCLIError(stdout, operation, "", exitRuntime, err)
 		}
 		return writeManagedEnvelope(stdout, managedEnvelope{Operation: operation, OK: true, Result: map[string]any{"agent_id": options.values["agent"], "stopped": true}})
@@ -299,6 +322,7 @@ func parseManagedCLI(operation string, args []string) (managedCLIOptions, error)
 		allowed["state"], allowed["watch"] = true, true
 	case "worker":
 		allowed["state"], allowed["agent"], allowed["once"] = true, true, true
+		allowed["definition"] = true
 	case "rotate":
 		allowed["state"], allowed["agent"] = true, true
 	case "call":
@@ -378,6 +402,7 @@ func parseManagedCLI(operation string, args []string) (managedCLIOptions, error)
 
 func printManagedUsage(out io.Writer) {
 	fmt.Fprintln(out, `Managed runtime (opt-in v2 configuration):
+  agentmux managed setup [--spec FILE] [--output FILE] [--init-git]
   agentmux managed up <config> [--state <private-dir>]
       [--broker-sandbox local|bubblewrap] [--attach]
   agentmux managed down --state <private-dir>
@@ -387,7 +412,12 @@ func printManagedUsage(out io.Writer) {
   agentmux managed serve --state <private-dir> [--sandbox local|bubblewrap]
   agentmux managed call <operation> [--credential-file <path>] [--socket <path>]
       [--json <object> | --stdin] [--request-id <id>]
-  agentmux managed worker --state <private-dir> --agent <id> [--once]
+  agentmux managed worker --state <private-dir> --agent <id> [--once] [--definition FILE]
+  agentmux managed remote --state DIR --agent ID --host SSH_ALIAS --remote-dir DIR
+      [--layout FILE] [--binary FILE] [--once] [--resume]
+  agentmux managed memory export|import|search|index|prune [--help]
+  agentmux managed trace list|verify|show --state DIR --agent ID [--id ID] [--mac MAC]
+  agentmux managed capsule inspect|recover --state DIR --agent ID [--help]
   agentmux managed status --state <private-dir> [--watch]
   agentmux managed activity --state <private-dir> [--watch]
   agentmux managed rotate --state <private-dir> --agent <id|'$owner'>

@@ -35,6 +35,7 @@ type GameOptions struct {
 	PerRoundCap int    `yaml:"per_round_cap" json:"per_round_cap"`
 	Threshold   int    `yaml:"threshold" json:"threshold"`
 	Dividend    int    `yaml:"dividend" json:"dividend"`
+	Multiplier  int    `yaml:"multiplier" json:"multiplier"`
 }
 
 type Input struct {
@@ -43,8 +44,9 @@ type Input struct {
 }
 
 type Action struct {
-	Project    *int `json:"project"`
-	Contribute int  `json:"contribute"`
+	Project    *int   `json:"project"`
+	Contribute int    `json:"contribute"`
+	RewardTeam string `json:"reward_team,omitempty"`
 }
 
 type ActionResult struct {
@@ -68,6 +70,10 @@ type Outcome struct {
 	TotalCost         int                     `json:"total_cost"`
 	InvalidActions    int                     `json:"invalid_actions"`
 	FreeRiders        int                     `json:"free_riders"`
+	Environment       string                  `json:"environment"`
+	ScoringUtilities  map[string]float64      `json:"scoring_utilities"`
+	RewardPools       []RewardPool            `json:"reward_pools,omitempty"`
+	Exchange          *ExchangeOutcome        `json:"exchange,omitempty"`
 }
 
 type PublicGoods struct{}
@@ -85,15 +91,20 @@ type goodsEpisode struct {
 	round   int
 	credits map[string]int
 	payoffs map[string]float64
+	rewards rewardContext
+	seed    int64
 }
 
 func (PublicGoods) New(seed int64, actors []string, options GameOptions) (Episode, error) {
+	if options.Kind != GameVersion {
+		return nil, errors.New("public goods constructor requires its own versioned kind")
+	}
 	if err := options.validate(len(actors)); err != nil {
 		return nil, err
 	}
 	actors = append([]string(nil), actors...)
 	sort.Strings(actors)
-	g := &goodsEpisode{options: options, actors: actors, credits: map[string]int{}, payoffs: map[string]float64{}}
+	g := &goodsEpisode{options: options, actors: actors, credits: map[string]int{}, payoffs: map[string]float64{}, seed: seed}
 	for i, id := range actors {
 		if !identifier.MatchString(id) || (i > 0 && id == actors[i-1]) {
 			return nil, errors.New("unique conservative actor ids required")
@@ -114,14 +125,20 @@ func (PublicGoods) New(seed int64, actors []string, options GameOptions) (Episod
 }
 
 func (o GameOptions) validate(population int) error {
-	if o.Kind != GameVersion {
-		return fmt.Errorf("game.kind must be %s", GameVersion)
+	if o.Kind != GameVersion && o.Kind != ExchangeVersion {
+		return fmt.Errorf("game.kind must be %s or %s", GameVersion, ExchangeVersion)
 	}
 	if population < 2 || population > 16 || o.Rounds < 1 || o.Rounds > 100 {
 		return errors.New("game requires 2–16 participants and 1–100 rounds")
 	}
-	if o.Credits < 1 || o.Credits > 10000 || o.PerRoundCap < 1 || o.PerRoundCap > o.Credits || o.Threshold < 1 || o.Threshold > o.PerRoundCap*population || o.Dividend < 1 || o.Dividend > 10000 {
+	if o.Credits < 1 || o.Credits > 10000 || o.PerRoundCap < 1 || o.PerRoundCap > o.Credits {
 		return errors.New("game credits, per-round cap, threshold, and dividend must be bounded and feasible")
+	}
+	if o.Kind == GameVersion && (o.Threshold < 1 || o.Threshold > o.PerRoundCap*population || o.Dividend < 1 || o.Dividend > 10000 || o.Multiplier != 0) {
+		return errors.New("public goods requires feasible threshold/dividend and no multiplier")
+	}
+	if o.Kind == ExchangeVersion && (o.Multiplier < 2 || o.Multiplier > 4 || o.Threshold != 0 || o.Dividend != 0) {
+		return errors.New("trust exchange requires multiplier 2–4 and no threshold/dividend")
 	}
 	return nil
 }
@@ -157,7 +174,7 @@ func parseAction(raw string) (Action, error) {
 			return Action{}, errors.New("invalid action JSON")
 		}
 		name, ok := key.(string)
-		if !ok || (name != "project" && name != "contribute") {
+		if !ok || (name != "project" && name != "contribute" && name != "reward_team") {
 			return Action{}, errors.New("unknown action field")
 		}
 		if _, exists := fields[name]; exists {
@@ -169,7 +186,7 @@ func parseAction(raw string) (Action, error) {
 		}
 		fields[name] = value
 	}
-	if _, err := d.Token(); err != nil || len(fields) != 2 {
+	if _, err := d.Token(); err != nil || fields["project"] == nil || fields["contribute"] == nil {
 		return Action{}, errors.New("action requires project and contribute")
 	}
 	var extra any
@@ -177,6 +194,9 @@ func parseAction(raw string) (Action, error) {
 		return Action{}, errors.New("action has trailing content")
 	}
 	var action Action
+	if fields["reward_team"] != nil && (bytes.Equal(fields["reward_team"], []byte("null")) || json.Unmarshal(fields["reward_team"], &action.RewardTeam) != nil) {
+		return Action{}, errors.New("reward_team must be a string")
+	}
 	if json.Unmarshal(fields["project"], &action.Project) != nil || json.Unmarshal(fields["contribute"], &action.Contribute) != nil || bytes.Equal(fields["contribute"], []byte("null")) {
 		return Action{}, errors.New("action fields must be integers (project may be null)")
 	}
@@ -204,7 +224,7 @@ func (g *goodsEpisode) Resolve(inputs map[string]Input, mode string) (Outcome, e
 			return Outcome{}, errors.New("missing participant input")
 		}
 	}
-	out := Outcome{Round: g.round + 1, ProductiveProject: g.cases[g.round].Productive, Actions: map[string]ActionResult{}, Credits: map[string]int{}, Utilities: map[string]float64{}, Payoffs: map[string]float64{}, CumulativePayoffs: map[string]float64{}}
+	out := Outcome{Round: g.round + 1, Environment: GameVersion, ProductiveProject: g.cases[g.round].Productive, Actions: map[string]ActionResult{}, Credits: map[string]int{}, Utilities: map[string]float64{}, Payoffs: map[string]float64{}, CumulativePayoffs: map[string]float64{}}
 	for _, actor := range g.actors {
 		input := inputs[actor]
 		action, err := parseAction(input.Raw)
@@ -213,6 +233,9 @@ func (g *goodsEpisode) Resolve(inputs map[string]Input, mode string) (Outcome, e
 		}
 		if err == nil && (action.Contribute > g.options.PerRoundCap || action.Contribute > g.credits[actor]) {
 			err = errors.New("contribution exceeds remaining credits or per-round cap")
+		}
+		if err == nil && !g.rewards.valid(actor, action.RewardTeam) {
+			err = errors.New("reward_team requires enabled pooling and frozen active membership")
 		}
 		result := ActionResult{Action: action, Valid: err == nil}
 		if err != nil {
@@ -248,33 +271,13 @@ func (g *goodsEpisode) Resolve(inputs map[string]Input, mode string) (Outcome, e
 		out.Utilities[actor] = utility
 		out.SocialWelfare += utility
 	}
-	maxUtility := 0.0
-	winners := 0
-	for _, value := range out.Utilities {
-		if value > maxUtility {
-			maxUtility = value
+	choices := map[string]string{}
+	for id, result := range out.Actions {
+		if result.Valid {
+			choices[id] = result.Action.RewardTeam
 		}
 	}
-	for _, value := range out.Utilities {
-		if value == maxUtility && maxUtility > 0 {
-			winners++
-		}
-	}
-	for _, actor := range g.actors {
-		out.Payoffs[actor] = 0
-		switch mode {
-		case "shared":
-			out.Payoffs[actor] = out.SocialWelfare / float64(len(g.actors))
-		case "individual":
-			out.Payoffs[actor] = out.Utilities[actor]
-		case "winner":
-			if out.Utilities[actor] == maxUtility && maxUtility > 0 {
-				out.Payoffs[actor] = 1 / float64(winners)
-			}
-		}
-		g.payoffs[actor] += out.Payoffs[actor]
-		out.CumulativePayoffs[actor] = g.payoffs[actor]
-	}
+	applyRewards(&out, g.actors, g.payoffs, mode, g.rewards, choices)
 	g.round++
 	return out, nil
 }
@@ -283,6 +286,9 @@ func (g *goodsEpisode) Resolve(inputs map[string]Input, mode string) (Outcome, e
 // resource accounting. oracle-cooperative is an informed feasible comparator,
 // not a proof of global optimality over the finite horizon.
 func Baseline(seed int64, actors []string, options GameOptions, mode, policy string) ([]Outcome, error) {
+	if options.Kind == ExchangeVersion {
+		return exchangeBaseline(seed, actors, options, mode, policy)
+	}
 	episode, err := (PublicGoods{}).New(seed, actors, options)
 	if err != nil {
 		return nil, err

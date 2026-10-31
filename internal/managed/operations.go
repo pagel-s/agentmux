@@ -36,7 +36,7 @@ func internal(err error) *Fault {
 
 func isWrite(op string) bool {
 	switch op {
-	case "worker.next", "autonomy.control", "autonomy.ack":
+	case "worker.next", "autonomy.control", "autonomy.ack", "memory.delete", "memory.prune", "memory.index":
 		return true
 	case "board.post", "message.send", "ping.send", "instruct", "task.claim", "task.complete", "task.stopped", "task.cancel", "task.verify", "task.resolve", "memory.put", "agent.spawn", "agent.stop", "team.create", "team.invite", "team.join", "team.leave", "team.remove", "team.dissolve", "conversation.begin", "conversation.reset":
 		return true
@@ -112,7 +112,11 @@ func (s *Store) Call(ctx context.Context, token string, r Request) (json.RawMess
 			if priorDigest != digest {
 				return nil, fault("conflict", "request_id was already used for different arguments")
 			}
-			replay, err := s.autonomyReplay(ctx, tx, a, r.Operation, json.RawMessage(prior))
+			memoryReplay, problem := s.memoryReplay(ctx, tx, a, r, json.RawMessage(prior))
+			if problem != nil {
+				return nil, problem
+			}
+			replay, err := s.autonomyReplay(ctx, tx, a, r.Operation, memoryReplay)
 			if err != nil {
 				return nil, internal(err)
 			}
@@ -136,7 +140,7 @@ func (s *Store) Call(ctx context.Context, token string, r Request) (json.RawMess
 				if in.Mode != "paused" && in.Mode != "stopped" {
 					return nil, fault("limit", "session runtime budget exhausted")
 				}
-			case "task.complete", "task.stopped", "task.cancel", "task.verify", "agent.stop", "team.leave", "team.remove", "team.dissolve", "conversation.reset":
+			case "task.complete", "task.stopped", "task.cancel", "task.verify", "agent.stop", "team.leave", "team.remove", "team.dissolve", "conversation.reset", "memory.delete", "memory.prune":
 			case "task.resolve":
 				var in struct {
 					Resolution string `json:"resolution"`
@@ -188,6 +192,8 @@ func (s *Store) Call(ctx context.Context, token string, r Request) (json.RawMess
 
 func (s *Store) dispatch(ctx context.Context, q queryer, a actor, r Request) (any, *Fault) {
 	switch r.Operation {
+	case "budget.status":
+		return s.budgetStatus(ctx, q, a, r.Args)
 	case "worker.next", "autonomy.status", "autonomy.control", "autonomy.ack", "wake.read":
 		return s.autonomy(ctx, q, a, r)
 	case "message.get":
@@ -228,7 +234,7 @@ func (s *Store) dispatch(ctx context.Context, q queryer, a actor, r Request) (an
 		return s.messages(ctx, q, a, r.Args)
 	case "task.get", "task.list", "task.claim", "task.complete", "task.stopped", "task.cancel", "task.verify", "task.resolve":
 		return s.tasks(ctx, q, a, r)
-	case "memory.get", "memory.list", "memory.put":
+	case "memory.get", "memory.list", "memory.put", "memory.head", "memory.search", "memory.delete", "memory.prune", "memory.index":
 		return s.memory(ctx, q, a, r)
 	case "agent.list", "agent.spawn", "agent.stop":
 		return s.agents(ctx, q, a, r)
@@ -639,6 +645,9 @@ func (s *Store) tasks(ctx context.Context, q queryer, a actor, r Request) (any, 
 			return map[string]any{"task": nil}, nil
 		}
 		t := all[0]
+		if problem := s.reserveTurnBudget(ctx, q, &t); problem != nil {
+			return nil, problem
+		}
 		t.State = "running"
 		t.Delivery = "dispatching"
 		t.Version++
@@ -674,6 +683,7 @@ func (s *Store) tasks(ctx context.Context, q queryer, a actor, r Request) (any, 
 		Resolution string          `json:"resolution"`
 		SessionID  string          `json:"session_id"`
 		Skipped    bool            `json:"skipped"`
+		Trace      *TraceSummary   `json:"trace"`
 	}
 	if err := strictJSON(r.Args, &in); err != nil {
 		return nil, invalid(err)
@@ -712,6 +722,23 @@ func (s *Store) tasks(ctx context.Context, q queryer, a actor, r Request) (any, 
 		t.Usage = in.Usage
 		if in.Status != "submitted" && in.Status != "failed" {
 			return nil, fault("invalid", "status must be submitted or failed")
+		}
+		if in.Trace != nil {
+			if !strings.HasPrefix(in.Trace.ID, t.ID+"-") {
+				return nil, fault("invalid", "trace must belong to this task")
+			}
+			verified, err := VerifyTrace(s.dir, t.To, in.Trace.ID, in.Trace.MAC)
+			if err != nil || verified.Records != in.Trace.Records || verified.Bytes != in.Trace.Bytes || !in.Trace.Complete {
+				return nil, fault("invalid", "native trace could not be authenticated")
+			}
+			t.Trace = &verified
+		}
+		info, err := s.agent(ctx, q, t.To)
+		if err != nil {
+			return nil, internal(err)
+		}
+		if info.Config.Trace.Enabled && !in.Skipped && t.Trace == nil {
+			return nil, fault("invalid", "configured native trace is required before completion")
 		}
 		t.State = in.Status
 		t.Result = in.Result
@@ -816,94 +843,7 @@ func (s *Store) tasks(ctx context.Context, q queryer, a actor, r Request) (any, 
 }
 
 func (s *Store) memory(ctx context.Context, q queryer, a actor, r Request) (any, *Fault) {
-	var in struct {
-		Namespace string `json:"namespace"`
-		Key       string `json:"key"`
-		Value     string `json:"value"`
-		Version   int    `json:"version"`
-		Limit     int    `json:"limit"`
-		After     string `json:"after"`
-	}
-	if err := strictJSON(r.Args, &in); err != nil {
-		return nil, invalid(err)
-	}
-	private := in.Namespace == "private"
-	scope := in.Namespace
-	if private {
-		if a.owner() {
-			return nil, fault("invalid", "owner must use an agent credential for private memory")
-		}
-		scope = "private:" + a.ID
-	} else {
-		allowed := s.namespace(ctx, q, a.ID, in.Namespace, true, false)
-		if r.Operation == "memory.put" {
-			allowed = s.namespace(ctx, q, a.ID, in.Namespace, true, true)
-		}
-		if !s.namespaceExists(ctx, q, in.Namespace, true) || (!a.owner() && !allowed) {
-			return nil, forbidden()
-		}
-	}
-	if r.Operation == "memory.list" {
-		if in.Limit <= 0 || in.Limit > 200 {
-			in.Limit = 100
-		}
-		var after int64
-		if in.After != "" {
-			if !validKey(in.After) {
-				return nil, fault("invalid", "invalid memory cursor")
-			}
-			err := q.QueryRowContext(ctx, "SELECT seq FROM records WHERE kind='memory' AND scope=? AND id=?", scope, "memory_"+hash(scope+"\x00"+in.After)).Scan(&after)
-			if err != nil {
-				return nil, fault("invalid", "invalid memory cursor")
-			}
-		}
-		items, err := list[Memory](ctx, q, "memory", "AND scope=? AND seq>? ORDER BY seq LIMIT ?", scope, after, in.Limit)
-		if err != nil {
-			return nil, internal(err)
-		}
-		page := []Memory{}
-		cursor := in.After
-		size := 0
-		for _, m := range items {
-			raw, _ := json.Marshal(m)
-			if size+len(raw) > maxWireBytes/2 {
-				break
-			}
-			size += len(raw)
-			page = append(page, m)
-			cursor = m.Key
-		}
-		return map[string]any{"entries": page, "cursor": cursor}, nil
-	}
-	if !validKey(in.Key) {
-		return nil, fault("invalid", "key must have 1–128 characters without line breaks")
-	}
-	id := "memory_" + hash(scope+"\x00"+in.Key)
-	var m Memory
-	err := get(ctx, q, "memory", id, &m)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return nil, internal(err)
-	}
-	if r.Operation == "memory.get" {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, fault("not_found", "memory entry not found")
-		}
-		return map[string]any{"entry": m}, nil
-	}
-	if len(in.Value) > s.cfg.Limits.MaxMessageBytes {
-		return nil, fault("invalid", "memory value exceeds max_message_bytes")
-	}
-	if in.Version != m.Version {
-		return nil, fault("conflict", "memory version changed; read it again (use version 0 to create)")
-	}
-	m = Memory{Namespace: in.Namespace, Key: in.Key, Value: in.Value, Version: m.Version + 1, Author: a.ID, UpdatedAt: now()}
-	if err = save(ctx, q, "memory", id, a.ID, "", scope, m); err != nil {
-		return nil, internal(err)
-	}
-	if err = event(ctx, q, a, "memory.put", id, map[string]any{"namespace": scope, "version": m.Version}); err != nil {
-		return nil, internal(err)
-	}
-	return map[string]any{"entry": m}, nil
+	return s.memoryOperation(ctx, q, a, r)
 }
 
 func formatFault(f *Fault) error {

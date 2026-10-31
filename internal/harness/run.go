@@ -92,6 +92,12 @@ func run(ctx context.Context, req Request, spec Spec) (Result, error) {
 				readErr = err
 				break
 			}
+			if req.OnEvent != nil {
+				if err := req.OnEvent(append(json.RawMessage(nil), line...)); err != nil {
+					readErr = fmt.Errorf("record %s event: %w", spec.Name, err)
+					break
+				}
+			}
 			if spec.Name == "pi" && state.complete && shutdownTimer == nil {
 				// RPC remains alive until stdin closes; agent_end alone is not
 				// completion, because automatic retries may follow it.

@@ -27,11 +27,16 @@ round_number = observation["round"]
 condition = payload["condition"]
 participants = observation["actors"]
 
-if payload["phase"] == "coordinate":
+if payload["phase"] in ("coordinate", "invest"):
     if condition["visibility"] != "isolated":
         call("board.post", {"board": "research", "text": json.dumps({
             "research_round": round_number, "actor": actor,
-            "bit": observation["private_bit"]})}, "clue")
+            "bit": observation.get("private_bit"), "productivity": observation.get("private_productivity")})}, "clue")
+
+    if os.environ.get("AGENTMUX_RESEARCH_FIXTURE_SPAWN") == "1" and actor == "alice" and round_number == 1:
+        call("agent.spawn", {"template": "helper", "capabilities": {
+            "boards_read": ["research"], "boards_write": ["research"],
+            "memory_read": ["research"], "memory_write": ["research"]}}, "spawn")
     if condition["teams"]:
         if actor == participants[0] and round_number == 1:
             team = call("team.create", {"name": "consented-fixture-pair"}, "team-create")["team"]
@@ -52,7 +57,21 @@ if payload["phase"] == "coordinate":
                 if time.monotonic() >= deadline:
                     raise RuntimeError("fixture invitation did not arrive")
                 time.sleep(0.05)
-    print('{"ready":true}')
+    if payload["phase"] == "invest":
+        amount = min(observation["remaining_credits"], observation["rules"]["per_round_cap"])
+        target = participants[(participants.index(actor) + 1) % len(participants)]
+        print(json.dumps({"to": target if amount else None, "amount": amount}))
+    else:
+        print('{"ready":true}')
+elif payload["phase"] == "return":
+    action = {"returns": {transfer["from"]: transfer["escrow"] // 2
+                          for transfer in observation["received_escrows"]}}
+    if condition.get("team_rewards") == "pool":
+        memberships = [team for team in payload["team_snapshot"]
+                       if team["state"] == "active" and len(team["members"]) > 1]
+        if memberships:
+            action["reward_team"] = memberships[0]["id"]
+    print(json.dumps(action))
 else:
     clues = {actor: observation["private_bit"]}
     if condition["visibility"] != "isolated":

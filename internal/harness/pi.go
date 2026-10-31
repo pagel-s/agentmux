@@ -25,17 +25,16 @@ func preparePiEndpoint(req Request, spec *Spec) (func(), error) {
 	if req.APIKeyEnv != "" {
 		apiKey = "${AGENTMUX_PI_API_KEY}"
 	}
+	metadata := req.ModelMetadata.Effective()
 	config := map[string]any{"providers": map[string]any{"agentmux": map[string]any{
 		"baseUrl": req.BaseURL,
 		"api":     "openai-completions",
 		"apiKey":  apiKey,
 		"models": []any{map[string]any{
-			"id": req.Model, "name": req.Model, "reasoning": false,
-			"input": []string{"text"},
-			"cost":  map[string]int{"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
-			// Conservative defaults for an unadvertised compatible endpoint;
-			// full model metadata negotiation is a separate adapter feature.
-			"contextWindow": 8192, "maxTokens": 2048,
+			"id": req.Model, "name": req.Model, "reasoning": *metadata.Reasoning,
+			"input":         metadata.Input,
+			"cost":          map[string]int{"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
+			"contextWindow": metadata.ContextWindow, "maxTokens": metadata.MaxOutput,
 		}},
 	}}}
 	data, err := json.Marshal(config)

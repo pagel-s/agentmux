@@ -1,0 +1,40 @@
+version: 2
+mode: managed
+session: dynamic-research-fixture
+agents:
+  alice:
+    harness: command
+    command: [../../scripts/fixtures/research/agent.py]
+    sandbox: bubblewrap
+    network: none
+    env: {AGENTMUX_RESEARCH_FIXTURE_SPAWN: '1'}
+    read_only_paths: [../../scripts/fixtures/research/agent.py]
+  bob:
+    harness: command
+    command: [../../scripts/fixtures/research/agent.py]
+    sandbox: bubblewrap
+    network: none
+    read_only_paths: [../../scripts/fixtures/research/agent.py]
+policy:
+  default: deny
+  grants:
+    - {from: ['*'], to: ['*'], actions: [message.send, ping.send]}
+spawn:
+  enabled: true
+  allow: {alice: [helper]}
+  templates:
+    helper:
+      harness: command
+      command: [../../scripts/fixtures/research/agent.py]
+      sandbox: bubblewrap
+      network: none
+      read_only_paths: [../../scripts/fixtures/research/agent.py]
+limits:
+  max_tasks: 40
+  max_messages: 100
+  max_records: 2000
+  max_requests: 3000
+  max_runtime_seconds: 120
+  max_concurrent_tasks: 3
+  max_spawns: 1
+  max_spawn_depth: 1

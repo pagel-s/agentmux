@@ -11,9 +11,10 @@ import (
 )
 
 type Estimate struct {
-	N             int      `json:"n"`
-	Mean          float64  `json:"mean"`
-	StandardError *float64 `json:"standard_error,omitempty"`
+	N             int       `json:"n"`
+	Mean          float64   `json:"mean"`
+	StandardError *float64  `json:"standard_error,omitempty"`
+	CI95          *Interval `json:"ci95,omitempty"`
 }
 type ConditionSummary struct {
 	Condition       string              `json:"condition"`
@@ -26,6 +27,7 @@ type ConditionSummary struct {
 	ConsentedTeams  Estimate            `json:"teams_with_multiple_members"`
 	TaskFailures    Estimate            `json:"failed_task_count"`
 	BaselineWelfare map[string]Estimate `json:"baseline_total_social_welfare"`
+	ReturnFraction  Estimate            `json:"escrow_return_fraction"`
 }
 type Contrast struct {
 	From       string   `json:"from"`
@@ -33,12 +35,16 @@ type Contrast struct {
 	Difference Estimate `json:"paired_social_welfare_difference_to_minus_from"`
 }
 type Analysis struct {
-	Research        string             `json:"research"`
-	ManifestHash    string             `json:"manifest_sha256"`
-	Conditions      []ConditionSummary `json:"conditions"`
-	PairedContrasts []Contrast         `json:"paired_contrasts"`
-	InterruptedRuns int                `json:"interrupted_runs"`
-	Interpretation  string             `json:"interpretation"`
+	Research         string             `json:"research"`
+	ManifestHash     string             `json:"manifest_sha256"`
+	Conditions       []ConditionSummary `json:"conditions"`
+	PairedContrasts  []Contrast         `json:"paired_contrasts"`
+	InterruptedRuns  int                `json:"interrupted_runs"`
+	Interpretation   string             `json:"interpretation"`
+	Preregistration  *Preregistration   `json:"preregistration,omitempty"`
+	FactorialEffects []FactorialEffect  `json:"factorial_effects,omitempty"`
+	PerAgent         []AgentSummary     `json:"per_agent,omitempty"`
+	PowerWarning     string             `json:"power_warning,omitempty"`
 }
 
 func estimate(values []float64) Estimate {
@@ -57,6 +63,8 @@ func estimate(values []float64) Estimate {
 		}
 		se := math.Sqrt(variance / float64(len(values)-1) / float64(len(values)))
 		e.StandardError = &se
+		critical := tCritical95(len(values) - 1)
+		e.CI95 = &Interval{Lower: e.Mean - critical*se, Upper: e.Mean + critical*se, Method: "Student-t run/block mean; df capped at 30; conservative table rounding"}
 	}
 	return e
 }
@@ -80,6 +88,7 @@ func Analyze(report Report) Analysis {
 	for _, id := range ids {
 		s := ConditionSummary{Condition: id, CompletedRuns: len(groups[id]), BaselineWelfare: map[string]Estimate{}}
 		var welfare, funding, cost, invalid, freeRiders, teams, failed []float64
+		var returnFractions []float64
 		baselines := map[string][]float64{}
 		paired[id] = map[string]float64{}
 		for _, r := range groups[id] {
@@ -105,6 +114,16 @@ func Analyze(report Report) Analysis {
 			}
 			teams = append(teams, float64(len(formed)))
 			failed = append(failed, failures)
+			returned, escrow := 0, 0
+			for _, round := range r.Rounds {
+				if round.Exchange != nil {
+					returned += round.Exchange.TotalReturned
+					escrow += round.Exchange.TotalEscrow
+				}
+			}
+			if escrow > 0 {
+				returnFractions = append(returnFractions, float64(returned)/float64(escrow))
+			}
 			paired[id][fmt.Sprintf("%d/%d", r.Trial.Seed, r.Trial.Repetition)] = w
 			for name, rounds := range r.Baselines {
 				w, _, _, _, _ := roundMetrics(rounds)
@@ -118,6 +137,7 @@ func Analyze(report Report) Analysis {
 		s.FreeRiders = estimate(freeRiders)
 		s.ConsentedTeams = estimate(teams)
 		s.TaskFailures = estimate(failed)
+		s.ReturnFraction = estimate(returnFractions)
 		for name, values := range baselines {
 			s.BaselineWelfare[name] = estimate(values)
 		}
@@ -137,6 +157,31 @@ func Analyze(report Report) Analysis {
 				}
 			}
 			a.PairedContrasts = append(a.PairedContrasts, Contrast{From: from, To: to, Difference: estimate(differences)})
+		}
+	}
+	a.Preregistration = report.Preregistration
+	a.FactorialEffects = factorialEffects(report)
+	a.PerAgent = agentSummaries(report)
+	if report.Preregistration != nil {
+		minimum := report.Preregistration.MinimumBlocks
+		blocks := map[string]map[string]bool{}
+		for _, r := range report.Results {
+			if r.Status == "completed" {
+				key := fmt.Sprintf("%d/%d", r.Trial.Seed, r.Trial.Repetition)
+				if blocks[key] == nil {
+					blocks[key] = map[string]bool{}
+				}
+				blocks[key][r.Trial.Condition] = true
+			}
+		}
+		complete := 0
+		for _, cells := range blocks {
+			if len(cells) == len(report.Conditions) {
+				complete++
+			}
+		}
+		if complete < minimum {
+			a.PowerWarning = fmt.Sprintf("Underpowered exploratory pilot: %d complete paired blocks; preregistered minimum %d. Intervals are assumption-dependent and cannot establish traits or reliable population effects.", complete, minimum)
 		}
 	}
 	return a

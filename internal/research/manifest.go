@@ -30,6 +30,9 @@ type Manifest struct {
 	BrokerSandbox       string               `yaml:"broker_sandbox" json:"broker_sandbox"`
 	Game                GameOptions          `yaml:"game" json:"game"`
 	Conditions          []Condition          `yaml:"conditions" json:"conditions"`
+	Budget              Budget               `yaml:"budget" json:"budget"`
+	Population          Population           `yaml:"population" json:"population"`
+	Preregistration     *Preregistration     `yaml:"preregistration" json:"preregistration,omitempty"`
 	Config              managedconfig.Config `yaml:"-" json:"resolved_team"`
 }
 
@@ -39,6 +42,7 @@ type Condition struct {
 	Visibility   string `yaml:"visibility" json:"visibility"`
 	Teams        bool   `yaml:"teams" json:"teams"`
 	Instructions string `yaml:"instructions" json:"instructions,omitempty"`
+	TeamRewards  string `yaml:"team_rewards" json:"team_rewards"`
 }
 
 type Trial struct {
@@ -56,6 +60,7 @@ type PlanResult struct {
 	TotalTasks    int      `json:"total_tasks"`
 	Environment   string   `json:"environment"`
 	SeedScope     string   `json:"seed_scope"`
+	ModelTasks    int      `json:"max_model_tasks_in_plan"`
 }
 
 var identifier = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]{0,63}$`)
@@ -111,6 +116,27 @@ func Load(path string) (Manifest, error) {
 		}
 		m.Config.Agents[id] = a
 	}
+	for id, a := range m.Config.Spawn.Templates {
+		if strings.HasPrefix(a.Auth.File, "~/") {
+			home, e := os.UserHomeDir()
+			if e != nil {
+				return m, e
+			}
+			a.Auth.File = filepath.Join(home, strings.TrimPrefix(a.Auth.File, "~/"))
+		}
+		if a.Auth.File != "" && !filepath.IsAbs(a.Auth.File) {
+			a.Auth.File = filepath.Join(filepath.Dir(m.Team), a.Auth.File)
+		}
+		if len(a.Command) > 0 && strings.ContainsRune(a.Command[0], filepath.Separator) && !filepath.IsAbs(a.Command[0]) {
+			a.Command[0] = filepath.Join(filepath.Dir(m.Team), a.Command[0])
+		}
+		for i, p := range a.ReadOnlyPaths {
+			if !filepath.IsAbs(p) {
+				a.ReadOnlyPaths[i] = filepath.Join(filepath.Dir(m.Team), p)
+			}
+		}
+		m.Config.Spawn.Templates[id] = a
+	}
 	m = normalize(m)
 	return m, m.Validate()
 }
@@ -119,6 +145,30 @@ func normalize(m Manifest) Manifest {
 	m.Config = m.Config.Normalized()
 	m.Seeds = append([]int64(nil), m.Seeds...)
 	m.Conditions = append([]Condition(nil), m.Conditions...)
+	if m.Preregistration != nil {
+		p := *m.Preregistration
+		p.Hypotheses = append([]string(nil), p.Hypotheses...)
+		p.FixedControls = append([]string(nil), p.FixedControls...)
+		p.Factors = map[string][]string{}
+		for k, v := range m.Preregistration.Factors {
+			p.Factors[k] = append([]string(nil), v...)
+		}
+		m.Preregistration = &p
+	}
+	if m.Population.Mode == "" {
+		m.Population.Mode = "fixed"
+	}
+	if m.Population.MaxAgents == 0 {
+		m.Population.MaxAgents = len(m.Config.Agents)
+	}
+	if m.Population.EntryCredits == 0 {
+		m.Population.EntryCredits = 1
+	}
+	for i := range m.Conditions {
+		if m.Conditions[i].TeamRewards == "" {
+			m.Conditions[i].TeamRewards = "none"
+		}
+	}
 	if m.Trials == 0 {
 		m.Trials = 1
 	}
@@ -146,11 +196,14 @@ func normalize(m Manifest) Manifest {
 	if m.Game.PerRoundCap == 0 {
 		m.Game.PerRoundCap = 2
 	}
-	if m.Game.Threshold == 0 {
+	if m.Game.Threshold == 0 && m.Game.Kind == GameVersion {
 		m.Game.Threshold = len(m.Config.Agents) + 1
 	}
-	if m.Game.Dividend == 0 {
+	if m.Game.Dividend == 0 && m.Game.Kind == GameVersion {
 		m.Game.Dividend = 3
+	}
+	if m.Game.Multiplier == 0 && m.Game.Kind == ExchangeVersion {
+		m.Game.Multiplier = 3
 	}
 	return m
 }
@@ -165,6 +218,17 @@ func (m Manifest) Validate() error {
 	if err := m.Game.validate(len(m.Config.Agents)); err != nil {
 		return err
 	}
+	if err := m.Population.validate(m); err != nil {
+		return err
+	}
+	if m.Budget.MaxModelTasks < 0 || m.Budget.MaxModelTasks > 100000 {
+		return errors.New("budget.max_model_tasks must be between 0 and 100000")
+	}
+	if m.Preregistration != nil {
+		if err := m.Preregistration.validate(m); err != nil {
+			return err
+		}
+	}
 	if m.Trials < 1 || m.Trials > 100 || len(m.Seeds) < 1 || len(m.Seeds) > 100 || len(m.Conditions) < 1 || len(m.Conditions) > 64 || m.Trials*len(m.Seeds)*len(m.Conditions) > 10000 {
 		return errors.New("research matrix requires bounded positive trials, seeds, and conditions (at most 10000 runs)")
 	}
@@ -174,10 +238,10 @@ func (m Manifest) Validate() error {
 	if m.BrokerSandbox != "bubblewrap" && m.BrokerSandbox != "local" {
 		return errors.New("broker_sandbox must be bubblewrap or explicitly trusted local")
 	}
-	if len(m.Config.Agents) > m.Config.Limits.MaxConcurrentTasks {
+	if m.Population.MaxAgents > m.Config.Limits.MaxConcurrentTasks {
 		return errors.New("population exceeds concurrent task limit")
 	}
-	if m.Game.Rounds*2*len(m.Config.Agents) > m.Config.Limits.MaxTasks {
+	if m.Game.Rounds*2*m.Population.MaxAgents > m.Config.Limits.MaxTasks {
 		return errors.New("team max_tasks must cover two tasks per participant per round")
 	}
 	seeds := map[int64]bool{}
@@ -201,6 +265,12 @@ func (m Manifest) Validate() error {
 		}
 		if c.Teams && c.Visibility != "direct" {
 			return errors.New("teams require direct visibility so invitations have explicit message authority")
+		}
+		if c.TeamRewards != "none" && c.TeamRewards != "pool" {
+			return errors.New("team_rewards must be none or pool")
+		}
+		if c.TeamRewards == "pool" && !c.Teams {
+			return errors.New("pooled team rewards require consented teams")
 		}
 		if len(c.Instructions) > 4096 {
 			return errors.New("condition instructions exceed 4096 bytes")
@@ -231,13 +301,31 @@ func Plan(m Manifest) (PlanResult, error) {
 	}
 	rng := rand.New(rand.NewSource(m.RandomizationSeed))
 	rng.Shuffle(len(blocks), func(i, j int) { blocks[i], blocks[j] = blocks[j], blocks[i] })
-	plan := PlanResult{Participants: actors(m.Config), TasksPerTrial: 2 * m.Game.Rounds * len(m.Config.Agents), Environment: GameVersion, SeedScope: "paired environment cases and scheduling; native model sampling is not seeded"}
+	plan := PlanResult{Participants: actors(m.Config), TasksPerTrial: 2 * m.Game.Rounds * m.Population.MaxAgents, Environment: m.Game.Kind, SeedScope: "paired environment cases and scheduling; native model sampling is not seeded"}
 	for _, b := range blocks {
 		for _, i := range rng.Perm(len(m.Conditions)) {
 			plan.Trials = append(plan.Trials, Trial{ID: fmt.Sprintf("run-%05d", len(plan.Trials)+1), Condition: m.Conditions[i].ID, Seed: b.seed, Repetition: b.repetition, Order: len(plan.Trials) + 1})
 		}
 	}
 	plan.TotalTasks = len(plan.Trials) * plan.TasksPerTrial
+	models := 0
+	for _, a := range m.Config.Agents {
+		if a.Harness != "command" {
+			models++
+		}
+	}
+	if m.Population.Mode == "dynamic" {
+		for _, a := range m.Config.Spawn.Templates {
+			if a.Harness != "command" {
+				models += m.Population.MaxAgents - len(m.Config.Agents)
+				break
+			}
+		}
+	}
+	plan.ModelTasks = len(plan.Trials) * 2 * m.Game.Rounds * models
+	if m.Budget.MaxModelTasks > 0 && plan.ModelTasks > m.Budget.MaxModelTasks {
+		return plan, errors.New("planned native task upper bound exceeds budget.max_model_tasks")
+	}
 	return plan, nil
 }
 

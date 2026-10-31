@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -200,6 +201,13 @@ func TestManagedLaunchSpawnedSandboxWorker(t *testing.T) {
 			break
 		}
 		if time.Now().After(deadline) {
+			if panes, err := launcher.tmux(ctx, "list-panes", "-a", "-F", "#{pane_id}"); err == nil {
+				for _, pane := range strings.Fields(panes) {
+					if output, err := launcher.tmux(ctx, "capture-pane", "-p", "-t", pane, "-S", "-25"); err == nil {
+						t.Logf("test pane %s: %s", pane, output)
+					}
+				}
+			}
 			t.Fatalf("spawned sandbox worker did not submit: %s", raw)
 		}
 		time.Sleep(50 * time.Millisecond)

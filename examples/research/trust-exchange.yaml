@@ -1,0 +1,26 @@
+version: 1
+id: trust-exchange-protocol
+team: team.yaml
+trials: 1
+seeds: [11, 22]
+randomization_seed: 741
+timeout_seconds: 120
+phase_timeout_seconds: 15
+broker_sandbox: bubblewrap
+game:
+  kind: trust-exchange-v1
+  rounds: 2
+  credits: 6
+  per_round_cap: 2
+  multiplier: 3
+conditions:
+  - {id: individual, reward_mode: individual, visibility: direct, teams: true, team_rewards: none}
+  - {id: pooled, reward_mode: individual, visibility: direct, teams: true, team_rewards: pool}
+preregistration:
+  question: Does explicitly selected consented team pooling change credited points under the deterministic protocol fixture?
+  primary_outcome: total_social_welfare
+  hypotheses: [The accounting preserves social welfare while mutually selected pools redistribute scoring utility.]
+  factors: {team_rewards: [none, pool]}
+  fixed_controls: [Same fixed scripted population, Same worlds and transfer strategy, Same private productivity and broker permissions]
+  minimum_blocks: 20
+  analysis: Paired world differences and accounting checks; scripted strategies do not establish model behavior.

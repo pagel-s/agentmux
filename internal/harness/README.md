@@ -49,9 +49,13 @@ hosts that disallow nested user namespaces while retaining the outer boundary.
 
 For Pi against Ollama use an API base such as `http://127.0.0.1:11434/v1`;
 against vLLM use its `/v1` API base. URLs are used exactly as configured and do
-not refer to Ollama's separate `/api/generate` protocol. Endpoint models use
-conservative metadata defaults: text-only, 8,192 context tokens, and 2,048 output
-tokens. Metadata discovery and richer provider protocols remain future work.
+not refer to Ollama's separate `/api/generate` protocol. `Request.ModelMetadata`
+accepts bounded context/output, text/image inputs, and explicit reasoning/tool
+declarations. A declared `Tools: false` adds `--no-tools`; capability metadata
+grants no filesystem or broker permissions. Missing metadata uses conservative
+text-only, 8,192 context/2,048 output defaults (reduced for smaller contexts).
+Setup performs bounded local endpoint discovery; this process adapter never
+contacts metadata endpoints automatically. See [managed setup](../../docs/managed-setup.md).
 No model weights are fetched by this package.
 
 Pi endpoint configuration lives in a private temporary agent directory, with no
@@ -74,6 +78,13 @@ authentication and permissions; managed policy still applies.
 
 Stdout is limited to 16 MiB, one event to 2 MiB, events to 10,000, and retained
 stderr to 64 KiB. Events, partial text, and reported usage survive errors.
+`Request.OnEvent` receives a separate copy of each validated structured stdout
+event after it enters the partial result, before the next event is read. A
+recording error cancels the process rather than silently losing trace events.
+Plain command output remains a final `Result.Text`, not a structured stream.
+`AfterProcess` runs once after the child has been waited for, before native
+transcript verification. A failed private checkpoint fails the turn, preserving
+any original process error. Neither callback runs during `Build`.
 Structured terminal failures fail even if a CLI exits zero. Claude permission
 denials and observed Antigravity soft denials return `ErrToolDenied` with partial
 results; this conservatively marks work as incomplete rather than silently

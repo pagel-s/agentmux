@@ -34,6 +34,7 @@ Technical reference, tutorials, and architectural deep-dives are available on ou
 *   **[Autonomous Workflows](docs/autonomous-workflows.md)**: Private native conversations, durable subscriptions, observation wakeups and bounded execution from one goal.
 *   **[Repeated-Round Research](docs/research.md)**: Scarce resources, private information, declared incentives, objective feedback and optional consented teams.
 *   **[Mixed-Harness Sandbox Acceptance](docs/mixed-harness-acceptance.md)**: Reproduce the real Claude/Codex/local-Pi handoff with selected native login files, enforced worker resources, scoped artifacts, and independent verification.
+*   **[Provider Validation](docs/provider-validation.md)**: Measured Claude, Codex, Pi, Ollama, Antigravity and vLLM support, authentication boundaries and remaining limits.
 
 ---
 
@@ -71,7 +72,11 @@ Start a managed team, inspect its published activity, and stop it:
 ./bin/agentmux managed down --state .agentmux-state/command-demo
 ```
 
-This demo uses command processes and makes no model calls. Configure Claude Code, Codex, Antigravity, or Pi in [managed team YAML](docs/managed-runtime.md) for model-backed workers. Managed mode and the research runners are opt-in experimental features. Claude, Codex and Pi support private persistent conversations in Bubblewrap; Antigravity uses fresh turns. Message wakeups require explicit autonomy configuration. Interactive terminal steering remains separate from managed task delivery.
+This demo uses command processes and makes no model calls. Use the [setup wizard](docs/managed-setup.md) or configure Claude Code, Codex, Antigravity, or Pi in [managed team YAML](docs/managed-runtime.md). Claude, Codex and Pi support private persistent conversations in Bubblewrap; the [Antigravity bridge](docs/antigravity-bridge.md) supplies a local provider to sandboxed Pi. Managed mode and research runners are opt-in experimental features. Message wakeups require explicit autonomy configuration.
+
+Additional guides cover [network, budget and disk hardening](docs/hardening.md), [memory lifecycle and retrieval](docs/memory-lifecycle.md), [trace verification and recovery](docs/traces-and-recovery.md), [SSH workers and measured broker scale](docs/remote-workers.md), and [controlled factorial research studies](docs/research-study.md).
+
+See the [preview validation record](docs/release-validation.md) for measured coverage and operational limits.
 
 ---
 

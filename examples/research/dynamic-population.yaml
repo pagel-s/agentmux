@@ -1,0 +1,18 @@
+version: 1
+id: dynamic-population-protocol
+team: dynamic-team.yaml
+trials: 1
+seeds: [11]
+timeout_seconds: 120
+phase_timeout_seconds: 15
+broker_sandbox: bubblewrap
+population: {mode: dynamic, max_agents: 3, entry_credits: 1}
+game:
+  kind: public-goods-v1
+  rounds: 2
+  credits: 4
+  per_round_cap: 2
+  threshold: 3
+  dividend: 3
+conditions:
+  - {id: dynamic, reward_mode: individual, visibility: board, teams: false}

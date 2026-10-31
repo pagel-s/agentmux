@@ -1,0 +1,190 @@
+{
+  "research": "native-public-goods-factorial-pilot",
+  "manifest_sha256": "1e02038c953ce65c1d4863739233a7ba28fd063ea1e05a02cb6f35e6896a2b7e",
+  "runs": 8,
+  "completed": 8,
+  "native_tasks": 64,
+  "task_states": {
+    "submitted": 41,
+    "verified": 22,
+    "failed": 1
+  },
+  "invalid_game_decisions": 10,
+  "total_game_decisions": 32,
+  "consented_teams": 0,
+  "coordination_messages": {
+    "note": 26
+  },
+  "by_condition": {
+    "shared-teams": {
+      "runs": 2,
+      "welfare": [
+        -1,
+        -4
+      ],
+      "funded_rounds": 0,
+      "rounds": 4,
+      "invalid": 2,
+      "failed_tasks": 0,
+      "teams": 0,
+      "agent_messages": 7,
+      "mean_welfare": -2.5
+    },
+    "shared-no-teams": {
+      "runs": 2,
+      "welfare": [
+        -2,
+        -1
+      ],
+      "funded_rounds": 0,
+      "rounds": 4,
+      "invalid": 3,
+      "failed_tasks": 1,
+      "teams": 0,
+      "agent_messages": 7,
+      "mean_welfare": -1.5
+    },
+    "individual-teams": {
+      "runs": 2,
+      "welfare": [
+        -1,
+        -1
+      ],
+      "funded_rounds": 0,
+      "rounds": 4,
+      "invalid": 2,
+      "failed_tasks": 0,
+      "teams": 0,
+      "agent_messages": 6,
+      "mean_welfare": -1.0
+    },
+    "individual-no-teams": {
+      "runs": 2,
+      "welfare": [
+        -3,
+        0
+      ],
+      "funded_rounds": 0,
+      "rounds": 4,
+      "invalid": 3,
+      "failed_tasks": 0,
+      "teams": 0,
+      "agent_messages": 6,
+      "mean_welfare": -1.5
+    }
+  },
+  "factorial_effects": [
+    {
+      "factors": [
+        "reward_mode"
+      ],
+      "ordered_levels": {
+        "reward_mode": [
+          "individual",
+          "shared"
+        ]
+      },
+      "paired_effect": {
+        "n": 2,
+        "mean": -0.75,
+        "standard_error": 1.25,
+        "ci95": {
+          "lower": -16.63375,
+          "upper": 15.133750000000001,
+          "method": "Student-t run/block mean; df capped at 30; conservative table rounding"
+        }
+      },
+      "definition": "level[1] minus level[0], averaged over other factor levels within paired worlds"
+    },
+    {
+      "factors": [
+        "reward_mode",
+        "teams"
+      ],
+      "ordered_levels": {
+        "reward_mode": [
+          "individual",
+          "shared"
+        ],
+        "teams": [
+          "false",
+          "true"
+        ]
+      },
+      "paired_effect": {
+        "n": 2,
+        "mean": -1.5,
+        "standard_error": 0.5,
+        "ci95": {
+          "lower": -7.8535,
+          "upper": 4.8535,
+          "method": "Student-t run/block mean; df capped at 30; conservative table rounding"
+        }
+      },
+      "definition": "paired difference of differences, averaged over remaining factor levels"
+    },
+    {
+      "factors": [
+        "teams"
+      ],
+      "ordered_levels": {
+        "teams": [
+          "false",
+          "true"
+        ]
+      },
+      "paired_effect": {
+        "n": 2,
+        "mean": -0.25,
+        "standard_error": 1.75,
+        "ci95": {
+          "lower": -22.487250000000003,
+          "upper": 21.987250000000003,
+          "method": "Student-t run/block mean; df capped at 30; conservative table rounding"
+        }
+      },
+      "definition": "level[1] minus level[0], averaged over other factor levels within paired worlds"
+    }
+  ],
+  "power_warning": "Underpowered exploratory pilot: 2 paired blocks; preregistered minimum 20. Intervals are assumption-dependent and cannot establish traits or reliable population effects.",
+  "harness_versions": {
+    "alice": [
+      "2.1.316"
+    ],
+    "bob": [
+      "0.165.0"
+    ]
+  },
+  "binary_sha256": "961593b68550b4b33cdd7ec7ccf9f202d3bd6df9ccaf38d0a47f67c41bb29b53",
+  "invalid_reasons": {
+    "return one JSON action object": 7,
+    "use project:null exactly when contributing zero": 2,
+    "task did not submit an action": 1
+  },
+  "failed_task_reasons": {
+    "Harness execution reached its time limit.": 1
+  },
+  "billing_measured": false,
+  "native_event_trace_enabled": false,
+  "collected_from_utc": "2026-10-31T16:30:50.849428396Z",
+  "collected_to_utc": "2026-10-31T16:52:43.591559092Z",
+  "actors": {
+    "alice": {
+      "harness": "claude",
+      "model": "claude-haiku-5-5"
+    },
+    "bob": {
+      "harness": "codex",
+      "model": "gpt-6.1-sol"
+    }
+  },
+  "direct_notes_by_actor": {
+    "alice": 0,
+    "bob": 26
+  },
+  "positive_contribution_decisions": 2,
+  "total_credits_spent": 13,
+  "measurement_caveat": "Frozen Codex adapter concatenated all completed agent messages. Seven rejected results contain prose followed by JSON; absent native event traces, attribution to model final-answer noncompliance cannot be established. Scores are preserved without suffix extraction or post-hoc rescoring.",
+  "interpretation": "Feasibility and measurement-quality evidence only. Two worlds, one fixed mixed-model dyad, native failures, and adapter aggregation confound social-effect or trait claims.",
+  "publication_scope": "Aggregate outcomes only; no prompts, private clues, credentials, sessions, or raw native text."
+}

@@ -22,7 +22,7 @@ func runResearch(args []string) int {
 }
 func runResearchIO(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	usage := func() {
-		fmt.Fprintln(stderr, "Usage: agentmux research plan <manifest.yaml>\n       agentmux research run <manifest.yaml> --output <private-dir> [--allow-models] [--rerun-interrupted]\n       agentmux research analyze <output-dir> [--csv <new-file>]")
+		fmt.Fprintln(stderr, "Usage: agentmux research plan <manifest.yaml>\n       agentmux research run <manifest.yaml> --output <private-dir> [--allow-models] [--rerun-interrupted]\n       agentmux research analyze <output-dir> [--csv <new-file>] [--behavior-csv <new-file>]")
 	}
 	if len(args) == 1 && (args[0] == "help" || args[0] == "--help" || args[0] == "-h") {
 		usage()
@@ -38,10 +38,11 @@ func runResearchIO(ctx context.Context, args []string, stdout, stderr io.Writer)
 	allow := flags.Bool("allow-models", false, "allow real model/provider calls")
 	rerun := flags.Bool("rerun-interrupted", false, "create a fresh attempt after stopping interrupted processes")
 	csvPath := flags.String("csv", "", "new private descriptive analysis CSV")
+	behaviorCSV := flags.String("behavior-csv", "", "new private per-decision behavior CSV")
 	if err := flags.Parse(args[2:]); err != nil || flags.NArg() != 0 {
 		return exitValidation
 	}
-	if args[0] == "plan" && (*output != "" || *allow || *rerun || *csvPath != "") {
+	if args[0] == "plan" && (*output != "" || *allow || *rerun || *csvPath != "" || *behaviorCSV != "") {
 		fmt.Fprintln(stderr, "plan accepts no execution/export flags")
 		return exitValidation
 	}
@@ -59,9 +60,12 @@ func runResearchIO(ctx context.Context, args []string, stdout, stderr io.Writer)
 			if *csvPath != "" {
 				err = writeResearchCSV(*csvPath, analysis)
 			}
+			if err == nil && *behaviorCSV != "" {
+				err = writeResearchBehaviorCSV(*behaviorCSV, research.Behaviors(report))
+			}
 		}
 	} else {
-		if *csvPath != "" {
+		if *csvPath != "" || *behaviorCSV != "" {
 			return exitValidation
 		}
 		var manifest research.Manifest
@@ -95,6 +99,29 @@ func runResearchIO(ctx context.Context, args []string, stdout, stderr io.Writer)
 		return exitRuntime
 	}
 	return exitSuccess
+}
+
+func writeResearchBehaviorCSV(path string, rows []research.Behavior) error {
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	w := csv.NewWriter(file)
+	if err := w.Write([]string{"behavior_id", "trial", "condition", "trial_status", "round", "actor", "harness", "model", "valid", "execution_failed", "contribution", "invested", "returned", "retained", "utility", "payoff", "remaining_credits"}); err != nil {
+		return err
+	}
+	for _, r := range rows {
+		row := []string{r.ID, r.Trial, r.Condition, r.TrialStatus, strconv.Itoa(r.Round), r.Actor, r.Harness, r.Model, strconv.FormatBool(r.Valid), strconv.FormatBool(r.ExecutionFailed), strconv.Itoa(r.Contribution), strconv.Itoa(r.Invested), strconv.Itoa(r.Returned), strconv.Itoa(r.Retained), strconv.FormatFloat(r.Utility, 'g', -1, 64), strconv.FormatFloat(r.Payoff, 'g', -1, 64), strconv.Itoa(r.RemainingCredits)}
+		if err := w.Write(row); err != nil {
+			return err
+		}
+	}
+	w.Flush()
+	if err := w.Error(); err != nil {
+		return err
+	}
+	return file.Sync()
 }
 func writeResearchCSV(path string, a research.Analysis) error {
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)

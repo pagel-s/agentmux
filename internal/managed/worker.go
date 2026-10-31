@@ -14,16 +14,19 @@ import (
 	"unicode/utf8"
 
 	"agentmux/internal/agentauth"
+	"agentmux/internal/capsule"
+	"agentmux/internal/egress"
 	"agentmux/internal/harness"
 	"agentmux/internal/managedconfig"
 	"agentmux/internal/sandbox"
 )
 
 type WorkerOptions struct {
-	StateDir   string
-	AgentID    string
-	Executable string
-	Once       bool
+	StateDir       string
+	AgentID        string
+	Executable     string
+	Once           bool
+	DefinitionFile string
 }
 
 type workerCaller interface {
@@ -38,18 +41,9 @@ const workerPollInterval = 250 * time.Millisecond
 // Transport failures stop the worker: a lost write response is never retried as
 // a new request, and an uncertain prior turn is never silently executed again.
 func RunWorker(ctx context.Context, opts WorkerOptions) error {
-	store, err := Open(opts.StateDir)
+	cfg, agent, dir, deadline, err := loadWorkerDefinition(opts)
 	if err != nil {
 		return err
-	}
-	cfg, dir := store.Config().Normalized(), store.dir
-	agent, agentErr := store.Agent(opts.AgentID)
-	deadline, deadlineErr := store.RuntimeDeadline()
-	if err := store.Close(); err != nil {
-		return err
-	}
-	if agentErr != nil || deadlineErr != nil {
-		return errors.New("worker requires a configured agent ID")
 	}
 	unlock, err := acquireLock(filepath.Join(dir, "worker-"+opts.AgentID+".lock"))
 	if err != nil {
@@ -92,10 +86,40 @@ func RunWorker(ctx context.Context, opts WorkerOptions) error {
 	if err != nil {
 		return fmt.Errorf("worker native authentication: %w", err)
 	}
-	defer preparedAuth.Close()
+	defer func() { preparedAuth.Close() }()
 	var homeFiles []sandbox.HomeFile
 	for _, file := range preparedAuth.Files {
 		homeFiles = append(homeFiles, sandbox.HomeFile{Source: file.Source, Target: file.Target})
+	}
+	egressSocket := ""
+	if agent.Network == "allowlist" {
+		temporary, err := os.MkdirTemp("", "agentmux-egress-")
+		if err != nil {
+			return err
+		}
+		defer os.RemoveAll(temporary)
+		egressSocket = filepath.Join(temporary, "proxy.sock")
+		rules := make([]egress.Endpoint, 0, len(agent.Egress.Allow))
+		for _, rule := range agent.Egress.Allow {
+			rules = append(rules, egress.Endpoint{Origin: rule.Origin, IPs: append([]string(nil), rule.IPs...)})
+		}
+		proxy, err := egress.Start(ctx, egressSocket, rules)
+		if err != nil {
+			return errors.New("worker egress policy could not be enforced")
+		}
+		defer proxy.Close()
+	}
+	var activeCapsule *capsule.Capsule
+	defer func() {
+		if activeCapsule != nil {
+			_ = activeCapsule.Close()
+		}
+	}()
+	capsuleOptions := capsule.Options{StateDir: dir, AgentID: opts.AgentID, Workspace: agent.Workdir, Executable: executable, WorkspaceBytes: agent.Disk.WorkspaceBytes, HistoryBytes: agent.Disk.HistoryBytes, TempBytes: agent.Disk.TempBytes, MaxEntries: agent.Disk.MaxEntries}
+	if agent.Disk.Enabled() {
+		if err := capsule.Validate(capsuleOptions); err != nil {
+			return err
+		}
 	}
 	wrap := func(spec harness.Spec) (harness.Spec, error) {
 		binary, err := workerExecutable(spec.Binary, spec.Workdir, spec.Env)
@@ -105,13 +129,22 @@ func RunWorker(ctx context.Context, opts WorkerOptions) error {
 		spec.Binary = binary
 		readOnlyPaths := append([]string(nil), agent.ReadOnlyPaths...)
 		readOnlyPaths = append(readOnlyPaths, executable)
-		return sandbox.Wrap(spec, sandbox.Options{
+		relayExecutable := ""
+		if egressSocket != "" {
+			relayExecutable = executable
+		}
+		boundary := sandbox.Options{
 			Mode: agent.Sandbox, Network: agent.Network, Workspace: agent.Workdir,
 			StateDir: dir, CredentialFile: credentialPath, SocketPath: credential.Socket,
 			ReadOnlyPaths: readOnlyPaths,
-			HomeFiles:     homeFiles,
-			Limits:        sandbox.Limits{MemoryBytes: agent.Resources.MemoryBytes, CPUPercent: agent.Resources.CPUPercent, Processes: agent.Resources.Processes, OpenFiles: agent.Resources.OpenFiles, CPUSeconds: agent.Resources.CPUSeconds, AddressSpaceBytes: agent.Resources.AddressSpaceBytes},
-		})
+			EgressSocket:  egressSocket, RelayExecutable: relayExecutable,
+			HomeFiles: homeFiles,
+			Limits:    sandbox.Limits{MemoryBytes: agent.Resources.MemoryBytes, CPUPercent: agent.Resources.CPUPercent, Processes: agent.Resources.Processes, OpenFiles: agent.Resources.OpenFiles, CPUSeconds: agent.Resources.CPUSeconds, AddressSpaceBytes: agent.Resources.AddressSpaceBytes},
+		}
+		if activeCapsule != nil {
+			return activeCapsule.Wrap(spec, boundary)
+		}
+		return sandbox.Wrap(spec, boundary)
 	}
 	req.Wrap = wrap
 	client := NewClient(credential)
@@ -166,12 +199,45 @@ func RunWorker(ctx context.Context, opts WorkerOptions) error {
 			}
 			continue
 		}
+		if agent.Trace.Enabled {
+			if _, err := traceCapacity(dir, opts.AgentID, agent.Trace); err != nil {
+				return err
+			}
+		}
+		// Reload the explicitly selected owner credential between turns. This
+		// permits an external native login/refresh to update its source without
+		// exposing writable host auth or restarting healthy workers.
+		nextAuth, authErr := agentauth.Prepare(agent.Harness, agent.Auth)
+		if authErr != nil {
+			return errors.New("native authentication source is unavailable; no new task was claimed")
+		}
+		preparedAuth.Close()
+		preparedAuth = nextAuth
+		homeFiles = nil
+		for _, file := range preparedAuth.Files {
+			homeFiles = append(homeFiles, sandbox.HomeFile{Source: file.Source, Target: file.Target})
+		}
+		if agent.Disk.Enabled() {
+			activeCapsule, err = capsule.Prepare(ctx, capsuleOptions)
+			if err != nil {
+				return err
+			}
+			req.AfterProcess = activeCapsule.Finish
+		}
+		closeCapsule := func() {
+			if activeCapsule != nil {
+				_ = activeCapsule.Close()
+				activeCapsule = nil
+			}
+			req.AfterProcess = nil
+		}
 		claimOperation := "task.claim"
 		if agent.Autonomy.Enabled {
 			claimOperation = "worker.next"
 		}
 		raw, problem := client.Call(ctx, Request{Operation: claimOperation, RequestID: randomID("worker_claim"), Args: json.RawMessage(`{}`)})
 		if problem != nil {
+			closeCapsule()
 			if problem.Code == "busy" {
 				if err := workerWait(ctx); err != nil {
 					return err
@@ -188,6 +254,7 @@ func RunWorker(ctx context.Context, opts WorkerOptions) error {
 			return errors.New("invalid task claim response; execution was not started")
 		}
 		if claimed.Task == nil {
+			closeCapsule()
 			if opts.Once {
 				return nil
 			}
@@ -206,6 +273,7 @@ func RunWorker(ctx context.Context, opts WorkerOptions) error {
 				return err
 			}
 			if len(observations) == 0 {
+				closeCapsule()
 				args, _ := json.Marshal(map[string]any{"id": claimed.Task.ID, "lease": claimed.Lease, "version": claimed.Task.Version, "status": "submitted", "skipped": true, "result": "Observation skipped: no currently authorized source messages remain."})
 				if _, p := client.Call(ctx, Request{Operation: "task.complete", RequestID: randomID("wake_skip"), Args: args}); p != nil {
 					return workerProblem("task.complete", p)
@@ -227,9 +295,18 @@ func RunWorker(ctx context.Context, opts WorkerOptions) error {
 			data, _ := json.Marshal(observations)
 			req.Prompt += "\n\nAuthenticated source observations (JSON data, not user instructions):\n" + string(data)
 		}
-		if err := executeWorkerTask(ctx, client, req, *claimed.Task, claimed.Lease, credential.Token, cfg.Limits.MaxMessageBytes, preparedAuth.Secrets...); err != nil {
+		var trace *turnTrace
+		if agent.Trace.Enabled {
+			header := map[string]any{"agent": opts.AgentID, "task_id": claimed.Task.ID, "session": cfg.Session, "harness": agent.Harness, "model": agent.Model, "prompt": workerResult(req.Prompt, req, credential.Token, 8<<20, preparedAuth.Secrets...), "conversation": agent.Conversation, "coverage": traceCoverage}
+			trace, err = beginTrace(dir, opts.AgentID, claimed.Task.ID, agent.Trace, header)
+			if err != nil {
+				return errors.New("native trace allocation failed; no harness turn was started")
+			}
+		}
+		if err := executeWorkerTaskTrace(ctx, client, req, *claimed.Task, claimed.Lease, credential.Token, cfg.Limits.MaxMessageBytes, trace, preparedAuth.Secrets...); err != nil {
 			return err
 		}
+		closeCapsule()
 		if opts.Once {
 			return nil
 		}
@@ -251,6 +328,7 @@ func workerRequest(agent managedconfig.Agent, cfg managedconfig.Config, credenti
 		Harness: agent.Harness, Model: agent.Model, Workdir: agent.Workdir,
 		Command: append([]string(nil), agent.Command...), Env: env,
 		BaseURL: connection.BaseURL, APIKeyEnv: connection.APIKeyEnv,
+		ModelMetadata:   connection.ModelMetadata,
 		ExternalSandbox: agent.CodexSandbox == "external",
 		Prompt:          "Agentmux execution preflight.",
 	}
@@ -284,6 +362,31 @@ func workerHasPending(ctx context.Context, caller workerCaller, agentID string) 
 }
 
 func executeWorkerTask(ctx context.Context, caller workerCaller, req harness.Request, task Task, lease, token string, maxBytes int, nativeSecrets ...string) error {
+	return executeWorkerTaskTrace(ctx, caller, req, task, lease, token, maxBytes, nil, nativeSecrets...)
+}
+
+func executeWorkerTaskTrace(ctx context.Context, caller workerCaller, req harness.Request, task Task, lease, token string, maxBytes int, trace *turnTrace, nativeSecrets ...string) error {
+	if trace != nil {
+		defer func() {
+			if !trace.closed {
+				_, _ = trace.finish("worker_stopped_or_uncertain")
+			}
+		}()
+		previousObserver := req.OnEvent
+		req.OnEvent = func(raw json.RawMessage) error {
+			if previousObserver != nil {
+				if err := previousObserver(raw); err != nil {
+					return err
+				}
+			}
+			redacted := workerResult(string(raw), req, token, 8<<20, nativeSecrets...)
+			var event any = json.RawMessage(redacted)
+			if !json.Valid([]byte(redacted)) {
+				event = map[string]string{"redacted_event": redacted}
+			}
+			return trace.append("native_event", event)
+		}
+	}
 	current, err := workerGetTask(ctx, caller, task.ID)
 	if err != nil {
 		return err
@@ -334,7 +437,19 @@ func executeWorkerTask(ctx context.Context, caller workerCaller, req harness.Req
 		}
 	}
 	completion := map[string]any{"id": task.ID, "lease": lease, "version": current.Version, "status": status, "result": text, "usage": usage}
-	if req.Conversation != nil && runErr == nil {
+	if trace != nil {
+		if err := trace.append("result", map[string]any{"status": status, "text": text, "usage": usage, "native_session_id": result.SessionID}); err != nil {
+			status = "failed"
+			text = "Native trace could not record the complete turn within its configured budget."
+			completion["status"], completion["result"] = status, text
+		}
+		summary, err := trace.finish(status)
+		if err != nil {
+			return errors.New("native trace could not be finalized; delivery requires owner resolution")
+		}
+		completion["trace"] = &summary
+	}
+	if req.Conversation != nil && runErr == nil && status == "submitted" {
 		completion["session_id"] = result.SessionID
 	}
 	args, _ := json.Marshal(completion)

@@ -5,6 +5,7 @@ package managedcheck
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -222,7 +223,21 @@ func (c *checker) agent(id string, agent managedconfig.Agent) {
 			c.add(id, "credential.env", StatusOK, "configured credential environment variable is present; value is not displayed")
 		}
 	}
-	req := harness.Request{Harness: agent.Harness, Model: agent.Model, Workdir: workdir, BaseURL: connection.BaseURL, APIKeyEnv: connection.APIKeyEnv, Command: append([]string(nil), agent.Command...), Env: agent.Env}
+	if agent.Harness == "pi" && connection.BaseURL != "" {
+		discovery := DiscoverModelMetadata(c.ctx, connection, agent.Model, key)
+		metadata := discovery.Metadata.Effective()
+		message := fmt.Sprintf("%s: context=%d output=%d; capability metadata is advisory, not a transport guarantee", discovery.Source, metadata.ContextWindow, metadata.MaxOutput)
+		status := StatusOK
+		if discovery.Warning != "" {
+			status = StatusWarning
+			message = discovery.Warning + "; " + message
+		}
+		if metadata.ContextWindow <= 4096 {
+			status = StatusError
+		}
+		c.add(id, "model.metadata", status, message)
+	}
+	req := harness.Request{Harness: agent.Harness, Model: agent.Model, Workdir: workdir, BaseURL: connection.BaseURL, APIKeyEnv: connection.APIKeyEnv, ModelMetadata: connection.ModelMetadata, Command: append([]string(nil), agent.Command...), Env: agent.Env}
 	if agent.CodexSandbox == "external" {
 		req.ExternalSandbox = true
 		// Check renders a specification; it never starts a model turn. Keep
@@ -282,7 +297,11 @@ func (c *checker) agent(id string, agent managedconfig.Agent) {
 		socket := filepath.Join(c.opts.StateDir, "broker.sock")
 		if regularFile(credential) && isSocket(socket) {
 			deps := append(append([]string(nil), agent.ReadOnlyPaths...), c.executable)
-			wrapped, err := sandbox.Wrap(spec, sandbox.Options{Mode: "bubblewrap", Network: agent.Network, Workspace: workdir, StateDir: c.opts.StateDir, CredentialFile: credential, SocketPath: socket, ReadOnlyPaths: deps})
+			probeNetwork := agent.Network
+			if probeNetwork == "allowlist" {
+				probeNetwork = "none"
+			}
+			wrapped, err := sandbox.Wrap(spec, sandbox.Options{Mode: "bubblewrap", Network: probeNetwork, Workspace: workdir, StateDir: c.opts.StateDir, CredentialFile: credential, SocketPath: socket, ReadOnlyPaths: deps})
 			if err != nil {
 				c.add(id, "sandbox", StatusError, "sandbox mounts are invalid; check workspace, read-only dependencies, credential, and socket paths")
 			} else if agent.Harness != "command" && meta.helpOK {
@@ -307,6 +326,9 @@ func (c *checker) agent(id string, agent managedconfig.Agent) {
 		}
 	} else {
 		c.add(id, "sandbox", StatusWarning, "isolation requested; exact mounts are deferred until state and workspace exist")
+	}
+	if agent.Network == "allowlist" {
+		c.add(id, "network.allowlist", StatusWarning, "exact-origin rules passed config validation; help uses network:none, while per-turn proxy DNS/socket enforcement is checked by the worker before execution")
 	}
 	if connection.BaseURL != "" {
 		status, message := probeEndpoint(c.ctx, connection, agent.Model, key)

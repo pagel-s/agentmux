@@ -2,9 +2,11 @@
 
 `agentmux research` runs repeated-round environments with private observations,
 scarce resources, validated decisions, and live objective payoff feedback. It
-complements the single-task [`experiment` pilot](experiments.md). The initial
-built-in environment is `public-goods-v1`; the exported `Scenario` / `Episode`
+complements the single-task [`experiment` pilot](experiments.md). Built-in
+environments are `public-goods-v1` and `trust-exchange-v1`; the exported `Scenario` / `Episode`
 interfaces separate owner-controlled mechanics from participant observations.
+See [exchange, reward pooling, and population mechanics](research-environments.md)
+and the [preregistered native pilot](research-study.md).
 
 ## Run the no-model protocol smoke
 
@@ -80,7 +82,9 @@ costs, remaining balances, utilities, round points, and cumulative points before
 the next round. The reward mechanism therefore affects subsequent decisions;
 it is not a label added after the run. Points are experimental scores, not
 external monetary payments. Team membership adds private collaboration channels
-and does not silently pool rewards or confer command authority.
+and does not silently pool rewards or confer command authority. Explicit
+`team_rewards: pool` allows mutually selected members to pool scoring utilities;
+wallets and raw objective welfare remain separate and are recorded.
 
 ## Scheduling and information boundaries
 
@@ -105,7 +109,10 @@ explicit `message.send` / `ping.send` edges. No participant receives instruction
 rights over another. Original source workdirs and namespace ACLs are replaced;
 agent roles and declared runtime dependencies are captured as potential
 confounds. Autonomy wake subscriptions and spawning are disabled so extra turns
-cannot cross the phase barriers. Population stays fixed during a run.
+cannot cross the phase barriers. Population is fixed by default. Explicit
+`population.mode: dynamic` admits approved broker-spawned children only at the
+next-round boundary, within declared resource and actor caps; see the mechanics
+guide for entry-credit transfers and protocol-deviation handling.
 
 With `teams: true` in a direct condition, all participants may create teams and
 use existing invitation/consent/CAS rules. Actual memberships, invitations, and
@@ -148,11 +155,20 @@ versioned environments without delegating ground-truth scoring to a model.
 Analysis reports objective welfare, funding rate, credits spent, invalid
 decisions, valid zero contributors on funded rounds, failed tasks, and actual
 teams with multiple members, plus baseline welfare. Pairwise contrasts align
-condition runs by seed and repetition. Sample standard errors are descriptive
+condition runs by seed and repetition. Preregistered one-/two-factor binary
+designs additionally report paired main effects and interaction. Per-decision
+behavior IDs, model/harness labels, and separate validity/execution-failure
+fields support reproducible behavioral coding. Per-agent uncertainty uses
+run-level means rather than treating rounds as independent samples.
+
+Sample standard errors and unadjusted 95% Student-t intervals are descriptive
 and assume independent runs; repeated worlds, provider dependence, order, and
 uncontrolled model sampling can violate that assumption. No automatic trait
 classification, causal conclusion, significance claim, or power calculation is
 made. Define behavioral outcomes and hypotheses before collecting model data.
+The critical values follow [NIST's Student-t table](https://www.itl.nist.gov/div898/handbook/eda/section3/eda3672.htm),
+rounded upward, with degrees of freedom capped at 30 for conservative larger-
+sample bounds. Tiny-sample or degenerate intervals do not establish stability.
 
 ## Models, artifacts, failures, and resuming
 
@@ -160,7 +176,8 @@ Replace the command fixture team with native managed harnesses and verified
 dependency/auth provisioning. The [mixed harness acceptance](mixed-harness-acceptance.md)
 documents real Claude/Codex/Pi boundaries and native-tool policy. Run planning
 first: repeated rounds use two turns per agent, so model studies can be costly.
-Actual native execution additionally requires explicit `--allow-models`:
+Actual native execution additionally requires explicit `--allow-models`, a
+strict preregistration, and positive `budget.max_model_tasks`:
 
 ```sh
 /tmp/agentmux research run /private/study.yaml --output /tmp/amx-model-study --allow-models
@@ -172,7 +189,11 @@ Otherwise those differences compete with the proposed explanation. The runner
 uses explicit phase observations and feedback with fresh native turns by default
 or the configured within-trial persistent conversation; it does not
 claim to capture every native model context, tool read, or hidden state. There
-are no automatic model retries and no billing guarantee from reported usage.
+are no automatic runner task retries and no billing guarantee from reported
+usage. A durable ledger reserves every native task before workers start,
+including interrupted attempts. Resuming or rerunning cannot reset that budget;
+an absent/corrupt ledger fails closed. Task counts bound native turns, not the
+number of provider requests a native harness may make within a turn.
 
 The private output contains the normalized manifest/configuration and hashes,
 balanced plan, executable hashes and nongenerative version/auth/isolation
@@ -182,6 +203,12 @@ owner-call JSONL, complete paginated broker record export, final results, and
 descriptive analysis. These files contain private messages/observations, model
 outputs, and configuration. Review/redact them before sharing. CLI run/analyze
 output is the descriptive aggregate, not the private observations.
+`behaviors.jsonl` contains deterministic per-decision IDs and objective fields.
+Export those rows separately without raw prompts:
+
+```sh
+/tmp/agentmux research analyze /tmp/amx-research --behavior-csv /tmp/amx-behavior.csv
+```
 
 The overall trial and each phase have finite deadlines, including phase task
 queuing, with a bounded cleanup window after workers stop. Native failures are

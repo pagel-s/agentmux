@@ -6,6 +6,9 @@ import (
 )
 
 func validateExecution(id string, a Agent, connection Connection) error {
+	if err := a.Trace.Validate(); err != nil {
+		return fmt.Errorf("agent %q: %w", id, err)
+	}
 	if err := a.Autonomy.validate(id); err != nil {
 		return err
 	}

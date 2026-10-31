@@ -427,6 +427,13 @@ func lifecycleReserve(ctx context.Context, q queryer) (int, error) {
 	// Dispatch controls retain capacity for pause and stop even after ordinary
 	// work fills storage. Resume is a fresh allocation, never a safety fallback.
 	err = q.QueryRowContext(ctx, `SELECT COALESCE(SUM(CASE json_extract(data,'$.mode') WHEN 'running' THEN 2 WHEN 'paused' THEN 1 ELSE 0 END),0) FROM records WHERE kind='autonomy'`).Scan(&extra)
+	if err != nil {
+		return 0, err
+	}
+	n += extra
+	// Every retained expiring entry can be pruned even if ordinary writes fill
+	// the run. A batch releases at least as much capacity as its cleanup receipt.
+	err = q.QueryRowContext(ctx, "SELECT count(*) FROM records WHERE kind='memory' AND COALESCE(json_extract(data,'$.deleted'),0)=0 AND COALESCE(json_extract(data,'$.expires_at'),'')<>''").Scan(&extra)
 	return n + extra, err
 }
 
@@ -468,6 +475,7 @@ type Task struct {
 	Usage     json.RawMessage `json:"usage,omitempty"`
 	CreatedAt string          `json:"created_at"`
 	UpdatedAt string          `json:"updated_at"`
+	Trace     *TraceSummary   `json:"trace,omitempty"`
 	Origin    *TaskOrigin     `json:"origin,omitempty"`
 }
 
@@ -475,9 +483,10 @@ type Task struct {
 // of status, audit exports, task lists, or another agent's task view.
 type taskRecord struct {
 	Task
-	LeaseToken string `json:"lease_token,omitempty"`
-	Instance   string `json:"instance,omitempty"`
-	Expires    int64  `json:"expires,omitempty"`
+	BudgetCharge *BudgetCharge `json:"budget_charge,omitempty"`
+	LeaseToken   string        `json:"lease_token,omitempty"`
+	Instance     string        `json:"instance,omitempty"`
+	Expires      int64         `json:"expires,omitempty"`
 }
 
 func loadTask(ctx context.Context, q queryer, id string) (taskRecord, error) {
@@ -490,12 +499,22 @@ func saveTask(ctx context.Context, q queryer, t taskRecord) error {
 }
 
 type Memory struct {
-	Namespace string `json:"namespace"`
-	Key       string `json:"key"`
-	Value     string `json:"value"`
-	Version   int    `json:"version"`
-	Author    string `json:"author"`
-	UpdatedAt string `json:"updated_at"`
+	Namespace       string         `json:"namespace"`
+	Key             string         `json:"key"`
+	Value           string         `json:"value"`
+	Version         int            `json:"version"`
+	Author          string         `json:"author"`
+	UpdatedAt       string         `json:"updated_at"`
+	CreatedAt       string         `json:"created_at,omitempty"`
+	ExpiresAt       string         `json:"expires_at,omitempty"`
+	ExpiresUnixNano int64          `json:"expires_unix_nano,omitempty"`
+	Deleted         bool           `json:"deleted,omitempty"`
+	Tags            []string       `json:"tags,omitempty"`
+	Sources         []MemorySource `json:"sources,omitempty"`
+	SHA256          string         `json:"sha256,omitempty"`
+	PreviousSHA256  string         `json:"previous_sha256,omitempty"`
+	Embedding       []float64      `json:"embedding,omitempty"`
+	EmbeddingModel  string         `json:"embedding_model,omitempty"`
 }
 
 // RecoverInflight never blindly repeats a potentially accepted harness turn.

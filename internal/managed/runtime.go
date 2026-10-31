@@ -11,6 +11,7 @@ import (
 	"sort"
 	"time"
 
+	"agentmux/internal/egress"
 	"agentmux/internal/managedconfig"
 )
 
@@ -312,8 +313,20 @@ func (s *Store) spawn(ctx context.Context, q queryer, a actor, raw json.RawMessa
 		return nil, fault("limit", "lifetime spawn limit reached")
 	}
 	if !a.owner() {
-		if parent.Config.Sandbox == "bubblewrap" && parent.Config.Network != "host" && template.Network == "host" {
-			return nil, forbidden()
+		if parent.Config.Sandbox == "bubblewrap" {
+			switch parent.Config.Network {
+			case "none":
+				if template.Network != "none" {
+					return nil, forbidden()
+				}
+			case "allowlist":
+				if template.Network != "none" && (template.Network != "allowlist" || !egress.IsSubset(template.Egress.Allow, parent.Config.Egress.Allow)) {
+					return nil, forbidden()
+				}
+			case "host":
+			default:
+				return nil, forbidden()
+			}
 		}
 		for _, entry := range []struct {
 			values        []string
@@ -438,6 +451,10 @@ func copyAgent(a managedconfig.Agent) managedconfig.Agent {
 	a.Command = append([]string(nil), a.Command...)
 	a.ReadOnlyPaths = append([]string(nil), a.ReadOnlyPaths...)
 	a.Autonomy.Boards = append([]string(nil), a.Autonomy.Boards...)
+	a.Egress.Allow = append(a.Egress.Allow[:0:0], a.Egress.Allow...)
+	for i := range a.Egress.Allow {
+		a.Egress.Allow[i].IPs = append([]string(nil), a.Egress.Allow[i].IPs...)
+	}
 	return a
 }
 

@@ -79,10 +79,11 @@ func (s *streamState) codex(e object) {
 	case "item.completed":
 		item := objectField(e, "item")
 		if stringField(item, "type") == "agent_message" {
-			if s.result.Text != "" {
-				s.result.Text += "\n"
-			}
-			s.result.Text += stringField(item, "text")
+			// Exec's JSONL stream contains interim messages as separate items.
+			// Its final answer is the last completed agent message, matching
+			// --output-last-message; the full stream stays in result.Events.
+			// https://learn.chatgpt.com/docs/non-interactive-mode
+			s.result.Text = stringField(item, "text")
 		}
 	case "turn.completed":
 		s.complete = true

@@ -29,6 +29,10 @@ func TestHarnessProcess(t *testing.T) {
 	scenario := os.Getenv("AGENTMUX_HARNESS_SCENARIO")
 	write := func(line string) { fmt.Fprintln(os.Stdout, line) }
 	switch scenario {
+	case "conversation-hook":
+		_, _ = io.ReadAll(os.Stdin)
+		_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"type": "result", "subtype": "success", "session_id": conversationTestID, "result": "checkpoint-answer"})
+		_ = os.WriteFile(os.Getenv("AGENTMUX_PROCESS_FINISHED"), []byte("finished"), 0600)
 	case "conversation-claude", "conversation-codex":
 		_, _ = io.ReadAll(os.Stdin)
 		id := conversationTestID

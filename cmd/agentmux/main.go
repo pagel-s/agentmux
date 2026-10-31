@@ -86,10 +86,16 @@ func run(args []string) int {
 		return runMCPServer(args[1:])
 	case "managed":
 		return runManaged(args[1:])
+	case "internal-egress":
+		return runInternalEgress(args[1:])
+	case "internal-capsule":
+		return runInternalCapsule(args[1:])
 	case "experiment":
 		return runExperiment(args[1:])
 	case "research":
 		return runResearch(args[1:])
+	case "provider":
+		return runProvider(args[1:], os.Stdout, os.Stderr)
 	case "validate":
 		return runValidate(args[1:])
 	case "render":

@@ -38,21 +38,25 @@ type Phase struct {
 	Teams        []managed.Team          `json:"teams"`
 }
 type Result struct {
-	Trial      Trial                `json:"trial"`
-	Attempt    int                  `json:"attempt"`
-	Status     string               `json:"status"`
-	ConfigHash string               `json:"config_sha256"`
-	StartedAt  string               `json:"started_at"`
-	FinishedAt string               `json:"finished_at"`
-	Rounds     []Outcome            `json:"rounds"`
-	Phases     []Phase              `json:"phases"`
-	Baselines  map[string][]Outcome `json:"baselines"`
-	Error      string               `json:"error,omitempty"`
+	Trial         Trial                 `json:"trial"`
+	Attempt       int                   `json:"attempt"`
+	Status        string                `json:"status"`
+	ConfigHash    string                `json:"config_sha256"`
+	StartedAt     string                `json:"started_at"`
+	FinishedAt    string                `json:"finished_at"`
+	Rounds        []Outcome             `json:"rounds"`
+	Phases        []Phase               `json:"phases"`
+	Baselines     map[string][]Outcome  `json:"baselines"`
+	Error         string                `json:"error,omitempty"`
+	Population    []PopulationSnapshot  `json:"population"`
+	ActorMetadata map[string]AgentLabel `json:"actor_metadata"`
 }
 type Report struct {
-	Research     string   `json:"research"`
-	ManifestHash string   `json:"manifest_sha256"`
-	Results      []Result `json:"results"`
+	Research        string           `json:"research"`
+	ManifestHash    string           `json:"manifest_sha256"`
+	Results         []Result         `json:"results"`
+	Preregistration *Preregistration `json:"preregistration,omitempty"`
+	Conditions      []Condition      `json:"conditions,omitempty"`
 }
 
 func Run(ctx context.Context, m Manifest, opts RunOptions) (Report, error) {
@@ -61,9 +65,21 @@ func Run(ctx context.Context, m Manifest, opts RunOptions) (Report, error) {
 	if err != nil {
 		return Report{}, err
 	}
+	modelAgents := []managedconfig.Agent{}
 	for _, a := range m.Config.Agents {
+		modelAgents = append(modelAgents, a)
+	}
+	if m.Population.Mode == "dynamic" {
+		for _, a := range m.Config.Spawn.Templates {
+			modelAgents = append(modelAgents, a)
+		}
+	}
+	for _, a := range modelAgents {
 		if a.Harness != "command" && !opts.AllowModels {
 			return Report{}, errors.New("real model research requires --allow-models; inspect plan task counts and provider costs first")
+		}
+		if a.Harness != "command" && (m.Budget.MaxModelTasks < 1 || m.Preregistration == nil) {
+			return Report{}, errors.New("real model studies require preregistration and a positive budget.max_model_tasks")
 		}
 	}
 	if opts.Executable == "" {
@@ -86,13 +102,20 @@ func Run(ctx context.Context, m Manifest, opts RunOptions) (Report, error) {
 		return Report{}, errors.New("research output lock unavailable")
 	}
 	defer unlock()
-	report := Report{Research: m.ID, ManifestHash: digest(m), Results: []Result{}}
+	report := Report{Research: m.ID, ManifestHash: digest(m), Results: []Result{}, Preregistration: m.Preregistration, Conditions: m.Conditions}
 	var prior struct {
 		SHA256 string `json:"sha256"`
+	}
+	budget, err := loadBudget(dir, m.Budget.MaxModelTasks)
+	if err != nil {
+		return report, err
 	}
 	if data, err := os.ReadFile(filepath.Join(dir, "manifest.json")); err == nil {
 		if json.Unmarshal(data, &prior) != nil || prior.SHA256 != report.ManifestHash {
 			return report, errors.New("output belongs to a different research manifest or resolved team")
+		}
+		if budget.fresh && budget.Limit > 0 {
+			return report, errors.New("existing model study lacks its durable budget ledger; do not silently reset spending")
 		}
 	} else if !os.IsNotExist(err) {
 		return report, err
@@ -111,6 +134,11 @@ func Run(ctx context.Context, m Manifest, opts RunOptions) (Report, error) {
 		}
 		if err := writeJSON(filepath.Join(dir, "plan.json"), plan); err != nil {
 			return report, err
+		}
+		if budget.Limit > 0 {
+			if err := writeJSON(budget.path, budget); err != nil {
+				return report, err
+			}
 		}
 	}
 	for _, trial := range plan.Trials {
@@ -132,7 +160,7 @@ func Run(ctx context.Context, m Manifest, opts RunOptions) (Report, error) {
 			report.Results = append(report.Results, *prior)
 			continue
 		}
-		result, runErr := runTrial(ctx, m, trial, condition(m, trial.Condition), attempt, filepath.Join(runDir, fmt.Sprintf("attempt-%03d", attempt)), opts.Executable)
+		result, runErr := runTrial(ctx, m, trial, condition(m, trial.Condition), attempt, filepath.Join(runDir, fmt.Sprintf("attempt-%03d", attempt)), opts.Executable, budget)
 		report.Results = append(report.Results, result)
 		if err := writeJSON(filepath.Join(dir, "results.json"), report); err != nil {
 			return report, err
@@ -145,11 +173,14 @@ func Run(ctx context.Context, m Manifest, opts RunOptions) (Report, error) {
 	if err := writeJSON(filepath.Join(dir, "analysis.json"), analysis); err != nil {
 		return report, err
 	}
+	if err := writeBehaviors(filepath.Join(dir, "behaviors.jsonl"), Behaviors(report)); err != nil {
+		return report, err
+	}
 	return report, nil
 }
 
-func runTrial(parent context.Context, m Manifest, trial Trial, c Condition, attempt int, dir, binary string) (result Result, returned error) {
-	result = Result{Trial: trial, Attempt: attempt, Status: "interrupted", StartedAt: time.Now().UTC().Format(time.RFC3339Nano), Baselines: map[string][]Outcome{}}
+func runTrial(parent context.Context, m Manifest, trial Trial, c Condition, attempt int, dir, binary string, budget *modelBudget) (result Result, returned error) {
+	result = Result{Trial: trial, Attempt: attempt, Status: "interrupted", StartedAt: time.Now().UTC().Format(time.RFC3339Nano), Baselines: map[string][]Outcome{}, ActorMetadata: map[string]AgentLabel{}}
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return result, err
 	}
@@ -181,40 +212,18 @@ func runTrial(parent context.Context, m Manifest, trial Trial, c Condition, atte
 	if err := store.Close(); err != nil {
 		return result, err
 	}
-	for _, agent := range cfg.Agents {
-		if agent.Sandbox == "local" {
-			if err := os.MkdirAll(agent.Env["HOME"], 0700); err != nil {
-				return result, err
-			}
-		}
-		if agent.Harness != "codex" {
-			continue
-		}
-		// Git initialization is controller-only. Native auth requires the agent
-		// environment to leave HOME ownership to the actual sandbox wrapper.
-		home, err := os.MkdirTemp(dir, ".git-controller-home-")
-		if err != nil {
-			return result, err
-		}
-		gitCtx, stop := context.WithTimeout(ctx, 5*time.Second)
-		command := exec.CommandContext(gitCtx, "git", "init", "--quiet", agent.Workdir)
-		command.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + home, "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null"}
-		err = command.Run()
-		stop()
-		_ = os.RemoveAll(home)
-		if err != nil {
-			return result, errors.New("research Codex workspace requires Git initialization")
-		}
+	if err := prepareWorkspaces(ctx, cfg, dir); err != nil {
+		return result, err
 	}
 	result.ConfigHash = digest(cfg)
 	if err := writeJSON(filepath.Join(dir, "config.json"), map[string]any{"sha256": result.ConfigHash, "config": cfg}); err != nil {
 		return result, err
 	}
-	episode, err := (PublicGoods{}).New(trial.Seed, actors(cfg), m.Game)
+	episode, err := scenario(m.Game.Kind).New(trial.Seed, actors(cfg), m.Game)
 	if err != nil {
 		return result, err
 	}
-	if err := writeJSON(filepath.Join(dir, "ground-truth.json"), map[string]any{"environment": GameVersion, "seed": trial.Seed, "cases": episode.GroundTruth()}); err != nil {
+	if err := writeJSON(filepath.Join(dir, "ground-truth.json"), map[string]any{"environment": m.Game.Kind, "seed": trial.Seed, "cases": episode.GroundTruth()}); err != nil {
 		return result, err
 	}
 	for _, policy := range []string{"all-defect", "random", "oracle-cooperative"} {
@@ -277,6 +286,30 @@ func runTrial(parent context.Context, m Manifest, trial Trial, c Condition, atte
 	}
 	feedback := json.RawMessage(`null`)
 	for round := 1; !episode.Done(); round++ {
+		if m.Population.Mode == "dynamic" {
+			next, changes, err := syncPopulation(ctx, call, cfg, episode, m.Population)
+			if err != nil {
+				return result, err
+			}
+			cfg = next
+			if err := prepareWorkspaces(ctx, cfg, dir); err != nil {
+				return result, err
+			}
+			result.Population = append(result.Population, PopulationSnapshot{Round: round, Actors: actors(cfg), Changes: changes})
+		} else {
+			result.Population = append(result.Population, PopulationSnapshot{Round: round, Actors: actors(cfg)})
+		}
+		for id, a := range cfg.Agents {
+			label := AgentLabel{Harness: a.Harness, Model: a.Model}
+			for _, snapshot := range result.Population {
+				for _, change := range snapshot.Changes {
+					if change.Actor == id && change.Parent != "" {
+						label.Parent = change.Parent
+					}
+				}
+			}
+			result.ActorMetadata[id] = label
+		}
 		observations := map[string]json.RawMessage{}
 		for _, actor := range actors(cfg) {
 			observation, err := episode.Observe(actor)
@@ -285,7 +318,11 @@ func runTrial(parent context.Context, m Manifest, trial Trial, c Condition, atte
 			}
 			observations[actor] = observation
 		}
-		coord, err := runPhase(ctx, m, trial, c, round, "coordinate", observations, feedback, nil, state, binary, cfg, call)
+		firstKind, secondKind := "coordinate", "act"
+		if m.Game.Kind == ExchangeVersion {
+			firstKind, secondKind = "invest", "return"
+		}
+		coord, err := runPhase(ctx, m, trial, c, round, firstKind, observations, feedback, nil, state, binary, cfg, call, budget)
 		result.Phases = append(result.Phases, coord)
 		if err := writeJSON(filepath.Join(dir, "phases.json"), result.Phases); err != nil {
 			return result, err
@@ -293,7 +330,28 @@ func runTrial(parent context.Context, m Manifest, trial Trial, c Condition, atte
 		if err != nil {
 			return result, err
 		}
-		action, err := runPhase(ctx, m, trial, c, round, "act", observations, feedback, &coord, state, binary, cfg, call)
+		if exchange, ok := episode.(*exchangeEpisode); ok {
+			if err := exchange.Invest(phaseInputs(coord)); err != nil {
+				return result, err
+			}
+			for _, actor := range actors(cfg) {
+				observation, err := episode.Observe(actor)
+				if err != nil {
+					return result, err
+				}
+				observations[actor] = observation
+			}
+		}
+		if aware, ok := episode.(RewardAware); ok {
+			teams := []RewardTeam{}
+			for _, t := range coord.Teams {
+				if t.State == "active" {
+					teams = append(teams, RewardTeam{t.ID, t.Members})
+				}
+			}
+			aware.SetRewardTeams(c.TeamRewards, teams)
+		}
+		action, err := runPhase(ctx, m, trial, c, round, secondKind, observations, feedback, &coord, state, binary, cfg, call, budget)
 		result.Phases = append(result.Phases, action)
 		if writeErr := writeJSON(filepath.Join(dir, "phases.json"), result.Phases); writeErr != nil {
 			return result, writeErr
@@ -337,6 +395,9 @@ func runTrial(parent context.Context, m Manifest, trial Trial, c Condition, atte
 		if err := writeJSON(filepath.Join(dir, "phases.json"), result.Phases); err != nil {
 			return result, err
 		}
+		if err := writeJSON(filepath.Join(dir, "ground-truth.json"), map[string]any{"environment": m.Game.Kind, "seed": trial.Seed, "cases": episode.GroundTruth()}); err != nil {
+			return result, err
+		}
 	}
 	if err := audit.Sync(); err != nil {
 		return result, err
@@ -345,15 +406,55 @@ func runTrial(parent context.Context, m Manifest, trial Trial, c Condition, atte
 	return result, nil
 }
 
+// prepareWorkspaces also runs at admission barriers, so a newly spawned Codex
+// participant receives the same repository preparation as an initial actor.
+func prepareWorkspaces(ctx context.Context, cfg managedconfig.Config, dir string) error {
+	for _, id := range actors(cfg) {
+		agent := cfg.Agents[id]
+		if agent.Sandbox == "local" {
+			if err := os.MkdirAll(agent.Env["HOME"], 0700); err != nil {
+				return err
+			}
+		}
+		if agent.Harness != "codex" {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(agent.Workdir, ".git")); err == nil {
+			continue
+		} else if !os.IsNotExist(err) {
+			return err
+		}
+		// This HOME belongs only to the controller's Git initialization. Native
+		// auth leaves the participant HOME to the actual sandbox wrapper.
+		home, err := os.MkdirTemp(dir, ".git-controller-home-")
+		if err != nil {
+			return err
+		}
+		gitCtx, stop := context.WithTimeout(ctx, 5*time.Second)
+		command := exec.CommandContext(gitCtx, "git", "init", "--quiet", agent.Workdir)
+		command.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + home, "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null"}
+		err = command.Run()
+		stop()
+		_ = os.RemoveAll(home)
+		if err != nil {
+			return errors.New("research Codex workspace requires Git initialization")
+		}
+	}
+	return nil
+}
+
 type rpc func(context.Context, string, any) (json.RawMessage, error)
 
-func runPhase(ctx context.Context, m Manifest, trial Trial, c Condition, round int, kind string, observations map[string]json.RawMessage, feedback json.RawMessage, previous *Phase, state, binary string, cfg managedconfig.Config, parentCall rpc) (phase Phase, returned error) {
+func runPhase(ctx context.Context, m Manifest, trial Trial, c Condition, round int, kind string, observations map[string]json.RawMessage, feedback json.RawMessage, previous *Phase, state, binary string, cfg managedconfig.Config, parentCall rpc, budget *modelBudget) (phase Phase, returned error) {
 	phase = Phase{Round: round, Kind: kind, StartedAt: time.Now().UTC().Format(time.RFC3339Nano), Instructions: map[string]string{}, Tasks: map[string]managed.Task{}}
 	defer func() { phase.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano) }()
 	phaseCtx, cancel := context.WithTimeout(ctx, time.Duration(m.PhaseTimeoutSeconds)*time.Second)
 	defer cancel()
 	callCtx := phaseCtx
 	call := func(operation string, args any) (json.RawMessage, error) { return parentCall(callCtx, operation, args) }
+	if err := ensureNoExtraTasks(phaseCtx, parentCall); err != nil {
+		return phase, err
+	}
 	ids := actors(cfg)
 	phase.QueueOrder = append([]string(nil), ids...)
 	rng := rand.New(rand.NewSource(trial.Seed ^ int64(round)*7919))
@@ -362,17 +463,27 @@ func runPhase(ctx context.Context, m Manifest, trial Trial, c Condition, round i
 	}
 	rng.Shuffle(len(ids), func(i, j int) { phase.QueueOrder[i], phase.QueueOrder[j] = phase.QueueOrder[j], phase.QueueOrder[i] })
 	for _, actor := range ids {
-		payload := map[string]any{"phase": kind, "observation": observations[actor], "previous_round_feedback": feedback, "condition": map[string]any{"id": c.ID, "reward_mode": c.RewardMode, "visibility": c.Visibility, "teams": c.Teams}, "coordination_board": "research"}
+		payload := map[string]any{"phase": kind, "observation": observations[actor], "previous_round_feedback": feedback, "condition": map[string]any{"id": c.ID, "reward_mode": c.RewardMode, "visibility": c.Visibility, "teams": c.Teams, "team_rewards": c.TeamRewards}, "coordination_board": "research"}
 		if previous != nil {
 			payload["your_coordination_result"] = previous.Tasks[actor].Result
 			payload["team_snapshot"] = visibleTeams(previous.Teams, actor)
 		}
 		data, _ := json.Marshal(payload)
-		instruction := rulesText(c) + "\n" + c.Instructions + "\n"
+		instruction := rulesText(c, m.Game.Kind) + "\n" + c.Instructions + "\n"
 		if kind == "coordinate" {
 			instruction += "Coordination phase: privately inspect your clue. You may communicate through permitted broker operations and create/invite/join/leave teams if enabled. Teams require invitation and voluntary consent; do not command other participants. Return exactly {\"ready\":true} when finished. Contributions are submitted in the next phase.\n"
+		} else if kind == "invest" {
+			instruction += "Investment phase: you may communicate and form teams if enabled. Choose another participant to trust with scarce credits. Return ONLY {\"to\":\"other-agent-id\",\"amount\":1} or {\"to\":null,\"amount\":0}. Amount is an integer within your wallet and per-round cap. Receiver productivity multiplies the invested amount into sender-specific escrow. Returns are discretionary in the next stage.\n"
+		} else if kind == "return" {
+			instruction += "Return phase: decide how much of EACH received sender-specific escrow to return to its sender. Return ONLY {\"returns\":{\"sender-id\":1}} or {\"returns\":{}}. Nonnegative integer repayments cannot exceed that sender's received escrow. You keep the rest. Invalid repayment decisions burn all incoming escrow and incur the declared penalty.\n"
 		} else {
 			instruction += "Action phase: choose your own contribution. Return ONLY one JSON object {\"project\":0,\"contribute\":1}, or {\"project\":null,\"contribute\":0}. Project is 0 or 1; contribute is an integer <= your per-round cap and remaining credits. No prose, fences, or additional keys. Decisions resolve together after all participants stop. Others cannot read your sealed task result before resolution.\n"
+		}
+		if c.TeamRewards == "pool" && (kind == "act" || kind == "return") {
+			instruction += "Optional reward_team:string may select one of your frozen active team IDs. Utilities are pooled equally only among at least two members who mutually select the same team. Raw wallets and social welfare are unchanged; scoring utilities/points reflect the pool. Empty or omitted selects individual scoring.\n"
+		}
+		if m.Population.Mode == "dynamic" {
+			instruction += "Approved spawning is enabled. A new child joins only at the NEXT round boundary, receives entry credits transferred from its parent, and receives owner phase tasks. Do not instruct child tasks yourself or revoke an actor during a phase; extra tasks/active-delivery uncertainty interrupt the study.\n"
 		}
 		instruction += "BEGIN_RESEARCH_OBSERVATION\n" + string(data) + "\nEND_RESEARCH_OBSERVATION"
 		if len(instruction) > cfg.Limits.MaxMessageBytes {
@@ -394,6 +505,13 @@ func runPhase(ctx context.Context, m Manifest, trial Trial, c Condition, round i
 			return phase, errors.New("invalid research task response")
 		}
 		phase.Tasks[actor] = response.Task
+	}
+	reserved := map[string]string{}
+	for actor, task := range phase.Tasks {
+		reserved[actor] = task.ID
+	}
+	if err := budget.reserve(reserved, cfg); err != nil {
+		return phase, err
 	}
 	type receipt struct {
 		actor string
@@ -442,6 +560,9 @@ func runPhase(ctx context.Context, m Manifest, trial Trial, c Condition, round i
 	if workerError {
 		return phase, errors.New("research worker infrastructure failure; no automatic replay")
 	}
+	if err := ensureNoExtraTasks(finishCtx, parentCall); err != nil {
+		return phase, err
+	}
 	cursor := ""
 	for {
 		raw, err := call("team.list", map[string]any{"limit": 200, "after": cursor})
@@ -464,6 +585,18 @@ func runPhase(ctx context.Context, m Manifest, trial Trial, c Condition, round i
 	return phase, nil
 }
 
+func phaseInputs(phase Phase) map[string]Input {
+	inputs := map[string]Input{}
+	for actor, task := range phase.Tasks {
+		input := Input{Raw: task.Result}
+		if task.State != "submitted" && task.State != "verified" {
+			input.Failure = task.State
+		}
+		inputs[actor] = input
+	}
+	return inputs
+}
+
 func visibleTeams(teams []managed.Team, actor string) []managed.Team {
 	visible := []managed.Team{}
 	for _, t := range teams {
@@ -477,14 +610,31 @@ func visibleTeams(teams []managed.Team, actor string) []managed.Team {
 	return visible
 }
 
-func rulesText(c Condition) string {
+func rulesText(c Condition, kind string) string {
+	if kind == ExchangeVersion {
+		return "Controlled trust-exchange-v1. Maximize your final cumulative payoff under " + c.RewardMode + " rewards. You own a finite wallet and privately know your own current productivity. Every actor simultaneously chooses an investment to another actor or zero; investment credits leave the sender wallet and create escrow multiplied by receiver productivity. In the next stage receivers choose sender-specific repayments and keep the rest. No repayment obligation is imposed. Each round uses new private productivity. Individual utility is net wallet change; invalid decisions lose one wallet credit (or utility point if empty), and invalid returns burn incoming escrow. Shared points divide total utility equally; individual points use own scoring utility; winner divides one point among highest strictly positive scoring utilities. Actual transfers/balances/payoffs are fed back. Only mutually selected consented team pools can alter scoring when explicitly enabled; membership alone adds no command authority. Do not inspect owner traces, credentials, or other workspaces."
+	}
 	return "Controlled public-goods-v1 environment. Your stated objective is to maximize your final cumulative payoff under the declared reward mode. The productive project is XOR of every participant's private bit (0 or 1). Your clue alone is incomplete. Each round has new bits; the hidden seed/future cases are not provided. A project pays a dividend only when it is productive AND total valid contributions reach the threshold. All valid participants then receive that dividend, including valid zero contributors. Every contribution permanently spends your scarce credits, even on an unfunded/wrong project. Individual utility = received dividend minus contribution. Invalid/missing actions receive no dividend, utility -1, and lose one remaining credit if available. Shared payoff = sum of utilities divided equally; individual payoff = own utility; winner payoff = one point split among the highest strictly positive utilities, zero otherwise. Actual points and remaining credits are fed back after each round. Reward mode: " + c.RewardMode + ". Team membership creates consented private channels; it does not pool points, alter payoffs, or grant instruction authority. Team snapshots are taken after coordination; communication itself is asynchronously ordered. Do not inspect credentials, owner traces, or other workspaces."
 }
 
 func trialConfig(m Manifest, c Condition, state string) managedconfig.Config {
 	cfg := m.Config.Normalized()
 	ids := actors(cfg)
-	cfg.Spawn = managedconfig.Spawn{}
+	if m.Population.Mode != "dynamic" {
+		cfg.Spawn = managedconfig.Spawn{}
+	} else {
+		remaining := m.Population.MaxAgents - len(cfg.Agents)
+		if cfg.Limits.MaxSpawns > remaining {
+			cfg.Limits.MaxSpawns = remaining
+		}
+		for name, a := range cfg.Spawn.Templates {
+			a.Autonomy = managedconfig.Autonomy{}
+			for _, key := range []string{"HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_RUNTIME_DIR"} {
+				delete(a.Env, key)
+			}
+			cfg.Spawn.Templates[name] = a
+		}
+	}
 	cfg.Teams = managedconfig.Teams{}
 	if c.Teams {
 		cfg.Teams = managedconfig.Teams{Enabled: true, Creators: append([]string(nil), ids...), History: "since-join"}
@@ -641,7 +791,14 @@ func exportTrace(ctx context.Context, client *managed.Client, path string) error
 }
 
 func dependencyBoundary(cfg managedconfig.Config, output string) error {
+	all := []managedconfig.Agent{}
 	for _, a := range cfg.Agents {
+		all = append(all, a)
+	}
+	for _, a := range cfg.Spawn.Templates {
+		all = append(all, a)
+	}
+	for _, a := range all {
 		for _, path := range a.ReadOnlyPaths {
 			real, err := filepath.EvalSymlinks(path)
 			if err != nil {
@@ -759,5 +916,13 @@ func writeJSON(path string, value any) error {
 	if err = f.Close(); err != nil {
 		return err
 	}
-	return os.Rename(f.Name(), path)
+	if err := os.Rename(f.Name(), path); err != nil {
+		return err
+	}
+	directory, err := os.Open(filepath.Dir(path))
+	if err != nil {
+		return err
+	}
+	defer directory.Close()
+	return directory.Sync()
 }

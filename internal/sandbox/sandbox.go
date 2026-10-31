@@ -17,15 +17,18 @@ import (
 )
 
 type Options struct {
-	Mode           string
-	Network        string
-	Workspace      string
-	StateDir       string
-	CredentialFile string
-	SocketPath     string
-	ReadOnlyPaths  []string
-	Limits         Limits
-	HomeFiles      []HomeFile
+	Mode            string
+	Network         string
+	Workspace       string
+	StateDir        string
+	CredentialFile  string
+	SocketPath      string
+	ReadOnlyPaths   []string
+	Limits          Limits
+	HomeFiles       []HomeFile
+	EgressSocket    string
+	RelayExecutable string
+	Capsule         *CapsuleOptions
 }
 
 const (
@@ -50,7 +53,7 @@ func Wrap(spec harness.Spec, opts Options) (harness.Spec, error) {
 		}
 	}
 	if opts.Mode == "local" {
-		if opts.Limits.Enabled() || len(opts.HomeFiles) != 0 || len(spec.SessionDirs) != 0 {
+		if opts.Limits.Enabled() || len(opts.HomeFiles) != 0 || len(spec.SessionDirs) != 0 || opts.Capsule != nil {
 			return harness.Spec{}, fmt.Errorf("resource limits and isolated home files require bubblewrap mode")
 		}
 		if opts.Network != "host" {
@@ -64,8 +67,11 @@ func Wrap(spec harness.Spec, opts Options) (harness.Spec, error) {
 	if runtime.GOOS != "linux" {
 		return harness.Spec{}, fmt.Errorf("bubblewrap sandbox requires Linux")
 	}
-	if opts.Network != "none" && opts.Network != "host" {
+	if opts.Network != "none" && opts.Network != "host" && opts.Network != "allowlist" {
 		return harness.Spec{}, fmt.Errorf("unsupported bubblewrap network mode %q", opts.Network)
+	}
+	if opts.Network != "allowlist" && (opts.EgressSocket != "" || opts.RelayExecutable != "") {
+		return harness.Spec{}, fmt.Errorf("egress relay requires allowlist network mode")
 	}
 	if err := opts.Limits.Validate(); err != nil {
 		return harness.Spec{}, err
@@ -141,17 +147,55 @@ func Wrap(spec harness.Spec, opts Options) (harness.Spec, error) {
 	if err := safeMountSource(executable, workspace, state, credential, socket); err != nil {
 		return harness.Spec{}, fmt.Errorf("harness executable: %w", err)
 	}
+	var egressSocket, relay string
+	if opts.Network == "allowlist" {
+		egressSocket, err = realPath(opts.EgressSocket, "egress socket", false)
+		if err != nil {
+			return harness.Spec{}, err
+		}
+		info, e := os.Stat(egressSocket)
+		if e != nil || info.Mode()&os.ModeSocket == 0 || info.Mode().Perm()&0077 != 0 {
+			return harness.Spec{}, fmt.Errorf("egress requires a private Unix socket")
+		}
+		relay, err = resolveExecutable(opts.RelayExecutable, workdir, env)
+		if err != nil {
+			return harness.Spec{}, err
+		}
+		if containsPath(workspace, relay) {
+			return harness.Spec{}, fmt.Errorf("trusted egress relay must be outside the writable workspace")
+		}
+		if err = safeMountSource(relay, workspace, state, credential, socket); err != nil {
+			return harness.Spec{}, err
+		}
+	}
+	capsuleArgs, capsuleExecutable, err := capsuleMounts(opts.Capsule, workspace, state)
+	if err != nil {
+		return harness.Spec{}, err
+	}
+	if capsuleExecutable != "" {
+		capsuleExecutable, err = resolveExecutable(capsuleExecutable, workdir, env)
+		if err != nil {
+			return harness.Spec{}, err
+		}
+		if containsPath(workspace, capsuleExecutable) {
+			return harness.Spec{}, fmt.Errorf("capsule shim must be outside writable workspace")
+		}
+		if err = safeMountSource(capsuleExecutable, workspace, state, credential, socket); err != nil {
+			return harness.Spec{}, err
+		}
+	}
 	args := []string{"--die-with-parent", "--new-session", "--unshare-all", "--cap-drop", "ALL"}
 	if opts.Network == "host" {
 		args = append(args, "--share-net")
 	}
 	args = append(args, runtimeMounts()...)
-	args = append(args,
-		"--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp",
-		"--dir", "/home", "--tmpfs", privateHome,
-		"--dir", "/run", "--dir", "/run/agentmux",
-		"--bind", workspace, workspaceTarget,
-	)
+	args = append(args, "--proc", "/proc", "--dev", "/dev")
+	if opts.Capsule != nil {
+		args = append(args, "--size", fmt.Sprint(opts.Capsule.TempBytes), "--tmpfs", "/tmp", "--dir", "/home", "--size", fmt.Sprint(opts.Capsule.HomeBytes), "--tmpfs", privateHome, "--dir", "/run", "--dir", "/run/agentmux", "--size", fmt.Sprint(opts.Capsule.WorkspaceBytes), "--tmpfs", workspaceTarget)
+	} else {
+		args = append(args, "--tmpfs", "/tmp", "--dir", "/home", "--tmpfs", privateHome, "--dir", "/run", "--dir", "/run/agentmux", "--bind", workspace, workspaceTarget)
+	}
+	args = append(args, capsuleArgs...)
 	allHomeFiles := append(append([]HomeFile(nil), opts.HomeFiles...), spec.HomeFiles...)
 	homeArgs, err := homeMounts(allHomeFiles, workspace, state, credential, socket)
 	if err != nil {
@@ -168,6 +212,12 @@ func Wrap(spec harness.Spec, opts Options) (harness.Spec, error) {
 	// Pi config and packages referenced by wrapper scripts remain addressable.
 	// Only the dedicated workspace is writable; no controller state is mounted.
 	paths := append(append([]string(nil), opts.ReadOnlyPaths...), spec.ReadOnlyPaths...)
+	if capsuleExecutable != "" && !coveredByRuntime(capsuleExecutable) {
+		paths = append(paths, capsuleExecutable)
+	}
+	if relay != "" && !coveredByRuntime(relay) {
+		paths = append(paths, relay)
+	}
 	if !coveredByRuntime(executable) && !containsPath(workspace, executable) {
 		paths = append(paths, executable)
 	}
@@ -203,10 +253,26 @@ func Wrap(spec harness.Spec, opts Options) (harness.Spec, error) {
 	args = append(args,
 		"--ro-bind", credential, credentialTarget,
 		"--ro-bind", socket, socketTarget,
-		"--chdir", childWorkdir,
-		"--unsetenv", "XDG_RUNTIME_DIR", "--unsetenv", "DBUS_SESSION_BUS_ADDRESS",
-		"--", childExecutable,
 	)
+	if egressSocket != "" {
+		args = append(args, "--ro-bind", egressSocket, "/run/agentmux/egress.sock")
+	}
+	launchWorkdir := childWorkdir
+	if opts.Capsule != nil {
+		launchWorkdir = workspaceTarget
+	}
+	args = append(args,
+		"--chdir", launchWorkdir,
+		"--unsetenv", "XDG_RUNTIME_DIR", "--unsetenv", "DBUS_SESSION_BUS_ADDRESS",
+		"--",
+	)
+	if capsuleExecutable != "" {
+		args = append(args, capsuleExecutable, "internal-capsule", "--manifest", "/run/agentmux/capsule.json", "--")
+	}
+	if relay != "" {
+		args = append(args, relay, "internal-egress", "--socket", "/run/agentmux/egress.sock", "--")
+	}
+	args = append(args, childExecutable)
 	args = append(args, spec.Args...)
 	// Cmd.Dir is interpreted on the host before bwrap starts. The namespace's
 	// actual working directory is selected by --chdir above.

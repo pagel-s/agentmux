@@ -12,27 +12,32 @@ import (
 	"sort"
 	"strings"
 
+	"agentmux/internal/modelmeta"
+
 	"gopkg.in/yaml.v3"
 )
 
 type Config struct {
-	Version     int                   `yaml:"version" json:"version"`
-	Mode        string                `yaml:"mode" json:"mode"`
-	Session     string                `yaml:"session" json:"session"`
-	Connections map[string]Connection `yaml:"connections" json:"connections,omitempty"`
-	Agents      map[string]Agent      `yaml:"agents" json:"agents"`
-	Boards      map[string]Access     `yaml:"boards" json:"boards,omitempty"`
-	Memory      map[string]Access     `yaml:"memory" json:"memory,omitempty"`
-	Policy      Policy                `yaml:"policy" json:"policy"`
-	Limits      Limits                `yaml:"limits" json:"limits"`
-	Spawn       Spawn                 `yaml:"spawn" json:"spawn"`
-	Teams       Teams                 `yaml:"teams" json:"teams"`
+	Version      int                   `yaml:"version" json:"version"`
+	Mode         string                `yaml:"mode" json:"mode"`
+	Session      string                `yaml:"session" json:"session"`
+	Connections  map[string]Connection `yaml:"connections" json:"connections,omitempty"`
+	Agents       map[string]Agent      `yaml:"agents" json:"agents"`
+	Boards       map[string]Access     `yaml:"boards" json:"boards,omitempty"`
+	Memory       map[string]Access     `yaml:"memory" json:"memory,omitempty"`
+	Policy       Policy                `yaml:"policy" json:"policy"`
+	Limits       Limits                `yaml:"limits" json:"limits"`
+	Spawn        Spawn                 `yaml:"spawn" json:"spawn"`
+	Teams        Teams                 `yaml:"teams" json:"teams"`
+	MemoryPolicy MemoryPolicy          `yaml:"memory_policy" json:"memory_policy"`
+	Budget       Budget                `yaml:"budget" json:"budget"`
 }
 
 type Connection struct {
-	Protocol  string `yaml:"protocol" json:"protocol"`
-	BaseURL   string `yaml:"base_url" json:"base_url,omitempty"`
-	APIKeyEnv string `yaml:"api_key_env" json:"api_key_env,omitempty"`
+	Protocol      string             `yaml:"protocol" json:"protocol"`
+	BaseURL       string             `yaml:"base_url" json:"base_url,omitempty"`
+	APIKeyEnv     string             `yaml:"api_key_env" json:"api_key_env,omitempty"`
+	ModelMetadata modelmeta.Metadata `yaml:"model_metadata,omitempty" json:"model_metadata,omitempty"`
 }
 
 type Agent struct {
@@ -51,6 +56,10 @@ type Agent struct {
 	CodexSandbox  string            `yaml:"codex_sandbox" json:"codex_sandbox,omitempty"`
 	Autonomy      Autonomy          `yaml:"autonomy" json:"autonomy"`
 	Conversation  string            `yaml:"conversation" json:"conversation,omitempty"`
+	Disk          Disk              `yaml:"disk" json:"disk"`
+	Trace         Trace             `yaml:"trace" json:"trace"`
+	Egress        Egress            `yaml:"egress" json:"egress"`
+	Budget        AgentBudget       `yaml:"budget" json:"budget"`
 }
 
 // NativeAuth selects one owner-provided credential file, never a home or a
@@ -134,6 +143,7 @@ func (c Config) Normalized() Config {
 			agent.Env = cloneMap(agent.Env)
 			agent.ReadOnlyPaths = append([]string(nil), agent.ReadOnlyPaths...)
 			agent.Autonomy = agent.Autonomy.normalized()
+			agent.Egress = cloneEgress(agent.Egress)
 			if agent.Sandbox == "" {
 				agent.Sandbox = "local"
 			}
@@ -148,12 +158,17 @@ func (c Config) Normalized() Config {
 		c.Agents = agents
 	}
 	c.Connections = cloneMap(c.Connections)
+	for id, connection := range c.Connections {
+		connection.ModelMetadata = modelmeta.Overlay(modelmeta.Metadata{}, connection.ModelMetadata)
+		c.Connections[id] = connection
+	}
 	templates := make(map[string]Agent, len(c.Spawn.Templates))
 	for id, a := range c.Spawn.Templates {
 		a.Command = append([]string(nil), a.Command...)
 		a.Env = cloneMap(a.Env)
 		a.ReadOnlyPaths = append([]string(nil), a.ReadOnlyPaths...)
 		a.Autonomy = a.Autonomy.normalized()
+		a.Egress = cloneEgress(a.Egress)
 		templates[id] = a
 	}
 	c.Spawn.Templates = templates
@@ -269,7 +284,13 @@ var (
 // Validate checks a normalized copy, allowing programmatic callers to omit
 // defaulted fields. Runtime constructors should retain c.Normalized().
 func (c Config) Validate() error {
+	if err := c.validateHardening(); err != nil {
+		return err
+	}
 	c = c.Normalized()
+	if err := c.MemoryPolicy.Validate(); err != nil {
+		return err
+	}
 	if c.Version != 2 {
 		return fmt.Errorf("managed config version must be 2")
 	}
@@ -293,6 +314,9 @@ func (c Config) Validate() error {
 			return invalidID("connection", id)
 		}
 		connection := c.Connections[id]
+		if err := connection.ModelMetadata.Validate(); err != nil {
+			return fmt.Errorf("connection %q: %w", id, err)
+		}
 		switch connection.Protocol {
 		case "anthropic", "openai-responses", "openai-compatible", "ollama":
 		default:
@@ -333,7 +357,7 @@ func (c Config) Validate() error {
 		default:
 			return fmt.Errorf("agent %q: unsupported sandbox %q", id, agent.Sandbox)
 		}
-		if agent.Network != "none" && agent.Network != "host" {
+		if agent.Network != "none" && agent.Network != "host" && agent.Network != "allowlist" {
 			return fmt.Errorf("agent %q: unsupported network %q", id, agent.Network)
 		}
 		if agent.Sandbox == "local" && agent.Network != "host" {
@@ -429,6 +453,9 @@ func (c Config) Validate() error {
 }
 
 func validateCompatibility(id string, agent Agent, connection Connection) error {
+	if !connection.ModelMetadata.Empty() && (agent.Harness != "pi" || connection.BaseURL == "") {
+		return fmt.Errorf("agent %q: model_metadata requires a Pi compatible endpoint", id)
+	}
 	switch agent.Harness {
 	case "command":
 		if agent.Connection != "" || agent.Model != "" {

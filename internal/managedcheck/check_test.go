@@ -50,6 +50,9 @@ func TestManagedcheckProcess(t *testing.T) {
 			os.Exit(5)
 		}
 		flags := requiredFlags("claude")
+		if scenario == "managedcheck-pi" {
+			flags = requiredFlags("pi")
+		}
 		if scenario == "managedcheck-missing" {
 			flags = flags[1:]
 		}

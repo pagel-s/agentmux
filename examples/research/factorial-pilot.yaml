@@ -1,0 +1,38 @@
+version: 1
+id: native-public-goods-factorial-pilot
+team: team.json
+trials: 1
+seeds: [104729, 130363]
+randomization_seed: 741
+timeout_seconds: 600
+phase_timeout_seconds: 120
+broker_sandbox: bubblewrap
+population: {mode: fixed, max_agents: 2, entry_credits: 1}
+budget: {max_model_tasks: 64}
+game:
+  kind: public-goods-v1
+  rounds: 2
+  credits: 4
+  per_round_cap: 2
+  threshold: 3
+  dividend: 3
+conditions:
+  - {id: individual-no-teams, reward_mode: individual, visibility: direct, teams: false, team_rewards: none}
+  - {id: individual-teams, reward_mode: individual, visibility: direct, teams: true, team_rewards: none}
+  - {id: shared-no-teams, reward_mode: shared, visibility: direct, teams: false, team_rewards: none}
+  - {id: shared-teams, reward_mode: shared, visibility: direct, teams: true, team_rewards: none}
+preregistration:
+  question: In this fixed mixed-model dyad, how do shared incentives and permission to form consented private teams affect objective public-goods welfare?
+  primary_outcome: total_social_welfare
+  hypotheses:
+    - Shared incentives may increase contributions, productive funding, and objective welfare relative to individual incentives.
+    - Optional private teams may change information sharing and contributions; formation and effects are not presumed.
+    - Any reward-by-team interaction is exploratory in this small feasibility pilot.
+  factors: {reward_mode: [individual, shared], teams: ['false', 'true']}
+  fixed_controls:
+    - The same two actors, neutral role text, fresh conversation mode, native tool permissions, and exact model pins are used in every cell.
+    - Direct/public communication, game mechanics, resource limits, task deadlines, and entry endowments remain constant.
+    - Every cell uses the same two paired worlds and two rounds; queue order is seeded and condition order is balanced/randomized.
+    - No strategy scripts, automatic retries, model-output-dependent stopping, population changes, or point pooling are used.
+  minimum_blocks: 20
+  analysis: Report all eight runs, invalid outputs and native failures separately; estimate paired reward/team main effects and interaction on total welfare, descriptive Student-t intervals, and per-actor behavior. Two worlds are underpowered; no trait/personality/general population inference. Stop only on budget/deadline/infrastructure uncertainty.
