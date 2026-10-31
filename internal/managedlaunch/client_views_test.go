@@ -14,8 +14,8 @@ import (
 	"time"
 )
 
-// Real control-mode clients exercise AttachAgent without introducing a PTY
-// dependency. The interactive smoke script separately checks real PTY keys.
+// Real PTY clients exercise the same terminal attach path humans use. Python's
+// standard-library PTY support is also used by the interactive smoke script.
 func TestAttachAgentRealClientsHaveIndependentViewsAndOwnedCleanup(t *testing.T) {
 	if os.Getenv("AGENTMUX_MANAGED_INTEGRATION") != "1" {
 		t.Skip("set AGENTMUX_MANAGED_INTEGRATION=1 for real tmux client views")
@@ -23,6 +23,10 @@ func TestAttachAgentRealClientsHaveIndependentViewsAndOwnedCleanup(t *testing.T)
 	realTMux, err := exec.LookPath("tmux")
 	if err != nil {
 		t.Fatal(err)
+	}
+	python, err := exec.LookPath("python3")
+	if err != nil {
+		t.Fatal("real terminal integration requires python3:", err)
 	}
 	state, err := os.MkdirTemp("", "amx-views-")
 	if err != nil {
@@ -37,12 +41,15 @@ func TestAttachAgentRealClientsHaveIndependentViewsAndOwnedCleanup(t *testing.T)
 	wrapperDir := t.TempDir()
 	fixturePath := strings.Join([]string{wrapperDir, filepath.Dir(realTMux), "/usr/bin", "/bin"}, string(os.PathListSeparator))
 	// Verbose tmux diagnostics include environment updates. Both owner commands
-	// and the foreground control client must see fixture-only values, never CI
+	// and the foreground terminal client must see fixture-only values, never CI
 	// credentials or the user's native configuration/environment.
 	fixtureEnv := []string{"PATH=" + fixturePath, "HOME=" + state, "SHELL=/bin/sh", "TERM=xterm-256color", "LC_ALL=C"}
 	t.Setenv("AGENTMUX_FIXTURE_SECRET", "sentinel-must-stay-outside-tmux")
-	// Only AttachAgent's foreground client is converted to control mode. All
-	// owner-side commands still invoke the real tmux executable directly.
+	// Only AttachAgent's foreground client gets a PTY relay. All owner-side
+	// commands still invoke the real tmux executable directly. Do not replace
+	// this with -C clients: tmux 3.2a can dereference a retained dead pane's freed
+	// output buffer when another control client still has pending output. The
+	// upstream guard is present in tmux 3.3 control.c:control_write_pending.
 	l.run = func(ctx context.Context, args ...string) (string, error) {
 		// -u keeps machine-readable tab separators intact under the deliberately
 		// minimal C locale; non-UTF-8 tmux clients replace them with underscores.
@@ -59,13 +66,16 @@ func TestAttachAgentRealClientsHaveIndependentViewsAndOwnedCleanup(t *testing.T)
 		}
 		return string(output), err
 	}
-	controlCommand := append([]string{"/usr/bin/env", "-i"}, fixtureEnv...)
-	controlCommand = append(controlCommand, realTMux, "-u")
-	if os.Getenv("AGENTMUX_TMUX_DEBUG") == "1" {
-		controlCommand = append(controlCommand, "-vv")
+	ptyDriver := filepath.Join(wrapperDir, "pty-client.py")
+	if err := os.WriteFile(ptyDriver, []byte(clientViewsPTYDriver), 0600); err != nil {
+		t.Fatal(err)
 	}
-	controlCommand = append(controlCommand, "-C")
-	wrapper := "#!/bin/sh\n" + ShellCommand([]string{"cd", state}) + " || exit 1\nexec " + ShellCommand(controlCommand) + " \"$@\"\n"
+	terminalCommand := append([]string{"/usr/bin/env", "-i"}, fixtureEnv...)
+	terminalCommand = append(terminalCommand, python, ptyDriver, realTMux, "-u")
+	if os.Getenv("AGENTMUX_TMUX_DEBUG") == "1" {
+		terminalCommand = append(terminalCommand, "-vv")
+	}
+	wrapper := "#!/bin/sh\n" + ShellCommand([]string{"cd", state}) + " || exit 1\nexec " + ShellCommand(terminalCommand) + " \"$@\"\n"
 	if err := os.WriteFile(filepath.Join(wrapperDir, "tmux"), []byte(wrapper), 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -201,7 +211,7 @@ func TestAttachAgentRealClientsHaveIndependentViewsAndOwnedCleanup(t *testing.T)
 	if tmux("display-message", "-p", "-t", runtime.Agents["bob"].PaneID, "#{pane_dead}") != "0" || !l.ownsSession(ctx, runtime) {
 		t.Fatal("one native process exit destroyed another worker or the owner session")
 	}
-	if _, err := io.WriteString(firstInput, "detach-client\n"); err != nil {
+	if _, err := io.WriteString(firstInput, "\x02d"); err != nil {
 		t.Fatal(err)
 	}
 	_ = firstInput.Close()
@@ -246,6 +256,52 @@ func TestAttachAgentRealClientsHaveIndependentViewsAndOwnedCleanup(t *testing.T)
 		}
 	}
 }
+
+// The child owns a real terminal; the parent drains all its output and relays
+// keys from AttachAgent's pipe. EOF on the input pipe is not a terminal detach:
+// keep draining until tmux exits, just as an ordinary terminal emulator does.
+// The wrapper supplies an explicit fixture-only environment to both processes.
+const clientViewsPTYDriver = `import errno
+import fcntl
+import os
+import pty
+import select
+import struct
+import sys
+import termios
+
+pid, master = pty.fork()
+if pid == 0:
+    fcntl.ioctl(0, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
+    os.execv(sys.argv[1], sys.argv[1:])
+
+input_open = True
+try:
+    while True:
+        ready, _, _ = select.select([master, 0] if input_open else [master], [], [])
+        if master in ready:
+            try:
+                data = os.read(master, 4096)
+            except OSError as error:
+                if error.errno != errno.EIO:
+                    raise
+                break
+            if not data:
+                break
+            sys.stdout.buffer.write(data)
+            sys.stdout.buffer.flush()
+        if input_open and 0 in ready:
+            data = os.read(0, 4096)
+            if not data:
+                input_open = False
+            else:
+                while data:
+                    data = data[os.write(master, data):]
+finally:
+    os.close(master)
+_, status = os.waitpid(pid, 0)
+sys.exit(os.waitstatus_to_exitcode(status))
+`
 
 func TestAttachAgentRejectsChangedRuntimeBeforeCreatingView(t *testing.T) {
 	l := &Launcher{options: Options{StateDir: "/private/state"}}

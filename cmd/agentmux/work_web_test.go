@@ -56,6 +56,8 @@ func TestWebRejectsUnexposedOperationsMalformedBodiesAndCrossSiteRequests(t *tes
 		code                    int
 	}{
 		{`{"operation":"agent.spawn","args":{}}`, "application/json", "", 403},
+		{`{"operation":"team.join","args":{}}`, "application/json", "", 403},
+		{`{"operation":"research.publish","args":{}}`, "application/json", "", 403},
 		{`{"operation":"control.get"} {}`, "application/json", "", 400},
 		{`{"operation":"control.get","unexpected":true}`, "application/json", "", 400},
 		{`{}`, "text/plain", "", 415},

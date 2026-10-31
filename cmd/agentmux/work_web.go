@@ -32,7 +32,7 @@ var workWebAssets embed.FS
 // bearer capability for every API call, validates Host/Origin, and serves no
 // cross-origin API. Native output is data, never HTML or terminal input.
 func workWebHandler(state string, client *managed.Client, token, host string) http.Handler {
-	allowed := map[string]bool{"activity": true, "agent.list": true, "agent.label": true, "boundaries.get": true, "control.get": true, "control.update": true, "task.get": true, "task.list": true, "task.cancel": true, "agent.stop": true, "autonomy.status": true, "autonomy.control": true, "memory.list": true, "memory.get": true, "memory.put": true, "board.post": true}
+	allowed := map[string]bool{"activity": true, "agent.list": true, "agent.label": true, "boundaries.get": true, "control.get": true, "control.update": true, "task.get": true, "task.list": true, "task.cancel": true, "agent.stop": true, "autonomy.status": true, "autonomy.control": true, "memory.list": true, "memory.get": true, "memory.put": true, "board.post": true, "team.invite": true, "team.remove": true, "team.dissolve": true, "research.control": true}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -67,9 +67,23 @@ func workWebHandler(state string, client *managed.Client, token, host string) ht
 				}
 				reply(result)
 			}
+			if r.URL.Path == "/api/research-status" && r.Method == http.MethodGet {
+				status, problem := client.LocalResearchStatus(r.Context(), state)
+				if problem != nil {
+					failure(problem)
+					return
+				}
+				reply(map[string]any{"ok": true, "research": status, "live": false})
+				return
+			}
 			if r.URL.Path == "/api/snapshot" && r.Method == http.MethodGet {
 				d := fetchWorkSnapshot(state, client, r.URL.Query().Get("agent"))
 				if d.err != nil {
+					if d.research != nil {
+						w.WriteHeader(http.StatusBadRequest)
+						reply(map[string]any{"ok": false, "error": d.err.Error(), "saved_research": d.research, "live": false})
+						return
+					}
 					failure(d.err)
 					return
 				}
@@ -84,6 +98,9 @@ func workWebHandler(state string, client *managed.Client, token, host string) ht
 				}
 				attach = append(attach, "--state", state)
 				attachCommand := managedlaunch.ShellCommand(attach)
+				if d.headless || d.researchErr != nil || d.research != nil && d.runtime.Agents[d.selected].PaneID == "" {
+					attachCommand = ""
+				}
 				for _, a := range d.agents {
 					if a.ID == d.selected && a.External {
 						attachCommand = ""
@@ -94,7 +111,13 @@ func workWebHandler(state string, client *managed.Client, token, host string) ht
 						}
 					}
 				}
-				reply(map[string]any{"ok": true, "groups": d.controls.Groups, "observed": d.observed, "bridge_setup": func() string {
+				errorText := func(err error) string {
+					if err == nil {
+						return ""
+					}
+					return err.Error()
+				}
+				reply(map[string]any{"ok": true, "headless": d.headless, "groups": d.controls.Groups, "teams": d.teams, "autonomy": d.autonomy, "conversation": d.conversation, "research": d.research, "runtime_error": errorText(d.runtimeErr), "teams_error": errorText(d.teamsErr), "research_error": errorText(d.researchErr), "observed": d.observed, "bridge_setup": func() string {
 					for _, a := range d.agents {
 						if a.ID == d.selected && a.External {
 							return bridgeInstructions(state, a.ID)

@@ -173,12 +173,32 @@ func TestExperimentCommandIntegration(t *testing.T) {
 	m := testManifest()
 	m.Trials = 1
 	m.Seeds = []int64{7}
-	report, err := Run(context.Background(), m, RunOptions{OutputDir: root})
+	liveCalls := 0
+	report, err := Run(context.Background(), m, RunOptions{OutputDir: root, OnLive: func(state string) {
+		liveCalls++
+		live := readLiveState(t, root)
+		if live.Kind != "experiment" || live.State != "running" || live.StateDir != state || live.Attempt != 1 || live.Trial == "" {
+			t.Fatalf("callback did not expose ready trial metadata: %+v", live)
+		}
+		if _, err := time.Parse(time.RFC3339Nano, live.Deadline); err != nil {
+			t.Fatal("missing finite deadline")
+		}
+		credential, err := managed.LoadCredential(managed.CredentialPath(state, ""))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, problem := managed.NewClient(credential).Call(context.Background(), managed.Request{Operation: "identity"}); problem != nil {
+			t.Fatalf("callback announced broker before ready: %v", problem)
+		}
+	}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(report.Results) != 2 {
 		t.Fatal("missing condition results")
+	}
+	if liveCalls != len(report.Results) || readLiveState(t, root).State != "completed" {
+		t.Fatal("active trial pointer did not follow finite trial lifecycle")
 	}
 	for _, result := range report.Results {
 		if result.Status != "completed" || result.Scores["alice"] != 1 || result.Scores["bob"] != 0 {
@@ -222,6 +242,9 @@ func TestExperimentInterruptedIntegration(t *testing.T) {
 	if err == nil || len(report.Results) != 1 || report.Results[0].Status != "interrupted" || time.Since(started) > 8*time.Second {
 		t.Fatalf("interruption not bounded: %+v, %v", report, err)
 	}
+	if live := readLiveState(t, root); live.State != "interrupted" || live.Attempt != 1 {
+		t.Fatalf("interruption lost live pointer: %+v", live)
+	}
 	trialDir := filepath.Join(root, report.Results[0].Trial.ID)
 	if data, err := os.ReadFile(filepath.Join(trialDir, "attempt-001", "coordination.jsonl")); err != nil || len(data) == 0 {
 		t.Fatalf("interruption lost its coordination trace: %v", err)
@@ -232,9 +255,37 @@ func TestExperimentInterruptedIntegration(t *testing.T) {
 	if _, err := Run(context.Background(), m, RunOptions{OutputDir: root, RerunInterrupted: true}); err == nil {
 		t.Fatal("same sleeping workload should time out in its fresh retry")
 	}
+	if live := readLiveState(t, root); live.State != "interrupted" || live.Attempt != 2 {
+		t.Fatalf("retry pointer did not preserve new attempt identity: %+v", live)
+	}
 	for _, attempt := range []string{"attempt-001", "attempt-002"} {
 		if _, err := os.Stat(filepath.Join(trialDir, attempt, "result.json")); err != nil {
 			t.Fatalf("attempt history not preserved: %v", err)
 		}
 	}
+}
+
+func readLiveState(t *testing.T, root string) LiveState {
+	t.Helper()
+	path := filepath.Join(root, "live.json")
+	info, err := os.Lstat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !info.Mode().IsRegular() || info.Mode().Perm() != 0600 {
+		t.Fatal("live metadata must be a private regular file")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var live LiveState
+	if err := json.Unmarshal(data, &live); err != nil {
+		t.Fatal(err)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil || len(fields) != 6 {
+		t.Fatal("live pointer must contain metadata only")
+	}
+	return live
 }

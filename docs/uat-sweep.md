@@ -79,6 +79,46 @@ python3 scripts/smoke-managed-scale.py --live-agents 40 --serve --keep-output
 python3 scripts/smoke-managed-remote.py --host HOST --remote-dir /tmp/FRESH_DIRECTORY
 ```
 
+## Live research and dynamic collaboration follow-up
+
+The owner consoles now expose consented teams and invitations separately from
+owner-configured groups, including real team board/memory access, spawned-agent
+lineage, task origins and lifecycle changes. Terminal Teams/Events views use
+reviewed exact IDs and versions. Polling preserves independently selected action
+recipients rather than changing them when a new child enters the sorted registry.
+
+A real sandboxed, model-free dynamic study was started paused and stepped from
+the browser. Its participants created and joined a team, spawned a helper, and
+admitted that helper only at the next-round boundary. An owner team-memory edit
+and membership removal appeared as separate assisted-run mutations; the removed
+participant's actual memory read was immediately denied. The phase deadline
+remained unchanged. The web interface distinguishes a responsive broker from a
+runner heartbeat and labels headless workers without promising terminal input.
+
+A second real 80×24 terminal/browser pass reviewed and stepped one phase from
+each surface, preserved physical spaces in intervention reasons, displayed the
+consented team, and stopped at the next-round boundary after child admission.
+Fresh page loads then displayed the authenticated final saved state with all
+writes disabled. Terminal offline status remains visible across navigation;
+saved worker counters do not claim current execution state.
+
+Review found and fixed an atomic admission race where a committed pause/stop
+could lose to a stale running publish, and an evidence-validation gap where
+missing intervention metadata could turn an assisted result into apparently
+clean evidence. Tests now cover both cases, exact one-phase stepping, deadline
+preservation, authenticated runner provenance, recorded owner steering, and
+exclusion of assisted runs from default estimates. A second permission bug let
+named delegated namespace capabilities bypass team consent; durable team
+namespaces now require actual membership, including after removal/dissolution.
+
+Saved research metadata remains readable after broker shutdown through the
+original authenticated owner token, without enabling writes or inventing live
+tasks, panes or permissions. Rotation and damaged checkpoints fail closed.
+Legacy single-task pilots separately print their active owner-console commands
+and save metadata-only lifecycle pointers; they do not gain phase controls or
+independent assisted-run classification. None of this establishes hidden model
+reasoning, native-interactive research turns, or model cooperation quality.
+
 The scale report distinguishes live PTYs from synthetic definitions and records
 snapshot sizes/timings. In the inspected fixture, five snapshot samples were
 69–95 ms at forty definitions and 284–355 ms at two hundred. These are observations
@@ -90,15 +130,19 @@ processes. Recovery digests detect damaged state; they do not defend against an
 owner who can rewrite both records and their recovery metadata. Remote trace
 collection remains unsupported without a central collector and was not validated.
 
-One [CI run](https://github.com/pagel-s/agentmux/actions/runs/41242918692/job/124660332398)
-reported an unexpected tmux server exit during the two-client shutdown test on
-Ubuntu's tmux 3.2a. The cause remains unconfirmed: 270 isolated repetitions
-across upstream 3.2a, Ubuntu's exact 3.2a package and system 3.6 passed, as did the
-next [complete CI run](https://github.com/pagel-s/agentmux/actions/runs/41243366671)
-without a lifecycle code change. These local package tests
-used host libraries and do not reproduce the full CI VM. The fixture now also
-checks worker exit with both clients attached. Unexpected server death still
-fails shutdown; this sweep does not claim to have fixed that intermittent exit.
-CI now retains failed model-free tmux fixture logs for seven days. The diagnostic
-server and clients use an explicit minimal environment without inherited user or
-CI credentials; successful fixtures remove their logs.
+An earlier [CI run](https://github.com/pagel-s/agentmux/actions/runs/41242918692/job/124660332398)
+reported an unexpected tmux 3.2a server exit that initially resisted local
+reproduction. A subsequent [failure with retained diagnostics](https://github.com/pagel-s/agentmux/actions/runs/41247017287/job/124672444506)
+identified queued output in the test's two control-mode clients when a retained
+worker pane exits. A local stress reproducer also crashed Ubuntu's exact tmux
+3.2a package. Its pending-output path can use a freed pane event;
+[tmux 3.3 guards the exited descriptor before accessing that data](https://github.com/tmux/tmux/blob/3.3/control.c#L623-L630).
+
+Agentmux's ordinary attach uses native terminal clients. The integration fixture
+now uses real PTY clients too, retaining the independent navigation, simultaneous
+worker-exit, detach, owned cleanup and foreign-session assertions. It does not
+patch tmux or claim control-mode reliability on 3.2a. Unexpected server death still
+fails the test. CI retains failed model-free tmux logs for seven days; the fixture
+server and clients use a minimal environment without inherited user or CI
+credentials, and successful fixtures remove their logs. Local package checks use
+host libraries and do not reproduce the full CI VM.

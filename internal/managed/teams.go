@@ -145,7 +145,10 @@ func (s *Store) teams(ctx context.Context, q queryer, a actor, r Request) (any, 
 		if err = save(ctx, q, "team", t.ID, a.ID, "", "", t); err != nil {
 			return nil, internal(err)
 		}
-		if err = event(ctx, q, a, "team.created", t.ID, nil); err != nil {
+		if err = advanceBoundaryRevision(ctx, q); err != nil {
+			return nil, internal(err)
+		}
+		if err = event(ctx, q, a, "team.created", t.ID, map[string]any{"version": t.Version, "name": t.Name, "owner": t.Owner, "members": t.Members, "invited": t.Invited, "state": t.State}); err != nil {
 			return nil, internal(err)
 		}
 		return map[string]any{"team": t.Team}, nil
@@ -164,6 +167,8 @@ func (s *Store) teams(ctx context.Context, q queryer, a actor, r Request) (any, 
 	if in.Version != t.Version {
 		return nil, fault("conflict", "team version changed; read it again")
 	}
+	priorMembers := append([]string{}, t.Members...)
+	priorInvited := append([]string{}, t.Invited...)
 	switch r.Operation {
 	case "team.invite":
 		if !manager {
@@ -242,7 +247,14 @@ func (s *Store) teams(ctx context.Context, q queryer, a actor, r Request) (any, 
 	if err := save(ctx, q, "team", t.ID, t.Owner, "", "", t); err != nil {
 		return nil, internal(err)
 	}
-	if err := event(ctx, q, a, r.Operation, t.ID, map[string]any{"version": t.Version}); err != nil {
+	if err := advanceBoundaryRevision(ctx, q); err != nil {
+		return nil, internal(err)
+	}
+	subject := in.Agent
+	if r.Operation == "team.join" || r.Operation == "team.leave" {
+		subject = a.ID
+	}
+	if err := event(ctx, q, a, r.Operation, t.ID, map[string]any{"version": t.Version, "name": t.Name, "subject": subject, "before_members": priorMembers, "before_invited": priorInvited, "members": t.Members, "invited": t.Invited, "state": t.State}); err != nil {
 		return nil, internal(err)
 	}
 	return map[string]any{"team": t.Team}, nil

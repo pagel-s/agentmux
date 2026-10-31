@@ -34,6 +34,77 @@ his own credential, then writes a receipt to the team's private board. Charlie
 does not become a member. These are deliberately scripted strategies that test
 the protocol, not evidence of intelligent self-organization.
 
+## Observe and intervene live
+
+Research uses the same terminal and web owner consoles as other managed work.
+The runner prints the exact current state path and console commands when a new
+attempt becomes ready. The private output's `live.json` points to that attempt.
+To open the controls before the first participant phase:
+
+```sh
+agentmux research run examples/research/dynamic-population.yaml \
+  --output /tmp/amx-live-study --start-paused
+
+# In another terminal; OUTPUT follows the current attempt:
+agentmux research status /tmp/amx-live-study
+agentmux research watch /tmp/amx-live-study
+# Use the exact STATE printed by the runner:
+agentmux dashboard --state STATE --view research
+agentmux web --state STATE
+```
+
+The terminal Events view and web Research view show trial/condition, round and
+phase, population, authoritative phase-task delivery, finite deadline, reserved
+model-task count and requested versus acknowledged control versions. A fresh
+runner heartbeat is separate from a responsive broker. A stale/unknown heartbeat
+does not establish that a task stopped. Heartbeats are ephemeral, consume no
+durable request receipts, and become unknown after broker restart.
+
+Pause, resume, single-phase step and stop require the displayed control version
+and an explicit reason. For example, after reading version 2:
+
+```sh
+agentmux research step /tmp/amx-live-study --version 2 \
+  --reason "Inspect team formation after one phase"
+```
+
+These controls act at phase barriers. A phase already admitted may finish;
+cancellation of accepted tasks is a separate action in Tasks. A step admits
+exactly one phase and then waits. Pausing never renews the trial deadline or model
+budget. `--start-paused` pauses each new attempt and is itself an intervention.
+Transport failures never trigger automatic write replay or model reruns.
+
+Teams exposes real agent-created teams, invitations awaiting participant consent,
+membership versions and scoped board/memory. Owner invite/remove/dissolve actions
+are reviewed against exact IDs and versions; the owner never impersonates an
+agent's acceptance. Spawned children appear with template and parent; admission
+to a dynamic study still happens only at the next-round boundary. Permission
+versions change with membership so revoked shared knowledge is not presented as
+currently readable. Previously delivered context cannot be erased.
+
+Observation alone does not mark a run assisted. Every explicit phase control,
+and successful owner changes to messages, knowledge, permissions, teams or tasks,
+are recorded separately from authenticated runner scheduling and participant
+activity. Results retain the intervention journal and owner-mutation count, and
+default condition/paired/factorial/per-agent estimates exclude these exploratory
+runs. `intervened_runs` reports them, and behavior exports carry an `intervened`
+flag. New evidence is checked against both its private intervention artifact and
+the durable broker checkpoint; missing metadata does not silently become clean
+evidence. This provenance assumes a trusted host owner.
+
+After broker shutdown, the web/terminal console can show saved research metadata
+without enabling writes or claiming live execution. The local read authenticates
+the original owner token; credential rotation and damaged state still fail
+closed. `research status OUTPUT` also distinguishes live and saved metadata.
+
+Research participants use bounded headless managed turns. There is no native
+terminal to type into during those turns; such a configuration is rejected
+before execution. Use the normal interactive workspace for native conversation.
+Within a study, steer through explicit phase controls, scoped notes/knowledge or
+task cancellation. Extra owner instruction tasks interrupt the finite phase
+protocol rather than quietly becoming unscheduled model work. Broker and
+adapter-reported traces do not expose hidden model reasoning or unreported tools.
+
 ## The environment and actual incentives
 
 Each round has two projects. Every participant privately receives one bit. XOR

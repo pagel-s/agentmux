@@ -102,6 +102,9 @@ native history and current limits.
 
 The terminal dashboard provides agent selection, terminal previews, recent
 coordination, task results, follow-ups, cancellation and live permissions.
+Teams and Events expose consented membership, pending invitations, spawn lineage,
+worker admission state and recent lifecycle changes. Team boards and memory appear
+in the same namespace controls as configured shared knowledge.
 `agentmux web` serves a compact local owner app with the same communication
 controls, shared-memory inspection/editing, session setup/discovery, a relationship
 graph and read-only terminal previews. Native
@@ -123,6 +126,13 @@ Managed workers support authenticated scoped messages, durable tasks, optional
 private persistent conversations and explicitly configured observation wakeups.
 Owner-approved templates enable bounded spawning; dynamic teams use consent-based
 membership and scoped boards/memory.
+
+Research runs remain observable and steerable: start with `research run …
+--start-paused`, open the printed terminal/web console, and inspect or advance one
+phase at a time. Pause/resume/step/stop apply at phase barriers; task cancellation
+is separate. Owner steering is recorded and assisted runs are excluded from
+default research estimates. Research turns are headless; native terminal typing
+belongs to the interactive work-session workflow.
 
 Claude, Codex and Pi have managed adapters. Pi connects to configured compatible
 endpoints, including Ollama/vLLM. The Antigravity bridge combines native local

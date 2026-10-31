@@ -157,7 +157,12 @@ interactive Antigravity role injection is unverified; use its Pi bridge.
 | L | Edit the selected session's human task title; empty clears |
 | F1 / Ctrl-b g in a native session | Return to the workbench |
 | Ctrl-b b / P / m / t | Open Board / Connections / Memory / Tasks in a popup |
-| Tab / Shift-Tab or 1–6 | Switch Board, Agents, Connections, Memory, Tasks, Sessions |
+| Tab / Shift-Tab or 1–8 | Switch Board, Agents, Connections, Memory, Tasks, Sessions, Teams, Events |
+| [ / ] in Teams; ← / → | Choose a team; choose an exact agent for a membership action |
+| i / r / d in Teams | Review invite / remove or revoke invitation / dissolve with the current version |
+| b / v in Teams | Compose to its board / inspect its shared memory as owner |
+| [ / ] in Events; Home | Inspect an event; return to following the newest event |
+| P / R / S / T in Events | Research pause / resume / one phase / stop, each with a reason and separate review |
 | N / x | Add a native session / close the selected registered session |
 | s / b | Compose a direct message/instruction or selected shared-board note |
 | + / − in Board | Select an allowed board namespace |
@@ -268,4 +273,19 @@ calls. Native model behavior requires separate provider validation.
 in separate projects: dynamic additions, three disjoint pairs, overlapping groups,
 private/shared data checks through assigned credentials, isolation without losing
 native input, stable reconnects and closing one session while nine remain usable.
-The research and soak runners validate the separate hands-off workflows.
+Research and dynamic workflows use the same observability surfaces. Agent-created
+teams remain distinct from owner collaboration groups: an invitation grants no
+context until the participant accepts. Team namespace access follows actual
+membership, including parent-delegation and revocation fences. Membership changes
+invalidate displayed permission versions immediately.
+
+The Agent view distinguishes automatic admission state from accepted work still
+executing, reports pending/used turn counts and persistent-history fences, and
+shows parent/template/children for spawned workers. Events report observed actor,
+subject and membership changes rather than inventing an agent's intent.
+
+Research and legacy experiment workers run headlessly. Their consoles expose
+tasks, results, reported traces and lifecycle information; they do not offer a
+native tmux pane. Research adds reviewed phase-barrier controls and a separate
+runner heartbeat. See [live research](research.md#observe-and-intervene-live) and
+the [single-task pilot](experiments.md#observe-a-running-pilot).

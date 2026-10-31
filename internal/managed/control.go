@@ -35,9 +35,12 @@ type ControlState struct {
 	Groups      []WorkspaceGroup `json:"groups,omitempty"`
 }
 type BoundaryScope struct {
-	Name  string `json:"name"`
-	Read  bool   `json:"read"`
-	Write bool   `json:"write"`
+	Name   string `json:"name"`
+	Read   bool   `json:"read"`
+	Write  bool   `json:"write"`
+	Source string `json:"source,omitempty"`
+	TeamID string `json:"team_id,omitempty"`
+	Label  string `json:"label,omitempty"`
 }
 type Boundaries struct {
 	Version       int             `json:"version"`
@@ -111,6 +114,28 @@ func scopeControl(ctx context.Context, q queryer, agent, namespace string, memor
 	return false, false
 }
 
+// One revision covers every effective permission source, including consented
+// membership. Clients must not reuse a boundary snapshot across a team change.
+func saveControls(ctx context.Context, q queryer, c ControlState) error {
+	if err := save(ctx, q, "control", "live_access", ownerID, "", "owner", c); err != nil {
+		return err
+	}
+	if err := saveStateRecoveryDigest(ctx, q, "control", "live_access", c); err != nil {
+		return err
+	}
+	_, err := q.ExecContext(ctx, "INSERT INTO metadata(key,value) VALUES('live_access_version',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", strconv.Itoa(c.Version))
+	return err
+}
+
+func advanceBoundaryRevision(ctx context.Context, q queryer) error {
+	c, err := controls(ctx, q)
+	if err != nil {
+		return err
+	}
+	c.Version++
+	return saveControls(ctx, q, c)
+}
+
 func (s *Store) control(ctx context.Context, q queryer, a actor, r Request) (any, *Fault) {
 	if r.Operation == "boundaries.get" {
 		var in struct {
@@ -182,6 +207,26 @@ func (s *Store) control(ctx context.Context, q queryer, a actor, r Request) (any
 				memory bool
 			}{{group.Board, false}, {group.Memory, true}} {
 				scope := BoundaryScope{Name: entry.name, Read: s.namespace(ctx, q, in.Agent, entry.name, entry.memory, false), Write: s.namespace(ctx, q, in.Agent, entry.name, entry.memory, true)}
+				if !a.owner() && !scope.Read && !scope.Write {
+					continue
+				}
+				if entry.memory {
+					b.Memory = append(b.Memory, scope)
+				} else {
+					b.Boards = append(b.Boards, scope)
+				}
+			}
+		}
+		teams, err := list[Team](ctx, q, "team", "AND json_extract(data,'$.state')='active' ORDER BY seq")
+		if err != nil {
+			return nil, internal(err)
+		}
+		for _, team := range teams {
+			for _, entry := range []struct {
+				name   string
+				memory bool
+			}{{team.Board, false}, {team.Memory, true}} {
+				scope := BoundaryScope{Name: entry.name, Read: s.namespace(ctx, q, in.Agent, entry.name, entry.memory, false), Write: s.namespace(ctx, q, in.Agent, entry.name, entry.memory, true), Source: "team", TeamID: team.ID, Label: team.Name}
 				if !a.owner() && !scope.Read && !scope.Write {
 					continue
 				}
@@ -419,14 +464,18 @@ func (s *Store) control(ctx context.Context, q queryer, a actor, r Request) (any
 	if len(c.Edges)+len(c.Scopes) > 4096 {
 		return nil, fault("limit", "live permission override limit reached")
 	}
+	// Independence can remove several consented memberships in this same
+	// transaction. Preserve their revisions instead of overwriting with an
+	// earlier value captured before those nested mutations.
+	current, err := controls(ctx, q)
+	if err != nil {
+		return nil, internal(err)
+	}
+	if current.Version > c.Version {
+		c.Version = current.Version
+	}
 	c.Version++
-	if err := save(ctx, q, "control", "live_access", a.ID, "", "owner", c); err != nil {
-		return nil, internal(err)
-	}
-	if err := saveStateRecoveryDigest(ctx, q, "control", "live_access", c); err != nil {
-		return nil, internal(err)
-	}
-	if _, err := q.ExecContext(ctx, "INSERT INTO metadata(key,value) VALUES('live_access_version',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", strconv.Itoa(c.Version)); err != nil {
+	if err := saveControls(ctx, q, c); err != nil {
 		return nil, internal(err)
 	}
 	if err := event(ctx, q, a, "boundaries.changed", "live_access", map[string]any{"version": c.Version, "kind": in.Kind, "agent": in.Agent, "from": in.From, "to": in.To, "action": in.Action, "namespace": in.Namespace}); err != nil {

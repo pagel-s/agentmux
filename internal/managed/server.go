@@ -145,6 +145,40 @@ func NewClient(c Credential) *Client {
 	return &Client{credential: c, http: &http.Client{Transport: transport, Timeout: 45 * time.Second}}
 }
 
+// LocalResearchStatus reads only the owner's durable research checkpoint when
+// its broker is unavailable. It authenticates the original client token against
+// the current database; credential rotation cannot be bypassed by reloading a
+// newer owner credential. This does not start/recover workers or imply that the
+// driver is alive. A freshly opened Store has no ephemeral runner heartbeat.
+func (c *Client) LocalResearchStatus(ctx context.Context, state string) (*ResearchStatus, *Fault) {
+	if c == nil || c.credential.AgentID != ownerID {
+		return nil, forbidden()
+	}
+	abs, err := filepath.Abs(state)
+	if err != nil || !filepath.IsAbs(c.credential.Socket) || filepath.Clean(c.credential.Socket) != SocketPath(abs) {
+		return nil, fault("invalid", "local research status must match the client's original broker state")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, internal(err)
+	}
+	store, err := Open(abs)
+	if err != nil {
+		return nil, fault("unavailable", "private research checkpoint is unavailable")
+	}
+	defer store.Close()
+	raw, problem := store.Call(ctx, c.credential.Token, Request{Operation: "research.status", Args: json.RawMessage(`{}`)})
+	if problem != nil {
+		return nil, problem
+	}
+	var response struct {
+		Research *ResearchStatus `json:"research"`
+	}
+	if err := json.Unmarshal(raw, &response); err != nil {
+		return nil, fault("internal", "invalid private research checkpoint")
+	}
+	return response.Research, nil
+}
+
 // Call never retries automatically. An interrupted write may have committed;
 // retry it explicitly with the same request ID to retrieve its durable result.
 func (c *Client) Call(ctx context.Context, r Request) (json.RawMessage, *Fault) {

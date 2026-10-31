@@ -115,7 +115,10 @@ function renameContext() {
     },
   });
   vm.runInContext(
-    source.slice(source.indexOf('$("title-editor").onsubmit =')),
+    source.slice(
+      source.indexOf('$("title-editor").onsubmit ='),
+      source.indexOf("\nfunction teamOperationReady("),
+    ),
     context,
   );
   return {
@@ -232,6 +235,12 @@ function connectionContext() {
     },
     queueMicrotask,
     updateTitleConflict() {},
+    researchMutable: () => false,
+    researchReviewReady: () => false,
+    researchHeadless: () => false,
+    nativeHeadless: () => false,
+    researchReview: null,
+    researchSavedOffline: false,
     setTimeout(fn) {
       const id = timers.size + 1;
       timers.set(id, fn);
@@ -249,6 +258,13 @@ function connectionContext() {
       );
     },
   });
+  vm.runInContext(
+    source.slice(
+      source.indexOf("function validSavedResearch("),
+      source.indexOf("async function api("),
+    ),
+    context,
+  );
   vm.runInContext(
     source.slice(
       source.indexOf("async function api("),
@@ -514,6 +530,7 @@ function replyContext(interaction) {
     },
   });
   for (const [start, end] of [
+    ["function nativeHeadless(", "function sessionStatus("],
     ["const selectionReady =", "function selectionControls()"],
     ["function selectAgent(", "async function action("],
     ["function replyRecipient(", "async function loadMemory("],
@@ -676,4 +693,737 @@ test("explicit reply overrides a restored board draft after recipient boundaries
   assert.equal(f.requests[0].args.reply_to, "message-b");
   f.release({ target: "b", kind: "Message" });
   await f.settled();
+});
+
+function teamControlContext() {
+  const requests = [],
+    team = {
+      id: "team-one",
+      version: 3,
+      state: "active",
+      owner: "creator",
+      members: ["creator"],
+      invited: ["invited"],
+    };
+  let release;
+  const context = vm.createContext({
+    snapshot: { teams: [team], agents: [{ id: "candidate", state: "active" }] },
+    selectionReady: () => true,
+    teamReview: null,
+    teamsSignature: "previous",
+    renderTeams() {},
+    notice: (message) => {
+      context.lastNotice = message;
+    },
+    action: (fn) => fn(),
+    call: (operation, args) => {
+      requests.push({ operation, args });
+      return new Promise((resolve) => {
+        release = resolve;
+      });
+    },
+  });
+  vm.runInContext(
+    source.slice(
+      source.indexOf("function teamOperationReady("),
+      source.indexOf("function renderTeams("),
+    ),
+    context,
+  );
+  return { context, team, requests, release: () => release({}) };
+}
+
+test("team interventions require current consent state and preserve a newer review", async () => {
+  const f = teamControlContext();
+  f.context.reviewTeamChange("team.invite", f.team, "candidate");
+  const original = f.context.teamReview;
+  assert.equal(f.requests.length, 0, "review alone must not mutate membership");
+  f.team.version++;
+  await f.context.applyTeamReview();
+  assert.equal(f.requests.length, 0, "stale team CAS cannot submit");
+  f.team.version = 3;
+  f.context.snapshot.agents[0].state = "revoked";
+  await f.context.applyTeamReview();
+  assert.equal(f.requests.length, 0, "revoked invitation target cannot submit");
+  f.context.snapshot.agents[0].state = "active";
+  const pending = f.context.applyTeamReview();
+  assert.equal(f.requests[0].operation, "team.invite");
+  assert.equal(f.requests[0].args.id, "team-one");
+  assert.equal(f.requests[0].args.version, 3);
+  assert.equal(f.requests[0].args.agent, "candidate");
+  f.context.reviewTeamChange("team.remove", f.team, "invited");
+  const newer = f.context.teamReview;
+  assert.notEqual(newer, original);
+  f.release();
+  await pending;
+  assert.equal(
+    f.context.teamReview,
+    newer,
+    "late invitation completion cannot clear a different review",
+  );
+  assert.equal(
+    f.context.teamOperationReady({
+      operation: "team.join",
+      id: f.team.id,
+      version: 3,
+      agent: "invited",
+    }),
+    false,
+    "owner cannot impersonate participant consent",
+  );
+  assert.equal(
+    f.context.teamOperationReady({
+      operation: "team.remove",
+      id: f.team.id,
+      version: 3,
+      agent: "creator",
+    }),
+    false,
+    "team creator requires dissolution, not removal",
+  );
+});
+
+test("headless research blocks attach without changing native workspace behavior", () => {
+  const c = identityContext(),
+    agent = { id: "worker" };
+  c.snapshot = { runtime: { agents: {} } };
+  assert.equal(c.researchHeadless(agent), false);
+  c.snapshot.research = { progress: { state: "running" } };
+  assert.equal(c.researchHeadless(agent), true);
+  c.snapshot.runtime = {
+    attempt_id: "owned-attempt",
+    agents: { worker: { pane_id: "%12", state: "running" } },
+  };
+  assert.equal(c.researchHeadless(agent), false);
+  c.snapshot.runtime.agents.worker.state = "unavailable";
+  assert.equal(c.researchHeadless(agent), true);
+  c.snapshot.research = null;
+  c.snapshot.research_error = "State unavailable";
+  assert.equal(
+    c.researchHeadless(agent),
+    true,
+    "research status failure must not promise a native terminal",
+  );
+});
+
+test("research intervention freezes attempt, CAS and reason without overwriting newer input", async () => {
+  const nodes = {
+      "research-reason": { value: "Inspect team formation" },
+      "research-action": { value: "pause" },
+    },
+    requests = [];
+  let release;
+  const context = vm.createContext({
+    snapshot: {
+      research: {
+        progress: { trial: "trial-1", attempt: 2, state: "running" },
+        control: { version: 4, mode: "running" },
+      },
+    },
+    researchReview: {
+      trial: "trial-1",
+      attempt: 2,
+      version: 4,
+      action: "pause",
+      reason: "Inspect team formation",
+    },
+    selectionReady: () => true,
+    $: (id) => nodes[id],
+    notice: (message) => {
+      context.lastNotice = message;
+    },
+    action: (fn) => fn(),
+    call: (operation, args) => {
+      requests.push({ operation, args });
+      return new Promise((resolve) => {
+        release = resolve;
+      });
+    },
+  });
+  vm.runInContext(
+    source.slice(
+      source.indexOf("function researchMutable("),
+      source.indexOf("function renderResearchReview("),
+    ),
+    context,
+  );
+  vm.runInContext(
+    source.slice(
+      source.indexOf("async function applyResearchReview("),
+      source.indexOf("function renderResearch()"),
+    ),
+    context,
+  );
+  context.snapshot.research.progress.attempt = 3;
+  await context.applyResearchReview();
+  assert.equal(
+    requests.length,
+    0,
+    "review for a different attempt cannot apply",
+  );
+  context.snapshot.research.progress.attempt = 2;
+  context.snapshot.research.control.version = 5;
+  await context.applyResearchReview();
+  assert.equal(
+    requests.length,
+    0,
+    "changed control version requires explicit review",
+  );
+  context.snapshot.research.control.version = 4;
+  const pending = context.applyResearchReview();
+  assert.equal(requests[0].operation, "research.control");
+  assert.equal(requests[0].args.version, 4);
+  assert.equal(requests[0].args.action, "pause");
+  assert.equal(requests[0].args.reason, "Inspect team formation");
+  nodes["research-reason"].value = "Newer draft while request is pending";
+  release({});
+  await pending;
+  assert.equal(
+    nodes["research-reason"].value,
+    "Newer draft while request is pending",
+  );
+  context.snapshot.research.progress.state = "completed";
+  assert.equal(context.researchMutable(context.snapshot.research), false);
+});
+
+test("delegated session fallback uses template while IDs and searchable lineage stay exact", () => {
+  const c = identityContext(),
+    id = "child_" + "f".repeat(64),
+    child = {
+      id,
+      title: "",
+      parent: "alice",
+      template: "helper",
+      config: { harness: "command", workdir: "/tmp/" + id },
+    };
+  c.snapshot = { agents: [child] };
+  assert.equal(c.sessionTitle(child), "helper · Command");
+  assert.equal(c.sessionReference(id), "helper · Command (" + id + ")");
+  c.sessionQuery = "alice helper";
+  assert.equal(c.matchesSession(child), true);
+  assert.equal(
+    c.sessionTitle({ ...child, title: "Review permissions" }),
+    "Review permissions",
+  );
+  assert.equal(
+    c.sessionTitle({ ...child, owner_managed: true }),
+    id + " · Command",
+  );
+  assert.equal(child.id, id);
+  assert.equal(child.title, "");
+});
+
+test("headless research extra instructions warn before submission and preserve contextual confirmation", async () => {
+  const f = replyContext("managed");
+  f.context.snapshot.research = { progress: { trial: "trial-1" } };
+  f.context.setReply("task_b");
+  f.coherent();
+  assert.match(
+    f.node("message-kind").options[0].textContent,
+    /Extra instruction.*interrupts run/,
+  );
+  assert.match(
+    f.node("delivery-hint").textContent,
+    /interrupt.*phase protocol/,
+  );
+  assert.match(f.node("delivery-hint").textContent, /shared board or memory/);
+  f.submit();
+  f.context.snapshot.research = null;
+  f.release({ target: "b", kind: "Instruction" });
+  await f.settled();
+  assert.match(f.context.lastNotice, /interrupts the research phase protocol/);
+  assert.doesNotMatch(f.context.lastNotice, /runs this instruction when ready/);
+});
+
+test("headless research shared-board steering does not promise an extra dispatched turn", () => {
+  const f = replyContext("managed");
+  f.context.snapshot.research = { progress: { trial: "trial-1" } };
+  f.context.selectAgent("b");
+  f.context.snapshot.boundaries.boards = [
+    { name: "team", read: true, write: true },
+  ];
+  f.coherent();
+  f.node("message-kind").value = "board:team";
+  f.context.renderComposer();
+  assert.match(f.node("delivery-hint").textContent, /Research steering note/);
+  assert.match(f.node("delivery-hint").textContent, /next read/);
+  assert.match(
+    f.node("delivery-hint").textContent,
+    /does not add an extra instruction task/,
+  );
+});
+
+test("first headless research snapshot defaults to Research and later polls preserve navigation", async () => {
+  const f = connectionContext(),
+    next = f.context.snapshot,
+    activated = [];
+  next.research = { progress: { trial: "trial-1" } };
+  f.context.snapshot = null;
+  f.context.tab = "activity";
+  f.context.activateTab = (name) => {
+    activated.push(name);
+    f.context.tab = name;
+  };
+  vm.runInContext(
+    source.slice(
+      source.indexOf("function nativeHeadless("),
+      source.indexOf("function sessionStatus("),
+    ),
+    f.context,
+  );
+  f.context.fetch = async () => ({
+    ok: true,
+    status: 200,
+    text: async () => JSON.stringify(next),
+  });
+  await f.context.refresh();
+  assert.deepEqual(activated, ["research"]);
+  assert.match(f.context.lastNotice, /Research owner console ready/);
+  assert.doesNotMatch(f.context.lastNotice, /terminal input stays in tmux/);
+  f.context.tab = "teams";
+  await f.context.refresh();
+  assert.deepEqual(activated, ["research"]);
+  assert.equal(f.context.tab, "teams");
+});
+
+test("headless participant phase-controls button navigates without toggling autonomy", () => {
+  const f = replyContext("managed"),
+    tabs = [],
+    calls = [];
+  f.context.snapshot.research = { progress: { trial: "trial-1" } };
+  f.context.activateTab = (name) => tabs.push(name);
+  f.context.call = (operation) => calls.push(operation);
+  vm.runInContext(
+    source.slice(
+      source.indexOf('$("pause-agent").onclick ='),
+      source.indexOf("function activateTab("),
+    ),
+    f.context,
+  );
+  f.node("pause-agent").onclick();
+  assert.deepEqual(tabs, ["research"]);
+  assert.deepEqual(calls, []);
+});
+
+test("headless one-shot managed runs warn that additional queued tasks may not dispatch", async () => {
+  const f = replyContext("managed");
+  f.context.snapshot.headless = true;
+  f.context.setReply("task_b");
+  f.coherent();
+  assert.equal(f.context.nativeHeadless(f.agents[1]), true);
+  assert.equal(f.context.researchHeadless(f.agents[1]), false);
+  assert.match(
+    f.node("delivery-hint").textContent,
+    /one-shot runner may not dispatch additional tasks/,
+  );
+  assert.doesNotMatch(
+    f.node("delivery-hint").textContent,
+    /phase protocol|runs it when ready/,
+  );
+  assert.equal(
+    f.node("message-kind").options[0].textContent,
+    "Instruction task",
+  );
+  f.submit();
+  f.context.snapshot.headless = false;
+  f.release({ target: "b", kind: "Instruction" });
+  await f.settled();
+  assert.match(
+    f.context.lastNotice,
+    /Queued only; this one-shot runner may not dispatch/,
+  );
+});
+
+test("first legacy headless snapshot opens Tasks and disables fake terminal actions", async () => {
+  const f = connectionContext(),
+    next = f.context.snapshot,
+    activated = [];
+  next.headless = true;
+  f.context.snapshot = null;
+  f.context.tab = "activity";
+  f.context.activateTab = (name) => {
+    activated.push(name);
+    f.context.tab = name;
+  };
+  vm.runInContext(
+    source.slice(
+      source.indexOf("function nativeHeadless("),
+      source.indexOf("function sessionStatus("),
+    ),
+    f.context,
+  );
+  f.context.fetch = async () => ({
+    ok: true,
+    status: 200,
+    text: async () => JSON.stringify(next),
+  });
+  await f.context.refresh();
+  assert.deepEqual(activated, ["tasks"]);
+  assert.equal(f.node("focus-terminal").disabled, true);
+  assert.equal(f.node("copy-attach").disabled, true);
+  assert.match(f.context.lastNotice, /Managed task console ready/);
+  assert.doesNotMatch(
+    f.context.lastNotice,
+    /terminal input stays in tmux|phase controls/i,
+  );
+});
+
+test("runner heartbeat distinguishes fresh, stale and unknown without inferring task state", () => {
+  const c = vm.createContext({});
+  vm.runInContext(
+    source.slice(
+      source.indexOf("function runnerHeartbeat("),
+      source.indexOf("function researchMutable("),
+    ),
+    c,
+  );
+  const now = Date.parse("2026-10-31T12:00:00Z");
+  assert.equal(c.runnerHeartbeat("2026-10-31T11:59:58Z", now), "fresh");
+  assert.equal(c.runnerHeartbeat("2026-10-31T11:59:45Z", now), "stale");
+  assert.equal(c.runnerHeartbeat("", now), "unknown");
+  assert.equal(c.runnerHeartbeat("2026-10-31T12:01:00Z", now), "unknown");
+});
+
+test("delegated joining limitation is explained without changing eligibility or stored grants", () => {
+  const c = vm.createContext({});
+  vm.runInContext(
+    source.slice(
+      source.indexOf("function teamJoiningHint("),
+      source.indexOf("function teamOperationReady("),
+    ),
+    c,
+  );
+  const child = { parent: "alice", capabilities: { join_teams: false } };
+  assert.equal(c.teamJoiningHint(child), "joining not delegated");
+  assert.equal(
+    c.teamJoiningHint({ parent: "alice", capabilities: { join_teams: true } }),
+    "",
+  );
+  assert.equal(c.teamJoiningHint({ parent: "" }), "");
+  assert.equal(child.capabilities.join_teams, false);
+});
+
+function offlineResearchContext(recovered) {
+  const f = connectionContext(),
+    rendered = [];
+  f.context.snapshot.research = {
+    progress: {
+      trial: "trial-stop",
+      attempt: 2,
+      revision: 8,
+      state: "paused",
+      ack_version: 3,
+    },
+    control: { version: 4, mode: "stopped" },
+  };
+  f.context.researchSavedOffline = false;
+  f.context.renderResearch = () =>
+    rendered.push(f.context.snapshot.research.progress.state);
+  f.context.fetch = async (path, options) => {
+    f.requests.push({ path, options });
+    if (path.startsWith("/api/snapshot")) throw new Error("Broker unavailable");
+    assert.equal(path, "/api/research-status");
+    return {
+      ok: true,
+      status: 200,
+      text: async () =>
+        JSON.stringify({ ok: true, live: false, research: recovered }),
+    };
+  };
+  return { ...f, rendered };
+}
+
+test("offline research refresh learns durable stopped state without reviving routing or replaying writes", async () => {
+  const recovered = {
+    progress: {
+      trial: "trial-stop",
+      attempt: 2,
+      revision: 9,
+      state: "stopped",
+      ack_version: 4,
+    },
+    control: { version: 4, mode: "stopped" },
+    runner_heartbeat_at: new Date().toISOString(),
+  };
+  const f = offlineResearchContext(recovered),
+    before = f.context.snapshot,
+    boundaries = before.boundaries,
+    agents = before.agents;
+  await f.context.refresh();
+  assert.equal(f.context.connected, false);
+  assert.equal(f.context.loading, false);
+  assert.equal(
+    f.context.snapshot,
+    before,
+    "only research metadata may change on fallback",
+  );
+  assert.equal(f.context.snapshot.agents, agents);
+  assert.equal(f.context.snapshot.boundaries, boundaries);
+  assert.equal(f.context.snapshot.selected, "a");
+  assert.equal(f.context.snapshot.research.progress.state, "stopped");
+  assert.equal(
+    f.context.snapshot.research.runner_heartbeat_at,
+    "",
+    "durable metadata cannot establish current liveness",
+  );
+  assert.equal(f.context.researchSavedOffline, true);
+  assert.deepEqual(f.rendered, ["stopped"]);
+  assert.match(
+    f.node("runtime-state").textContent,
+    /Broker offline.*saved research state: stopped/,
+  );
+  assert.equal(f.node("review-research").disabled, true);
+  assert.equal(f.node("send-message").disabled, true);
+  let writes = 0;
+  await f.context.action(async () => {
+    writes++;
+  }, "must not send");
+  assert.equal(writes, 0);
+  assert.equal(
+    f.requests.length,
+    2,
+    "one snapshot read and one bounded research metadata fallback",
+  );
+  assert.ok(
+    f.requests.every(({ options }) => options.method === undefined),
+    "fallback never replays a mutation",
+  );
+});
+
+test("offline research metadata cannot replace a different attempt or roll back observed control state", async () => {
+  for (const [attempt, version] of [
+    [3, 4],
+    [2, 3],
+  ]) {
+    const f = offlineResearchContext({
+      progress: { trial: "trial-stop", attempt, revision: 9, state: "stopped" },
+      control: { version, mode: "stopped" },
+    });
+    const prior = f.context.snapshot.research;
+    await f.context.refresh();
+    assert.equal(f.context.snapshot.research, prior);
+    assert.equal(f.context.researchSavedOffline, false);
+    assert.equal(f.context.connected, false);
+    assert.equal(f.requests.length, 2);
+    assert.deepEqual(f.rendered, []);
+  }
+});
+
+function savedResearchFixture() {
+  return {
+    progress: {
+      trial: "saved-trial",
+      attempt: 2,
+      revision: 7,
+      round: 1,
+      ack_version: 3,
+      state: "stopped",
+      condition: "dynamic-teams",
+      phase: "decide",
+      seed: 42,
+      deadline: "2026-10-31T23:00:00Z",
+      updated_at: "2026-10-31T22:00:00Z",
+      model_tasks_reserved: 4,
+      model_tasks_limit: 20,
+      population: ["alice"],
+      tasks: { alice: "submitted" },
+    },
+    control: {
+      version: 3,
+      mode: "stopped",
+      interventions: [
+        {
+          version: 3,
+          action: "stop",
+          reason: "Finish inspection",
+          at: "2026-10-31T22:00:00Z",
+          actor: "$owner",
+          round: 1,
+          phase: "decide",
+        },
+      ],
+    },
+    owner_mutations: 1,
+  };
+}
+function coldSavedContext(saved, live = false) {
+  const f = connectionContext(),
+    activated = [];
+  f.context.snapshot = null;
+  f.context.selected = "";
+  f.context.tab = "activity";
+  f.context.activateTab = (name) => {
+    activated.push(name);
+    f.context.tab = name;
+  };
+  f.context.fetch = async (path, options) => {
+    f.requests.push({ path, options });
+    return {
+      ok: false,
+      status: 400,
+      text: async () =>
+        JSON.stringify({
+          ok: false,
+          error: "Broker offline",
+          saved_research: saved,
+          live,
+        }),
+    };
+  };
+  return { ...f, activated };
+}
+
+test("cold saved research opens an offline metadata-only Research view without inventing routing", async () => {
+  const saved = savedResearchFixture(),
+    f = coldSavedContext(saved);
+  await f.context.refresh();
+  assert.equal(f.context.connected, false);
+  assert.equal(f.context.researchSavedOffline, true);
+  assert.deepEqual(f.activated, ["research"]);
+  const snapshot = f.context.snapshot;
+  assert.equal(snapshot.selected, "");
+  assert.equal(snapshot.agents.length, 0);
+  assert.equal(snapshot.teams.length, 0);
+  assert.equal(snapshot.boundaries.targets.length, 0);
+  assert.equal(snapshot.boundaries.boards.length, 0);
+  assert.equal(snapshot.activity.tasks.length, 0);
+  assert.equal(Object.keys(snapshot.runtime.agents).length, 0);
+  assert.equal(snapshot.research.progress.deadline, saved.progress.deadline);
+  assert.equal(
+    snapshot.research.control.interventions[0].reason,
+    "Finish inspection",
+  );
+  assert.equal(f.node("review-research").disabled, true);
+  assert.equal(f.node("send-message").disabled, true);
+  assert.match(f.context.lastNotice, /Only durable research metadata/);
+  assert.equal(
+    f.requests.length,
+    1,
+    "cold bootstrap does not require a second metadata request",
+  );
+});
+
+test("cold research bootstrap rejects malformed metadata and non-saved envelopes", async () => {
+  for (const saved of [
+    null,
+    {},
+    { ...savedResearchFixture(), control: null },
+    {
+      ...savedResearchFixture(),
+      progress: {
+        ...savedResearchFixture().progress,
+        state: "invented",
+        deadline: "invalid",
+      },
+    },
+    {
+      ...savedResearchFixture(),
+      control: { ...savedResearchFixture().control, interventions: {} },
+    },
+  ]) {
+    const f = coldSavedContext(saved);
+    await f.context.refresh();
+    assert.equal(f.context.snapshot, null);
+    assert.equal(f.context.connected, false);
+    assert.deepEqual(f.activated, []);
+    assert.equal(f.requests.length, 1);
+  }
+  const f = coldSavedContext(savedResearchFixture(), true);
+  await f.context.refresh();
+  assert.equal(
+    f.context.snapshot,
+    null,
+    "only explicitly saved live:false metadata may bootstrap",
+  );
+});
+
+test("global Research and Teams headings preserve selected session and restore agent presentation", () => {
+  const c = identityContext(),
+    nodes = new Map(),
+    classes = new Map();
+  c.snapshot = {
+    agents: [{ id: "alice", title: "Investigate protocol", config: {} }],
+    research: { progress: { condition: "dynamic-teams" } },
+  };
+  c.selected = "alice";
+  c.researchSavedOffline = false;
+  c.$ = (id) => {
+    if (!nodes.has(id)) nodes.set(id, {});
+    return nodes.get(id);
+  };
+  c.document = {
+    body: { classList: { toggle: (name, value) => classes.set(name, value) } },
+  };
+  vm.runInContext(
+    source.slice(
+      source.indexOf("function renderGlobalHeading("),
+      source.indexOf("function renderMetadataOnly("),
+    ),
+    c,
+  );
+  for (const tab of ["research", "teams"]) {
+    c.tab = tab;
+    c.renderGlobalHeading();
+    assert.equal(classes.get("global-view"), true);
+    assert.match(
+      nodes.get("global-view-context").textContent,
+      /Investigate protocol.*alice/,
+    );
+    assert.equal(c.selected, "alice");
+  }
+  c.tab = "activity";
+  c.renderGlobalHeading();
+  assert.equal(classes.get("global-view"), false);
+  assert.equal(c.selected, "alice");
+});
+
+test("saved metadata roster and task count stay unknown, including after a search render", () => {
+  const nodes = new Map(),
+    node = (id) => {
+      if (!nodes.has(id))
+        nodes.set(id, {
+          textContent: "",
+          replaceChildren(...children) {
+            this.children = children;
+          },
+        });
+      return nodes.get(id);
+    };
+  const c = vm.createContext({
+    snapshot: { agents: [] },
+    researchSavedOffline: true,
+    sessionQuery: "",
+    $: node,
+    el: (_tag, _class, text) => ({ textContent: text }),
+  });
+  vm.runInContext(
+    source.slice(
+      source.indexOf("function renderSessionLists("),
+      source.indexOf("function closeTitleEditor("),
+    ),
+    c,
+  );
+  vm.runInContext(
+    source.slice(source.indexOf("function renderMetadataOnly(")),
+    c,
+  );
+  c.renderSessionLists();
+  c.renderMetadataOnly();
+  assert.match(
+    node("agents").children[0].textContent,
+    /Agent registry not loaded/,
+  );
+  assert.doesNotMatch(
+    node("agents").children[0].textContent,
+    /No sessions match|Clear search/,
+  );
+  assert.equal(node("task-count").textContent, "—");
+  assert.equal(node("copy-attach").textContent, "Saved metadata");
+  c.sessionQuery = "alice";
+  c.renderSessionLists();
+  assert.match(
+    node("agents").children[0].textContent,
+    /Agent registry not loaded/,
+  );
+  assert.equal(node("registered-count").textContent, "NOT LOADED");
 });

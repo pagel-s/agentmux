@@ -33,6 +33,21 @@ func TestResearchPlanIsReadOnlyAndReportsTaskBudget(t *testing.T) {
 	}
 }
 
+func TestResearchLiveCLIRequiresVersionAndReason(t *testing.T) {
+	for _, args := range [][]string{
+		{"pause", "unused"},
+		{"step", "unused", "--version", "1"},
+		{"stop", "unused", "--reason", "inspect"},
+		{"status", "unused", "--version", "1"},
+		{"watch", "unused", "--reason", "inspect"},
+	} {
+		var stdout, stderr bytes.Buffer
+		if code := runResearchIO(context.Background(), args, &stdout, &stderr); code != exitValidation {
+			t.Fatalf("accepted unaudited/ambiguous live request %v: %d %s", args, code, stderr.String())
+		}
+	}
+}
+
 func TestResearchAnalysisCSVIsPrivateAndContainsNoObservations(t *testing.T) {
 	dir := t.TempDir()
 	report := research.Report{Research: "test", ManifestHash: "hash", Results: []research.Result{{Status: "completed", Trial: research.Trial{Condition: "shared", Seed: 1, Repetition: 1}, Rounds: []research.Outcome{{SocialWelfare: 5, Funded: true}}}}}
@@ -85,7 +100,7 @@ func TestResearchBehaviorCSVExportsDecisionsWithoutPrompts(t *testing.T) {
 		t.Fatal(err)
 	}
 	rows, err := csv.NewReader(bytes.NewReader(content)).ReadAll()
-	if err != nil || len(rows) != 2 || len(rows[0]) != 17 || len(rows[1][0]) != 24 || rows[1][5] != "alice" || rows[1][10] != "2" {
+	if err != nil || len(rows) != 2 || len(rows[0]) != 18 || len(rows[1][0]) != 24 || rows[1][5] != "alice" || rows[1][10] != "2" {
 		t.Fatalf("unexpected behavior rows: %v %v", rows, err)
 	}
 	if strings.Contains(string(content)+stdout.String(), "PRIVATE_OBSERVATION_SENTINEL") {

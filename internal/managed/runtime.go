@@ -125,6 +125,15 @@ func (s *Store) namespace(ctx context.Context, q queryer, id, name string, memor
 	if group != nil && (group.State != "active" || !contains(group.Members, id)) {
 		return false
 	}
+	teamScope, err := teamNamespace(ctx, q, name, memory)
+	if err != nil {
+		return false
+	}
+	if teamScope {
+		// A named delegation or old owner scope override is not participant
+		// consent. Durable namespace recognition also fences dissolved teams.
+		return !independent(ctx, q, id) && s.teamAccess(ctx, q, id, name, memory)
+	}
 	if allow, exists := scopeControl(ctx, q, id, name, memory, write); exists {
 		return allow
 	}
@@ -161,6 +170,17 @@ func (s *Store) namespace(ctx context.Context, q queryer, id, name string, memor
 	}
 	return contains(values, name) && (a.Parent == ownerID || s.namespace(ctx, q, a.Parent, name, memory, write))
 }
+
+func teamNamespace(ctx context.Context, q queryer, name string, memory bool) (bool, error) {
+	field := "$.board"
+	if memory {
+		field = "$.memory"
+	}
+	var matches int
+	err := q.QueryRowContext(ctx, "SELECT count(*) FROM records WHERE kind='team' AND json_extract(data,?)=?", field, name).Scan(&matches)
+	return matches > 0, err
+}
+
 func (s *Store) namespaceExists(ctx context.Context, q queryer, name string, memory bool) bool {
 	if group, err := workspaceGroupNamespace(ctx, q, name, memory); err != nil {
 		return false

@@ -21,6 +21,9 @@ func validateReportEntries(report Report) error {
 	}
 	cells, trials, tasks := map[string]bool{}, map[string]bool{}, map[string]bool{}
 	for _, result := range report.Results {
+		if report.Execution != nil && report.Execution.InterventionProtocol != "" && result.InterventionProtocol != report.Execution.InterventionProtocol {
+			return errors.New("research result intervention protocol differs from its execution evidence")
+		}
 		trial := result.Trial
 		cell := fmt.Sprintf("%s/%d/%d", trial.Condition, trial.Seed, trial.Repetition)
 		if cells[cell] || trial.ID != "" && trials[trial.ID] {
@@ -99,6 +102,9 @@ func verifyReportEvidence(dir string, report Report) error {
 		if !ok || trial != result.Trial {
 			return errors.New("research result differs from its frozen plan")
 		}
+		if execution.InterventionProtocol != "" && result.InterventionProtocol != execution.InterventionProtocol {
+			return errors.New("research result lacks its collection intervention protocol")
+		}
 		if result.Status != "completed" {
 			continue
 		}
@@ -107,7 +113,7 @@ func verifyReportEvidence(dir string, report Report) error {
 		if err := privateJSON(filepath.Join(attemptDir, "result.json"), &checkpoint); err != nil || !reflect.DeepEqual(checkpoint, result) {
 			return errors.New("research report differs from its completed trial checkpoint")
 		}
-		if err := checkCachedResult(stored.Manifest, trial, result.Attempt, attemptDir, result, budget, seen, true); err != nil {
+		if err := checkCachedResult(stored.Manifest, trial, result.Attempt, attemptDir, result, budget, seen, true, execution.InterventionProtocol); err != nil {
 			return err
 		}
 	}

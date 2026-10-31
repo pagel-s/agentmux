@@ -109,6 +109,9 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(commands...)
 	}
 	key := msg.String()
+	if m.teamAction != nil {
+		return m.teamReviewKey(msg)
+	}
 	if m.composer != "" {
 		switch key {
 		case "esc":
@@ -172,6 +175,10 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.busy || strings.TrimSpace(string(m.text)) == "" && m.composer != "new-role" && m.composer != "new-title" && m.composer != "label" {
 				return m, nil
 			}
+			if m.offline {
+				m.message = "Broker offline. Draft kept; refresh before submitting."
+				return m, nil
+			}
 			if strings.HasPrefix(m.composer, "new-") {
 				return m.nativeDraftNext()
 			}
@@ -222,6 +229,12 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	switch key {
+	case "P", "R", "S", "T":
+		if m.tab == 7 {
+			action := map[string]string{"P": "pause", "R": "resume", "S": "step", "T": "stop"}[key]
+			m.reviewResearchAction(action)
+			return m, nil
+		}
 	case "/":
 		m.findIndex = 0
 		m.compose("find", "task / project / provider / ID", "", "")
@@ -241,6 +254,10 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.close()
 	case "esc":
 		m.closeMemory()
+	case "home":
+		if m.tab == 7 {
+			m.eventIndex = 0
+		}
 	case "up", "k":
 		if m.tab == 5 {
 			if m.observedSelected > 0 {
@@ -271,11 +288,11 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "tab":
 		m.closeMemory()
-		m.tab = (m.tab + 1) % 6
+		m.tab = (m.tab + 1) % 8
 	case "shift+tab":
 		m.closeMemory()
-		m.tab = (m.tab + 5) % 6
-	case "1", "2", "3", "4", "5", "6":
+		m.tab = (m.tab + 7) % 8
+	case "1", "2", "3", "4", "5", "6", "7", "8":
 		if m.tab != int(key[0]-'1') {
 			m.closeMemory()
 		}
@@ -296,6 +313,12 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.compose("send", m.selectedID(), "", "")
 		}
 	case "b":
+		if m.tab == 6 {
+			if team := m.selectedTeam(); team != nil && team.State == "active" {
+				m.compose("board", team.Board, "", "")
+			}
+			return m, nil
+		}
 		if board := m.selectedBoard(); board != "" {
 			m.compose("board", board, "", "")
 		} else {
@@ -337,11 +360,31 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.messageIndex = 0
 		}
 	case "]":
+		if m.tab == 6 {
+			m.teamIndex++
+			return m, nil
+		}
+		if m.tab == 7 {
+			m.eventIndex++
+			return m, nil
+		}
 		m.scope++
 		m.task++
 		m.messageIndex++
 		m.memoryEntry++
 	case "[":
+		if m.tab == 6 {
+			if m.teamIndex > 0 {
+				m.teamIndex--
+			}
+			return m, nil
+		}
+		if m.tab == 7 {
+			if m.eventIndex > 0 {
+				m.eventIndex--
+			}
+			return m, nil
+		}
 		if m.scope > 0 {
 			m.scope--
 		}
@@ -355,14 +398,26 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.memoryEntry--
 		}
 	case "right", "l":
+		if m.tab == 6 && len(m.agents) > 0 {
+			m.teamMemberIndex = (m.teamMemberIndex + 1) % len(m.agents)
+			return m, nil
+		}
 		if len(m.agents) > 0 {
 			m.target = (m.target + 1) % len(m.agents)
 		}
 	case "left", "h":
+		if m.tab == 6 && len(m.agents) > 0 {
+			m.teamMemberIndex = (m.teamMemberIndex + len(m.agents) - 1) % len(m.agents)
+			return m, nil
+		}
 		if len(m.agents) > 0 {
 			m.target = (m.target + len(m.agents) - 1) % len(m.agents)
 		}
 	case "r":
+		if m.tab == 6 {
+			m.reviewTeamAction("team.remove")
+			return m, nil
+		}
 		if m.tab == 4 && len(m.data.activity.Tasks) > 0 {
 			v := m.data.activity.Tasks[m.task%len(m.data.activity.Tasks)]
 			m.compose("reply", v.To, v.ID, "")
@@ -387,6 +442,12 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 	case "v":
+		if m.tab == 6 && !m.busy {
+			if team := m.selectedTeam(); team != nil {
+				m.tab = 3
+				return m, m.loadMemory(team.Memory)
+			}
+		}
 		if m.tab == 3 && !m.busy {
 			if m.data.boundaries.Agent != m.selectedID() {
 				m.message = "Loading the selected session's current memory boundaries."
@@ -419,6 +480,10 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.compose("memory-key", m.memoryNamespace, "", "")
 		}
 	case "m", "p", "i":
+		if m.tab == 6 && key == "i" {
+			m.reviewTeamAction("team.invite")
+			return m, nil
+		}
 		if m.tab == 2 && !m.busy && len(m.agents) > 0 && m.data.boundaries.Agent == m.selectedID() {
 			action := map[string]string{"m": "message.send", "p": "ping.send", "i": "instruct"}[key]
 			target := m.agents[m.target%len(m.agents)].ID
@@ -427,6 +492,10 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.mutate("control.update", map[string]any{"version": m.data.boundaries.Version, "kind": "edge", "from": m.selectedID(), "to": target, "action": action, "allow": allow}, "Permissions saved and enforced immediately.")
 		}
 	case "c":
+		if m.offline {
+			m.message = "Broker offline; refresh before making changes."
+			return m, nil
+		}
 		if observations := m.observedSessions(); m.tab == 5 && !m.busy && len(observations) > 0 {
 			v := observations[m.observedSelected%len(observations)]
 			state := m.state
@@ -465,6 +534,14 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.mutate("task.cancel", map[string]any{"id": v.ID, "version": v.Version}, "Cancellation requested. Check delivery acknowledgement.")
 		}
 	case "d":
+		if m.offline {
+			m.message = "Broker offline; refresh before making changes."
+			return m, nil
+		}
+		if m.tab == 6 {
+			m.reviewTeamAction("team.dissolve")
+			return m, nil
+		}
 		if m.tab == 2 && !m.busy && m.selectedID() != "" {
 			id, client := m.selectedID(), m.client
 			m.busy = true
@@ -474,6 +551,10 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 	case "a":
+		if m.offline {
+			m.message = "Broker offline; refresh before making changes."
+			return m, nil
+		}
 		if (m.tab == 0 || m.tab == 1) && !m.busy && m.selectedID() != "" {
 			if !m.agents[m.selected%len(m.agents)].Config.Autonomy.Enabled {
 				m.message = "Automatic wakeups are disabled. Native interaction stays in the agent terminal."
@@ -493,7 +574,7 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					return consoleAction{err: err}
 				}
 				mode := "paused"
-				if result.Status.Mode == "paused" {
+				if result.Status.Mode != "running" {
 					mode = "running"
 				}
 				_, err = workCall(context.Background(), m.client, "autonomy.control", map[string]any{"agent": id, "version": result.Status.Version, "mode": mode})

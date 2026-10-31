@@ -21,7 +21,12 @@ let snapshot = null,
   agentSignature = "",
   taskSignature = "",
   boardFilter = "all",
-  observedSignature = "";
+  observedSignature = "",
+  teamsSignature = "";
+let teamReview = null;
+let researchReview = null;
+let researchSavedOffline = false;
+const teamInviteDrafts = new Map();
 const messageDrafts = new Map();
 const titleDrafts = new Map(),
   observedDrafts = new Map();
@@ -74,6 +79,8 @@ function sessionTitle(agent) {
   if (agent.title) return agent.title;
   const project = projectName(agent.config?.workdir || agent.project),
     provider = providerName(agent.config?.harness || agent.harness);
+  if (agent.parent && !agent.owner_managed && agent.template)
+    return agent.template + " · " + provider;
   return project ? project + " · " + provider : provider;
 }
 function sessionReference(id) {
@@ -82,6 +89,35 @@ function sessionReference(id) {
 }
 function sessionOrigin(agent) {
   return agent.external ? "External bridge" : "Workspace";
+}
+function sessionLineage(agent) {
+  if (!agent.parent) return "";
+  if (agent.owner_managed) return "Owner-created session";
+  return (
+    "Spawned by " +
+    sessionReference(agent.parent) +
+    (agent.template ? " · template " + agent.template : "") +
+    " · depth " +
+    agent.depth
+  );
+}
+function nativeHeadless(agent) {
+  if (typeof snapshot?.headless === "boolean")
+    return snapshot.headless && (!agent || agent.id === snapshot.selected);
+  const pane = snapshot?.runtime?.agents?.[agent?.id];
+  return (
+    !!(snapshot?.research || snapshot?.research_error) &&
+    !(
+      snapshot.runtime?.attempt_id &&
+      pane?.state === "running" &&
+      /^%\d+$/.test(pane.pane_id)
+    )
+  );
+}
+function researchHeadless(agent) {
+  return (
+    !!(snapshot?.research || snapshot?.research_error) && nativeHeadless(agent)
+  );
 }
 // A registered bridge is not evidence that its original native terminal is
 // currently observable. Neither a missing observation nor revocation exits it.
@@ -140,6 +176,8 @@ function matchesSession(item) {
     item.config?.workdir,
     item.config?.harness,
     item.source,
+    item.parent,
+    item.template,
     item.tmux_session,
     item.tty,
     item.external ? "external" : "workspace",
@@ -172,8 +210,23 @@ function emptySearch(list, kind) {
 function renderSessionLists() {
   if (!snapshot) return;
   const all = snapshot.agents || [],
-    agents = all.filter(matchesSession),
     list = $("agents");
+  if (researchSavedOffline && !all.length) {
+    $("agent-count").textContent = "—";
+    $("registered-count").textContent = "NOT LOADED";
+    list.replaceChildren(
+      el(
+        "p",
+        "empty",
+        "Agent registry not loaded. Only saved research metadata is available.",
+      ),
+    );
+    $("registered-sessions").replaceChildren(
+      el("p", "empty", "Agent sessions have not been loaded."),
+    );
+    return;
+  }
+  const agents = all.filter(matchesSession);
   $("agent-count").textContent = sessionQuery
     ? agents.length + " / " + all.length
     : all.length;
@@ -338,6 +391,83 @@ function updateTitleConflict() {
       current.title_version +
       "). Your draft is preserved. Review it before replacing this version.";
 }
+function validSavedResearch(value) {
+  const object = (v) => !!v && typeof v === "object" && !Array.isArray(v),
+    integer = (v, min = 0) => Number.isSafeInteger(v) && v >= min,
+    time = (v) => typeof v === "string" && Number.isFinite(Date.parse(v));
+  if (!object(value) || !object(value.progress) || !object(value.control))
+    return false;
+  const p = value.progress,
+    c = value.control;
+  return (
+    typeof p.trial === "string" &&
+    !!p.trial.trim() &&
+    p.trial.length <= 256 &&
+    integer(p.attempt, 1) &&
+    integer(p.revision, 1) &&
+    integer(p.round) &&
+    integer(c.version, 1) &&
+    integer(p.ack_version, 1) &&
+    p.ack_version <= c.version &&
+    [
+      "starting",
+      "barrier",
+      "paused",
+      "running",
+      "completed",
+      "interrupted",
+      "stopped",
+    ].includes(p.state) &&
+    ["running", "paused", "step", "stopped"].includes(c.mode) &&
+    typeof p.condition === "string" &&
+    typeof p.phase === "string" &&
+    Number.isFinite(p.seed) &&
+    time(p.deadline) &&
+    time(p.updated_at) &&
+    integer(p.model_tasks_reserved) &&
+    integer(p.model_tasks_limit) &&
+    Array.isArray(p.population) &&
+    p.population.length <= 16 &&
+    p.population.every((id) => typeof id === "string" && id.length > 0) &&
+    object(p.tasks) &&
+    Object.keys(p.tasks).length <= 16 &&
+    Object.values(p.tasks).every((state) => typeof state === "string") &&
+    Array.isArray(c.interventions) &&
+    c.interventions.length <= 129 &&
+    c.interventions.every(
+      (item) =>
+        object(item) &&
+        integer(item.version, 1) &&
+        item.version <= c.version &&
+        ["pause", "resume", "step", "stop"].includes(item.action) &&
+        typeof item.reason === "string" &&
+        typeof item.actor === "string" &&
+        integer(item.round) &&
+        typeof item.phase === "string" &&
+        time(item.at),
+    ) &&
+    (value.owner_mutations === undefined || integer(value.owner_mutations))
+  );
+}
+function savedResearchSnapshot(research) {
+  return {
+    selected: "",
+    agents: [],
+    groups: [],
+    teams: [],
+    observed: [],
+    boundaries: { agent: "", version: 0, targets: [], boards: [], memory: [] },
+    activity: {
+      messages: [],
+      tasks: [],
+      events: [],
+      runtime_deadline: research.progress.deadline,
+    },
+    runtime: { agents: {} },
+    headless: true,
+    research: { ...research, runner_heartbeat_at: "" },
+  };
+}
 async function api(path, body) {
   const controller = new AbortController(),
     timeout = setTimeout(
@@ -373,6 +503,7 @@ async function api(path, body) {
     if (!response.ok || value.ok === false) {
       const error = new Error(value.error || "Operation failed");
       error.code = value.code;
+      if (value.live === false) error.savedResearch = value.saved_research;
       throw error;
     }
     return value;
@@ -425,8 +556,12 @@ function selectionControls() {
         "graph-edit",
       ].includes(id) &&
         agent?.state !== "active") ||
-      (id === "pause-agent" && !agent?.config.autonomy?.enabled) ||
-      (id === "focus-terminal" && !!agent?.external) ||
+      (id === "pause-agent" &&
+        !agent?.config.autonomy?.enabled &&
+        !researchHeadless(agent)) ||
+      (id === "focus-terminal" &&
+        (!!agent?.external || nativeHeadless(agent))) ||
+      (id === "copy-attach" && nativeHeadless(agent)) ||
       (id === "close-agent" && agent?.state !== "active");
   }
   $("memory-form")
@@ -452,6 +587,13 @@ function selectionControls() {
     document.querySelectorAll(".toggle, [data-owner-write]").forEach((node) => {
       node.disabled = true;
     });
+  $("review-research").disabled =
+    !ready ||
+    !!snapshot?.research_error ||
+    !researchMutable(snapshot?.research);
+  const researchConfirm = $("confirm-research");
+  if (researchConfirm)
+    researchConfirm.disabled = !researchReviewReady(researchReview);
   if (!ready) {
     $("send-target").textContent =
       selected + (connected ? " (loading…)" : " (offline)");
@@ -542,21 +684,35 @@ async function refresh() {
       "/api/snapshot?agent=" + encodeURIComponent(requested),
     );
     if (requested !== selected) return;
-    if (!snapshot)
-      notice("Owner console ready. Direct terminal input stays in tmux.");
+    const initial = !snapshot;
+    if (initial)
+      notice(
+        next.research
+          ? "Research owner console ready. Phase controls act at barriers; tasks, teams and memory stay observable."
+          : next.headless
+            ? "Managed task console ready. Tasks, lifecycle events and results stay observable."
+            : "Owner console ready. Direct terminal input stays in tmux.",
+      );
     else if (!connected)
       notice("Reconnected. Current state loaded; drafts are preserved.");
     snapshot = next;
+    researchSavedOffline = false;
     connected = true;
     selected = next.selected;
     $("error-overlay").classList.add("hidden");
     $("connection").textContent = "Connected";
     $("connection").classList.remove("offline");
     render();
+    if (
+      initial &&
+      tab === "activity" &&
+      nativeHeadless(next.agents.find((agent) => agent.id === next.selected))
+    )
+      activateTab(next.research ? "research" : "tasks");
     $("updated").textContent = "Updated " + new Date().toLocaleTimeString();
   } catch (error) {
     connected = false;
-    boundarySignature = taskSignature = observedSignature = "";
+    boundarySignature = taskSignature = observedSignature = teamsSignature = "";
     $("connection").textContent = "Offline";
     $("connection").classList.add("offline");
     notice(
@@ -567,9 +723,62 @@ async function refresh() {
       true,
     );
     selectionControls();
+    let bootstrapped = false;
+    if (!snapshot && validSavedResearch(error.savedResearch)) {
+      snapshot = savedResearchSnapshot(error.savedResearch);
+      selected = "";
+      researchSavedOffline = true;
+      bootstrapped = true;
+      render();
+      activateTab("research");
+      $("error-overlay").classList.add("hidden");
+      $("runtime-state").textContent =
+        "Broker offline · saved research state: " +
+        snapshot.research.progress.state;
+      notice(
+        "Broker offline · saved research state. Only durable research metadata is available; controls remain disabled.",
+        true,
+      );
+      selectionControls();
+    }
     if (!snapshot) {
       $("error-message").textContent = error.message;
       $("error-overlay").classList.remove("hidden");
+    }
+    if (snapshot?.research && !bootstrapped) {
+      const prior = snapshot.research;
+      try {
+        const saved = await api("/api/research-status");
+        const current = snapshot.research,
+          recovered = saved.research;
+        if (
+          saved.live === false &&
+          recovered &&
+          recovered.progress.trial === prior.progress.trial &&
+          recovered.progress.attempt === prior.progress.attempt &&
+          current.progress.trial === prior.progress.trial &&
+          current.progress.attempt === prior.progress.attempt &&
+          recovered.progress.revision >= current.progress.revision &&
+          recovered.control.version >= current.control.version
+        ) {
+          snapshot.research = { ...recovered, runner_heartbeat_at: "" };
+          researchSavedOffline = true;
+          renderResearch();
+          $("runtime-state").textContent =
+            "Broker offline · saved research state: " +
+            recovered.progress.state;
+          notice(
+            "Broker offline · saved research state: " +
+              recovered.progress.state +
+              ". Controls remain disabled; reconnect before making changes.",
+            true,
+          );
+          selectionControls();
+        }
+      } catch {
+        // Retain the original connection error. This read never retries a write
+        // or replaces live routing, panes, permissions or agent selection.
+      }
     }
   } finally {
     loading = false;
@@ -580,11 +789,25 @@ function render() {
   const agents = snapshot.agents || [],
     a = agents.find((item) => item.id === selected),
     b = snapshot.boundaries;
-  $("session").textContent = snapshot.runtime.session || "Work session";
-  $("runtime-state").textContent =
-    "Runtime · " + (snapshot.runtime.state || "unavailable");
+  $("session").textContent = snapshot.research
+    ? snapshot.research.progress.trial +
+      " · " +
+      snapshot.research.progress.condition +
+      " · attempt " +
+      snapshot.research.progress.attempt
+    : snapshot.runtime.session ||
+      (snapshot.headless ? "Managed tasks" : "Work session");
+  $("session").title = $("session").textContent;
+  $("runtime-state").textContent = snapshot.research
+    ? "Research · " + snapshot.research.progress.state
+    : "Runtime · " + (snapshot.runtime.state || "unavailable");
   renderSessionLists();
+  renderTeams();
+  renderLifecycle();
+  renderResearch();
+  renderGlobalHeading();
   if (!a) {
+    if (researchSavedOffline && snapshot.research) renderMetadataOnly();
     selectionControls();
     return;
   }
@@ -605,6 +828,8 @@ function render() {
     .filter(Boolean)
     .join(" · ");
   $("agent-terminal").textContent = terminalIdentity(observed);
+  $("agent-lineage").textContent = sessionLineage(a);
+  renderWorkerRuntime(a);
   $("agent-role").textContent = a.config.role || "No role configured";
   $("agent-harness").textContent =
     a.config.harness.toUpperCase() +
@@ -625,9 +850,13 @@ function render() {
   $("copy-attach").textContent =
     a.external && !snapshot.attach_command ? "Copy setup" : "Attach command ↗";
   $("pause-agent").disabled = !a.config.autonomy?.enabled;
-  $("pause-agent").textContent = a.config.autonomy?.enabled
-    ? "Pause / resume autonomy"
-    : "Human-led";
+  $("pause-agent").textContent = researchHeadless(a)
+    ? "Phase controls"
+    : a.config.autonomy?.enabled
+      ? "Pause / resume autonomy"
+      : nativeHeadless(a)
+        ? "Managed task"
+        : "Human-led";
   const interactive = a.config.interaction === "interactive";
   $("delivery-hint").textContent = interactive
     ? "Inbox message only. Attach in tmux to type directly; native prompts and approvals stay in that terminal."
@@ -635,11 +864,39 @@ function render() {
   $("message-kind").options[0].textContent = interactive
     ? "Direct inbox"
     : "Instruction task";
+  const headless = nativeHeadless(a),
+    research = researchHeadless(a);
+  $("research-memory-hint").hidden = !research;
+  if (headless)
+    $("workbench-shortcuts").textContent = research
+      ? "Headless research · use Research, Tasks and Teams"
+      : "Headless managed run · Tasks and Teams / events";
+  else
+    $("workbench-shortcuts").replaceChildren(
+      el("kbd", "", "F1"),
+      document.createTextNode(" terminal workbench"),
+      document.createElement("br"),
+      el("kbd", "", "Ctrl-b b"),
+      document.createTextNode(" shared board"),
+    );
+  if (headless) $("copy-attach").textContent = "Headless worker";
+  $("native-observation-title").textContent = headless
+    ? "Worker observation"
+    : "Native terminal";
+  $("native-observation-label").textContent = headless
+    ? research
+      ? "HEADLESS RESEARCH · TASKS & TRACES"
+      : "HEADLESS MANAGED RUN · TASKS & TRACES"
+    : "LIVE OBSERVATION · INPUT IN TMUX";
   const terminal =
-    (a.external
-      ? "Existing native conversation. Continue in its original terminal. Sessions → Copy setup connects it to coordination without restarting it.\n\n" +
-        snapshot.bridge_setup
-      : snapshot.preview) ||
+    (headless
+      ? research
+        ? "Headless research worker. Open Tasks for instructions, results, provenance and adapter trace summaries. Research controls apply at phase barriers. This worker has no owned native terminal to attach to."
+        : "Headless managed worker. Open Tasks for instructions, results, provenance and adapter trace summaries, and Teams for lifecycle events. No native terminal is attached. This one-shot runner may not dispatch additional owner tasks."
+      : a.external
+        ? "Existing native conversation. Continue in its original terminal. Sessions → Copy setup connects it to coordination without restarting it.\n\n" +
+          snapshot.bridge_setup
+        : snapshot.preview) ||
     "No terminal output yet. Use Focus in tmux or copy the attach command.";
   if ($("terminal").textContent !== terminal)
     $("terminal").textContent = terminal;
@@ -783,6 +1040,32 @@ function renderTasks() {
         summary,
         el("pre", "", JSON.stringify(t.usage, null, 2).slice(0, 2000)),
       );
+      item.append(details);
+    }
+    if (t.origin || t.trace) {
+      const details = el("details", "reported-usage"),
+        summary = el("summary", "", "Origin & adapter trace");
+      details.append(summary);
+      if (t.origin)
+        details.append(
+          el("pre", "", JSON.stringify(t.origin, null, 2).slice(0, 4000)),
+        );
+      if (t.trace)
+        details.append(
+          el(
+            "p",
+            "",
+            "Recorded trace " +
+              t.trace.id +
+              " · " +
+              t.trace.records +
+              " records · " +
+              (t.trace.complete ? "complete" : "incomplete") +
+              ". Coverage: " +
+              t.trace.coverage +
+              ". This view has not reverified the trace file.",
+          ),
+        );
       item.append(details);
     }
     const buttons = el("div", "task-buttons"),
@@ -933,12 +1216,15 @@ function renderBoundaries() {
             ),
         );
         control.disabled =
+          scope.source === "team" ||
           (!!agents.find((a) => a.id === source)?.parent &&
             !agents.find((a) => a.id === source)?.owner_managed) ||
           agents.find((a) => a.id === source)?.state !== "active";
         if (control.disabled)
           control.title =
-            "Spawned agents use their inherited delegation limits.";
+            scope.source === "team"
+              ? "Consented team membership controls this scope. Manage invitations and membership in Teams."
+              : "Spawned agents use their inherited delegation limits.";
         row.append(control);
       }
       scopes.append(row);
@@ -1056,6 +1342,13 @@ $("target-agent").onchange = (event) => {
   drawGraph();
 };
 $("copy-attach").onclick = async () => {
+  if (nativeHeadless(snapshot?.agents?.find((a) => a.id === selected))) {
+    notice(
+      "This headless worker has no native attach command. Use Tasks and lifecycle events to observe; research phase controls are in Research when available.",
+      true,
+    );
+    return;
+  }
   try {
     await navigator.clipboard.writeText(
       snapshot.attach_command || snapshot.bridge_setup,
@@ -1077,6 +1370,12 @@ $("focus-terminal").onclick = () =>
       " in the existing tmux session. F1 returns to the workbench.",
   );
 $("pause-agent").onclick = () => {
+  if (
+    researchHeadless(snapshot?.agents?.find((agent) => agent.id === selected))
+  ) {
+    activateTab("research");
+    return;
+  }
   const id = selected;
   action(
     async () => {
@@ -1092,6 +1391,7 @@ $("pause-agent").onclick = () => {
 };
 function activateTab(next) {
   tab = next;
+  renderGlobalHeading();
   document
     .querySelectorAll("[data-tab]")
     .forEach((node) =>
@@ -1130,6 +1430,12 @@ $("composer").onsubmit = (event) => {
     );
     return;
   }
+  const researchInstruction =
+    !board &&
+    researchHeadless(snapshot.agents.find((agent) => agent.id === recipient));
+  const headlessInstruction =
+    !board &&
+    nativeHeadless(snapshot.agents.find((agent) => agent.id === recipient));
   let confirmation = "Posted to #" + board + ".";
   action(
     async () => {
@@ -1146,7 +1452,11 @@ $("composer").onsubmit = (event) => {
           sessionReference(result.target) +
           (result.kind === "Message"
             ? ". Native terminal input was not changed."
-            : ". The managed worker runs this instruction when ready.");
+            : researchInstruction
+              ? ". This extra instruction interrupts the research phase protocol."
+              : headlessInstruction
+                ? ". Queued only; this one-shot runner may not dispatch additional tasks."
+                : ". The managed worker runs this instruction when ready.");
       }
       const draft = messageDrafts.get(recipient);
       if (
@@ -1230,6 +1540,8 @@ function renderComposer() {
   const a = (snapshot.agents || []).find((a) => a.id === selected),
     select = $("message-kind"),
     prior = select.value;
+  const research = researchHeadless(a),
+    headless = nativeHeadless(a);
   const boards = (snapshot.boundaries.boards || [])
     .filter((s) => s.read || s.write)
     .map((s) => s.name);
@@ -1245,7 +1557,9 @@ function renderComposer() {
           value === "direct"
             ? a?.config.interaction === "interactive"
               ? "Direct inbox"
-              : "Instruction task"
+              : research
+                ? "Extra instruction · interrupts run"
+                : "Instruction task"
             : "#" + scopeLabel(value.slice(6)),
         );
         option.value = value;
@@ -1258,15 +1572,27 @@ function renderComposer() {
     if (values.includes(pendingDraftKind)) select.value = pendingDraftKind;
     pendingDraftKind = "";
   }
+  select.options[0].textContent =
+    a?.config.interaction === "interactive"
+      ? "Direct inbox"
+      : research
+        ? "Extra instruction · interrupts run"
+        : "Instruction task";
   const board = select.value.startsWith("board:") ? select.value.slice(6) : "";
   $("send-target").textContent = board
     ? "#" + scopeLabel(board)
     : sessionReference(selected);
   $("delivery-hint").textContent = board
-    ? "Shared board. Only sessions allowed to read this namespace receive its context."
+    ? research
+      ? "Research steering note. Agents see permitted board context at their next read; this does not add an extra instruction task."
+      : "Shared board. Only sessions allowed to read this namespace receive its context."
     : a?.config.interaction === "interactive"
       ? "Inbox message. Direct conversation and native approvals remain in the agent terminal."
-      : "Instruction task for this managed worker. The worker runs it when ready.";
+      : research
+        ? "Extra owner instructions interrupt this research attempt's phase protocol. Use a shared board or memory for steering, or review phase controls in Research."
+        : headless
+          ? "Queues an instruction; this one-shot runner may not dispatch additional tasks. Inspect Tasks and lifecycle events for delivery."
+          : "Instruction task for this managed worker. The worker runs it when ready.";
 }
 function renderObserved() {
   const connected = new Set(
@@ -1434,7 +1760,11 @@ function scopeLabel(name) {
   const group = (snapshot?.groups || []).find(
     (g) => g.board === name || g.memory === name,
   );
-  return group ? group.agents.map(sessionReference).join(" + ") : name;
+  if (group) return group.agents.map(sessionReference).join(" + ");
+  const team = (snapshot?.teams || []).find(
+    (t) => t.board === name || t.memory === name,
+  );
+  return team ? team.name + " (" + team.id + ")" : name;
 }
 
 $("session-search").oninput = () => {
@@ -1486,3 +1816,751 @@ $("title-editor").onsubmit = (event) => {
       : "Task title cleared for " + id + ".",
   );
 };
+
+function teamJoiningHint(agent) {
+  return agent?.parent && !agent.capabilities?.join_teams
+    ? "joining not delegated"
+    : "";
+}
+function teamOperationReady(review) {
+  if (!selectionReady() || snapshot.teams_error || !review) return false;
+  const team = (snapshot.teams || []).find((item) => item.id === review.id);
+  if (!team || team.state !== "active" || team.version !== review.version)
+    return false;
+  if (review.operation === "team.dissolve") return true;
+  if (review.operation === "team.remove")
+    return (
+      review.agent !== team.owner &&
+      [...(team.members || []), ...(team.invited || [])].includes(review.agent)
+    );
+  return (
+    review.operation === "team.invite" &&
+    snapshot.agents.some(
+      (agent) => agent.id === review.agent && agent.state === "active",
+    ) &&
+    ![...(team.members || []), ...(team.invited || [])].includes(review.agent)
+  );
+}
+function reviewTeamChange(operation, team, agent = "") {
+  const review = { operation, id: team.id, version: team.version, agent };
+  if (!teamOperationReady(review)) {
+    notice(
+      "Team or recipient changed. Refresh and review the current membership.",
+      true,
+    );
+    return;
+  }
+  teamReview = review;
+  teamsSignature = "";
+  renderTeams();
+}
+async function applyTeamReview() {
+  const review = teamReview;
+  if (!teamOperationReady(review)) {
+    notice(
+      "Team or recipient changed. Cancel this review and choose the current action again.",
+      true,
+    );
+    return;
+  }
+  await action(
+    async () => {
+      const args = { id: review.id, version: review.version };
+      if (review.agent) args.agent = review.agent;
+      await call(review.operation, args);
+      if (teamReview === review) teamReview = null;
+      teamsSignature = "";
+    },
+    review.operation === "team.invite"
+      ? "Invitation recorded. The agent must accept before becoming a member."
+      : "Team membership updated. Native processes and previously read context remain.",
+  );
+}
+function renderTeams() {
+  if (!snapshot) return;
+  const teams = snapshot.teams || [],
+    groups = snapshot.groups || [],
+    ready = selectionReady() && !snapshot.teams_error;
+  const signature = JSON.stringify([
+    selected,
+    selectionReady(),
+    teams,
+    groups,
+    teamReview,
+    snapshot.teams_error,
+    snapshot.agents.map((a) => [a.id, a.title, a.state]),
+  ]);
+  if (signature === teamsSignature) return;
+  teamsSignature = signature;
+  $("teams-count").textContent =
+    teams.filter((t) => t.state === "active").length + " ACTIVE";
+  const teamList = $("consented-teams"),
+    groupList = $("owner-groups");
+  teamList.replaceChildren();
+  groupList.replaceChildren();
+  const reference = (id) => {
+    const button = el("button", "quiet team-agent", sessionReference(id));
+    button.type = "button";
+    button.onclick = () => selectAgent(id);
+    if (id === "$owner") {
+      button.textContent = "Owner ($owner)";
+      button.disabled = true;
+    }
+    return button;
+  };
+  const scopes = (item) =>
+    el(
+      "p",
+      "team-scopes",
+      "Board: " + item.board + " · Memory: " + item.memory,
+    );
+  if (snapshot.teams_error)
+    teamList.append(
+      el(
+        "p",
+        "action-error",
+        "Team state unavailable: " + snapshot.teams_error,
+      ),
+    );
+  for (const team of teams) {
+    const card = el("article", "team-card"),
+      heading = el("div", "team-heading");
+    heading.append(
+      el("h3", "", team.name),
+      el("span", "", team.state + " · v" + team.version),
+    );
+    card.append(heading, el("code", "team-id", team.id));
+    const owner = el("div", "team-participants");
+    owner.append(el("span", "", "Created by"), reference(team.owner));
+    card.append(owner);
+    for (const [label, ids, pending] of [
+      ["Members", team.members || [], false],
+      ["Pending consent", team.invited || [], true],
+    ]) {
+      const row = el("div", "team-participants");
+      row.append(el("span", "", label));
+      if (!ids.length) row.append(el("small", "", "None"));
+      for (const id of ids) {
+        const participant = el("span", "team-participant");
+        participant.append(reference(id));
+        const joining = teamJoiningHint(
+          snapshot.agents.find((agent) => agent.id === id),
+        );
+        if (pending && joining) participant.append(el("small", "", joining));
+        if (team.state === "active" && id !== team.owner) {
+          const remove = el(
+            "button",
+            "quiet",
+            pending ? "Revoke invite" : "Remove",
+          );
+          remove.type = "button";
+          remove.dataset.ownerWrite = "true";
+          remove.disabled = !ready;
+          remove.onclick = () => reviewTeamChange("team.remove", team, id);
+          participant.append(remove);
+        }
+        row.append(participant);
+      }
+      card.append(row);
+    }
+    card.append(scopes(team));
+    if (team.state === "active") {
+      const form = el("form", "team-actions"),
+        invite = el("select"),
+        submit = el("button", "", "Review invite");
+      invite.setAttribute(
+        "aria-label",
+        "Invite an agent to " + team.name + " (" + team.id + ")",
+      );
+      const candidates = snapshot.agents.filter(
+        (agent) =>
+          agent.state === "active" &&
+          ![...(team.members || []), ...(team.invited || [])].includes(
+            agent.id,
+          ),
+      );
+      const placeholder = el("option", "", "Choose an active agent…");
+      placeholder.value = "";
+      invite.append(placeholder);
+      for (const agent of candidates) {
+        const hint = teamJoiningHint(agent);
+        const option = el(
+          "option",
+          "",
+          sessionReference(agent.id) + (hint ? " · " + hint : ""),
+        );
+        option.value = agent.id;
+        invite.append(option);
+      }
+      const draft = teamInviteDrafts.get(team.id);
+      if (candidates.some((agent) => agent.id === draft)) invite.value = draft;
+      invite.disabled = !ready;
+      invite.dataset.ownerWrite = "true";
+      submit.type = "submit";
+      submit.dataset.ownerWrite = "true";
+      submit.disabled = !ready || !invite.value;
+      invite.onchange = () => {
+        teamInviteDrafts.set(team.id, invite.value);
+        submit.disabled =
+          !selectionReady() || !!snapshot.teams_error || !invite.value;
+      };
+      form.onsubmit = (event) => {
+        event.preventDefault();
+        reviewTeamChange("team.invite", team, invite.value);
+      };
+      const dissolve = el("button", "quiet", "Dissolve…");
+      dissolve.type = "button";
+      dissolve.dataset.ownerWrite = "true";
+      dissolve.disabled = !ready;
+      dissolve.onclick = () => reviewTeamChange("team.dissolve", team);
+      form.append(invite, submit, dissolve);
+      card.append(form);
+    }
+    if (teamReview?.id === team.id) {
+      const review = teamReview,
+        panel = el("div", "team-review"),
+        valid = teamOperationReady(review);
+      const intent =
+        review.operation === "team.invite"
+          ? "Invite " + sessionReference(review.agent)
+          : review.operation === "team.remove"
+            ? "Remove " +
+              sessionReference(review.agent) +
+              " from membership or pending invitations"
+            : "Dissolve this team and end its future shared access";
+      panel.append(
+        el("strong", "", intent + "?"),
+        el(
+          "p",
+          "",
+          "Team " +
+            review.id +
+            " · reviewed version " +
+            review.version +
+            (valid
+              ? ". Existing knowledge and native processes remain."
+              : ". State changed; cancel and review the current membership."),
+        ),
+      );
+      const confirm = el("button", "", "Confirm"),
+        cancel = el("button", "quiet", "Cancel");
+      confirm.type = cancel.type = "button";
+      confirm.dataset.ownerWrite = "true";
+      confirm.disabled = !valid;
+      confirm.onclick = applyTeamReview;
+      cancel.onclick = () => {
+        teamReview = null;
+        teamsSignature = "";
+        renderTeams();
+      };
+      panel.append(confirm, cancel);
+      card.append(panel);
+    }
+    teamList.append(card);
+  }
+  if (!teams.length && !snapshot.teams_error)
+    teamList.append(
+      el(
+        "p",
+        "empty",
+        "No consented teams yet. Configured agents can create and invite within their delegation limits.",
+      ),
+    );
+  for (const group of groups) {
+    const card = el("article", "team-card"),
+      heading = el("div", "team-heading");
+    heading.append(
+      el("h3", "", "Owner collaboration"),
+      el("span", "", group.state + " · v" + group.version),
+    );
+    card.append(heading, el("code", "team-id", group.id));
+    const members = el("div", "team-participants");
+    members.append(el("span", "", "Current members"));
+    for (const id of group.members || []) members.append(reference(id));
+    if (!group.members?.length) members.append(el("small", "", "None"));
+    card.append(members, scopes(group));
+    groupList.append(card);
+  }
+  if (!groups.length)
+    groupList.append(
+      el(
+        "p",
+        "empty",
+        "No owner collaboration groups. Select agents in Graph to allow collaboration.",
+      ),
+    );
+}
+
+function renderWorkerRuntime(agent) {
+  const panel = $("worker-runtime");
+  panel.replaceChildren();
+  if (snapshot.runtime_error)
+    panel.append(
+      el(
+        "p",
+        "action-error",
+        "Runtime status unavailable: " + snapshot.runtime_error,
+      ),
+    );
+  if (agent.config.interaction === "interactive") {
+    panel.append(
+      el("strong", "", "Human-led native session"),
+      el(
+        "p",
+        "",
+        "Continue in its terminal. Broker observations do not establish native prompt state or whether the agent read its inbox.",
+      ),
+    );
+    return;
+  }
+  const status = snapshot.autonomy;
+  if (status?.agent === agent.id) {
+    panel.append(
+      el("strong", "", "Managed worker · " + status.state),
+      el(
+        "p",
+        "",
+        (status.reason || "Ready for eligible work") +
+          " · " +
+          status.inflight +
+          " active or uncertain deliveries",
+      ),
+    );
+    if (status.enabled)
+      panel.append(
+        el(
+          "p",
+          "",
+          "Autonomy " +
+            status.mode +
+            " · " +
+            status.turns_used +
+            "/" +
+            status.max_turns +
+            " turns · " +
+            status.pending +
+            " pending observations · " +
+            status.suppressed +
+            " suppressed · " +
+            status.dropped +
+            " dropped",
+        ),
+      );
+    else
+      panel.append(
+        el(
+          "p",
+          "",
+          nativeHeadless(agent) && !researchHeadless(agent)
+            ? "Autonomy disabled. This one-shot runner may not dispatch additional owner tasks."
+            : "Autonomy disabled. Owner instruction tasks can still run.",
+        ),
+      );
+    if (status.next_allowed_at)
+      panel.append(
+        el("p", "", sessionTime(status.next_allowed_at, "Next eligible")),
+      );
+  } else if (!snapshot.runtime_error)
+    panel.append(el("p", "", "Managed worker status not currently available."));
+  const history = snapshot.conversation;
+  if (history?.agent === agent.id)
+    panel.append(
+      el(
+        "p",
+        "",
+        "Persistent history · " +
+          history.state +
+          " · generation " +
+          history.generation +
+          (history.task_id ? " · task " + history.task_id : ""),
+      ),
+    );
+  panel.append(
+    el(
+      "small",
+      "",
+      "Pausing autonomy prevents future automatic turns. Cancel accepted tasks separately." +
+        (nativeHeadless(agent)
+          ? " This worker has no attached terminal."
+          : " Terminal interaction remains in tmux."),
+    ),
+  );
+}
+function renderLifecycle() {
+  const list = $("lifecycle-events");
+  list.replaceChildren();
+  for (const event of snapshot.activity.events || []) {
+    const row = el("article", "lifecycle-row"),
+      heading = el("div", "lifecycle-heading");
+    heading.append(
+      el("time", "", stamp(event.at)),
+      el("strong", "", event.type),
+    );
+    row.append(
+      heading,
+      el(
+        "p",
+        "",
+        sessionReference(event.actor) +
+          (event.entity_id ? " → " + sessionReference(event.entity_id) : ""),
+      ),
+    );
+    if (event.details && Object.keys(event.details).length) {
+      const detail = el("details");
+      detail.append(
+        el("summary", "", "Event details"),
+        el("pre", "", JSON.stringify(event.details, null, 2).slice(0, 4000)),
+      );
+      row.append(detail);
+    }
+    list.append(row);
+  }
+  if (!list.childElementCount)
+    list.append(
+      el(
+        "p",
+        "empty",
+        "No recent lifecycle events. This is the bounded broker event page, not a full research archive.",
+      ),
+    );
+}
+
+function runnerHeartbeat(at, now = Date.now()) {
+  const parsed = Date.parse(at),
+    age = now - parsed;
+  if (!Number.isFinite(parsed) || age < -5000) return "unknown";
+  return age > 10000 ? "stale" : "fresh";
+}
+function researchMutable(research) {
+  return (
+    !!research &&
+    research.control.mode !== "stopped" &&
+    !["completed", "interrupted", "stopped"].includes(research.progress.state)
+  );
+}
+function researchReviewReady(review) {
+  const research = snapshot?.research;
+  return (
+    !!review &&
+    selectionReady() &&
+    !snapshot.research_error &&
+    researchMutable(research) &&
+    research.control.version === review.version &&
+    research.progress.trial === review.trial &&
+    research.progress.attempt === review.attempt
+  );
+}
+function renderResearchReview() {
+  const panel = $("research-review");
+  panel.hidden = !researchReview;
+  panel.replaceChildren();
+  if (!researchReview) return;
+  const review = researchReview,
+    valid = researchReviewReady(review);
+  const heartbeat = runnerHeartbeat(snapshot?.research?.runner_heartbeat_at);
+  panel.append(
+    el(
+      "strong",
+      "",
+      review.action + " · " + review.trial + " · attempt " + review.attempt,
+    ),
+    el("p", "", "Reason: " + review.reason),
+    el(
+      "p",
+      "",
+      "Reviewed control version " +
+        review.version +
+        ". Applies at the next phase barrier; accepted tasks are not interrupted.",
+    ),
+  );
+  if (!valid)
+    panel.append(
+      el(
+        "p",
+        "action-error",
+        "The attempt or control state changed, or the console is offline. Cancel and review current state before sending.",
+      ),
+    );
+  if (heartbeat !== "fresh")
+    panel.append(
+      el(
+        "p",
+        "session-note",
+        "Runner heartbeat " +
+          heartbeat +
+          ". A request may remain pending until the runner responds; accepted tasks may still be running.",
+      ),
+    );
+  const confirm = el("button", "", "Confirm intervention"),
+    cancel = el("button", "quiet", "Cancel");
+  confirm.id = "confirm-research";
+  confirm.type = cancel.type = "button";
+  confirm.dataset.ownerWrite = "true";
+  confirm.disabled = !valid;
+  confirm.onclick = applyResearchReview;
+  cancel.onclick = () => {
+    researchReview = null;
+    renderResearchReview();
+  };
+  panel.append(confirm, cancel);
+}
+async function applyResearchReview() {
+  const review = researchReview;
+  if (!researchReviewReady(review)) {
+    notice(
+      "Research control or attempt changed. Cancel this review and review current state.",
+      true,
+    );
+    return;
+  }
+  await action(async () => {
+    await call("research.control", {
+      version: review.version,
+      action: review.action,
+      reason: review.reason,
+    });
+    if (researchReview === review) {
+      researchReview = null;
+      if (
+        $("research-reason").value === review.reason &&
+        $("research-action").value === review.action
+      )
+        $("research-reason").value = "";
+    }
+  }, "Research intervention recorded. Wait for the runner to acknowledge it at a phase barrier.");
+}
+function renderResearch() {
+  const research = snapshot?.research,
+    problem = snapshot?.research_error;
+  $("research-tab").hidden = !research && !problem;
+  const status = $("research-status"),
+    population = $("research-population"),
+    history = $("research-interventions");
+  status.replaceChildren();
+  population.replaceChildren();
+  history.replaceChildren();
+  $("research-control").hidden = !research;
+  if (!research) {
+    $("research-state").textContent = problem ? "UNAVAILABLE" : "NO RUNNER";
+    status.append(
+      el(
+        "p",
+        problem ? "action-error" : "empty",
+        problem
+          ? "Research status unavailable: " + problem
+          : "No research runner is registered with this workspace.",
+      ),
+    );
+    renderResearchReview();
+    return;
+  }
+  const p = research.progress,
+    c = research.control;
+  $("research-state").textContent =
+    (researchSavedOffline ? "SAVED · " : "") + p.state.toUpperCase();
+  if (researchSavedOffline)
+    status.append(
+      el(
+        "p",
+        "session-note",
+        "Broker offline · saved research state. This metadata does not establish runner or task liveness; controls remain disabled.",
+      ),
+    );
+  const line = (label, value) => {
+    const row = el("div", "research-stat");
+    row.append(el("span", "", label), el("strong", "", value));
+    status.append(row);
+  };
+  line("Trial / attempt", p.trial + " / " + p.attempt);
+  line("Condition / seed", p.condition + " / " + p.seed);
+  line("Round / phase", p.round + " / " + p.phase);
+  line("Last reported runner state", p.state);
+  const heartbeat = runnerHeartbeat(research.runner_heartbeat_at);
+  line(
+    "Runner heartbeat",
+    heartbeat +
+      (research.runner_heartbeat_at
+        ? " · " + new Date(research.runner_heartbeat_at).toLocaleTimeString()
+        : ""),
+  );
+  if (heartbeat !== "fresh")
+    status.append(
+      el(
+        "p",
+        "session-note",
+        "Heartbeat " +
+          heartbeat +
+          ": runner liveness is not confirmed. Accepted tasks may still run; control requests may remain pending.",
+      ),
+    );
+  line(
+    "Control request",
+    c.mode +
+      " · v" +
+      c.version +
+      (p.ack_version < c.version
+        ? " · awaiting phase-barrier acknowledgement"
+        : " · acknowledged"),
+  );
+  line(
+    "Finite deadline",
+    p.deadline ? new Date(p.deadline).toLocaleString() : "Not reported",
+  );
+  line(
+    "Reserved model tasks",
+    p.model_tasks_reserved + " / " + p.model_tasks_limit,
+  );
+  line("Owner mutations", String(research.owner_mutations || 0));
+  line(
+    "Last runner update",
+    p.updated_at ? new Date(p.updated_at).toLocaleString() : "Not reported",
+  );
+  status.append(
+    el(
+      "p",
+      "session-note",
+      "Reported lifecycle metadata. These counters do not establish model quality, cooperation, competition, or total provider spend.",
+    ),
+  );
+  for (const id of p.population || []) {
+    const row = el("div", "research-stat"),
+      button = el("button", "quiet team-agent", sessionReference(id));
+    button.type = "button";
+    button.onclick = () => selectAgent(id);
+    row.append(
+      button,
+      el("span", "", p.tasks?.[id] || "No phase task reported"),
+    );
+    population.append(row);
+  }
+  if (!population.childElementCount)
+    population.append(
+      el("p", "empty", "No population reported for this phase."),
+    );
+  for (const intervention of [...(c.interventions || [])].reverse()) {
+    const row = el("article", "lifecycle-row");
+    row.append(
+      el("strong", "", intervention.action + " · v" + intervention.version),
+      el("p", "", intervention.reason),
+      el(
+        "p",
+        "",
+        sessionReference(intervention.actor) +
+          " · round " +
+          intervention.round +
+          " · " +
+          intervention.phase +
+          " · " +
+          stamp(intervention.at),
+      ),
+    );
+    history.append(row);
+  }
+  if (!history.childElementCount)
+    history.append(
+      el("p", "empty", "No research control interventions recorded."),
+    );
+  renderResearchReview();
+}
+$("research-control").onsubmit = (event) => {
+  event.preventDefault();
+  const research = snapshot?.research,
+    reason = $("research-reason").value,
+    action = $("research-action").value;
+  if (
+    !selectionReady() ||
+    !researchMutable(research) ||
+    snapshot.research_error
+  )
+    return;
+  if (
+    !reason.trim() ||
+    new TextEncoder().encode(reason).length > 512 ||
+    /[\u0000-\u001f\u007f-\u009f]/u.test(reason)
+  ) {
+    notice("Enter a printable intervention reason of 1–512 bytes.", true);
+    return;
+  }
+  researchReview = {
+    version: research.control.version,
+    trial: research.progress.trial,
+    attempt: research.progress.attempt,
+    action,
+    reason,
+  };
+  renderResearchReview();
+};
+for (const id of ["research-action", "research-reason"])
+  $(id).addEventListener("input", () => {
+    researchReview = null;
+    renderResearchReview();
+  });
+
+function renderGlobalHeading() {
+  const global = tab === "research" || tab === "teams";
+  document.body.classList.toggle("global-view", global);
+  const research = snapshot?.research,
+    agent = snapshot?.agents?.find((item) => item.id === selected);
+  $("global-view-title").textContent =
+    tab === "research"
+      ? "Research" +
+        (research?.progress.condition
+          ? " · " + research.progress.condition
+          : "")
+      : "Teams";
+  $("global-view-context").textContent = agent
+    ? "Selected: " + sessionTitle(agent) + " · " + agent.id
+    : researchSavedOffline
+      ? "Broker offline · saved research metadata"
+      : "No session selected";
+  $("global-view-context").title = $("global-view-context").textContent;
+}
+function renderMetadataOnly() {
+  $("agent-name").textContent = "Saved research attempt";
+  $("agent-role").textContent =
+    "Broker offline · only durable lifecycle metadata is available.";
+  for (const id of [
+    "agent-id",
+    "agent-workdir",
+    "agent-boundary",
+    "agent-origin",
+    "agent-started",
+    "agent-terminal",
+    "agent-lineage",
+    "agent-harness",
+  ])
+    $(id).textContent = "";
+  $("workbench-shortcuts").textContent =
+    "Saved research · lifecycle metadata only";
+  $("native-observation-title").textContent = "Saved research metadata";
+  $("native-observation-label").textContent = "BROKER OFFLINE · READ ONLY";
+  $("terminal").textContent =
+    "Only saved research lifecycle metadata is available. Agent terminals, task records and permissions have not been loaded.";
+  $("pause-agent").textContent = "Offline";
+  $("copy-attach").textContent = "Saved metadata";
+  $("task-count").textContent = "—";
+  $("agent-count").textContent = "—";
+  $("registered-count").textContent = "NOT LOADED";
+  $("teams-count").textContent = "NOT LOADED";
+  $("memory-form").hidden = true;
+  for (const [id, text] of [
+    ["feed", "Messages are unavailable in this saved metadata view."],
+    ["tasks", "Task records are unavailable in this saved metadata view."],
+    ["memory-list", "Agent memory is unavailable while the broker is offline."],
+    [
+      "consented-teams",
+      "Team membership is unavailable in this saved metadata view.",
+    ],
+    [
+      "owner-groups",
+      "Collaboration groups are unavailable in this saved metadata view.",
+    ],
+    [
+      "lifecycle-events",
+      "Broker events are unavailable here; saved research interventions remain in Research.",
+    ],
+    ["registered-sessions", "Agent sessions have not been loaded."],
+    ["observed-sessions", "Native terminals have not been observed."],
+  ])
+    $(id).replaceChildren(el("p", "empty", text));
+}
