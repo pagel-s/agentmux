@@ -63,7 +63,7 @@ verified shared boards/memory, hierarchy, supervised spawning, consented teams,
 revocation, history controls and restart.
 
 The expanded model-free soak verified **250 command turns**, **50 clean broker
-restarts**, and one in-flight broker crash in **40.772 seconds**. It audited all
+restarts**, and one in-flight broker crash in **30.361 seconds**. It audited all
 251 tasks across pagination, reverified every completed trace after recovery,
 retained the original deadline and preserved uncertain delivery without replay.
 The [sanitized record](hardening-validation.json) includes the frozen test
@@ -75,3 +75,8 @@ missing isolation fails the job instead of skipping every sandbox check.
 Integration targets use uncached test execution and include the actual disk and
 destination-proxy checks. See the [trust model](security-model.md) for enforced
 properties, operator assumptions and remaining evidence work.
+
+The new hosted gate exposed Ubuntu 22.04's older Bubblewrap package lacking
+`--size`. CI now uses a checksum-pinned private build, and worker/doctor preflight
+checks an actual capped tmpfs before accepting work. This keeps unsupported
+tool versions visible without weakening host policy or removing disk limits.

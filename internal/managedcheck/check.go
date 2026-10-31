@@ -182,6 +182,16 @@ func (c *checker) finish() Report {
 }
 
 func (c *checker) agent(id string, agent managedconfig.Agent) {
+	if agent.Disk.Enabled() {
+		probeCtx, stop := context.WithTimeout(c.ctx, probeTimeout)
+		err := sandbox.ProbeCapsule(probeCtx)
+		stop()
+		if err != nil {
+			c.add(id, "sandbox.disk", StatusError, err.Error())
+		} else {
+			c.add(id, "sandbox.disk", StatusOK, "Bubblewrap --size created an actual kernel-capped tmpfs; no model request was made")
+		}
+	}
 	resources := sandbox.Limits{MemoryBytes: agent.Resources.MemoryBytes, CPUPercent: agent.Resources.CPUPercent, Processes: agent.Resources.Processes, OpenFiles: agent.Resources.OpenFiles, CPUSeconds: agent.Resources.CPUSeconds, AddressSpaceBytes: agent.Resources.AddressSpaceBytes}
 	if resources.Enabled() {
 		probeCtx, stop := context.WithTimeout(c.ctx, probeTimeout)

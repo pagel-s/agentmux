@@ -4,6 +4,15 @@ These controls are opt-in. They fail closed when the requested boundary cannot
 be established. `sandbox: local` remains a trusted host process; it cannot
 enforce the network or disk boundaries below.
 
+Disk caps require Bubblewrap with working `--size` support (introduced in
+[0.7.0](https://github.com/containers/bubblewrap/releases/tag/v0.7.0)), plus
+permitted user namespaces and tmpfs mounts. A namespace-only check is
+insufficient. Preflight verifies an actual capped filesystem before claiming
+work; an unsupported host must be upgraded instead of falling back to uncapped
+storage. CI builds the checksum-pinned official
+[0.13.1 release](https://github.com/containers/bubblewrap/releases/tag/v0.13.1)
+in a private prefix, retaining the runner's host security policy.
+
 ## Exact network destinations
 
 ```yaml

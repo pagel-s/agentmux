@@ -165,6 +165,11 @@ func RunWorker(ctx context.Context, opts WorkerOptions) error {
 			return err
 		}
 	}
+	if agent.Disk.Enabled() {
+		if err := sandbox.ProbeCapsule(ctx); err != nil {
+			return err
+		}
+	}
 	resourceLimits := sandbox.Limits{MemoryBytes: agent.Resources.MemoryBytes, CPUPercent: agent.Resources.CPUPercent, Processes: agent.Resources.Processes, OpenFiles: agent.Resources.OpenFiles, CPUSeconds: agent.Resources.CPUSeconds, AddressSpaceBytes: agent.Resources.AddressSpaceBytes}
 	if resourceLimits.Enabled() {
 		probeCtx, stop := context.WithTimeout(ctx, 5*time.Second)

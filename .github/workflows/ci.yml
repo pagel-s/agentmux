@@ -70,10 +70,27 @@ jobs:
       - name: Install model-free test dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y tmux bubblewrap python3
+          sudo apt-get install -y tmux python3 curl xz-utils build-essential meson ninja-build pkg-config libcap-dev libselinux1-dev
 
-      - name: Require working isolation
-        run: bwrap --unshare-all --die-with-parent --ro-bind /usr /usr --ro-bind /bin /bin --ro-bind /lib /lib --ro-bind /lib64 /lib64 --proc /proc --dev /dev -- /usr/bin/true
+      - name: Build supported Bubblewrap in a private prefix
+        # Jammy's 0.6.1 lacks --size. Verify the official source release and
+        # preserve host security policy; never downgrade disk enforcement.
+        env:
+          AGENTMUX_BWRAP_VERSION: '0.13.1'
+          AGENTMUX_BWRAP_SHA256: '0e85c8702248b8dd64144f594147553650cdd0e4c951690345faace79c217c4d'
+        run: |
+          curl --fail --location --output "$RUNNER_TEMP/agentmux-bwrap.tar.xz" "https://github.com/containers/bubblewrap/releases/download/v${AGENTMUX_BWRAP_VERSION}/bubblewrap-${AGENTMUX_BWRAP_VERSION}.tar.xz"
+          printf '%s  %s\n' "$AGENTMUX_BWRAP_SHA256" "$RUNNER_TEMP/agentmux-bwrap.tar.xz" | sha256sum --check --strict
+          tar -xf "$RUNNER_TEMP/agentmux-bwrap.tar.xz" -C "$RUNNER_TEMP"
+          meson setup "$RUNNER_TEMP/agentmux-bwrap-build" "$RUNNER_TEMP/bubblewrap-${AGENTMUX_BWRAP_VERSION}" --prefix "$RUNNER_TEMP/agentmux-bwrap" --wrap-mode=nodownload -Dman=disabled -Dtests=false -Dbash_completion=disabled -Dzsh_completion=disabled
+          meson compile -C "$RUNNER_TEMP/agentmux-bwrap-build"
+          meson install -C "$RUNNER_TEMP/agentmux-bwrap-build"
+          echo "$RUNNER_TEMP/agentmux-bwrap/bin" >> "$GITHUB_PATH"
+
+      - name: Require working isolation and capped tmpfs
+        run: |
+          bwrap --version
+          bwrap --unshare-all --die-with-parent --ro-bind /usr /usr --ro-bind /bin /bin --ro-bind /lib /lib --ro-bind /lib64 /lib64 --size 1048576 --tmpfs /tmp --proc /proc --dev /dev -- /usr/bin/true
 
       - name: Verify sandbox, network, disk and team boundaries
         run: make test-sandbox

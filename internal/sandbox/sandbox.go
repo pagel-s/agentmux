@@ -301,9 +301,7 @@ func Probe(ctx context.Context) error {
 	args := []string{"--die-with-parent", "--new-session", "--unshare-all", "--cap-drop", "ALL"}
 	args = append(args, runtimeMounts()...)
 	args = append(args, "--proc", "/proc", "--dev", "/dev", "--", truth)
-	cmd := exec.CommandContext(ctx, bwrap, args...)
-	cmd.Env = []string{"PATH=/usr/bin:/bin", "LANG=C"}
-	output, err := cmd.CombinedOutput()
+	output, err := runSandboxProbe(ctx, bwrap, args)
 	if err != nil {
 		return fmt.Errorf("bubblewrap namespace probe failed: %w: %s", err, strings.TrimSpace(string(output)))
 	}

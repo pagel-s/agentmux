@@ -194,15 +194,17 @@ printf SOAK_OK
                 "inflight_broker_crash": "uncertain, process stopped, no automatic replay, owner resolved fail",
                 "model_calls": 0, "coverage": "bounded soak only; no multi-day availability claim",
             }
-            if args.output:
-                descriptor = os.open(args.output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-                with os.fdopen(descriptor, "w") as output:
-                    json.dump(report, output, indent=2)
-                    output.write("\n")
-            print(json.dumps(report, indent=2))
         finally:
             stop(worker)
             stop(broker)
+
+    # Publish success only after process and private-state cleanup succeeds.
+    if args.output:
+        descriptor = os.open(args.output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(descriptor, "w") as output:
+            json.dump(report, output, indent=2)
+            output.write("\n")
+    print(json.dumps(report, indent=2))
 
 
 if __name__ == "__main__":

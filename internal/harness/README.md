@@ -128,7 +128,9 @@ Pi usage accumulation preserves missing/null counters as unknown rather than
 inventing zero values. Known numeric observations must be finite, nonnegative,
 and integer-valued for token counts; invalid/overflowing observations fail the
 turn without erasing earlier valid usage. Provider usage remains observational,
-not an independent billing ledger or a spending guarantee.
+not an independent billing ledger or a spending guarantee. The aggregate sums
+reported observations: earlier known counters remain when a later response
+omits them. It can therefore be a partial sum, not a known whole-turn total.
 
 `AGENTMUX_PI_LIVE=1 go test -v ./internal/harness -run
 TestPiCLIWithCompatibleEndpoint` checks a real installed Pi CLI against a local
