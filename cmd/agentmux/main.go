@@ -88,6 +88,8 @@ func run(args []string) int {
 		return runManaged(args[1:])
 	case "experiment":
 		return runExperiment(args[1:])
+	case "research":
+		return runResearch(args[1:])
 	case "validate":
 		return runValidate(args[1:])
 	case "render":
@@ -2089,6 +2091,7 @@ Usage:
   agentmux mcp-server
   agentmux managed <up|down|restart|doctor|status|activity|init|serve|call|worker|rotate> [options]
   agentmux experiment <plan|run> <manifest> [options]
+  agentmux research <plan|run|analyze> <manifest-or-output> [options]
   agentmux load <config> [--param key=value] [--attach|--no-attach] [--dry-run] [--replace] [--strict] [--verbose]
   agentmux reload <config> [--param key=value] [--attach|--no-attach] [--dry-run] [--strict] [--verbose]
   agentmux validate <config> [--param key=value] [--strict]

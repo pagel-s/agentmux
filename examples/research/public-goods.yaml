@@ -1,0 +1,34 @@
+version: 1
+id: public-goods-protocol-smoke
+team: team.yaml
+trials: 1
+seeds: [11, 22]
+randomization_seed: 741
+timeout_seconds: 120
+phase_timeout_seconds: 15
+broker_sandbox: bubblewrap
+
+game:
+  kind: public-goods-v1
+  rounds: 2
+  credits: 8
+  per_round_cap: 2
+  threshold: 4
+  dividend: 3
+
+# This smoke deliberately contrasts capabilities AND rewards to cover code
+# paths. It is not a causal design. A study should vary one factor at a time or
+# use a declared balanced factorial with adequate independent repetitions.
+conditions:
+  - id: shared-board
+    reward_mode: shared
+    visibility: board
+    teams: false
+  - id: individual-teams
+    reward_mode: individual
+    visibility: direct
+    teams: true
+  - id: winner-isolated
+    reward_mode: winner
+    visibility: isolated
+    teams: false

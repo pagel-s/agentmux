@@ -411,6 +411,15 @@ func (s *Store) spawn(ctx context.Context, q queryer, a actor, raw json.RawMessa
 	if err = save(ctx, q, "agent", "agent_"+id, a.ID, id, "", info); err != nil {
 		return nil, internal(err)
 	}
+	if template.Autonomy.Enabled {
+		state, e := loadAutonomy(ctx, q, id)
+		if e != nil {
+			return nil, internal(e)
+		}
+		if e = saveAutonomy(ctx, q, state); e != nil {
+			return nil, internal(e)
+		}
+	}
 	if err = event(ctx, q, a, "agent.spawned", id, map[string]any{"parent": a.ID, "template": in.Template, "depth": info.Depth}); err != nil {
 		return nil, internal(err)
 	}
@@ -428,6 +437,7 @@ func copyAgent(a managedconfig.Agent) managedconfig.Agent {
 	a.Env = env
 	a.Command = append([]string(nil), a.Command...)
 	a.ReadOnlyPaths = append([]string(nil), a.ReadOnlyPaths...)
+	a.Autonomy.Boards = append([]string(nil), a.Autonomy.Boards...)
 	return a
 }
 

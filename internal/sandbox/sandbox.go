@@ -50,7 +50,7 @@ func Wrap(spec harness.Spec, opts Options) (harness.Spec, error) {
 		}
 	}
 	if opts.Mode == "local" {
-		if opts.Limits.Enabled() || len(opts.HomeFiles) != 0 {
+		if opts.Limits.Enabled() || len(opts.HomeFiles) != 0 || len(spec.SessionDirs) != 0 {
 			return harness.Spec{}, fmt.Errorf("resource limits and isolated home files require bubblewrap mode")
 		}
 		if opts.Network != "host" {
@@ -158,6 +158,11 @@ func Wrap(spec harness.Spec, opts Options) (harness.Spec, error) {
 		return harness.Spec{}, err
 	}
 	args = append(args, homeArgs...)
+	sessionArgs, err := sessionMounts(spec.SessionDirs, workspace, state, credential, socket)
+	if err != nil {
+		return harness.Spec{}, err
+	}
+	args = append(args, sessionArgs...)
 
 	// Read-only dependencies retain their absolute paths, so runtime-generated
 	// Pi config and packages referenced by wrapper scripts remain addressable.

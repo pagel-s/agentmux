@@ -28,9 +28,14 @@ type Spec struct {
 	// mounts each file at its fixed private-home target, leaving its parent
 	// directory writable. Local execution keeps using its generated temp dir.
 	HomeFiles []HomeFile
+	// SessionDirs are explicit per-agent writable transcript stores. They never
+	// include authentication/config directories or another agent's history.
+	SessionDirs  []SessionDir
+	conversation *Conversation
 }
 
 type HomeFile struct{ Source, Target string }
+type SessionDir struct{ Source, Target string }
 
 // Request selects a harness and supplies a single fresh turn. Command is an
 // owner-controlled executable and prefix argv override, never model-authored
@@ -56,6 +61,7 @@ type Request struct {
 	// on the caller's outer isolation boundary. It requires Wrap and is never
 	// automatically selected after a native sandbox failure.
 	ExternalSandbox bool
+	Conversation    *Conversation
 }
 
 type Result struct {
@@ -179,6 +185,9 @@ func Build(req Request) (Spec, error) {
 		if req.Model != "" {
 			spec.Args = append(spec.Args, "--model", req.Model)
 		}
+		if err := configureConversation(req, &spec, overrides); err != nil {
+			return Spec{}, err
+		}
 		if name == "codex" {
 			spec.Args = append(spec.Args, "-")
 		}
@@ -188,6 +197,14 @@ func Build(req Request) (Spec, error) {
 			}
 			spec.Binary = req.Command[0]
 			spec.Args = append(append([]string(nil), req.Command[1:]...), spec.Args...)
+		}
+	}
+	if name == "command" && req.Conversation != nil {
+		if req.Conversation.Mode != "" && req.Conversation.Mode != "fresh" {
+			return Spec{}, ErrConversationUnsupported
+		}
+		if req.Conversation.ID != "" || req.Conversation.Dir != "" {
+			return Spec{}, errors.New("fresh conversation must not supply a native ID or directory")
 		}
 	}
 	spec.Env = mergeEnv(runtimeEnv(), overrides)
@@ -246,14 +263,24 @@ func runtimeEnv() []string {
 	return result
 }
 
-// Run executes exactly one fresh turn. It neither resumes sessions nor steers
-// an existing run. Callers serialize turns for each logical agent and supply a
+// Run executes exactly one turn, optionally resuming an explicitly identified
+// native conversation. It never steers an existing run. Callers serialize turns and supply a
 // deadline. Partial output and raw events are returned even when the run fails.
 func Run(ctx context.Context, req Request) (Result, error) {
+	if req.Conversation != nil && req.Conversation.Mode == "create" && req.Conversation.ID == "" && (req.Harness == "claude" || req.Harness == "claude-code" || req.Harness == "pi") {
+		conversation := *req.Conversation
+		var err error
+		conversation.ID, err = newConversationID()
+		if err != nil {
+			return Result{}, errors.New("could not generate a private conversation identity")
+		}
+		req.Conversation = &conversation
+	}
 	spec, err := Build(req)
 	if err != nil {
 		return Result{}, err
 	}
+	conversation := spec.conversation
 	cleanup, err := preparePiEndpoint(req, &spec)
 	if err != nil {
 		return Result{}, err
@@ -265,5 +292,9 @@ func Run(ctx context.Context, req Request) (Result, error) {
 			return Result{}, fmt.Errorf("wrap harness sandbox: %w", err)
 		}
 	}
-	return run(ctx, req, spec)
+	result, err := run(ctx, req, spec)
+	if err == nil && conversation != nil {
+		err = verifyConversation(spec.Name, conversation, result.SessionID)
+	}
+	return result, err
 }

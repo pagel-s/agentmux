@@ -44,6 +44,7 @@ jobs:
         run: |
           if command -v bwrap >/dev/null && bwrap --unshare-all --die-with-parent --ro-bind /usr /usr --ro-bind /bin /bin --ro-bind /lib /lib --ro-bind /lib64 /lib64 --proc /proc --dev /dev -- /usr/bin/true; then
             AGENTMUX_MANAGED_INTEGRATION=1 AGENTMUX_SANDBOX_INTEGRATION=1 go test -race ./internal/managed ./internal/managedlaunch
+            AGENTMUX_RESEARCH_INTEGRATION=1 AGENTMUX_TEST_BINARY="$PWD/bin/agentmux" go test -race ./internal/research
             python3 scripts/smoke-managed.py
             python3 scripts/smoke-managed-team.py
           else

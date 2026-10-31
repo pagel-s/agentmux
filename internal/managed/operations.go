@@ -36,7 +36,9 @@ func internal(err error) *Fault {
 
 func isWrite(op string) bool {
 	switch op {
-	case "board.post", "message.send", "ping.send", "instruct", "task.claim", "task.complete", "task.stopped", "task.cancel", "task.verify", "task.resolve", "memory.put", "agent.spawn", "agent.stop", "team.create", "team.invite", "team.join", "team.leave", "team.remove", "team.dissolve":
+	case "worker.next", "autonomy.control", "autonomy.ack":
+		return true
+	case "board.post", "message.send", "ping.send", "instruct", "task.claim", "task.complete", "task.stopped", "task.cancel", "task.verify", "task.resolve", "memory.put", "agent.spawn", "agent.stop", "team.create", "team.invite", "team.join", "team.leave", "team.remove", "team.dissolve", "conversation.begin", "conversation.reset":
 		return true
 	}
 	return false
@@ -110,7 +112,11 @@ func (s *Store) Call(ctx context.Context, token string, r Request) (json.RawMess
 			if priorDigest != digest {
 				return nil, fault("conflict", "request_id was already used for different arguments")
 			}
-			return json.RawMessage(prior), nil
+			replay, err := s.autonomyReplay(ctx, tx, a, r.Operation, json.RawMessage(prior))
+			if err != nil {
+				return nil, internal(err)
+			}
+			return replay, nil
 		}
 		if !errors.Is(err, sql.ErrNoRows) {
 			return nil, internal(err)
@@ -121,7 +127,16 @@ func (s *Store) Call(ctx context.Context, token string, r Request) (json.RawMess
 		}
 		if !deadline.IsZero() && time.Now().After(deadline) {
 			switch r.Operation {
-			case "task.complete", "task.stopped", "task.cancel", "task.verify", "agent.stop", "team.leave", "team.remove", "team.dissolve":
+			case "autonomy.ack":
+			case "autonomy.control":
+				var in struct {
+					Mode string `json:"mode"`
+				}
+				_ = json.Unmarshal(r.Args, &in)
+				if in.Mode != "paused" && in.Mode != "stopped" {
+					return nil, fault("limit", "session runtime budget exhausted")
+				}
+			case "task.complete", "task.stopped", "task.cancel", "task.verify", "agent.stop", "team.leave", "team.remove", "team.dissolve", "conversation.reset":
 			case "task.resolve":
 				var in struct {
 					Resolution string `json:"resolution"`
@@ -173,6 +188,22 @@ func (s *Store) Call(ctx context.Context, token string, r Request) (json.RawMess
 
 func (s *Store) dispatch(ctx context.Context, q queryer, a actor, r Request) (any, *Fault) {
 	switch r.Operation {
+	case "worker.next", "autonomy.status", "autonomy.control", "autonomy.ack", "wake.read":
+		return s.autonomy(ctx, q, a, r)
+	case "message.get":
+		var in struct {
+			ID string `json:"id"`
+		}
+		if err := strictJSON(r.Args, &in); err != nil {
+			return nil, invalid(err)
+		}
+		var m Message
+		if err := get(ctx, q, "message", in.ID, &m); err != nil || !s.canSeeMessage(ctx, q, a, m) {
+			return nil, fault("not_found", "visible message not found")
+		}
+		return map[string]any{"message": m}, nil
+	case "conversation.status", "conversation.begin", "conversation.reset":
+		return s.conversation(ctx, q, a, r)
 	case "identity":
 		var in struct{}
 		if err := strictJSON(r.Args, &in); err != nil {
@@ -408,7 +439,14 @@ func (s *Store) send(ctx context.Context, q queryer, a actor, r Request) (any, *
 		return nil, fault("limit", "stored message limit reached")
 	}
 	var t *Task
+	m.Provenance, err = s.messageProvenance(ctx, q, a, m.ID)
+	if err != nil {
+		return nil, internal(err)
+	}
 	if m.TaskID != "" {
+		if target, e := s.agent(ctx, q, m.To[0]); e == nil && target.Config.Autonomy.Enabled && m.Provenance.Hop > target.Config.Autonomy.MaxHops {
+			return nil, fault("limit", "causal hop budget exhausted")
+		}
 		n, err = count(ctx, q, "task")
 		if err != nil {
 			return nil, internal(err)
@@ -417,12 +455,16 @@ func (s *Store) send(ctx context.Context, q queryer, a actor, r Request) (any, *
 			return nil, fault("limit", "stored task limit reached")
 		}
 		record := taskRecord{Task: Task{ID: m.TaskID, MessageID: m.ID, From: a.ID, To: m.To[0], Text: m.Text, State: "proposed", Delivery: "pending", Version: 1, CreatedAt: m.CreatedAt, UpdatedAt: m.CreatedAt}}
+		record.Origin = &TaskOrigin{Kind: "instruction", Provenance: *m.Provenance}
 		if err = saveTask(ctx, q, record); err != nil {
 			return nil, internal(err)
 		}
 		t = &record.Task
 	}
 	if err = save(ctx, q, "message", m.ID, m.From, "", m.Board, m); err != nil {
+		return nil, internal(err)
+	}
+	if err = s.enqueueWakes(ctx, q, m); err != nil {
 		return nil, internal(err)
 	}
 	if err = event(ctx, q, a, r.Operation, m.ID, map[string]any{"task_id": m.TaskID, "board": m.Board, "recipients": m.To}); err != nil {
@@ -555,6 +597,22 @@ func (s *Store) tasks(ctx context.Context, q queryer, a actor, r Request) (any, 
 		if a.owner() {
 			return nil, forbidden()
 		}
+		if problem := s.autonomyBeforeClaim(ctx, q, a); problem != nil {
+			return nil, problem
+		}
+		info, e := s.agent(ctx, q, a.ID)
+		if e != nil {
+			return nil, internal(e)
+		}
+		if info.Config.Conversation == "persistent" {
+			conversation, err := loadConversation(ctx, q, a.ID)
+			if err != nil {
+				return nil, internal(err)
+			}
+			if conversation.State != "ready" {
+				return nil, fault("conflict", "conversation requires explicit owner reset before claiming another turn")
+			}
+		}
 		var in struct{}
 		if err := strictJSON(r.Args, &in); err != nil {
 			return nil, invalid(err)
@@ -598,6 +656,9 @@ func (s *Store) tasks(ctx context.Context, q queryer, a actor, r Request) (any, 
 		if err = saveTask(ctx, q, t); err != nil {
 			return nil, internal(err)
 		}
+		if err = s.autonomyClaimed(ctx, q, t); err != nil {
+			return nil, internal(err)
+		}
 		if err = event(ctx, q, a, "task.claimed", t.ID, nil); err != nil {
 			return nil, internal(err)
 		}
@@ -611,6 +672,8 @@ func (s *Store) tasks(ctx context.Context, q queryer, a actor, r Request) (any, 
 		Usage      json.RawMessage `json:"usage"`
 		Status     string          `json:"status"`
 		Resolution string          `json:"resolution"`
+		SessionID  string          `json:"session_id"`
+		Skipped    bool            `json:"skipped"`
 	}
 	if err := strictJSON(r.Args, &in); err != nil {
 		return nil, invalid(err)
@@ -656,6 +719,20 @@ func (s *Store) tasks(ctx context.Context, q queryer, a actor, r Request) (any, 
 		if t.State == "failed" {
 			t.Delivery = "failed"
 		}
+		if in.Skipped {
+			if t.Origin == nil || t.Origin.Kind != "observation" || in.Status != "submitted" || in.SessionID != "" {
+				return nil, fault("invalid", "only an unexecuted observation turn may be skipped")
+			}
+			c, err := loadConversation(ctx, q, a.ID)
+			if err != nil {
+				return nil, internal(err)
+			}
+			if c.State != "ready" {
+				return nil, fault("conflict", "begun native turns cannot be skipped")
+			}
+		} else if problem := s.finishConversation(ctx, q, a, t, in.SessionID); problem != nil {
+			return nil, problem
+		}
 	case "task.cancel":
 		if !a.owner() && a.ID != t.From {
 			return nil, forbidden()
@@ -677,6 +754,9 @@ func (s *Store) tasks(ctx context.Context, q queryer, a actor, r Request) (any, 
 			return nil, fault("conflict", "no matching cancellation to acknowledge")
 		}
 		t.Delivery = "stopped"
+		if problem := s.blockConversation(ctx, q, a, t.ID); problem != nil {
+			return nil, problem
+		}
 	case "task.verify":
 		if !a.owner() {
 			return nil, forbidden()
@@ -724,6 +804,9 @@ func (s *Store) tasks(ctx context.Context, q queryer, a actor, r Request) (any, 
 	t.Version++
 	t.UpdatedAt = now()
 	if err = saveTask(ctx, q, t); err != nil {
+		return nil, internal(err)
+	}
+	if err = s.autonomyCompleted(ctx, q, t); err != nil {
 		return nil, internal(err)
 	}
 	if err = event(ctx, q, a, r.Operation, t.ID, map[string]any{"state": t.State, "delivery": t.Delivery, "version": t.Version}); err != nil {

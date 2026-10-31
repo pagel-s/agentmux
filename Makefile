@@ -8,7 +8,7 @@ DATE ?= $(shell date -u +%Y-%m-%d)
 BINARY := bin/agentmux
 UNIT_PACKAGES := $(shell GOCACHE=$(GOCACHE) $(GO) list ./... | grep -v '^agentmux/internal/tmux$$')
 
-.PHONY: build test test-unit test-integration test-managed test-sandbox test-resources fmt check clean
+.PHONY: build test test-unit test-integration test-managed test-sandbox test-resources test-research fmt check clean
 
 build:
 	mkdir -p bin
@@ -36,6 +36,10 @@ test-sandbox: build
 # Verifies actual controls, aggregate OOM, and escaped-descendant cleanup.
 test-resources:
 	GOCACHE=$(GOCACHE) AGENTMUX_SANDBOX_INTEGRATION=1 AGENTMUX_RESOURCE_INTEGRATION=1 $(GO) test -race ./internal/sandbox
+
+# Repeated rounds, scarce credits and real consented teams; no model calls.
+test-research: build
+	GOCACHE=$(GOCACHE) AGENTMUX_RESEARCH_INTEGRATION=1 AGENTMUX_TEST_BINARY="$(CURDIR)/$(BINARY)" $(GO) test -race ./internal/research
 
 fmt:
 	gofmt -w cmd internal

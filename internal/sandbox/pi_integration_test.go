@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -24,6 +25,15 @@ import (
 // or help-only check misses an auth.json write when a prompt starts. The model
 // endpoint here is a local fake SSE server; no provider account is contacted.
 func TestPiSandboxRPCPromptUsesWritablePrivateAgentDirectory(t *testing.T) {
+	runPiSandboxRPC(t, false)
+}
+
+func TestPiSandboxPersistentConversationRetainsTwoTurnContext(t *testing.T) {
+	runPiSandboxRPC(t, true)
+}
+
+func runPiSandboxRPC(t *testing.T, persistent bool) {
+	t.Helper()
 	if os.Getenv("AGENTMUX_PI_SANDBOX_LIVE") != "1" {
 		t.Skip("set AGENTMUX_PI_SANDBOX_LIVE=1 for installed Pi + real bubblewrap + local fake SSE")
 	}
@@ -76,19 +86,29 @@ func TestPiSandboxRPCPromptUsesWritablePrivateAgentDirectory(t *testing.T) {
 	}
 	defer listener.Close()
 	var requests atomic.Int32
+	var priorContextSeen atomic.Bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requests.Add(1)
+		sequence := requests.Add(1)
 		if r.Method != http.MethodPost || r.URL.Path != "/v1/chat/completions" {
 			http.Error(w, "unexpected API route", http.StatusNotFound)
 			return
 		}
 		var request struct {
-			Model  string `json:"model"`
-			Stream bool   `json:"stream"`
+			Model    string            `json:"model"`
+			Stream   bool              `json:"stream"`
+			Messages []json.RawMessage `json:"messages"`
 		}
 		if json.NewDecoder(r.Body).Decode(&request) != nil || request.Model != "agentmux-sandbox-test" || !request.Stream {
 			http.Error(w, "unexpected model request", http.StatusBadRequest)
 			return
+		}
+		if persistent && sequence == 2 {
+			messages, _ := json.Marshal(request.Messages)
+			if !strings.Contains(string(messages), "FIRST_TURN_MARKER_29a1") || !strings.Contains(string(messages), "PI_SANDBOX_RPC_OK") {
+				http.Error(w, "previous native context is absent", http.StatusBadRequest)
+				return
+			}
+			priorContextSeen.Store(true)
 		}
 		w.Header().Set("Content-Type", "text/event-stream")
 		fmt.Fprintln(w, `data: {"id":"chatcmpl-agentmux","object":"chat.completion.chunk","created":1,"model":"agentmux-sandbox-test","choices":[{"index":0,"delta":{"role":"assistant","content":"PI_SANDBOX_RPC_OK"},"finish_reason":null}]}`)
@@ -105,7 +125,7 @@ func TestPiSandboxRPCPromptUsesWritablePrivateAgentDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 	configSource := ""
-	result, err := harness.Run(ctx, harness.Request{
+	req := harness.Request{
 		Harness: "pi", Model: "agentmux-sandbox-test", Prompt: "Reply with PI_SANDBOX_RPC_OK.",
 		BaseURL: server.URL + "/v1", Workdir: workspace,
 		Command: []string{node, cli, "--no-tools", "--no-extensions", "--no-context-files", "--no-skills", "--no-prompt-templates", "--no-approve", "--offline"},
@@ -118,7 +138,16 @@ func TestPiSandboxRPCPromptUsesWritablePrivateAgentDirectory(t *testing.T) {
 			}
 			return sandbox.Wrap(spec, sandbox.Options{Mode: "bubblewrap", Network: "host", Workspace: workspace, StateDir: state, CredentialFile: credential, SocketPath: socket, ReadOnlyPaths: []string{node, packageRoot}})
 		},
-	})
+	}
+	if persistent {
+		dir := filepath.Join(state, "sessions", "worker", "g-1")
+		if err := os.MkdirAll(dir, 0700); err != nil {
+			t.Fatal(err)
+		}
+		req.Conversation = &harness.Conversation{Mode: "create", Dir: dir}
+		req.Prompt = "Remember the private conversation marker FIRST_TURN_MARKER_29a1. Reply with PI_SANDBOX_RPC_OK."
+	}
+	result, err := harness.Run(ctx, req)
 	if configSource == "" {
 		t.Fatal("endpoint models.json was not passed as a file-only private-home resource")
 	}
@@ -147,5 +176,16 @@ func TestPiSandboxRPCPromptUsesWritablePrivateAgentDirectory(t *testing.T) {
 	}
 	if !stateSeen || !promptAccepted || !settled {
 		t.Fatalf("incomplete real Pi RPC lifecycle: state=%t prompt=%t settled=%t", stateSeen, promptAccepted, settled)
+	}
+	if persistent {
+		req.Conversation = &harness.Conversation{Mode: "resume", ID: result.SessionID, Dir: req.Conversation.Dir}
+		req.Prompt = "Use the earlier conversation context for this follow-up."
+		second, err := harness.Run(ctx, req)
+		if err != nil || second.SessionID != result.SessionID || second.Text != "PI_SANDBOX_RPC_OK" || requests.Load() != 2 || !priorContextSeen.Load() {
+			t.Fatalf("persistent native Pi conversation was not preserved: error=%v sameID=%t requests=%d context=%t", err, second.SessionID == result.SessionID, requests.Load(), priorContextSeen.Load())
+		}
+		if _, err := os.Stat(configSource); !os.IsNotExist(err) {
+			t.Fatal("second-turn endpoint config survived cleanup")
+		}
 	}
 }

@@ -31,13 +31,15 @@ Technical reference, tutorials, and architectural deep-dives are available on ou
 *   **[Managed Runtime](docs/managed-runtime.md)**: Opt-in v2 foundation with authenticated boards, scoped messages, durable tasks, private/shared memory, mixed harnesses, and optional bubblewrap isolation. Start with the no-model `/bin/cat` demo; the existing tmux workflow remains available.
 *   **[Dynamic Teams](docs/dynamic-teams.md)**: Bounded sandbox spawning, delegated permissions, invitation-based membership, and team history controls.
 *   **[Research Pilots](docs/experiments.md)**: Seeded trial plans, fresh state, independent scoring, and cooperation/competition payoff comparisons.
+*   **[Autonomous Workflows](docs/autonomous-workflows.md)**: Private native conversations, durable subscriptions, observation wakeups and bounded execution from one goal.
+*   **[Repeated-Round Research](docs/research.md)**: Scarce resources, private information, declared incentives, objective feedback and optional consented teams.
 *   **[Mixed-Harness Sandbox Acceptance](docs/mixed-harness-acceptance.md)**: Reproduce the real Claude/Codex/local-Pi handoff with selected native login files, enforced worker resources, scoped artifacts, and independent verification.
 
 ---
 
 ## 🛠 Status
 
-Agentmux is production-ready and currently ships with:
+The established tmux workflow ships with:
 - **Agentic Orchestration:** `wait`, `kv-set`, and `scale`.
 - **Remote Loading:** Fetch and launch configurations directly from URLs.
 - **Declarative Workspaces:** YAML configs with `include` for modular reuse.
@@ -69,7 +71,7 @@ Start a managed team, inspect its published activity, and stop it:
 ./bin/agentmux managed down --state .agentmux-state/command-demo
 ```
 
-This demo uses command processes and makes no model calls. Configure Claude Code, Codex, Antigravity, or Pi in [managed team YAML](docs/managed-runtime.md) for model-backed workers. Managed mode and the research runner are opt-in; native conversation resume and live steering are not implemented.
+This demo uses command processes and makes no model calls. Configure Claude Code, Codex, Antigravity, or Pi in [managed team YAML](docs/managed-runtime.md) for model-backed workers. Managed mode and the research runners are opt-in experimental features. Claude, Codex and Pi support private persistent conversations in Bubblewrap; Antigravity uses fresh turns. Message wakeups require explicit autonomy configuration. Interactive terminal steering remains separate from managed task delivery.
 
 ---
 

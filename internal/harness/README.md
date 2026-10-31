@@ -1,9 +1,28 @@
 # Managed harness adapters
 
-`Run` starts one fresh, serialized headless turn. It never sends keys to tmux,
-resumes a prior session, or claims live steering support. The caller serializes
+`Run` starts one serialized headless turn. It never sends keys to tmux or
+claims live steering support. By default each turn starts fresh; an explicit
+`Conversation` selects native creation/resume for a supported adapter. The caller serializes
 requests per agent and provides a deadline; a ten-minute fallback applies if a
 longer or absent deadline would otherwise leave a process unattended.
+
+`Conversation{Mode: "create"|"resume", ID, Dir}` supports Claude Code, Codex,
+and Pi. `Capabilities(name)` reports this explicitly; Antigravity and command
+harnesses reject persistence instead of pretending they resumed. Claude/Pi
+creation can omit ID: `Run` generates one without changing the caller's request;
+Codex creation learns its ID from its event stream. `Build` performs no session
+creation. A resumed turn requires an exact existing transcript and matching
+native ID. The adapter never chooses a most-recent session. Interrupted or
+uncertain turns require controller resolution; the adapter does not retry them.
+
+Private `Dir` requires `Wrap` and exposes one `Spec.SessionDirs` mount: Claude's
+projects, Codex's sessions, or Pi's sessions directory in an otherwise fresh
+private home. Authentication remains in separately selected read-only files.
+Managed workers bind this to one agent and generation under the private state.
+An empty `Dir` is standalone trusted-local compatibility using native host
+session storage/authentication, without an isolation claim. Transcripts may
+contain prompts, files and tool output; they are sensitive data. New role and
+instruction provenance still arrive as a new input on every turn.
 
 `Request.Command` is owner-controlled argv. For native adapters it overrides the
 executable and an optional argv prefix (for example, a Node interpreter and Pi

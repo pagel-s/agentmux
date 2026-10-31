@@ -10,12 +10,12 @@ The existing `load`, `render`, pane launchers, and v1 workspace YAML remain avai
 - Shared boards with exact read/write ACLs, direct messages, stored pings, and separately authorized instructions.
 - Durable instruction tasks, versioned state changes, instance-bound leases, uncertain-delivery recovery, and explicit owner verification.
 - Private per-agent memory and named shared memory, with version checks on updates.
-- One fresh, serialized headless turn per claimed task through Claude Code, Codex, Antigravity, Pi, or an owner-configured command.
+- Serialized headless turns through Claude Code, Codex, Antigravity, Pi, or an owner-configured command; optional private persistent conversations for Claude, Codex and Pi in Bubblewrap.
 - Optional bubblewrap worker and broker isolation that fails closed when unavailable, plus explicitly trusted local execution.
 - One-command tmux startup, preflight diagnostics, a metadata dashboard, ordered shutdown, and explicit restart.
 - Bounded spawning from owner-approved sandbox templates and consent-based dynamic teams with private team boards/memory.
 
-Native conversation resume and live steering remain future adapter work. A finite [research pilot runner](experiments.md) supports fresh-state comparisons; it is separate from managed tmux supervision. A ping is a stored notification; it does not inject a user message into an existing interactive terminal. The current event history records coordination operations, not a complete reconstruction of every model-visible input.
+[Persistent conversations and bounded wakeups](autonomous-workflows.md) support multi-turn workflows from one goal. Notes and pings are observations unless an explicitly authorized `instruct` creates a command task. Configured subscriptions can wake workers without injecting text into an interactive terminal. The finite [pilot runner](experiments.md) and [repeated-round research environment](research.md) support controlled comparisons separately from tmux supervision. Coordination history and native transcripts are useful evidence, but do not constitute a complete immutable trace of every model-visible input and tool execution.
 
 ## Try it without a model
 
@@ -52,7 +52,7 @@ The command harness receives the worker's prepared input on stdin, and `/bin/cat
 ./bin/agentmux managed status --state .agentmux-state/demo
 ```
 
-Replace `TASK_ID` and `CURRENT_VERSION` with the returned values before running verification. Workers started by `up` consume queued tasks automatically. Their windows show managed worker processes; these are fresh headless turns, not native interactive harness conversations. Inspect published results through the broker API.
+Replace `TASK_ID` and `CURRENT_VERSION` with the returned values before running verification. Workers started by `up` consume queued tasks automatically. Their windows show managed worker processes executing headless turns; persistent mode resumes an explicit native conversation between tasks. Inspect published results through the broker API.
 
 Stop the run without deleting its tasks or memory:
 
@@ -256,7 +256,7 @@ In this mode the adapter passes Codex `--sandbox danger-full-access`: the access
 
 ## Recovery, cancellation, and bounds
 
-Task acceptance, dispatch, process completion, and verification are separate facts. Workers serialize fresh turns per logical agent. Completion requires a valid instance-bound lease and the expected task version; credential rotation fences old instances. Rotate an agent credential with its ID, or quote the reserved owner identity:
+Task acceptance, dispatch, process completion, and verification are separate facts. Workers serialize turns per logical agent. Completion requires a valid instance-bound lease and the expected task version; credential rotation fences old instances. Rotate an agent credential with its ID, or quote the reserved owner identity:
 
 ```bash
 ./bin/agentmux managed rotate --state .agentmux-state/demo --agent worker

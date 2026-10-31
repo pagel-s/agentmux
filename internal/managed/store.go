@@ -158,6 +158,15 @@ func Init(dir string, cfg managedconfig.Config) (*Store, error) {
 		if _, err = s.rotate(id); err != nil {
 			return nil, err
 		}
+		if id != ownerID && cfg.Agents[id].Autonomy.Enabled {
+			state, e := loadAutonomy(context.Background(), s.db, id)
+			if e != nil {
+				return nil, e
+			}
+			if e = saveAutonomy(context.Background(), s.db, state); e != nil {
+				return nil, e
+			}
+		}
 	}
 	failed = false
 	return s, nil
@@ -388,17 +397,36 @@ func lifecycleReserve(ctx context.Context, q queryer) (int, error) {
  WHEN json_extract(data,'$.state')='running' THEN 2
  WHEN json_extract(data,'$.state')='submitted' THEN 1
  WHEN json_extract(data,'$.state')='cancelled' AND json_extract(data,'$.delivery') IN ('cancel_requested','cancel_uncertain') THEN 1
+ ELSE 0 END + CASE WHEN (
+ EXISTS (SELECT 1 FROM metadata WHERE key='config' AND json_extract(value,'$.agents.'||json_quote(records.target)||'.conversation')='persistent')
+ OR EXISTS (SELECT 1 FROM records agent WHERE agent.kind='agent' AND agent.target=records.target AND json_extract(agent.data,'$.config.conversation')='persistent')
+ ) AND NOT EXISTS (SELECT 1 FROM records c WHERE c.kind='conversation' AND json_extract(c.data,'$.task_id')=records.id)
+ THEN CASE json_extract(data,'$.state') WHEN 'proposed' THEN 3 WHEN 'running' THEN 3 ELSE 0 END
  ELSE 0 END),0) FROM records WHERE kind='task'`).Scan(&n)
 	if err != nil {
 		return n, err
 	}
 	var extra int
+	// An interrupted native turn retains one owner reset event/receipt slot.
+	// Reset releases this reservation; it never renews general storage budgets.
+	err = q.QueryRowContext(ctx, "SELECT count(*) FROM records WHERE kind='conversation' AND json_extract(data,'$.state') IN ('busy','blocked')").Scan(&extra)
+	if err != nil {
+		return 0, err
+	}
+	n += extra
 	err = q.QueryRowContext(ctx, `SELECT COALESCE(SUM(CASE WHEN EXISTS(SELECT 1 FROM records WHERE kind='agent' AND target=credentials.actor) THEN 1 ELSE 2 END),0) FROM credentials WHERE actor<>'$owner'`).Scan(&extra)
 	if err != nil {
 		return 0, err
 	}
 	n += extra
 	err = q.QueryRowContext(ctx, `SELECT COALESCE(SUM(1+json_array_length(data,'$.members')+json_array_length(data,'$.invited')),0) FROM records WHERE kind='team' AND json_extract(data,'$.state')='active'`).Scan(&extra)
+	if err != nil {
+		return 0, err
+	}
+	n += extra
+	// Dispatch controls retain capacity for pause and stop even after ordinary
+	// work fills storage. Resume is a fresh allocation, never a safety fallback.
+	err = q.QueryRowContext(ctx, `SELECT COALESCE(SUM(CASE json_extract(data,'$.mode') WHEN 'running' THEN 2 WHEN 'paused' THEN 1 ELSE 0 END),0) FROM records WHERE kind='autonomy'`).Scan(&extra)
 	return n + extra, err
 }
 
@@ -417,14 +445,15 @@ func event(ctx context.Context, q queryer, a actor, kind, id string, details map
 }
 
 type Message struct {
-	ID        string   `json:"id"`
-	Kind      string   `json:"kind"`
-	From      string   `json:"from"`
-	To        []string `json:"to,omitempty"`
-	Board     string   `json:"board,omitempty"`
-	Text      string   `json:"text"`
-	CreatedAt string   `json:"created_at"`
-	TaskID    string   `json:"task_id,omitempty"`
+	ID         string      `json:"id"`
+	Kind       string      `json:"kind"`
+	From       string      `json:"from"`
+	To         []string    `json:"to,omitempty"`
+	Board      string      `json:"board,omitempty"`
+	Text       string      `json:"text"`
+	CreatedAt  string      `json:"created_at"`
+	TaskID     string      `json:"task_id,omitempty"`
+	Provenance *Provenance `json:"provenance,omitempty"`
 }
 type Task struct {
 	ID        string          `json:"id"`
@@ -439,6 +468,7 @@ type Task struct {
 	Usage     json.RawMessage `json:"usage,omitempty"`
 	CreatedAt string          `json:"created_at"`
 	UpdatedAt string          `json:"updated_at"`
+	Origin    *TaskOrigin     `json:"origin,omitempty"`
 }
 
 // Persist lease fields separately from public task JSON. They are never part

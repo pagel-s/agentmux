@@ -49,6 +49,8 @@ type Agent struct {
 	Auth          NativeAuth        `yaml:"auth" json:"auth,omitempty"`
 	Resources     Resources         `yaml:"resources" json:"resources,omitempty"`
 	CodexSandbox  string            `yaml:"codex_sandbox" json:"codex_sandbox,omitempty"`
+	Autonomy      Autonomy          `yaml:"autonomy" json:"autonomy"`
+	Conversation  string            `yaml:"conversation" json:"conversation,omitempty"`
 }
 
 // NativeAuth selects one owner-provided credential file, never a home or a
@@ -131,6 +133,7 @@ func (c Config) Normalized() Config {
 			agent.Command = append([]string(nil), agent.Command...)
 			agent.Env = cloneMap(agent.Env)
 			agent.ReadOnlyPaths = append([]string(nil), agent.ReadOnlyPaths...)
+			agent.Autonomy = agent.Autonomy.normalized()
 			if agent.Sandbox == "" {
 				agent.Sandbox = "local"
 			}
@@ -150,6 +153,7 @@ func (c Config) Normalized() Config {
 		a.Command = append([]string(nil), a.Command...)
 		a.Env = cloneMap(a.Env)
 		a.ReadOnlyPaths = append([]string(nil), a.ReadOnlyPaths...)
+		a.Autonomy = a.Autonomy.normalized()
 		templates[id] = a
 	}
 	c.Spawn.Templates = templates
@@ -309,6 +313,12 @@ func (c Config) Validate() error {
 			return invalidID("agent", id)
 		}
 		agent := c.Agents[id]
+		if agent.Conversation != "" && agent.Conversation != "fresh" && agent.Conversation != "persistent" {
+			return fmt.Errorf("agent %q: conversation must be fresh or persistent", id)
+		}
+		if agent.Conversation == "persistent" && (agent.Sandbox != "bubblewrap" || (agent.Harness != "claude" && agent.Harness != "codex" && agent.Harness != "pi")) {
+			return fmt.Errorf("agent %q: persistent conversations require a supported Claude, Codex or Pi Bubblewrap worker", id)
+		}
 		encoded, _ := json.Marshal(agent)
 		if len(encoded) > 512*1024 {
 			return fmt.Errorf("agent %q: process definition exceeds 512 KiB", id)

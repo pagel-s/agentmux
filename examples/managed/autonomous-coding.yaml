@@ -1,0 +1,47 @@
+# Schematic: replace /opt/... and /home/you/... with exact installed code and
+# private native credential files. See sandboxed-coding.yaml for dependency
+# preparation, init, Git workspace setup and nongenerative doctor checks.
+# For an executable bounded acceptance using installed local CLIs:
+# python3 scripts/smoke-managed-autonomy.py --binary bin/agentmux --allow-models
+version: 2
+mode: managed
+session: autonomous-coding
+agents:
+  lead:
+    role: Coordinate the owner's goal. Delegate bounded changes to the coder. On artifact-ready pings review scoped handoff memory, request revisions with instruct when needed, and report evidence and remaining uncertainty. When done report completion and wait.
+    harness: claude
+    command: [/opt/agentmux-harnesses/claude/bin/claude, --allowedTools, 'Read,Write,Edit,Bash']
+    auth: {file: /home/you/.claude/.credentials.json}
+    sandbox: bubblewrap
+    network: host
+    conversation: persistent
+    read_only_paths: [/opt/agentmux-harnesses/claude]
+    autonomy: {enabled: true, pings: true, max_turns: 12, cooldown_seconds: 2, max_backlog: 20, batch_size: 5, max_hops: 12}
+    resources: {memory_bytes: 2147483648, cpu_percent: 100, processes: 256, open_files: 1024, cpu_seconds: 120}
+  coder:
+    role: Implement the assigned bounded change, run tests and publish a hashed source artifact with test evidence in handoff memory. Ping the lead with its reference and wait for review. Distinguish observed tests from unsupported claims.
+    harness: codex
+    command: [/opt/agentmux-harnesses/codex/bin/codex]
+    codex_sandbox: external
+    auth: {file: /home/you/.codex/auth.json}
+    sandbox: bubblewrap
+    network: host
+    conversation: persistent
+    read_only_paths: [/opt/agentmux-harnesses/codex]
+    autonomy: {enabled: true, max_turns: 8, cooldown_seconds: 2, max_backlog: 20, batch_size: 5, max_hops: 12}
+    resources: {memory_bytes: 2147483648, cpu_percent: 100, processes: 256, open_files: 1024, cpu_seconds: 120}
+boards:
+  work: {readers: [lead, coder], writers: [lead, coder]}
+memory:
+  handoff: {readers: [lead, coder], writers: [coder]}
+  project: {readers: [lead, coder], writers: [lead]}
+policy:
+  default: deny
+  grants:
+    - {from: [lead], to: [coder], actions: [message.send, ping.send, instruct]}
+    - {from: [coder], to: [lead], actions: [message.send, ping.send]}
+limits:
+  max_tasks: 24
+  max_messages: 200
+  max_runtime_seconds: 900
+  max_concurrent_tasks: 2

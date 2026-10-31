@@ -29,6 +29,30 @@ func TestHarnessProcess(t *testing.T) {
 	scenario := os.Getenv("AGENTMUX_HARNESS_SCENARIO")
 	write := func(line string) { fmt.Fprintln(os.Stdout, line) }
 	switch scenario {
+	case "conversation-claude", "conversation-codex":
+		_, _ = io.ReadAll(os.Stdin)
+		id := conversationTestID
+		if scenario == "conversation-claude" {
+			for i, arg := range os.Args {
+				if (arg == "--session-id" || arg == "--resume") && i+1 < len(os.Args) {
+					id = os.Args[i+1]
+				}
+			}
+		}
+		file := id + ".jsonl"
+		if scenario == "conversation-codex" {
+			file = "rollout-test-" + id + ".jsonl"
+		}
+		if err := os.WriteFile(filepath.Join(os.Getenv("AGENTMUX_TEST_CONVERSATION_DIR"), file), []byte("{}\n"), 0600); err != nil {
+			os.Exit(7)
+		}
+		if scenario == "conversation-claude" {
+			_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"type": "result", "subtype": "success", "session_id": id, "is_error": false, "result": "persistent-answer"})
+		} else {
+			_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"type": "thread.started", "thread_id": id})
+			write(`{"type":"item.completed","item":{"type":"agent_message","text":"persistent-answer"}}`)
+			write(`{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}`)
+		}
 	case "echo":
 		data, _ := io.ReadAll(os.Stdin)
 		_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"stdin": string(data), "argv": os.Args[3:]})

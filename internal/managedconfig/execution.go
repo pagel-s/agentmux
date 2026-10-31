@@ -6,6 +6,9 @@ import (
 )
 
 func validateExecution(id string, a Agent, connection Connection) error {
+	if err := a.Autonomy.validate(id); err != nil {
+		return err
+	}
 	switch a.CodexSandbox {
 	case "", "native":
 	case "external":
