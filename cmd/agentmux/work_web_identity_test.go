@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,50 @@ import (
 
 	"agentmux/internal/managed"
 )
+
+func TestWebRepliesRequireReviewedRecipientAndReportActualDeliveryKind(t *testing.T) {
+	state, client, observed := inventoryBroker(t)
+	if _, _, err := connectObservedSessionWithID(context.Background(), state, observed.ID, "native", "Native session"); err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct{ recipient, other, kind string }{
+		{"native", "peer", "Message"},
+		{"peer", "native", "Instruction"},
+	} {
+		t.Run(test.kind, func(t *testing.T) {
+			id, _, err := workSend(context.Background(), client, state, test.recipient, "Original conversation")
+			if err != nil {
+				t.Fatal(err)
+			}
+			activity := func() managedActivitySnapshot {
+				t.Helper()
+				raw, err := workCall(context.Background(), client, "activity", map[string]any{"limit": 100})
+				if err != nil {
+					t.Fatal(err)
+				}
+				var snapshot managedActivitySnapshot
+				if err = json.Unmarshal(raw, &snapshot); err != nil {
+					t.Fatal(err)
+				}
+				return snapshot
+			}
+			before := activity()
+			result := ownerWebRequest(t, state, client, "/api/send", map[string]any{"target": test.other, "reply_to": id, "text": "Must not silently redirect"})
+			if result.Code != http.StatusBadRequest || !strings.Contains(result.Body.String(), "conflict") {
+				t.Fatalf("unreviewed reply target accepted: %d %s", result.Code, result.Body.String())
+			}
+			after := activity()
+			if len(after.Tasks) != len(before.Tasks) || len(after.Messages) != len(before.Messages) {
+				t.Fatal("rejected recipient mismatch still created a message or instruction")
+			}
+			result = ownerWebRequest(t, state, client, "/api/send", map[string]any{"target": test.recipient, "reply_to": id, "text": "Reviewed follow-up"})
+			var reply struct{ Target, Kind string }
+			if err = json.Unmarshal(result.Body.Bytes(), &reply); err != nil || result.Code != http.StatusOK || reply.Target != test.recipient || reply.Kind != test.kind {
+				t.Fatalf("incorrect reply target/kind: %d %s %v", result.Code, result.Body.String(), err)
+			}
+		})
+	}
+}
 
 func ownerWebRequest(t *testing.T, state string, client *managed.Client, path string, body any) *httptest.ResponseRecorder {
 	t.Helper()

@@ -13,6 +13,7 @@ remote deployments were isolated from everyday user workspaces.
 | Sessions launched separately | Recognizable process with a controlling TTY, observational discovery, explicit bridge setup, disconnect preserving the original process |
 | Knowledge boundaries | Separate pairs and overlapping groups, private/shared memory, version conflicts, in-flight permission revocation, credential rotation, reconnect/reopen retaining scoped history |
 | Asynchronous editing | Late memory responses after navigation/Esc, rename conflicts and failed delivery retaining drafts, typing while a save is pending |
+| Reply routing | Original sender/task recipient differs from selection; native inbox versus managed instruction; restored board draft cannot redirect a reply; another session's draft survives |
 | Web failure handling | Injected outage, hanging snapshot, committed write with delayed response, reconnect without replay, stale actions disabled while drafts remain editable |
 | Larger teams | Forty real Bubblewrap terminals with network disabled; readable scrollable graph and searchable roster |
 | Registry capacity | Two hundred definitions: forty real PTYs plus 160 explicitly synthetic records; selection outside the first forty; 201st admission rejected without partial state |
@@ -46,6 +47,12 @@ remote deployments were isolated from everyday user workspaces.
 - Concurrent web title edits lacked a useful resolution flow. The editor now
   shows the current saved version and requires explicit review before rebasing a
   preserved draft. Newer memory text is marked unsaved when an earlier save ends.
+- Reply could show the selected session while delivering to the original sender
+  or task recipient. It now selects the resolved recipient before submission,
+  waits for that session's boundaries, and confirms the actual delivery kind and
+  recipient. The server rejects a mismatched reviewed recipient without writing.
+  Existing memory key/value drafts remain editable offline while their namespace,
+  load and save controls remain disabled.
 - Revoked static definitions were counted twice at admission. Capacity now counts
   unique IDs, and owner-added native sessions do not consume delegated spawn quota.
 - Damaged saved lifecycle records could restore permissive or fresh defaults.
@@ -82,3 +89,16 @@ reliability, the quality of model collaboration, or 200 simultaneous model
 processes. Recovery digests detect damaged state; they do not defend against an
 owner who can rewrite both records and their recovery metadata. Remote trace
 collection remains unsupported without a central collector and was not validated.
+
+One [CI run](https://github.com/pagel-s/agentmux/actions/runs/41242918692/job/124660332398)
+reported an unexpected tmux server exit during the two-client shutdown test on
+Ubuntu's tmux 3.2a. The cause remains unconfirmed: 270 isolated repetitions
+across upstream 3.2a, Ubuntu's exact 3.2a package and system 3.6 passed, as did the
+next [complete CI run](https://github.com/pagel-s/agentmux/actions/runs/41243366671)
+without a lifecycle code change. These local package tests
+used host libraries and do not reproduce the full CI VM. The fixture now also
+checks worker exit with both clients attached. Unexpected server death still
+fails shutdown; this sweep does not claim to have fixed that intermittent exit.
+CI now retains failed model-free tmux fixture logs for seven days. The diagnostic
+server and clients use an explicit minimal environment without inherited user or
+CI credentials; successful fixtures remove their logs.

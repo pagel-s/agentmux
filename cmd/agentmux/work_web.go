@@ -188,6 +188,10 @@ func workWebHandler(state string, client *managed.Client, token, host string) ht
 						failure(err)
 						return
 					}
+					if target != in.Target {
+						failure(&managed.Fault{Code: "conflict", Message: "reply recipient differs from the reviewed target; refresh and review before sending"})
+						return
+					}
 					text = "Follow-up to " + in.ReplyTo + ":\n" + text
 				}
 				id, kind, err := workSend(r.Context(), client, state, target, text)

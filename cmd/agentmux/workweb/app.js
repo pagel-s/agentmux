@@ -430,9 +430,16 @@ function selectionControls() {
       (id === "close-agent" && agent?.state !== "active");
   }
   $("memory-form")
-    .querySelectorAll("input,textarea,button")
+    .querySelectorAll("button")
     .forEach((node) => {
       node.disabled = !ready;
+    });
+  // An offline draft stays editable in its existing namespace. A pending
+  // session switch must not expose the previous session's editor as current.
+  $("memory-form")
+    .querySelectorAll("input,textarea")
+    .forEach((node) => {
+      node.disabled = !ready && (connected || snapshot?.selected !== selected);
     });
   document
     .querySelectorAll(
@@ -499,7 +506,7 @@ async function action(fn, success) {
   notice("Applying change…");
   try {
     await fn();
-    notice(success);
+    notice(typeof success === "function" ? success() : success);
     await refresh();
   } catch (error) {
     const definite = [
@@ -939,7 +946,35 @@ function renderBoundaries() {
   if (!scopes.childElementCount)
     scopes.append(el("p", "empty", "No shared namespaces configured."));
 }
+function replyRecipient(id) {
+  const task = (snapshot?.activity.tasks || []).find((item) => item.id === id),
+    message = (snapshot?.activity.messages || []).find(
+      (item) => item.id === id,
+    ),
+    target = task
+      ? task.to
+      : message?.from !== "$owner"
+        ? message?.from
+        : message?.to?.length === 1
+          ? message.to[0]
+          : "";
+  return (snapshot?.agents || []).some(
+    (agent) => agent.id === target && agent.state === "active",
+  )
+    ? target
+    : "";
+}
 function setReply(id) {
+  const recipient = replyRecipient(id);
+  if (!recipient) {
+    notice(
+      "The original reply recipient is unavailable. Refresh and review before sending.",
+      true,
+    );
+    return;
+  }
+  selectAgent(recipient);
+  pendingDraftKind = "direct";
   activateTab("activity");
   replyTo = id;
   $("reply-context").textContent = "↳ " + id;
@@ -1086,28 +1121,51 @@ $("composer").onsubmit = (event) => {
   if (!text.trim() || !selectionReady()) return;
   const recipient = snapshot.selected,
     reference = replyTo,
-    board = $("message-kind").value.startsWith("board:")
-      ? $("message-kind").value.slice(6)
-      : "";
+    destination = $("message-kind").value,
+    board = destination.startsWith("board:") ? destination.slice(6) : "";
+  if (!board && reference && replyRecipient(reference) !== recipient) {
+    notice(
+      "The original reply recipient is unavailable or changed. Refresh and review the reply before sending.",
+      true,
+    );
+    return;
+  }
+  let confirmation = "Posted to #" + board + ".";
   action(
     async () => {
       if (board) await call("board.post", { board, text });
-      else
-        await api("/api/send", {
+      else {
+        const result = await api("/api/send", {
           target: recipient,
           text,
           reply_to: reference,
         });
-      if (messageDrafts.get(recipient)?.text === text)
+        confirmation =
+          result.kind +
+          " queued for " +
+          sessionReference(result.target) +
+          (result.kind === "Message"
+            ? ". Native terminal input was not changed."
+            : ". The managed worker runs this instruction when ready.");
+      }
+      const draft = messageDrafts.get(recipient);
+      if (
+        draft?.text === text &&
+        draft.reply === reference &&
+        draft.kind === destination
+      )
         messageDrafts.delete(recipient);
-      if (selected === recipient && $("message").value === text) {
+      if (
+        selected === recipient &&
+        $("message").value === text &&
+        replyTo === reference &&
+        $("message-kind").value === destination
+      ) {
         $("message").value = "";
         clearReply();
       }
     },
-    board
-      ? "Posted to #" + board + "."
-      : "Queued for " + recipient + ". Native terminal input was not changed.",
+    () => confirmation,
   );
 };
 $("message").onkeydown = (event) => {

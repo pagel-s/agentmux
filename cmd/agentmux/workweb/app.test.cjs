@@ -444,3 +444,236 @@ test("editing memory while a save is pending preserves newer text as unsaved", a
   assert.equal(context.memoryVersion, 5);
   assert.match(nodes["memory-version"].textContent, /Unsaved changes/);
 });
+
+function replyContext(interaction) {
+  const nodes = new Map();
+  const node = (id) => {
+    if (!nodes.has(id))
+      nodes.set(id, {
+        value: "",
+        textContent: "",
+        options: [],
+        classList: { add() {}, remove() {} },
+        focus() {},
+        replaceChildren(...children) {
+          this.options = children;
+        },
+      });
+    return nodes.get(id);
+  };
+  node("message").value = "Unsent draft for A";
+  node("message-kind").value = "direct";
+  node("message-kind").options = [{ value: "direct" }];
+  const messages = [{ id: "message-b", from: "b", to: ["a"] }],
+    tasks = [{ id: "task_b", from: "$owner", to: "b" }],
+    agents = [
+      { id: "a", state: "active", config: { interaction: "interactive" } },
+      { id: "b", state: "active", config: { interaction } },
+    ];
+  let release, pending;
+  const requests = [];
+  const context = vm.createContext({
+    $: node,
+    snapshot: {
+      selected: "a",
+      boundaries: { agent: "a", boards: [] },
+      agents,
+      activity: { messages, tasks },
+    },
+    selected: "a",
+    connected: true,
+    replyTo: "",
+    boundarySignature: "old",
+    pendingDraftKind: "",
+    graphSelection: null,
+    messageDrafts: new Map([
+      ["b", { text: "B draft", kind: "direct", reply: "" }],
+    ]),
+    document: { querySelectorAll: () => [] },
+    closeTitleEditor() {},
+    selectionControls() {},
+    refresh() {},
+    activateTab() {},
+    notice: (message) => {
+      context.lastNotice = message;
+    },
+    sessionReference: (id) => "Session " + id,
+    scopeLabel: (name) => name,
+    el: (_tag, _class, text) => ({ textContent: text }),
+    action: (fn, success) => {
+      pending = fn().then(() => {
+        context.lastNotice =
+          typeof success === "function" ? success() : success;
+      });
+    },
+    api: (path, args) => {
+      requests.push({ path, args });
+      return new Promise((resolve) => {
+        release = resolve;
+      });
+    },
+  });
+  for (const [start, end] of [
+    ["const selectionReady =", "function selectionControls()"],
+    ["function selectAgent(", "async function action("],
+    ["function replyRecipient(", "async function loadMemory("],
+    ["function renderComposer()", "function renderObserved()"],
+    ['$("composer").onsubmit =', '$("message").onkeydown ='],
+  ])
+    vm.runInContext(
+      source.slice(source.indexOf(start), source.indexOf(end)),
+      context,
+    );
+  return {
+    context,
+    node,
+    requests,
+    agents,
+    release: (value) => release(value),
+    settled: () => pending,
+    coherent() {
+      context.snapshot.selected = context.selected;
+      context.snapshot.boundaries.agent = context.selected;
+      context.renderComposer();
+    },
+    submit() {
+      node("composer").onsubmit({ preventDefault() {} });
+    },
+  };
+}
+
+for (const interaction of ["interactive", "managed"]) {
+  test(
+    "reply selects and displays actual " +
+      interaction +
+      " recipient before sending",
+    async () => {
+      const f = replyContext(interaction),
+        reference = interaction === "interactive" ? "message-b" : "task_b";
+      f.context.setReply(reference);
+      assert.equal(f.context.selected, "b");
+      assert.equal(f.context.messageDrafts.get("a").text, "Unsent draft for A");
+      assert.equal(f.node("message").value, "B draft");
+      assert.equal(f.context.replyTo, reference);
+      f.submit();
+      assert.equal(
+        f.requests.length,
+        0,
+        "pending target boundaries cannot submit",
+      );
+      f.coherent();
+      assert.equal(f.node("send-target").textContent, "Session b");
+      assert.match(
+        f.node("delivery-hint").textContent,
+        interaction === "interactive" ? /Inbox message/ : /Instruction task/,
+      );
+      f.submit();
+      assert.equal(f.requests[0].args.target, "b");
+      assert.equal(f.requests[0].args.reply_to, reference);
+      f.context.selectAgent("a");
+      assert.equal(f.node("message").value, "Unsent draft for A");
+      f.release({
+        target: "b",
+        kind: interaction === "interactive" ? "Message" : "Instruction",
+      });
+      await f.settled();
+      assert.equal(f.node("message").value, "Unsent draft for A");
+      assert.match(f.context.lastNotice, /queued for Session b/);
+      assert.match(
+        f.context.lastNotice,
+        interaction === "interactive" ? /^Message/ : /^Instruction/,
+      );
+      assert.equal(
+        f.context.messageDrafts.has("b"),
+        false,
+        "only successfully sent B draft is cleared",
+      );
+    },
+  );
+}
+
+test("reply recipient missing or revoked requires review without a write", () => {
+  const f = replyContext("managed");
+  f.agents[1].state = "revoked";
+  f.context.setReply("task_b");
+  assert.equal(f.context.selected, "a");
+  assert.equal(f.context.replyTo, "");
+  assert.match(f.context.lastNotice, /unavailable/);
+  f.agents[1].state = "active";
+  f.context.setReply("task_b");
+  f.coherent();
+  f.agents[1].state = "revoked";
+  f.submit();
+  assert.equal(f.requests.length, 0);
+  assert.match(f.context.lastNotice, /unavailable/);
+});
+
+test("an offline memory draft stays editable with namespace and writes frozen", () => {
+  const f = connectionContext(),
+    key = { disabled: false, value: "proposal" },
+    value = { disabled: false, value: "Unsaved text" },
+    save = { disabled: false };
+  f.node("memory-form").querySelectorAll = (selector) =>
+    selector === "button" ? [save] : [key, value];
+  f.context.connected = false;
+  vm.runInContext("selectionControls()", f.context);
+  assert.equal(key.disabled, false);
+  assert.equal(value.disabled, false);
+  assert.equal(save.disabled, true);
+  assert.equal(f.node("memory-namespace").disabled, true);
+  assert.equal(f.node("load-memory").disabled, true);
+  assert.equal(value.value, "Unsaved text");
+  f.context.selected = "another-agent";
+  vm.runInContext("selectionControls()", f.context);
+  assert.equal(
+    key.disabled,
+    true,
+    "previous session's namespace cannot be edited during selection change",
+  );
+  assert.equal(value.disabled, true);
+});
+
+test("a completed send cannot clear a different reply started while pending", async () => {
+  const f = replyContext("interactive");
+  f.context.setReply("message-b");
+  f.coherent();
+  f.submit();
+  f.context.setReply("task_b");
+  f.release({ target: "b", kind: "Message" });
+  await f.settled();
+  assert.equal(f.context.replyTo, "task_b");
+  assert.equal(f.node("message").value, "B draft");
+});
+
+test("explicit reply overrides a restored board draft after recipient boundaries load", async () => {
+  const f = replyContext("interactive");
+  f.context.messageDrafts.set("b", {
+    text: "B board draft",
+    kind: "board:pair",
+    reply: "",
+  });
+  f.context.snapshot.boundaries.boards = [
+    { name: "pair", read: true, write: true },
+  ];
+  const boardWrites = [];
+  f.context.call = async (operation, args) => {
+    boardWrites.push({ operation, args });
+  };
+  f.context.setReply("message-b");
+  assert.equal(f.context.selected, "b");
+  assert.equal(f.node("message").value, "B board draft");
+  f.coherent();
+  assert.equal(f.node("message-kind").value, "direct");
+  assert.equal(f.node("send-target").textContent, "Session b");
+  f.submit();
+  assert.equal(
+    boardWrites.length,
+    0,
+    "reply must never become board.post from restored draft kind",
+  );
+  assert.equal(f.requests[0].path, "/api/send");
+  assert.equal(f.requests[0].args.target, "b");
+  assert.equal(f.requests[0].args.reply_to, "message-b");
+  f.release({ target: "b", kind: "Message" });
+  await f.settled();
+});

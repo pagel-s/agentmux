@@ -294,12 +294,12 @@ def main():
     parser.add_argument("--sandbox", choices=("bubblewrap", "local"), default="bubblewrap")
     parser.add_argument("--port", type=int, default=0)
     parser.add_argument("--serve", action="store_true")
-    parser.add_argument("--check-admission", action="store_true", help="also test200 uniqueIDs after static revocation, with no native processes")
+    parser.add_argument("--check-admission", action="store_true", help="also test 200 unique IDs after static revocation, with no native processes")
     parser.add_argument("--keep-output", action="store_true")
     options = parser.parse_args()
-    if not 1 <= options.live_agents <= 40:parser.error("--live-agents must be between1 and40")
+    if not 1 <= options.live_agents <= 40:parser.error("--live-agents must be between 1 and 40")
     if options.registry_agents is None:options.registry_agents=options.live_agents
-    if not options.live_agents <= options.registry_agents <= 200:parser.error("registry count must be between live count and200")
+    if not options.live_agents <= options.registry_agents <= 200:parser.error("registry count must be between live count and 200")
     if not 0<=options.port<=65535:parser.error("invalid web port")
     fixture = Fixture(options)
     try:

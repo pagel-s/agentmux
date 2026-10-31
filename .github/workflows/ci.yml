@@ -37,7 +37,17 @@ jobs:
         env:
           AGENTMUX_MANAGED_INTEGRATION: '1'
           AGENTMUX_EXPERIMENT_INTEGRATION: '1'
+          AGENTMUX_TMUX_DEBUG: '1'
         run: go test -race -count=1 ./...
+
+      - name: Preserve failed tmux client-view diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: tmux-test-failure-logs
+          path: /tmp/amx-views-*/tmux-*.log
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Verify release installer safety
         run: python3 scripts/test-install-release.py
@@ -99,7 +109,18 @@ jobs:
         run: python3 scripts/smoke-managed-models.py --check-fixtures
 
       - name: Verify sandbox, network, disk and team boundaries
+        env:
+          AGENTMUX_TMUX_DEBUG: '1'
         run: make test-sandbox
+
+      - name: Preserve failed sandbox tmux client-view diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: tmux-sandbox-failure-logs
+          path: /tmp/amx-views-*/tmux-*.log
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Verify isolated research and resume
         run: make test-research
