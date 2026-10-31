@@ -35,12 +35,19 @@
         /></label>
         <div id="agents" class="agent-list"></div>
         <div class="rail-bottom">
-          <kbd>F1</kbd> terminal workbench<br /><kbd>Ctrl-b b</kbd> shared board
+          <span id="workbench-shortcuts"
+            ><kbd>F1</kbd> terminal workbench<br /><kbd>Ctrl-b b</kbd> shared
+            board</span
+          >
           <div id="runtime-state">Loading</div>
         </div>
       </aside>
       <main>
         <div class="workspace-header">
+          <div class="global-heading">
+            <h1 id="global-view-title"></h1>
+            <span id="global-view-context"></span>
+          </div>
           <div class="agent-title">
             <h1 id="agent-name">Select an agent</h1>
             <button id="edit-title" class="quiet" aria-label="Edit task title">
@@ -79,7 +86,7 @@
         </div>
         <div class="workspace-meta identity-meta">
           <span id="agent-origin"></span><span id="agent-started"></span
-          ><span id="agent-terminal"></span>
+          ><span id="agent-terminal"></span><span id="agent-lineage"></span>
         </div>
         <nav class="tabs" aria-label="Workspace views">
           <button data-tab="activity" class="active">Board</button
@@ -87,10 +94,80 @@
           ><button data-tab="tasks">Tasks <span id="task-count">0</span></button
           ><button data-tab="memory">Memory</button
           ><button data-tab="graph">Graph</button
+          ><button data-tab="teams">Teams</button
+          ><button data-tab="research" id="research-tab" hidden>Research</button
           ><button data-tab="sessions">Sessions</button
           ><span class="tab-tail" id="deadline"></span>
         </nav>
         <div class="workspace-content">
+          <section id="view-research" class="view">
+            <div class="section-label">
+              <h2>Research attempt</h2>
+              <span id="research-state"></span>
+            </div>
+            <div id="research-status" class="research-status"></div>
+            <div class="section-label">
+              <h2>Intervene at a phase barrier</h2>
+            </div>
+            <p class="session-note">
+              Pause, step, resume and stop apply when the runner next reaches a
+              phase barrier. They do not interrupt an accepted task. Cancel
+              tasks separately if needed. Interventions and other owner
+              mutations remain part of the run record.
+            </p>
+            <form id="research-control" class="research-control">
+              <select id="research-action" aria-label="Research intervention">
+                <option value="pause">Pause at next barrier</option>
+                <option value="step">Run one phase</option>
+                <option value="resume">Resume</option>
+                <option value="stop">Stop at next barrier</option>
+              </select>
+              <input
+                id="research-reason"
+                aria-label="Reason for research intervention"
+                placeholder="Reason (recorded with the intervention)"
+                required
+                maxlength="512"
+              />
+              <button type="submit" id="review-research" data-owner-write>
+                Review intervention
+              </button>
+            </form>
+            <div id="research-review" class="team-review" hidden></div>
+            <div class="section-label">
+              <h2>Population & phase tasks</h2>
+              <span>REPORTED BY THE RUNNER</span>
+            </div>
+            <div id="research-population"></div>
+            <div class="section-label"><h2>Intervention history</h2></div>
+            <div id="research-interventions" class="lifecycle-events"></div>
+          </section>
+          <section id="view-teams" class="view">
+            <div class="section-label">
+              <h2>Consented teams</h2>
+              <span id="teams-count"></span>
+            </div>
+            <p class="session-note">
+              Agents create teams and accept invitations within their configured
+              authority. Invitations alone share no context. Owner intervention
+              is explicit below.
+            </p>
+            <div id="consented-teams" class="team-list"></div>
+            <div class="section-label">
+              <h2>Owner collaboration groups</h2>
+              <span>OWNER CONFIGURED</span>
+            </div>
+            <p class="session-note">
+              These groups grant collaboration directly. Their membership is
+              distinct from agent-created teams and consented invitations.
+            </p>
+            <div id="owner-groups" class="team-list"></div>
+            <div class="section-label">
+              <h2>Lifecycle & interventions</h2>
+              <span>RECENT BROKER EVENTS</span>
+            </div>
+            <div id="lifecycle-events" class="lifecycle-events"></div>
+          </section>
           <section id="view-sessions" class="view">
             <div class="section-label">
               <h2>New session</h2>
@@ -169,9 +246,12 @@
             <div id="feed" class="feed"></div>
           </section>
           <section id="view-agent" class="view">
+            <div id="worker-runtime" class="worker-runtime"></div>
             <div class="section-label">
-              <h2>Native terminal</h2>
-              <span>LIVE OBSERVATION · INPUT IN TMUX</span>
+              <h2 id="native-observation-title">Native terminal</h2>
+              <span id="native-observation-label"
+                >LIVE OBSERVATION · INPUT IN TMUX</span
+              >
             </div>
             <pre id="terminal" tabindex="0">Waiting for terminal output…</pre>
           </section>
@@ -191,6 +271,11 @@
               ></select
               ><button id="load-memory" class="quiet">Load</button>
             </div>
+            <p id="research-memory-hint" class="session-note" hidden>
+              Research steering through shared memory: changes are version
+              checked and recorded as owner mutations. Agents only see
+              namespaces they may read, when they next read them.
+            </p>
             <div id="memory-list" class="memory-list"></div>
             <form id="memory-form" class="memory-editor">
               <label

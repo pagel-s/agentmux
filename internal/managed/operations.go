@@ -14,9 +14,10 @@ import (
 )
 
 type Request struct {
-	Operation string          `json:"operation"`
-	RequestID string          `json:"request_id,omitempty"`
-	Args      json.RawMessage `json:"args"`
+	Operation           string          `json:"operation"`
+	ResearchRunnerProof string          `json:"research_runner_proof,omitempty"`
+	RequestID           string          `json:"request_id,omitempty"`
+	Args                json.RawMessage `json:"args"`
 }
 type Fault struct {
 	Code    string `json:"code"`
@@ -36,7 +37,7 @@ func internal(err error) *Fault {
 
 func isWrite(op string) bool {
 	switch op {
-	case "control.update", "worker.next", "autonomy.control", "autonomy.ack", "memory.delete", "memory.prune", "memory.index":
+	case "research.publish", "research.control", "control.update", "worker.next", "autonomy.control", "autonomy.ack", "memory.delete", "memory.prune", "memory.index":
 		return true
 	case "board.post", "message.send", "ping.send", "instruct", "task.claim", "task.complete", "task.stopped", "task.cancel", "task.verify", "task.resolve", "memory.put", "agent.add", "agent.label", "agent.spawn", "agent.stop", "team.create", "team.invite", "team.join", "team.leave", "team.remove", "team.dissolve", "conversation.begin", "conversation.reset":
 		return true
@@ -72,6 +73,9 @@ func (s *Store) Call(ctx context.Context, token string, r Request) (json.RawMess
 	if len(r.Args) > 2*s.cfg.Limits.MaxMessageBytes+32768 {
 		return nil, fault("invalid", "request arguments exceed limit")
 	}
+	if problem := s.authenticateResearchRunner(ctx, s.db, &a, r.ResearchRunnerProof); problem != nil {
+		return nil, problem
+	}
 	var q queryer = s.db
 	var tx *sql.Tx
 	digest := ""
@@ -104,6 +108,9 @@ func (s *Store) Call(ctx context.Context, token string, r Request) (json.RawMess
 		a, err = authenticateWith(ctx, tx, token)
 		if err != nil {
 			return nil, fault("unauthorized", "invalid credential")
+		}
+		if problem := s.authenticateResearchRunner(ctx, tx, &a, r.ResearchRunnerProof); problem != nil {
+			return nil, problem
 		}
 		var prior, priorDigest string
 		requestActor := a.ID + "/" + a.Instance
@@ -140,7 +147,15 @@ func (s *Store) Call(ctx context.Context, token string, r Request) (json.RawMess
 				if in.Mode != "paused" && in.Mode != "stopped" {
 					return nil, fault("limit", "session runtime budget exhausted")
 				}
-			case "task.complete", "task.stopped", "task.cancel", "task.verify", "agent.stop", "agent.label", "team.leave", "team.remove", "team.dissolve", "conversation.reset", "memory.delete", "memory.prune":
+			case "research.control":
+				var in struct {
+					Action string `json:"action"`
+				}
+				_ = json.Unmarshal(r.Args, &in)
+				if in.Action != "pause" && in.Action != "stop" {
+					return nil, fault("limit", "session runtime budget exhausted")
+				}
+			case "research.publish", "task.complete", "task.stopped", "task.cancel", "task.verify", "agent.stop", "agent.label", "team.leave", "team.remove", "team.dissolve", "conversation.reset", "memory.delete", "memory.prune":
 			case "task.resolve":
 				var in struct {
 					Resolution string `json:"resolution"`
@@ -157,6 +172,11 @@ func (s *Store) Call(ctx context.Context, token string, r Request) (json.RawMess
 	result, e := s.dispatch(ctx, q, a, r)
 	if e != nil {
 		return nil, e
+	}
+	if tx != nil && a.owner() && !a.researchRunner && r.Operation != "research.control" {
+		if err := recordResearchOwnerMutation(ctx, q, a, r); err != nil {
+			return nil, internal(err)
+		}
 	}
 	data, err := json.Marshal(result)
 	if err != nil {
@@ -195,6 +215,8 @@ func (s *Store) dispatch(ctx context.Context, q queryer, a actor, r Request) (an
 		return s.control(ctx, q, a, r)
 	}
 	switch r.Operation {
+	case "research.status", "research.publish", "research.control", "research.heartbeat":
+		return s.researchControl(ctx, q, a, r)
 	case "budget.status":
 		return s.budgetStatus(ctx, q, a, r.Args)
 	case "worker.next", "autonomy.status", "autonomy.control", "autonomy.ack", "wake.read":

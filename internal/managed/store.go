@@ -36,19 +36,21 @@ type Credential struct {
 }
 
 type actor struct {
-	ID, Instance string
-	Generation   int
+	ID, Instance   string
+	Generation     int
+	researchRunner bool
 }
 
 func (a actor) owner() bool { return a.ID == ownerID }
 
 type Store struct {
-	db          *sql.DB
-	cfg         managedconfig.Config
-	dir         string
-	mu          sync.Mutex
-	closed      bool
-	stagedPaths []string
+	db                  *sql.DB
+	cfg                 managedconfig.Config
+	dir                 string
+	mu                  sync.Mutex
+	closed              bool
+	stagedPaths         []string
+	researchHeartbeatAt string
 }
 
 type queryer interface {
@@ -427,6 +429,13 @@ func lifecycleReserve(ctx context.Context, q queryer) (int, error) {
 	// Dispatch controls retain capacity for pause and stop even after ordinary
 	// work fills storage. Resume is a fresh allocation, never a safety fallback.
 	err = q.QueryRowContext(ctx, `SELECT COALESCE(SUM(CASE json_extract(data,'$.mode') WHEN 'running' THEN 2 WHEN 'paused' THEN 1 ELSE 0 END),0) FROM records WHERE kind='autonomy'`).Scan(&extra)
+	if err != nil {
+		return 0, err
+	}
+	n += extra
+	// An active study retains slots for an audited owner stop and the runner's
+	// terminal checkpoint. Safety controls do not renew ordinary work budgets.
+	err = q.QueryRowContext(ctx, `SELECT COALESCE(SUM(CASE json_extract(data,'$.control.mode') WHEN 'stopped' THEN 1 ELSE 3 END),0) FROM records WHERE kind='research' AND json_extract(data,'$.progress.state') NOT IN ('completed','interrupted','stopped')`).Scan(&extra)
 	if err != nil {
 		return 0, err
 	}

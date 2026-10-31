@@ -122,6 +122,10 @@ kbd {
   font: 24px var(--mono);
 }
 #session {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font: 11px var(--mono);
   color: var(--muted);
   padding-left: 18px;
@@ -1340,4 +1344,215 @@ h1 {
   .session-row > button {
     justify-self: start;
   }
+}
+
+.team-list {
+  display: flex;
+  flex-direction: column;
+}
+.team-card {
+  border-bottom: 1px solid var(--line);
+  padding: 16px 0;
+}
+.team-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.team-heading h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 550;
+  overflow-wrap: anywhere;
+}
+.team-heading > span,
+.team-id,
+.team-scopes {
+  color: var(--faint);
+  font: 10px/1.8 var(--mono);
+  overflow-wrap: anywhere;
+}
+.team-heading > span {
+  margin-left: auto;
+  white-space: nowrap;
+}
+.team-participants {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin-top: 8px;
+}
+.team-participants > span:first-child {
+  color: var(--muted);
+  min-width: 105px;
+  font-size: 11px;
+}
+.team-participants small {
+  color: var(--faint);
+}
+.team-participant {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid var(--line);
+}
+.team-agent,
+.team-participant button {
+  font-size: 10px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.team-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.team-actions select {
+  max-width: 440px;
+  flex: 1;
+  font-size: 11px;
+}
+.team-actions button,
+.team-review button {
+  font-size: 11px;
+}
+.team-review {
+  margin-top: 12px;
+  border-left: 2px solid var(--accent);
+  padding: 10px 14px;
+}
+.team-review strong {
+  font-weight: 500;
+}
+.team-review p {
+  color: var(--muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.team-review button + button {
+  margin-left: 8px;
+}
+.worker-runtime {
+  border-bottom: 1px solid var(--line);
+  padding: 16px 0;
+}
+.worker-runtime strong {
+  font-size: 12px;
+  font-weight: 550;
+}
+.worker-runtime p {
+  margin: 7px 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+.worker-runtime small {
+  color: var(--faint);
+  font-size: 10px;
+}
+.lifecycle-row {
+  border-bottom: 1px solid var(--line);
+  padding: 10px 0;
+}
+.lifecycle-heading {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.lifecycle-heading time {
+  color: var(--faint);
+  font: 10px var(--mono);
+}
+.lifecycle-heading strong {
+  font-size: 11px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.lifecycle-row p {
+  color: var(--muted);
+  margin: 5px 0;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.lifecycle-row details {
+  color: var(--faint);
+  font-size: 10px;
+}
+.lifecycle-row pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 200px;
+  overflow: auto;
+}
+.research-status {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 10px 28px;
+  padding: 6px 0;
+}
+.research-stat {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 11px;
+}
+.research-stat > span {
+  color: var(--muted);
+}
+.research-stat > strong {
+  font-weight: 500;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.research-status > .session-note {
+  grid-column: 1/-1;
+}
+.research-control {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.research-control input {
+  flex: 1;
+  min-width: 240px;
+}
+.global-heading {
+  display: none;
+  min-width: 0;
+  align-items: baseline;
+  gap: 16px;
+}
+.global-heading h1 {
+  font-size: 16px;
+  font-weight: 550;
+  margin: 0;
+  white-space: nowrap;
+}
+.global-heading span {
+  color: var(--faint);
+  font: 10px var(--mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.global-view .global-heading {
+  display: flex;
+}
+.global-view .workspace-header {
+  padding: 12px 22px;
+}
+.global-view .agent-title,
+.global-view .agent-actions,
+.global-view #agent-role,
+.global-view #title-editor,
+.global-view .workspace-meta {
+  display: none;
+}
+.global-heading {
+  grid-column: 1/-1;
 }

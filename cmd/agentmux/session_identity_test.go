@@ -77,3 +77,18 @@ func TestSessionIdentityPresentationRetainsIDAndShowsSelectedRoster(t *testing.T
 		t.Fatal("untitled fallback lacks project/provider")
 	}
 }
+
+func TestUnnamedDelegatedSessionUsesTemplateAndRetainsLineageAndID(t *testing.T) {
+	a := managed.AgentInfo{ID: "child_opaque_lifetime", Parent: "alice", Template: "reviewer", Config: managedconfig.Agent{Harness: "codex", Workdir: "/private/workspaces/child_opaque_lifetime"}}
+	if sessionTitle(a) != "reviewer · codex" {
+		t.Fatal("delegated fallback used an opaque workspace name")
+	}
+	m := console{agents: []managed.AgentInfo{a}, text: []rune("alice reviewer")}
+	if len(m.sessionMatches()) != 1 || !strings.Contains(m.agentLabel(a.ID), a.ID) {
+		t.Fatal("readable fallback lost exact routing identity or parent search")
+	}
+	a.Title = "Check payment race"
+	if sessionTitle(a) != a.Title {
+		t.Fatal("template replaced the user's task title")
+	}
+}

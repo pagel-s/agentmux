@@ -24,11 +24,12 @@ const decisionProtocol = "agentmux-research-strict-json-v1"
 // ExecutionEvidence freezes executable entrypoints, not provider weights, all
 // imported dependencies, or a host owner's ability to modify the machine.
 type ExecutionEvidence struct {
-	Version  int                  `json:"version"`
-	Protocol string               `json:"decision_protocol"`
-	Runner   ExecutableEvidence   `json:"runner"`
-	Worker   ExecutableEvidence   `json:"worker_and_broker"`
-	Harness  []ExecutableEvidence `json:"harness_entrypoints"`
+	Version              int                  `json:"version"`
+	Protocol             string               `json:"decision_protocol"`
+	InterventionProtocol string               `json:"owner_intervention_protocol,omitempty"`
+	Runner               ExecutableEvidence   `json:"runner"`
+	Worker               ExecutableEvidence   `json:"worker_and_broker"`
+	Harness              []ExecutableEvidence `json:"harness_entrypoints"`
 }
 
 type ExecutableEvidence struct {
@@ -69,7 +70,7 @@ func fingerprint(path, actor string) (ExecutableEvidence, error) {
 }
 
 func snapshotExecution(worker string, cfg managedconfig.Config) (ExecutionEvidence, error) {
-	result := ExecutionEvidence{Version: 1, Protocol: decisionProtocol}
+	result := ExecutionEvidence{Version: 1, Protocol: decisionProtocol, InterventionProtocol: interventionProtocol}
 	runner, err := os.Executable()
 	if err != nil {
 		return result, err

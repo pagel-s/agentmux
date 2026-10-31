@@ -22,15 +22,23 @@ import (
 
 type consoleTick time.Time
 type consoleData struct {
-	observed   []sessioninventory.Session
-	agents     []managed.AgentInfo
-	boundaries managed.Boundaries
-	controls   managed.ControlState
-	activity   managedActivitySnapshot
-	runtime    managedlaunch.Runtime
-	preview    string
-	selected   string
-	err        error
+	observed     []sessioninventory.Session
+	agents       []managed.AgentInfo
+	boundaries   managed.Boundaries
+	controls     managed.ControlState
+	teams        []managed.Team
+	autonomy     managed.AutonomyStatus
+	conversation managed.ConversationState
+	research     *managed.ResearchStatus
+	runtimeErr   error
+	teamsErr     error
+	researchErr  error
+	headless     bool
+	activity     managedActivitySnapshot
+	runtime      managedlaunch.Runtime
+	preview      string
+	selected     string
+	err          error
 }
 type consoleAction struct {
 	message            string
@@ -40,40 +48,43 @@ type consoleAction struct {
 	labelID, labelText string
 }
 type console struct {
-	state                  string
-	client                 *managed.Client
-	agents                 []managed.AgentInfo
-	selected               int
-	target                 int
-	scope                  int
-	task                   int
-	tab                    int
-	width, height          int
-	data                   consoleData
-	message                string
-	composer               string
-	text                   []rune
-	busy                   bool
-	popup                  bool
-	messageIndex           int
-	boardFilter            int
-	composeTarget, replyID string
-	textCursor             int
-	memoryNamespace        string
-	memoryEntries          []managed.Memory
-	memoryEntry            int
-	memoryOpen             bool
-	memoryKey              string
-	memoryVersion          int
-	memoryRequest          uint64
-	memoryLoading          bool
-	observedSelected       int
-	boardSelected          int
-	details                string
-	newNative              consoleNativeDraft
-	findIndex              int
-	labelVersion           int
-	labelDrafts            map[string]string
+	state                                  string
+	client                                 *managed.Client
+	agents                                 []managed.AgentInfo
+	selected                               int
+	target                                 int
+	scope                                  int
+	task                                   int
+	tab                                    int
+	width, height                          int
+	data                                   consoleData
+	message                                string
+	composer                               string
+	text                                   []rune
+	busy                                   bool
+	popup                                  bool
+	messageIndex                           int
+	boardFilter                            int
+	composeTarget, replyID                 string
+	textCursor                             int
+	memoryNamespace                        string
+	memoryEntries                          []managed.Memory
+	memoryEntry                            int
+	memoryOpen                             bool
+	memoryKey                              string
+	memoryVersion                          int
+	memoryRequest                          uint64
+	memoryLoading                          bool
+	observedSelected                       int
+	boardSelected                          int
+	details                                string
+	newNative                              consoleNativeDraft
+	findIndex                              int
+	labelVersion                           int
+	labelDrafts                            map[string]string
+	teamIndex, eventIndex, teamMemberIndex int
+	teamAction                             *consoleTeamAction
+	offline                                bool
 }
 type consoleNativeDraft struct{ id, title, provider, project, role string }
 type consoleMemory struct {
@@ -134,6 +145,11 @@ func fetchWorkSnapshot(state string, client *managed.Client, selected string) co
 	d := consoleData{selected: selected}
 	raw, err := workCall(ctx, client, "agent.list", map[string]any{"limit": 200})
 	if err != nil {
+		status, problem := client.LocalResearchStatus(ctx, state)
+		d.research = status
+		if problem != nil {
+			d.researchErr = problem
+		}
 		d.err = err
 		return d
 	}
@@ -145,6 +161,39 @@ func fetchWorkSnapshot(state string, client *managed.Client, selected string) co
 		return d
 	}
 	d.agents = registry.Agents
+	cursor := ""
+	for {
+		raw, err = workCall(ctx, client, "team.list", map[string]any{"limit": 200, "after": cursor})
+		if err != nil {
+			d.teamsErr = err
+			break
+		}
+		var page struct {
+			Teams  []managed.Team `json:"teams"`
+			Cursor string         `json:"cursor"`
+		}
+		if err = json.Unmarshal(raw, &page); err != nil {
+			d.teamsErr = err
+			break
+		}
+		d.teams = append(d.teams, page.Teams...)
+		if len(page.Teams) == 0 || page.Cursor == "" || page.Cursor == cursor {
+			break
+		}
+		cursor = page.Cursor
+	}
+	if raw, err = workCall(ctx, client, "research.status", map[string]any{}); err != nil {
+		d.researchErr = err
+	} else {
+		var status struct {
+			Research *managed.ResearchStatus `json:"research"`
+		}
+		if err = json.Unmarshal(raw, &status); err != nil {
+			d.researchErr = err
+		} else {
+			d.research = status.Research
+		}
+	}
 	raw, err = workCall(ctx, client, "control.get", map[string]any{})
 	if err != nil {
 		d.err = err
@@ -173,6 +222,34 @@ func fetchWorkSnapshot(state string, client *managed.Client, selected string) co
 			d.err = err
 			return d
 		}
+		if raw, err = workCall(ctx, client, "autonomy.status", map[string]string{"agent": d.selected}); err != nil {
+			d.runtimeErr = err
+		} else {
+			var status struct {
+				Status managed.AutonomyStatus `json:"status"`
+			}
+			if err = json.Unmarshal(raw, &status); err != nil {
+				d.runtimeErr = err
+			} else {
+				d.autonomy = status.Status
+			}
+		}
+		for _, info := range d.agents {
+			if info.ID == d.selected && info.Config.Conversation == "persistent" {
+				if raw, err = workCall(ctx, client, "conversation.status", map[string]string{"agent": d.selected}); err != nil {
+					d.runtimeErr = err
+				} else {
+					var status struct {
+						Conversation managed.ConversationState `json:"conversation"`
+					}
+					if err = json.Unmarshal(raw, &status); err != nil {
+						d.runtimeErr = err
+					} else {
+						d.conversation = status.Conversation
+					}
+				}
+			}
+		}
 	}
 	if !active {
 		d.boundaries = managed.Boundaries{Version: d.controls.Version, Agent: d.selected}
@@ -187,6 +264,11 @@ func fetchWorkSnapshot(state string, client *managed.Client, selected string) co
 		return d
 	}
 	d.runtime, _ = managedlaunch.Snapshot(state)
+	for _, info := range d.agents {
+		if info.ID == d.selected && !info.External && d.runtime.Agents[d.selected].PaneID == "" {
+			d.headless = d.research != nil || d.runtime.AttemptID == "" && info.Config.Interaction != "interactive"
+		}
+	}
 	d.observed = discoverWorkSessions(ctx, state)
 	if pane, ok := d.runtime.Agents[d.selected]; ok {
 		// Capture is owner-only. Rendered content is escaped and clipped so
@@ -201,12 +283,23 @@ func fetchWorkSnapshot(state string, client *managed.Client, selected string) co
 
 func (m console) mutate(op string, args any, message string) tea.Cmd {
 	return func() tea.Msg {
+		if m.offline {
+			return consoleAction{err: errors.New("broker offline; refresh before making changes")}
+		}
 		_, err := workCall(context.Background(), m.client, op, args)
 		return consoleAction{message: message, err: err}
 	}
 }
 func (m console) attach() tea.Cmd {
 	state, id, runtime, popup := m.state, m.selectedID(), m.data.runtime, m.popup
+	if m.data.headless || m.data.researchErr != nil || m.data.research != nil && runtime.Agents[id].PaneID == "" {
+		return func() tea.Msg {
+			if m.data.research == nil {
+				return consoleAction{message: "Headless managed worker: inspect Tasks and Events. Cancel accepted work from Tasks; there is no native tmux pane to attach."}
+			}
+			return consoleAction{message: "Research workers run headlessly. Inspect Tasks and Events; pause at a phase boundary to steer. Native terminal typing is unavailable for this worker."}
+		}
+	}
 	for _, a := range m.agents {
 		if a.ID == id && a.External {
 			return func() tea.Msg {
@@ -261,19 +354,41 @@ func (m console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(m.fetch, consoleTimer())
 	case consoleData:
 		if msg.err != nil {
+			m.offline = true
+			if msg.selected == m.selectedID() && msg.research != nil {
+				m.data.research = msg.research
+				m.data.researchErr = nil
+			}
 			m.message = "Refresh failed: " + activityText(msg.err.Error(), 160)
+			if msg.research != nil {
+				m.message += ". Saved research state: " + msg.research.Progress.State + "; writes disabled."
+			}
 			return m, nil
 		}
+		m.offline = false
 		observedID := ""
+		teamTargetID := ""
+		recipientID := ""
+		if len(m.agents) > 0 {
+			teamTargetID = m.agents[m.teamMemberIndex%len(m.agents)].ID
+			recipientID = m.agents[m.target%len(m.agents)].ID
+		}
 		if observations := m.observedSessions(); len(observations) > 0 {
 			observedID = observations[m.observedSelected%len(observations)].ID
 		}
 		oldID := m.selectedID()
 		m.agents = msg.agents
+		m.teamMemberIndex = 0
+		m.target = 0
 		for i, a := range m.agents {
+			if a.ID == recipientID {
+				m.target = i
+			}
+			if a.ID == teamTargetID {
+				m.teamMemberIndex = i
+			}
 			if a.ID == oldID {
 				m.selected = i
-				break
 			}
 		}
 		if len(m.agents) > 0 && m.selected >= len(m.agents) {
@@ -288,7 +403,13 @@ func (m console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Ignore a stale selection result. Its terminal or ACLs must never be
 		// shown as belonging to a different agent during rapid navigation.
 		if msg.selected == m.selectedID() {
-			var messageID, taskID string
+			var messageID, taskID, teamID, eventID string
+			if len(m.data.teams) > 0 {
+				teamID = m.data.teams[m.teamIndex%len(m.data.teams)].ID
+			}
+			if m.eventIndex > 0 && len(m.data.activity.Events) > 0 {
+				eventID = m.data.activity.Events[m.eventIndex%len(m.data.activity.Events)].ID
+			}
 			oldMessages := m.boardMessages()
 			if m.messageIndex > 0 && m.messageIndex < len(oldMessages) {
 				messageID = oldMessages[m.messageIndex].ID
@@ -297,6 +418,20 @@ func (m console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				taskID = m.data.activity.Tasks[m.task].ID
 			}
 			m.data = msg
+			m.teamIndex = 0
+			for i, team := range msg.teams {
+				if team.ID == teamID {
+					m.teamIndex = i
+					break
+				}
+			}
+			m.eventIndex = 0
+			for i, event := range msg.activity.Events {
+				if event.ID == eventID {
+					m.eventIndex = i
+					break
+				}
+			}
 			if observations := m.observedSessions(); len(observations) > 0 {
 				m.observedSelected %= len(observations)
 				for i, v := range observations {
@@ -390,6 +525,10 @@ func (m *console) toggleScope(write bool) tea.Cmd {
 	}
 	index := m.scope % len(scopes)
 	s := scopes[index]
+	if s.Source == "team" {
+		m.message = "Consented team access follows membership. Open Teams to invite, remove or dissolve; invitations require participant acceptance."
+		return nil
+	}
 	kind := "board"
 	if index >= len(m.data.boundaries.Boards) {
 		kind = "memory"
@@ -417,7 +556,7 @@ func runManagedConsole(state string, in io.Reader, out, diagnostics io.Writer) i
 	return runManagedConsoleView(state, "board", false, in, out, diagnostics)
 }
 func runManagedConsoleView(state, view string, popup bool, in io.Reader, out, diagnostics io.Writer) int {
-	views := map[string]int{"": 0, "board": 0, "agents": 1, "connections": 2, "memory": 3, "tasks": 4, "sessions": 5}
+	views := map[string]int{"": 0, "board": 0, "agents": 1, "connections": 2, "memory": 3, "tasks": 4, "sessions": 5, "teams": 6, "events": 7, "research": 7}
 	index, ok := views[view]
 	if !ok {
 		fmt.Fprintln(diagnostics, "error: unknown dashboard view")

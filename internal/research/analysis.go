@@ -39,6 +39,7 @@ type Analysis struct {
 	ManifestHash     string             `json:"manifest_sha256"`
 	Conditions       []ConditionSummary `json:"conditions"`
 	PairedContrasts  []Contrast         `json:"paired_contrasts"`
+	IntervenedRuns   int                `json:"intervened_runs"`
 	InterruptedRuns  int                `json:"interrupted_runs"`
 	Interpretation   string             `json:"interpretation"`
 	Preregistration  *Preregistration   `json:"preregistration,omitempty"`
@@ -80,10 +81,27 @@ func Analyze(report Report) Analysis {
 	if report.Execution == nil {
 		a.EvidenceWarnings = append(a.EvidenceWarnings, "Legacy evidence coverage: no frozen executable/protocol evidence or mandatory authenticated native-trace verification; historical scores are unchanged.")
 	}
-	groups := map[string][]Result{}
+	if report.Execution != nil && report.Execution.InterventionProtocol == "" {
+		a.EvidenceWarnings = append(a.EvidenceWarnings, "Legacy observation coverage: owner interventions were not independently classified and verified.")
+	}
+	clean := make([]Result, 0, len(report.Results))
 	for _, r := range report.Results {
 		if r.Status != "completed" {
 			a.InterruptedRuns++
+		}
+		if len(r.Interventions) > 0 || r.OwnerMutations > 0 {
+			a.IntervenedRuns++
+			continue
+		}
+		clean = append(clean, r)
+	}
+	report.Results = clean
+	if a.IntervenedRuns > 0 {
+		a.EvidenceWarnings = append(a.EvidenceWarnings, "Owner-intervened runs are retained as exploratory evidence and excluded from default estimates and contrasts.")
+	}
+	groups := map[string][]Result{}
+	for _, r := range report.Results {
+		if r.Status != "completed" {
 			continue
 		}
 		groups[r.Trial.Condition] = append(groups[r.Trial.Condition], r)

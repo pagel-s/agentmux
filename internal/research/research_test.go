@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -324,6 +325,21 @@ func TestScriptedRoundsAndConsentedTeamsIntegration(t *testing.T) {
 	for _, out := range report.Results[0].Rounds {
 		if !out.Funded || out.InvalidActions != 0 || out.TotalCost != 4 {
 			t.Fatalf("invalid scripted outcome: %+v", out)
+		}
+	}
+	view, err := LiveStatus(context.Background(), dir)
+	if err != nil || view.Live || view.Research == nil || view.Research.Progress.State != "completed" || view.Research.OwnerMutations != 0 {
+		t.Fatalf("invalid retained live status: %+v %v", view, err)
+	}
+	proofPattern := regexp.MustCompile(`runner_[a-f0-9]{48}`)
+	attemptDir := filepath.Join(dir, report.Results[0].Trial.ID, "attempt-001")
+	for _, path := range []string{filepath.Join(dir, "live.json"), filepath.Join(attemptDir, "result.json"), filepath.Join(attemptDir, "runner-calls.jsonl"), filepath.Join(attemptDir, "coordination.jsonl")} {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(data), "research_runner_proof") || proofPattern.Match(data) {
+			t.Fatalf("runner capability leaked into %s", filepath.Base(path))
 		}
 	}
 	formed := false

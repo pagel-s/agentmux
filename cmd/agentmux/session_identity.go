@@ -21,6 +21,9 @@ func sessionTitle(a managed.AgentInfo) string {
 	if a.Title != "" {
 		return a.Title
 	}
+	if a.Parent != "" && !a.OwnerManaged && a.Template != "" {
+		return a.Template + " · " + a.Config.Harness
+	}
 	return sessionProject(a.Config.Workdir) + " · " + a.Config.Harness
 }
 

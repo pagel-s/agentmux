@@ -67,6 +67,9 @@ func (m console) roster(width, height int) string {
 		if pane, ok := m.data.runtime.Agents[a.ID]; ok {
 			status = pane.State
 		}
+		if m.offline {
+			status = "saved " + status
+		}
 		name := "  " + consoleContent(sessionTitle(a), 150)
 		if i == m.selected {
 			name = consoleSelected.Render("› " + consoleContent(sessionTitle(a), 150))
@@ -76,15 +79,22 @@ func (m console) roster(width, height int) string {
 			break
 		}
 	}
-	out.WriteString(consoleMuted.Render("↑/↓ select · / find\nEnter native CLI · L title"))
+	hint := "↑/↓ select · / find\nEnter native CLI · L title"
+	if m.data.headless {
+		hint = "↑/↓ select · / find\nTasks output · Events state"
+	}
+	out.WriteString(consoleMuted.Render(hint))
 	return consoleClip(out.String(), width, height)
 }
 func (m console) panel(width, height int) string {
+	if m.teamAction != nil {
+		return m.teamReviewPanel(width, height)
+	}
 	if m.composer == "find" {
 		return m.sessionSearchPanel(width, height)
 	}
 	var out strings.Builder
-	if len(m.agents) > 0 && m.tab != 5 && m.tab != 1 {
+	if len(m.agents) > 0 && m.tab != 5 && m.tab != 1 && m.tab != 6 && m.tab != 7 {
 		a := m.agents[m.selected%len(m.agents)]
 		fmt.Fprintf(&out, "%s\n%s\n\n", consoleAccent.Render(consoleContent(sessionTitle(a), 150)), consoleMuted.Render(consoleContent(a.ID+" · "+a.Config.Harness+" · "+a.Config.Workdir, 300)))
 	}
@@ -122,15 +132,33 @@ func (m console) panel(width, height int) string {
 			}
 		}
 	case 1:
-		fmt.Fprintf(&out, "%s  %s\n\n", consoleAccent.Render(consoleContent(m.agentLabel(m.selectedID()), 200)), consoleMuted.Render("Enter native terminal · L edit title"))
+		hint := "Enter worker console · Tasks for structured output · L title"
+		if m.data.headless {
+			hint = "Headless managed worker · Tasks output · Events lifecycle · L title"
+		}
+		if len(m.agents) > 0 && m.agents[m.selected%len(m.agents)].Config.Interaction == "interactive" {
+			hint = "Enter native terminal · L edit title"
+		}
+		fmt.Fprintf(&out, "%s\n%s\n\n", consoleAccent.Render(consoleContent(m.agentLabel(m.selectedID()), 200)), consoleMuted.Render(hint))
 		if len(m.agents) > 0 {
 			a := m.agents[m.selected%len(m.agents)]
-			fmt.Fprintf(&out, "%s\n%s\n%s\n%s\n\n", consoleContent(a.Config.Role, 300), consoleMuted.Render(consoleContent(a.Config.Workdir, 200)), consoleMuted.Render(a.Config.Harness+" · "+a.Config.Sandbox+" · network "+a.Config.Network), consoleMuted.Render(consoleContent(sessionOrigin(a)+" · added "+sessionAdded(a.CreatedAt), 200)))
+			if m.offline && a.Config.Interaction != "interactive" {
+				out.WriteString(consoleAccent.Render("Saved runtime snapshot · execution now unknown") + "\n")
+			}
+			out.WriteString(m.agentRuntimePanel(width) + "\n")
+			fmt.Fprintf(&out, "%s\n%s\n%s\n%s\n\n", consoleClip(consoleContent(a.Config.Role, 300), width, 2), consoleMuted.Render(consoleClip(consoleContent(a.Config.Workdir, 200), width, 1)), consoleMuted.Render(a.Config.Harness+" · "+a.Config.Sandbox+" · network "+a.Config.Network), consoleMuted.Render(consoleContent(sessionOrigin(a)+" · added "+sessionAdded(a.CreatedAt), 200)))
 			if a.External {
 				fmt.Fprintf(&out, "%s  %s\n\n%s\n\n%s\n", consoleAccent.Render("EXTERNAL NATIVE SESSION"), consoleMuted.Render(observationStatus(a.ExternalRef, m.data.observed)), consoleContent("Use its original terminal. Helper: "+m.bridgeHelper(a.ID), 500), consoleMuted.Render("Registration prepares a bridge; it does not prove the native agent read the setup.\nCopy the setup below into its existing conversation yourself."))
 				out.WriteString("\n" + consoleContent(bridgeInstructions(m.state, a.ID), 6000))
 				break
 			}
+		}
+		if m.data.headless {
+			out.WriteString(consoleMuted.Render("HEADLESS MANAGED WORKER\nInspect Tasks for results and reported traces; Events for lifecycle.\nThere is no native terminal pane for this bounded runner.\n"))
+			if m.data.research != nil {
+				out.WriteString(consoleMuted.Render("Research controls in Events apply at phase barriers.\n"))
+			}
+			break
 		}
 		out.WriteString(consoleMuted.Render("LIVE TERMINAL PREVIEW\n"))
 		preview := strings.TrimSpace(m.data.preview)
@@ -139,6 +167,10 @@ func (m console) panel(width, height int) string {
 		}
 		out.WriteString(consoleContent(preview, 6000))
 	case 2:
+		if m.data.boundaries.Agent != m.selectedID() {
+			out.WriteString(consoleMuted.Render("Loading this session's current boundaries…"))
+			break
+		}
 		out.WriteString(consoleAccent.Render("Connections") + consoleMuted.Render(fmt.Sprintf("  revision %d\n\n", m.data.boundaries.Version)))
 		if len(m.agents) > 0 {
 			target := m.agents[m.target%len(m.agents)].ID
@@ -170,6 +202,10 @@ func (m console) panel(width, height int) string {
 			}
 		}
 	case 3:
+		if m.data.boundaries.Agent != m.selectedID() {
+			out.WriteString(consoleMuted.Render("Loading this session's current memory boundaries…"))
+			break
+		}
 		if m.memoryOpen {
 			fmt.Fprintf(&out, "%s  %s\n\n", consoleAccent.Render("Memory / "+m.scopeLabel(m.memoryNamespace)), consoleMuted.Render("owner view · [/] entry · e edit · n new · v refresh · Esc back"))
 			if len(m.memoryEntries) == 0 {
@@ -200,6 +236,9 @@ func (m console) panel(width, height int) string {
 					kind = "memory"
 				}
 				line := fmt.Sprintf("  %-7s %-18s read %-7s write %s", kind, m.scopeLabel(v.Name), accessLabel(v.Read), accessLabel(v.Write))
+				if v.Source == "team" {
+					line += " · membership-managed"
+				}
 				if i == m.scope%len(scopes) {
 					line = consoleSelected.Render(line)
 				}
@@ -252,6 +291,10 @@ func (m console) panel(width, height int) string {
 		if m.details != "" {
 			out.WriteString("\n" + consoleAccent.Render("Manual setup / terminal details") + "\n" + consoleContent(m.details, 7000))
 		}
+	case 6:
+		return m.teamsPanel(width, height)
+	case 7:
+		return m.eventsPanel(width, height)
 	}
 	return consoleClip(out.String(), width, height)
 }
@@ -264,7 +307,13 @@ func (m console) View() string {
 		height = 30
 	}
 	header := consoleAccent.Render(" AGENTMUX ") + " " + consoleContent(m.data.runtime.Session, 60) + "  " + consoleMuted.Render(m.data.runtime.State)
-	tabs := []string{"1 Board", "2 Agents", "3 Connections", "4 Memory", "5 Tasks", "6 Sessions"}
+	if m.offline {
+		header = consoleAccent.Render(" AGENTMUX · BROKER OFFLINE ") + consoleMuted.Render("saved snapshot · writes disabled")
+	}
+	tabs := []string{"1 Board", "2 Agents", "3 Connections", "4 Memory", "5 Tasks", "6 Sessions", "7 Teams", "8 Events"}
+	if width < 100 {
+		tabs[2] = "3 Links"
+	}
 	var navigation strings.Builder
 	for i, label := range tabs {
 		if i == m.tab {
@@ -291,7 +340,14 @@ func (m console) View() string {
 	} else if m.message != "" {
 		footer.WriteString(consoleClip(consoleContent(m.message, 500), width, 2) + "\n")
 	}
-	footer.WriteString(consoleMuted.Render("↑/↓ select · Enter native CLI · / find · L title · Tab views · F1 workbench\nN new · x close/disconnect · s send · b board · +/- board · q detach/close"))
+	help := "↑/↓ select · Enter native CLI · / find · L title · Tab views · F1 workbench\nN new · x close/disconnect · s send · b board · +/- board · q detach/close"
+	if m.data.headless {
+		help = "↑/↓ agent · / find · L title · Tab views · 7 Teams · 8 Events\nTasks: output/cancel · Events: lifecycle · q close observer"
+		if m.data.research != nil {
+			help += " · P/R/S/T phase controls"
+		}
+	}
+	footer.WriteString(consoleMuted.Render(help))
 	bottom := consoleClip(footer.String(), width, height/2)
 	bodyHeight := height - lipgloss.Height(bottom) - 4
 	if bodyHeight < 1 {
@@ -328,6 +384,11 @@ func (m console) View() string {
 }
 
 func (m console) scopeLabel(name string) string {
+	for _, team := range m.data.teams {
+		if team.Board == name || team.Memory == name {
+			return team.Name + " (consented team)"
+		}
+	}
 	for _, g := range m.data.controls.Groups {
 		if g.Board == name || g.Memory == name {
 			labels := make([]string, 0, len(g.Agents))

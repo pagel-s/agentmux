@@ -106,6 +106,7 @@ async function renderGraph() {
   }
   const signature = JSON.stringify([
     snapshot.boundaries.version,
+    snapshot.teams || [],
     graphAgents().map((a) => a.id),
   ]);
   if (graphVersion !== signature && !graphLoading) {
@@ -118,6 +119,7 @@ async function renderGraph() {
       );
       const current = JSON.stringify([
         snapshot.boundaries.version,
+        snapshot.teams || [],
         graphAgents().map((a) => a.id),
       ]);
       if (current === signature && values.every((v) => v.version === version)) {
@@ -141,6 +143,7 @@ function drawGraph() {
     selected,
     graphPositions,
     snapshot.boundaries,
+    snapshot.teams || [],
     (snapshot.agents || []).map((a) => [a.id, a.title, a.config.harness]),
   ]);
   if (signature === graphDrawSignature) return;

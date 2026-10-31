@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	"agentmux/internal/experiment"
+	"agentmux/internal/managedlaunch"
 )
 
 func runExperiment(args []string) int {
@@ -57,7 +58,7 @@ func runExperimentIO(ctx context.Context, args []string, stdout, stderr io.Write
 			return exitValidation
 		}
 		executable, _ := os.Executable()
-		result, err = experiment.Run(ctx, m, experiment.RunOptions{OutputDir: *output, Executable: executable, AllowModels: *allowModels, RerunInterrupted: *rerun})
+		result, err = experiment.Run(ctx, m, experiment.RunOptions{OutputDir: *output, Executable: executable, AllowModels: *allowModels, RerunInterrupted: *rerun, OnLive: func(state string) { printExperimentLive(stderr, executable, state) }})
 	}
 	if err != nil {
 		fmt.Fprintf(stderr, "experiment: %v\n", err)
@@ -67,4 +68,12 @@ func runExperimentIO(ctx context.Context, args []string, stdout, stderr io.Write
 		return exitRuntime
 	}
 	return exitSuccess
+}
+
+func printExperimentLive(out io.Writer, executable, state string) {
+	fmt.Fprintln(out, "Active single-task pilot state:", state)
+	for _, command := range []string{"dashboard", "web", "activity"} {
+		fmt.Fprintln(out, managedlaunch.ShellCommand([]string{executable, command, "--state", state}))
+	}
+	fmt.Fprintln(out, "Observe Tasks/Events and use task cancellation, boards and memory in the owner console. These workers have no native terminal. Owner steering is recorded in broker events; this legacy pilot does not independently classify pristine versus intervened results.")
 }

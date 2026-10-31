@@ -80,7 +80,7 @@ type plannedAttempt struct {
 	prior  *Result
 }
 
-func inspectAttempts(m Manifest, plan PlanResult, dir string, rerun bool, budget *modelBudget, strict bool) (map[string]plannedAttempt, bool, error) {
+func inspectAttempts(m Manifest, plan PlanResult, dir string, rerun bool, budget *modelBudget, strict bool, liveProtocol string) (map[string]plannedAttempt, bool, error) {
 	results := map[string]plannedAttempt{}
 	pending := false
 	seenTasks := map[string]bool{}
@@ -94,7 +94,7 @@ func inspectAttempts(m Manifest, plan PlanResult, dir string, rerun bool, budget
 			return nil, false, fmt.Errorf("%s: %w", trial.ID, err)
 		}
 		if prior != nil {
-			if err := checkCachedResult(m, trial, number, filepath.Join(runDir, fmt.Sprintf("attempt-%03d", number)), *prior, budget, seenTasks, strict); err != nil {
+			if err := checkCachedResult(m, trial, number, filepath.Join(runDir, fmt.Sprintf("attempt-%03d", number)), *prior, budget, seenTasks, strict, liveProtocol); err != nil {
 				return nil, false, fmt.Errorf("%s: %w", trial.ID, err)
 			}
 		} else {
@@ -105,12 +105,20 @@ func inspectAttempts(m Manifest, plan PlanResult, dir string, rerun bool, budget
 	return results, pending, nil
 }
 
-func checkCachedResult(m Manifest, trial Trial, attempt int, dir string, result Result, budget *modelBudget, seen map[string]bool, strict bool) error {
+func checkCachedResult(m Manifest, trial Trial, attempt int, dir string, result Result, budget *modelBudget, seen map[string]bool, strict bool, expectedLiveProtocol ...string) error {
 	if result.Status != "completed" || result.Trial != trial || result.Attempt != attempt || result.ConfigHash == "" || len(result.Rounds) != m.Game.Rounds || len(result.Phases) != 2*m.Game.Rounds {
 		return errors.New("completed research result is incomplete or differs from its plan/attempt")
 	}
 	if strict && result.Protocol != decisionProtocol || !strict && result.Protocol != "" {
 		return errors.New("research result protocol differs from collection execution evidence")
+	}
+	if len(expectedLiveProtocol) > 0 && expectedLiveProtocol[0] != "" && result.InterventionProtocol != expectedLiveProtocol[0] {
+		return errors.New("completed research intervention protocol differs from collection evidence")
+	}
+	if result.InterventionProtocol != "" {
+		if err := verifyInterventions(dir, result); err != nil {
+			return err
+		}
 	}
 	var saved struct {
 		SHA256 string          `json:"sha256"`

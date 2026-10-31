@@ -215,6 +215,16 @@ func (m Manifest) Validate() error {
 	if err := m.Config.Validate(); err != nil {
 		return err
 	}
+	for _, agent := range m.Config.Agents {
+		if agent.Interaction == "interactive" {
+			return errors.New("research participants require managed task turns; native interactive sessions are not supported by the headless research runner")
+		}
+	}
+	for _, agent := range m.Config.Spawn.Templates {
+		if agent.Interaction == "interactive" {
+			return errors.New("research spawn templates require managed task turns, not native interactive sessions")
+		}
+	}
 	if err := m.Game.validate(len(m.Config.Agents)); err != nil {
 		return err
 	}

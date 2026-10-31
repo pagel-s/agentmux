@@ -79,6 +79,46 @@ python3 scripts/smoke-managed-scale.py --live-agents 40 --serve --keep-output
 python3 scripts/smoke-managed-remote.py --host HOST --remote-dir /tmp/FRESH_DIRECTORY
 ```
 
+## Live research and dynamic collaboration follow-up
+
+The owner consoles now expose consented teams and invitations separately from
+owner-configured groups, including real team board/memory access, spawned-agent
+lineage, task origins and lifecycle changes. Terminal Teams/Events views use
+reviewed exact IDs and versions. Polling preserves independently selected action
+recipients rather than changing them when a new child enters the sorted registry.
+
+A real sandboxed, model-free dynamic study was started paused and stepped from
+the browser. Its participants created and joined a team, spawned a helper, and
+admitted that helper only at the next-round boundary. An owner team-memory edit
+and membership removal appeared as separate assisted-run mutations; the removed
+participant's actual memory read was immediately denied. The phase deadline
+remained unchanged. The web interface distinguishes a responsive broker from a
+runner heartbeat and labels headless workers without promising terminal input.
+
+A second real 80×24 terminal/browser pass reviewed and stepped one phase from
+each surface, preserved physical spaces in intervention reasons, displayed the
+consented team, and stopped at the next-round boundary after child admission.
+Fresh page loads then displayed the authenticated final saved state with all
+writes disabled. Terminal offline status remains visible across navigation;
+saved worker counters do not claim current execution state.
+
+Review found and fixed an atomic admission race where a committed pause/stop
+could lose to a stale running publish, and an evidence-validation gap where
+missing intervention metadata could turn an assisted result into apparently
+clean evidence. Tests now cover both cases, exact one-phase stepping, deadline
+preservation, authenticated runner provenance, recorded owner steering, and
+exclusion of assisted runs from default estimates. A second permission bug let
+named delegated namespace capabilities bypass team consent; durable team
+namespaces now require actual membership, including after removal/dissolution.
+
+Saved research metadata remains readable after broker shutdown through the
+original authenticated owner token, without enabling writes or inventing live
+tasks, panes or permissions. Rotation and damaged checkpoints fail closed.
+Legacy single-task pilots separately print their active owner-console commands
+and save metadata-only lifecycle pointers; they do not gain phase controls or
+independent assisted-run classification. None of this establishes hidden model
+reasoning, native-interactive research turns, or model cooperation quality.
+
 The scale report distinguishes live PTYs from synthetic definitions and records
 snapshot sizes/timings. In the inspected fixture, five snapshot samples were
 69–95 ms at forty definitions and 284–355 ms at two hundred. These are observations

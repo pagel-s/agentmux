@@ -25,6 +25,18 @@ type RunOptions struct {
 	Executable       string
 	RerunInterrupted bool
 	AllowModels      bool
+	OnLive           func(state string)
+}
+
+// LiveState locates the current single-task pilot. It carries no credentials,
+// observations, instructions, or research phase-control authority.
+type LiveState struct {
+	Kind     string `json:"kind"`
+	Trial    string `json:"trial"`
+	Attempt  int    `json:"attempt"`
+	StateDir string `json:"state_dir"`
+	Deadline string `json:"deadline"`
+	State    string `json:"state"`
 }
 
 type AssertionResult struct {
@@ -129,7 +141,7 @@ func Run(ctx context.Context, m Manifest, opts RunOptions) (Report, error) {
 			continue
 		}
 		condition := conditionByID(m, trial.Condition)
-		result, err := runTrial(ctx, m, trial, condition, attempt, filepath.Join(trialDir, fmt.Sprintf("attempt-%03d", attempt)), opts.Executable)
+		result, err := runTrial(ctx, m, trial, condition, attempt, filepath.Join(trialDir, fmt.Sprintf("attempt-%03d", attempt)), opts.Executable, opts.OnLive)
 		report.Results = append(report.Results, result)
 		if writeErr := writeJSON(filepath.Join(dir, "results.json"), report); writeErr != nil {
 			return report, writeErr
@@ -167,16 +179,26 @@ func resumeTrial(dir string, rerun bool) (int, *Result, error) {
 	return last + 1, nil, nil
 }
 
-func runTrial(parent context.Context, m Manifest, trial Trial, condition Condition, attempt int, dir, executable string) (result Result, returned error) {
+func runTrial(parent context.Context, m Manifest, trial Trial, condition Condition, attempt int, dir, executable string, onLive func(string)) (result Result, returned error) {
 	result = Result{Trial: trial, Attempt: attempt, Status: "interrupted", StartedAt: time.Now().UTC().Format(time.RFC3339Nano), RewardMode: condition.RewardMode, RewardEnforcement: "deterministic post-run owner oracle; no live resource transfer", Instructions: map[string]string{}, Tasks: map[string]managed.Task{}}
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return result, err
 	}
+	var live *LiveState
+	livePath := filepath.Join(filepath.Dir(filepath.Dir(dir)), "live.json")
 	defer func() {
 		result.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
 		if returned != nil {
 			result.Status = "interrupted"
 			result.Error = "infrastructure failure or interruption; inspect private trace; no automatic rerun"
+		}
+		if live != nil {
+			live.State = result.Status
+			if err := writeJSON(livePath, live); err != nil && returned == nil {
+				returned = err
+				result.Status = "interrupted"
+				result.Error = "live metadata could not be saved; inspect private trace; no automatic rerun"
+			}
 		}
 		if err := writeJSON(filepath.Join(dir, "result.json"), result); err != nil && returned == nil {
 			returned = err
@@ -255,6 +277,14 @@ func runTrial(parent context.Context, m Manifest, trial Trial, condition Conditi
 			return result, ctx.Err()
 		case <-time.After(20 * time.Millisecond):
 		}
+	}
+	deadline, _ := ctx.Deadline()
+	live = &LiveState{Kind: "experiment", Trial: trial.ID, Attempt: attempt, StateDir: stateDir, Deadline: deadline.UTC().Format(time.RFC3339Nano), State: "running"}
+	if err := writeJSON(livePath, live); err != nil {
+		return result, err
+	}
+	if onLive != nil {
+		onLive(stateDir)
 	}
 	call := func(op string, args any) (json.RawMessage, error) {
 		data, _ := json.Marshal(args)

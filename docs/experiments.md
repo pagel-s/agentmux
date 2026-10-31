@@ -18,6 +18,24 @@ Use a new, empty output directory. Existing output must be private (`0700`).
 Choose a short path: each trial's Unix socket path must fit within 100 bytes.
 The example uses only `/bin/sh` and makes no model calls.
 
+## Observe a running pilot
+
+Each new attempt prints its active state directory and exact `dashboard`, `web`
+and `managed activity` commands on stderr. Final stdout remains JSON. A private
+atomic `OUTPUT/live.json` records only kind, trial, attempt, state path, finite
+deadline and running/completed/interrupted state; completed cached trials do not
+pretend to launch another live attempt.
+
+Open the printed owner console to inspect tasks, results, coordination,
+permissions and knowledge, or request task cancellation. Workers are headless
+single-task processes: there is no native tmux pane, and queued extra instructions
+are not guaranteed another worker turn. This legacy pilot has no phase pause or
+step control and does not independently classify pristine versus owner-assisted
+results. Owner broker mutations remain auditable, but manually steered outcomes
+should be treated as exploratory. Use [the research runner](research.md#observe-and-intervene-live)
+for repeated phases, dynamic populations, explicit intervention accounting and
+automatic exclusion of assisted runs from default estimates.
+
 ## Manifest and execution
 
 A manifest has `version: 1`, an `id`, a relative or absolute managed `team` YAML,
