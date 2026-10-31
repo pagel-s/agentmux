@@ -35,6 +35,8 @@ remote deployments were isolated from everyday user workspaces.
   for explicit review and retry.
 - Missing native panes could still appear running. A successful complete pane
   inventory now reports them unavailable without respawning or stopping peers.
+  External bridge status separately reports whether the original native terminal
+  is currently observed; registration and revocation do not imply process lifetime.
 - The circular graph overlapped at forty sessions and could omit a selected
   session beyond its display cap. Larger graphs use a scrollable grid, keep the
   selected session/recipient in the displayed subset, and show the cap explicitly.

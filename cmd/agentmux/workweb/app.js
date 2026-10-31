@@ -83,6 +83,31 @@ function sessionReference(id) {
 function sessionOrigin(agent) {
   return agent.external ? "External bridge" : "Workspace";
 }
+// A registered bridge is not evidence that its original native terminal is
+// currently observable. Neither a missing observation nor revocation exits it.
+function sessionStatus(agent, runtime = {}, observations = []) {
+  if (agent.external) {
+    const observed =
+      !!agent.external_ref &&
+      observations.some((session) => session.id === agent.external_ref);
+    const active = agent.state === "active" && observed;
+    return {
+      text:
+        "bridge " +
+        agent.state +
+        " · native " +
+        (observed ? "observed" : "not currently observed"),
+      active,
+      muted: !active,
+    };
+  }
+  const state = runtime.agents?.[agent.id]?.state || agent.state;
+  return {
+    text: state,
+    active: state === "running" || state === "active",
+    muted: false,
+  };
+}
 function terminalIdentity(observed) {
   return [
     observed?.tmux_session ? "tmux " + observed.tmux_session : "",
@@ -221,13 +246,15 @@ function renderSessionLists() {
       ),
     );
     row.append(copy);
-    const status = snapshot.runtime.agents?.[item.id]?.state || item.state,
-      dot = el(
-        "span",
-        "agent-dot" +
-          (status !== "running" && status !== "active" ? " exited" : ""),
-      );
-    dot.title = status;
+    const status = sessionStatus(
+        item,
+        snapshot.runtime,
+        snapshot.observed || [],
+      ),
+      dot = el("span", "agent-dot" + (status.active ? "" : " exited"));
+    if (status.muted) dot.style.backgroundColor = "var(--faint)";
+    dot.title = status.text;
+    row.title += "\n" + status.text;
     row.append(dot);
     row.onclick = () => selectAgent(item.id);
     list.append(row);
@@ -243,9 +270,9 @@ function renderSessionLists() {
           " · " +
           providerName(config.harness) +
           " · " +
-          sessionOrigin(item) +
-          " · " +
-          status,
+          (item.external
+            ? status.text
+            : sessionOrigin(item) + " · " + status.text),
       ),
       el("small", "", config.workdir || "No project directory available"),
     );
@@ -560,7 +587,10 @@ function render() {
   const observed = (snapshot.observed || []).find(
     (s) => s.id === a.external_ref,
   );
-  $("agent-origin").textContent = sessionOrigin(a);
+  $("agent-origin").textContent = a.external
+    ? "External " +
+      sessionStatus(a, snapshot.runtime, snapshot.observed || []).text
+    : sessionOrigin(a);
   $("agent-started").textContent = [
     sessionTime(a.created_at, "Added"),
     sessionTime(observed?.started_at, "Started"),

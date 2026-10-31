@@ -20,6 +20,39 @@ function identityContext() {
   return context;
 }
 
+test("external bridge status separates registry access from native observation", () => {
+  const context = identityContext();
+  const agent = {
+    id: "bridge-one",
+    external: true,
+    external_ref: "process:123:stable",
+    state: "active",
+  };
+  const runtime = { agents: { "bridge-one": { state: "running" } } };
+  const absent = context.sessionStatus(agent, runtime, [
+    { id: "unrelated-process" },
+  ]);
+  assert.equal(absent.text, "bridge active · native not currently observed");
+  assert.equal(absent.active, false);
+  assert.equal(absent.muted, true);
+  const present = context.sessionStatus(agent, runtime, [
+    { id: agent.external_ref },
+  ]);
+  assert.equal(present.text, "bridge active · native observed");
+  assert.equal(present.active, true);
+  assert.equal(present.muted, false);
+  const revoked = context.sessionStatus(
+    { ...agent, state: "revoked" },
+    runtime,
+    [{ id: agent.external_ref }],
+  );
+  assert.equal(revoked.text, "bridge revoked · native observed");
+  assert.equal(revoked.active, false);
+  assert.equal(revoked.muted, true);
+  assert.equal(agent.state, "active");
+  assert.equal(agent.external_ref, "process:123:stable");
+});
+
 test("human titles, project fallbacks and search retain stable identities", () => {
   const context = identityContext();
   const agent = {
