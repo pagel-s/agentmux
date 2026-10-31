@@ -81,6 +81,7 @@ class Acceptance(mixed.Acceptance):
 
     def run(self):
         self.prepare()
+        self.preflight_oracle()
         self.start_broker()
         initial = self.call("instruct", {"to": ["lead"], "text":
             "Complete the bounded normalize_tags implementation, review refinement, revision and verification workflow. "
@@ -112,8 +113,7 @@ class Acceptance(mixed.Acceptance):
         artifact = json.loads(self.call("memory.get", {"namespace": "handoff", "key": "implementation"})["entry"]["value"])
         completion = json.loads(self.call("memory.get", {"namespace": "project", "key": "completion"})["entry"]["value"])
         assert artifact["revision"] == 2 and completion["sha256"] == artifact["sha256"]
-        verdict = mixed.oracle(artifact["content"], self.root)
-        assert verdict["ok"]
+        verdict = self.verify_artifact(artifact["content"], "independent_oracle")
         for task in tasks:
             self.call("task.verify", {"id": task["id"], "version": task["version"]})
         final_conversations = [self.call("conversation.status", {"agent": actor})["conversation"] for actor in ("lead", "coder")]

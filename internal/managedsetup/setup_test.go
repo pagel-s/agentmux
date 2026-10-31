@@ -157,3 +157,42 @@ func TestAntigravityBridgeSetupUsesIsolatedPiAndExplicitInferenceKey(t *testing.
 		t.Fatal("bridge accepted host native login in agent")
 	}
 }
+
+func TestNativeSetupKeepsProjectAndPiSkillsExtensionsAndTools(t *testing.T) {
+	project := t.TempDir()
+	spec := Spec{Session: "daily", WorkspaceRoot: filepath.Join(t.TempDir(), "unused-workspaces"), Sandbox: "local", BrokerSandbox: "local", Agents: []Agent{{ID: "native-pi", Harness: "pi", Interaction: "interactive", Workdir: project, Binary: fakeBinary(t, "pi"), Auth: "native-local"}}}
+	plan, err := Build(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	agent := plan.Config.Agents["native-pi"]
+	if agent.Workdir != project || agent.Interaction != "interactive" || agent.Sandbox != "local" {
+		t.Fatalf("native project session changed: %+v", agent)
+	}
+	for _, arg := range agent.Command {
+		for _, disabled := range []string{"--offline", "--no-extensions", "--no-skills", "--no-prompt-templates", "--no-context-files", "--no-approve", "--no-tools"} {
+			if arg == disabled {
+				t.Fatalf("native Pi setup disabled normal configuration: %q", agent.Command)
+			}
+		}
+	}
+	if len(plan.Config.Policy.Grants) != 0 || len(plan.Config.Boards) != 0 || len(plan.Config.Memory) != 0 {
+		t.Fatal("plain native session setup implicitly enabled collaboration")
+	}
+	if _, err := os.Stat(spec.WorkspaceRoot); !os.IsNotExist(err) {
+		t.Fatal("planning a native session created replacement project directories")
+	}
+	// The managed adapter remains intentionally constrained; preserving the
+	// owner's native configuration must not loosen unattended workers.
+	spec.Agents[0].Interaction = "managed"
+	managedPlan, err := Build(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	command := strings.Join(managedPlan.Config.Agents["native-pi"].Command, " ")
+	for _, required := range []string{"--no-extensions", "--no-skills", "--no-context-files"} {
+		if !strings.Contains(command, required) {
+			t.Fatalf("managed Pi lost its explicit isolation flag %s: %s", required, command)
+		}
+	}
+}

@@ -25,7 +25,7 @@ type teamRecord struct {
 }
 
 func (s *Store) canJoinTeams(ctx context.Context, q queryer, id string) bool {
-	if !s.cfg.Teams.Enabled {
+	if !s.cfg.Teams.Enabled || independent(ctx, q, id) {
 		return false
 	}
 	a, err := s.agent(ctx, q, id)

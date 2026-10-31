@@ -63,8 +63,11 @@ type Request struct {
 	// on the caller's outer isolation boundary. It requires Wrap and is never
 	// automatically selected after a native sandbox failure.
 	ExternalSandbox bool
-	Conversation    *Conversation
-	ModelMetadata   modelmeta.Metadata
+	// InheritEnvironment is only honored by native interactive sessions explicitly
+	// running with trusted host authority. Managed turns keep filtered environments.
+	InheritEnvironment bool
+	Conversation       *Conversation
+	ModelMetadata      modelmeta.Metadata
 	// OnEvent receives an independent copy after each bounded JSON-object frame
 	// enters the partial result, before the next event is read. This includes
 	// the frame causing a semantic ErrProtocol, so traces retain its evidence.

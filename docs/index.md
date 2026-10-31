@@ -1,41 +1,40 @@
-# Welcome to Agentmux
+# Agentmux
 
-**Agentmux** is the fastest way to spin up and control coordinated AI-heavy terminal workspaces.
+Run agent teams in tmux with explicit communication and memory permissions.
+Use native Claude/Codex/Pi terminals for human-led work, managed workers for
+bounded autonomous workflows, or the research runners for controlled experiments.
 
-It's not just a window manager—it's a **stateless orchestrator** for terminal-based agents.
+## Start here
 
-!!! info "The Paradigm"
-    Agentmux sits exactly between two extremes: manual tmux splits and complex, black-box agent daemons. It gives you the power of declarative configuration with the transparency of the Unix terminal.
+1. [Build and install](getting-started/installation.md).
+2. [Start an interactive work session](work-sessions.md).
+3. Use the terminal dashboard for attachment and the local web app for activity,
+   tasks, shared-memory editing and live permission controls.
 
----
+The managed runtime and workbench are experimental. Broker permissions, native
+approvals, provider networking and filesystem isolation are separate boundaries.
+The [trust model](security-model.md) and [validation record](release-validation.md)
+describe measured coverage and limits.
 
-## Why Agentmux?
+## Configure and automate
 
-*   **🚀 One-Command Launch:** Spin up complex multi-window, multi-pane layouts with specialized AI agents in seconds.
-*   **🧠 Coordinated Teams:** Agents talk to each other via a shared **Blackboard** (shared memory) and **Wait** (synchronization) primitives.
-*   **📦 Portable Bundles:** Package your entire agentic team—YAML, scripts, and prompts—into a single `.amx` file that runs anywhere.
-*   **🔍 Visible Agency:** Don't let your agents run in the dark. Monitor everything in real-time with the **Mission Control Dashboard**.
-*   **⚡ Stateless & Resilient:** No background daemons. Agentmux "compiles" your config into tmux commands. If Agentmux crashes, your agents keep working.
+- [Setup and providers](managed-setup.md)
+- [Managed runtime](managed-runtime.md)
+- [Persistent conversations and autonomous wakeups](autonomous-workflows.md)
+- [Dynamic teams and bounded spawning](dynamic-teams.md)
+- [Private/shared memory](memory-lifecycle.md)
+- [Hardening](hardening.md)
+- [Trace inspection and recovery](traces-and-recovery.md)
+- [Remote workers](remote-workers.md)
+- [Provider validation](provider-validation.md)
+- [Research](research.md) and [controlled studies](research-study.md)
 
----
+## Existing workspace mode
 
-## The Agentic Team Protocol
+The original YAML compiler creates tmux layouts with `load` and `reload`. Pane
+capture, raw input, synchronization, session KV and portable bundles remain
+available. This mode does not provide the managed broker's per-agent ACLs.
 
-Agentmux provides the core pillars required for professional AI team orchestration in the terminal:
-
-| Pillar | Feature | Purpose |
-| :--- | :--- | :--- |
-| **Memory** | [The Blackboard](architecture/coordination.md#1-the-blackboard-kv-store) | Shared state via tmux session options. |
-| **Signals** | [Synchronization](architecture/coordination.md#2-synchronization-wait) | Block execution until output patterns are matched. |
-| **Elasticity** | [Dynamic Scaling](architecture/coordination.md#3-dynamic-scaling) | Surgically add/remove workers based on workload. |
-| **Reliability** | [Environment Guards](config-guide.md#requires-environment-guards) | Pre-flight dependency and API key verification. |
-
----
-
-## Next Steps
-
-To get started, follow our guides:
-
-1.  **[Installation](getting-started/installation.md)**: How to get Agentmux on your machine.
-2.  **[Quickstart Guide](getting-started/quickstart.md)**: Launch your first session in 60 seconds.
-3.  **[Your First AI Team](tutorials/hello-team.md)**: A tutorial on building a coordinated 2-agent workflow.
+[Workspace quickstart](getting-started/quickstart.md#existing-workspace-mode)
+· [Layout architecture](architecture/mental-model.md)
+· [Portable bundles](tutorials/portable-bundles.md)

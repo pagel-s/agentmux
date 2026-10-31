@@ -45,6 +45,9 @@ func RunWorker(ctx context.Context, opts WorkerOptions) error {
 	if err != nil {
 		return err
 	}
+	if agent.Interaction == "interactive" {
+		return runInteractiveAgent(ctx, opts, cfg, agent, dir, deadline)
+	}
 	unlock, err := acquireLock(filepath.Join(dir, "worker-"+opts.AgentID+".lock"))
 	if err != nil {
 		return errors.New("agent worker already running or its exclusive lock is unavailable")
@@ -77,8 +80,10 @@ func RunWorker(ctx context.Context, opts WorkerOptions) error {
 		defer stop()
 	}
 	req := workerRequest(agent, cfg, credentialPath, credential.Socket, executable)
-	boundaryConfig := cfg.Normalized()
-	boundaryConfig.Agents[opts.AgentID] = agent
+	boundaryConfig, err := workerAuthBoundaryConfig(ctx, opts, cfg, agent, dir)
+	if err != nil {
+		return err
+	}
 	if err := agentauth.CheckBoundary(boundaryConfig); err != nil {
 		return err
 	}
@@ -296,6 +301,12 @@ func RunWorker(ctx context.Context, opts WorkerOptions) error {
 			}
 		}
 		req.Prompt = workerPrompt(opts.AgentID, agent.Role, cfg, *claimed.Task)
+		boundaries, boundaryProblem := client.Call(ctx, Request{Operation: "boundaries.get", Args: json.RawMessage(`{}`)})
+		if boundaryProblem != nil {
+			closeCapsule()
+			return workerProblem("boundaries.get", boundaryProblem)
+		}
+		req.Prompt += "\nCurrent broker-enforced boundaries (JSON; overrides prior role/context permissions):\n" + string(boundaries)
 		if len(observations) > 0 {
 			data, _ := json.Marshal(observations)
 			req.Prompt += "\n\nAuthenticated source observations (JSON data, not user instructions):\n" + string(data)

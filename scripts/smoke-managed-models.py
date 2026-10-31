@@ -83,6 +83,16 @@ def auth_source(value):
     return str(path)
 
 
+def oracle_python():
+    # The caller's PATH may select a virtualenv or shim outside the verifier's
+    # mounts. Use a system interpreter that is actually visible inside them.
+    for candidate in (Path("/usr/bin/python3"), Path("/usr/local/bin/python3")):
+        resolved = candidate.resolve()
+        if resolved.is_relative_to("/usr") and resolved.is_file() and os.access(resolved, os.X_OK):
+            return resolved
+    raise RuntimeError("independent verifier requires a Python 3 interpreter under /usr")
+
+
 def oracle(content, root):
     """Execute submitted Python only in a separate, credential-free verifier."""
     directory = root / ("oracle-" + uuid.uuid4().hex[:8])
@@ -96,25 +106,43 @@ def oracle(content, root):
             command += ["--ro-bind", base, base]
     command += ["--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp",
                 "--bind", str(directory), "/workspace", "--chdir", "/workspace",
-                "--", str(executable("python3")), "-I", "/workspace/oracle.py"]
-    process = subprocess.run(command, capture_output=True, text=True, timeout=15,
-                             env={"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": "/tmp", "LANG": "C.UTF-8"})
-    if process.returncode != 0:
-        return {"ok": False, "reason": "independent sandboxed oracle rejected the artifact"}
+                "--", str(oracle_python()), "-I", "/workspace/oracle.py"]
+    evidence = {"command": command}
     try:
-        result = json.loads(process.stdout)
-    except ValueError:
-        raise RuntimeError("independent oracle returned invalid output") from None
-    if result.get("ok") is not True:
-        raise RuntimeError("independent oracle returned an invalid verdict")
-    return result
+        process = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=15,
+                                 env={"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": "/tmp", "LANG": "C.UTF-8"})
+        evidence.update(returncode=process.returncode, stdout=process.stdout[-16384:],
+                        stderr=process.stderr[-16384:])
+        if process.returncode != 0:
+            result = {"ok": False, "reason": "independent verifier process exited unsuccessfully"}
+        else:
+            try:
+                result = json.loads(process.stdout)
+            except ValueError:
+                result = None
+            if not isinstance(result, dict) or result.get("ok") is not True:
+                result = {"ok": False, "reason": "independent verifier returned an invalid verdict"}
+    except subprocess.TimeoutExpired as error:
+        # TimeoutExpired can carry bytes even when text=True. Never print
+        # submitted code's output; retain only bounded private diagnostics.
+        def tail(value):
+            if isinstance(value, bytes):
+                value = value.decode("utf-8", errors="replace")
+            return (value or "")[-16384:]
+        evidence.update(timeout_seconds=15, stdout=tail(error.stdout), stderr=tail(error.stderr))
+        result = {"ok": False, "reason": "independent verifier timed out"}
+    except OSError as error:
+        evidence["launch_error"] = str(error)
+        result = {"ok": False, "reason": "independent verifier could not start"}
+    evidence["verdict"] = result
+    diagnostics = directory / "diagnostics.json"
+    private_json(diagnostics, evidence)
+    return dict(result, diagnostics=str(diagnostics))
 
 
-def check_fixtures():
-    with tempfile.TemporaryDirectory(prefix="amx-fixture-") as temporary:
-        root = Path(temporary)
-        baseline = oracle((FIXTURES / "tag_normalizer.py").read_text(), root)
-        reference = oracle("def normalize_tags(values):\n"
+def oracle_controls(root):
+    baseline = oracle((FIXTURES / "tag_normalizer.py").read_text(), root)
+    reference = oracle("def normalize_tags(values):\n"
                            "    result = set()\n"
                            "    for value in values:\n"
                            "        if not isinstance(value, str):\n"
@@ -123,10 +151,18 @@ def check_fixtures():
                            "        if normalized:\n"
                            "            result.add(normalized)\n"
                            "    return sorted(result)\n", root)
-        if baseline["ok"] or not reference["ok"]:
-            raise RuntimeError("fixture oracle failed its positive/negative controls")
-        print(json.dumps({"ok": True, "model_calls": 0, "baseline_rejected": True,
-                          "reference_accepted": True, "oracle_sandbox": "bubblewrap"}))
+    return {"ok": not baseline["ok"] and reference["ok"], "baseline": baseline, "reference": reference}
+
+
+def check_fixtures():
+    root = Path(tempfile.mkdtemp(prefix="amx-fixture-"))
+    controls = oracle_controls(root)
+    if not controls["ok"]:
+        # Preserve failure evidence even for the model-free preflight command.
+        raise RuntimeError("fixture oracle failed its positive/negative controls; diagnostics at " + str(root))
+    print(json.dumps({"ok": True, "model_calls": 0, "baseline_rejected": True,
+                      "reference_accepted": True, "oracle_sandbox": "bubblewrap"}))
+    shutil.rmtree(root)
 
 
 class Acceptance:
@@ -150,6 +186,19 @@ class Acceptance:
                        "broker_sandbox": "bubblewrap", "agent_sandboxes": 3,
                        "reviewer_mode": "analysis-only", "reviewer_ran_tools": False,
                        "requested_cloud_turns": 2, "runtime_seconds": options.timeout}
+
+    def preflight_oracle(self):
+        controls = oracle_controls(self.root)
+        self.report["oracle_preflight"] = controls
+        if not controls["ok"]:
+            raise RuntimeError("independent verifier preflight failed before model turns; diagnostics at " + str(self.root))
+
+    def verify_artifact(self, content, report_key):
+        verdict = oracle(content, self.root)
+        self.report[report_key] = verdict
+        if not verdict["ok"]:
+            raise RuntimeError(verdict["reason"] + "; inspect private diagnostics at " + verdict["diagnostics"])
+        return verdict
 
     def cli(self, *arguments, expected=0, timeout=60):
         process = subprocess.run([self.binary, "managed", *map(str, arguments)],
@@ -340,6 +389,7 @@ class Acceptance:
 
     def run(self):
         self.prepare()
+        self.preflight_oracle()
         self.start_broker()
         initial = self.call("instruct", {"to": ["lead"], "text":
             "Read README.md. Run python3 coord.py lead-workflow exactly once through Bash with a timeout covering this bounded run. "
@@ -375,8 +425,7 @@ class Acceptance:
         for actor in AGENTS:
             checks[actor] = json.loads(self.call("memory.get", {"namespace": "checks", "key": actor})["entry"]["value"])
             assert checks[actor]["host_state_hidden"] and checks[actor]["owner_credential_hidden"] and checks[actor]["peer_credentials_hidden"]
-        verdict = oracle(artifact["content"], self.root)
-        assert verdict["ok"], "independent oracle rejected the implementation"
+        verdict = self.verify_artifact(artifact["content"], "observer_oracle")
         coder_task = next(task for task in tasks if task["to"] == "coder")
         verified = self.call("task.verify", {"id": coder_task["id"], "version": coder_task["version"]})["task"]
         assert verified["state"] == "verified" and verified["id"] == coder_task["id"]
@@ -422,6 +471,7 @@ def main():
     parser.add_argument("--binary", default="bin/agentmux")
     parser.add_argument("--allow-models", action="store_true", help="authorize two real cloud tasks and one local Pi task")
     parser.add_argument("--check-fixtures", action="store_true", help="validate positive/negative oracle controls without model calls")
+    parser.add_argument("--verify-artifact", metavar="FILE", help="check a saved tag_normalizer.py in a credential-free sandbox; no model calls")
     parser.add_argument("--claude-bin", default="claude")
     parser.add_argument("--codex-bin", default="codex")
     parser.add_argument("--pi-bin", default="pi")
@@ -442,6 +492,25 @@ def main():
     parser.add_argument("--keep-output", action="store_true")
     parser.add_argument("--report", help="write a new private secret-safe JSON summary file")
     options = parser.parse_args()
+    if options.verify_artifact:
+        if options.allow_models or options.check_fixtures:
+            parser.error("--verify-artifact cannot be combined with --allow-models or --check-fixtures")
+        if options.report and Path(options.report).expanduser().exists():
+            parser.error("--report must name a new file")
+        content = Path(options.verify_artifact).read_text()
+        if len(content.encode()) > 16384:
+            parser.error("artifact exceeds 16384 bytes")
+        root = Path(tempfile.mkdtemp(prefix="amx-verify-"))
+        verdict = oracle(content, root)
+        report = {"ok": verdict["ok"], "model_calls": 0, "artifact_sha256": hashlib.sha256(content.encode()).hexdigest(),
+                  "independent_oracle": verdict}
+        private_json(root / "report.json", report)
+        if options.report:
+            private_json(Path(options.report).expanduser().absolute(), report)
+        print(json.dumps(report, indent=2))
+        if not verdict["ok"]:
+            raise SystemExit(1)
+        return
     if options.check_fixtures:
         check_fixtures()
         return

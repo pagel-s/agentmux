@@ -258,6 +258,9 @@ func (c *checker) agent(id string, agent managedconfig.Agent) {
 		c.add(id, "codex.sandbox", StatusWarning, "explicit external mode: Codex commands rely on the required outer bubblewrap boundary; no native sandbox fallback is attempted")
 	}
 	spec, err := harness.Build(req)
+	if agent.Interaction == "interactive" {
+		spec, err = harness.BuildInteractive(req)
+	}
 	if err != nil {
 		// Missing named credentials have their own useful, non-secret result.
 		c.add(id, "harness.config", StatusError, "harness request cannot be built; check supported connection, model, environment, and argv configuration")
@@ -280,7 +283,7 @@ func (c *checker) agent(id string, agent managedconfig.Agent) {
 	if agent.Harness == "command" {
 		c.add(id, "harness.capabilities", StatusWarning, "custom command was not executed by preflight; its stdin/exit contract is owner-defined")
 	} else {
-		cacheKey := agent.Harness + "\x00" + binary + "\x00" + strings.Join(specPrefix(agent), "\x00") + "\x00" + strings.Join(metadataEnv(agent.Env), "\x00")
+		cacheKey := agent.Harness + "\x00" + agent.Interaction + "\x00" + binary + "\x00" + strings.Join(specPrefix(agent), "\x00") + "\x00" + strings.Join(metadataEnv(agent.Env), "\x00")
 		var exists bool
 		meta, exists = c.metadata[cacheKey]
 		if !exists {
@@ -292,7 +295,7 @@ func (c *checker) agent(id string, agent managedconfig.Agent) {
 		} else if len(meta.missing) > 0 {
 			c.add(id, "harness.capabilities", StatusError, "installed CLI lacks required adapter flags: "+strings.Join(meta.missing, ", "))
 		} else {
-			c.add(id, "harness.capabilities", StatusOK, "installed CLI advertises the required managed-turn flags")
+			c.add(id, "harness.capabilities", StatusOK, "installed CLI advertises the required flags for the selected interaction mode")
 		}
 		if meta.version != "" {
 			c.add(id, "harness.version", StatusOK, "installed CLI version "+meta.version)

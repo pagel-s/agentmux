@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -43,6 +44,7 @@ type AgentPane struct {
 // Runtime is presentation/lifecycle metadata only. No configuration, task text,
 // environment values, tokens, or model output enters the launch manifest.
 type Runtime struct {
+	Controller     string               `json:"controller,omitempty"`
 	Version        int                  `json:"version"`
 	AttemptID      string               `json:"attempt_id"`
 	Session        string               `json:"session"`
@@ -123,6 +125,12 @@ func (l *Launcher) Up(ctx context.Context, cfg managedconfig.Config) (Runtime, e
 		return Runtime{}, errors.New("another managed lifecycle operation is in progress")
 	}
 	defer unlock()
+	// A coding session may work on Agentmux's own source checkout. Its agents
+	// must never replace the controller executable later invoked with owner
+	// authority. Pin a private copy before launching any process.
+	if err := l.pinController(cfg); err != nil {
+		return Runtime{}, err
+	}
 	if err := l.ensureState(cfg); err != nil {
 		return Runtime{}, err
 	}
@@ -143,7 +151,7 @@ func (l *Launcher) Up(ctx context.Context, cfg managedconfig.Config) (Runtime, e
 	if err != nil {
 		return Runtime{}, err
 	}
-	runtime := Runtime{Version: 1, AttemptID: attempt, Session: cfg.Session, State: "starting", BrokerSandbox: l.options.BrokerSandbox, Agents: map[string]AgentPane{}}
+	runtime := Runtime{Controller: l.options.Executable, Version: 1, AttemptID: attempt, Session: cfg.Session, State: "starting", BrokerSandbox: l.options.BrokerSandbox, Agents: map[string]AgentPane{}}
 	runtime.AttachCommand = ShellCommand([]string{"tmux", "-S", SocketPath(l.options.StateDir), "attach-session", "-t", runtime.Session})
 	if err := writeRuntime(l.options.StateDir, runtime); err != nil {
 		return runtime, err
@@ -273,6 +281,13 @@ func (l *Launcher) Down(ctx context.Context) (Runtime, error) {
 	if err := l.stopPaneSet(ctx, runtime, []string{runtime.SupervisorPane}); err != nil {
 		return runtime, err
 	}
+	views, _ := l.tmux(ctx, "list-sessions", "-F", "#{session_name}\t#{@agentmux_view}")
+	for _, line := range strings.Split(views, "\n") {
+		parts := strings.Split(line, "\t")
+		if len(parts) == 2 && parts[1] == runtime.AttemptID {
+			_, _ = l.tmux(ctx, "kill-session", "-t", parts[0])
+		}
+	}
 	if l.ownsSession(ctx, runtime) {
 		if _, err := l.tmux(ctx, "kill-session", "-t", runtime.Session); err != nil {
 			return runtime, err
@@ -287,13 +302,147 @@ func (l *Launcher) Down(ctx context.Context) (Runtime, error) {
 }
 
 func (l *Launcher) Attach(ctx context.Context, runtime Runtime, in io.Reader, out, diagnostics io.Writer) error {
+	return l.AttachAgent(ctx, runtime, "", in, out, diagnostics)
+}
+
+// Each terminal client gets its own grouped view. Windows and processes are
+// shared, while switching windows in one terminal never moves another client.
+func (l *Launcher) AttachAgent(ctx context.Context, runtime Runtime, agent string, in io.Reader, out, diagnostics io.Writer) error {
 	if !l.ownsSession(ctx, runtime) {
 		return errors.New("managed tmux session is not running with this attempt identity")
 	}
-	command := exec.CommandContext(ctx, "tmux", "-S", SocketPath(l.options.StateDir), "attach-session", "-t", runtime.Session)
+	pane := runtime.DashboardPane
+	if agent != "" {
+		var err error
+		pane, err = l.liveAgentPane(ctx, runtime, agent)
+		if err != nil {
+			return err
+		}
+	}
+	id, err := newID()
+	if err != nil {
+		return err
+	}
+	view := "view_" + strings.TrimPrefix(id, "run_")
+	if _, err = l.tmux(ctx, "new-session", "-d", "-t", runtime.Session, "-s", view); err != nil {
+		return err
+	}
+	defer func() {
+		cleanup := context.Background()
+		tag, _ := l.tmux(cleanup, "show-options", "-v", "-t", view, "@agentmux_view")
+		if strings.TrimSpace(tag) == runtime.AttemptID {
+			_, _ = l.tmux(cleanup, "kill-session", "-t", view)
+		}
+	}()
+	for _, pair := range [][2]string{{"@agentmux_view", runtime.AttemptID}, {"@agentmux_runtime", runtime.AttemptID}} {
+		if _, err = l.tmux(ctx, "set-option", "-t", view, pair[0], pair[1]); err != nil {
+			return err
+		}
+	}
+	viewRuntime := runtime
+	viewRuntime.Session = view
+	if err = l.configureWorkbench(ctx, viewRuntime); err != nil {
+		return err
+	}
+	if _, err = l.tmux(ctx, "set-option", "-t", view, "status-left", "#[fg=#c4b5fd,bold] agentmux #[default]│ "+runtime.Session+" "); err != nil {
+		return err
+	}
+	index, err := l.tmux(ctx, "display-message", "-p", "-t", pane, "#{window_index}")
+	if err != nil {
+		return err
+	}
+	if _, err = l.tmux(ctx, "select-window", "-t", view+":"+strings.TrimSpace(index)); err != nil {
+		return err
+	}
+	command := exec.CommandContext(ctx, "tmux", "-S", SocketPath(l.options.StateDir), "attach-session", "-t", view)
 	command.Env = withoutTMux(os.Environ())
 	command.Stdin, command.Stdout, command.Stderr = in, out, diagnostics
 	return command.Run()
+}
+
+func (l *Launcher) liveAgentPane(ctx context.Context, runtime Runtime, agent string) (string, error) {
+	if !l.ownsSession(ctx, runtime) {
+		return "", errors.New("managed session ownership changed")
+	}
+	pane, ok := runtime.Agents[agent]
+	if !ok {
+		return "", errors.New("agent has no tracked terminal; external sessions stay in their original terminal")
+	}
+	panes, err := l.panes(ctx, runtime)
+	if err != nil {
+		return "", err
+	}
+	for _, p := range panes {
+		if p.ID == pane.PaneID && p.Agent == agent && p.Attempt == runtime.AttemptID && p.Role == "worker" && !p.Dead {
+			return p.ID, nil
+		}
+	}
+	return "", errors.New("agent terminal is no longer live or owned by this attempt")
+}
+
+// Focus selects only a live pane tagged to this exact attempt and agent. A
+// stale manifest or replaced pane cannot redirect a human into another shell.
+func (l *Launcher) Focus(ctx context.Context, runtime Runtime, agent string) error {
+	pane, err := l.liveAgentPane(ctx, runtime, agent)
+	if err != nil {
+		return err
+	}
+	// Prefer the most recently active attached view, preserving other clients'
+	// selected windows. The core session remains the lifecycle owner.
+	target := runtime.Session
+	explicitView := ""
+	contextParts := strings.Split(os.Getenv("TMUX"), ",")
+	if len(contextParts) == 3 && contextParts[0] == SocketPath(l.options.StateDir) {
+		if _, e := strconv.ParseUint(contextParts[2], 10, 64); e == nil {
+			name, _ := l.tmux(ctx, "display-message", "-p", "-t", "$"+contextParts[2], "#{session_name}")
+			name = strings.TrimSpace(name)
+			tag, _ := l.tmux(ctx, "show-options", "-v", "-t", name, "@agentmux_view")
+			if name != "" && strings.TrimSpace(tag) == runtime.AttemptID {
+				explicitView = name
+			}
+		}
+	}
+	clients, _ := l.tmux(ctx, "list-clients", "-F", "#{client_session}\t#{client_activity}\t#{pane_id}\t#{client_name}")
+	var latest int64
+	matchedPane := false
+	for _, line := range strings.Split(clients, "\n") {
+		fields := strings.Split(line, "\t")
+		if len(fields) != 4 {
+			continue
+		}
+		if explicitView != "" && fields[0] != explicitView {
+			continue
+		}
+		if client := os.Getenv("AGENTMUX_CLIENT"); client != "" && fields[3] != client {
+			continue
+		}
+		match := fields[2] == os.Getenv("TMUX_PANE") && os.Getenv("TMUX_PANE") != ""
+		if matchedPane && !match {
+			continue
+		}
+		stamp, _ := strconv.ParseInt(fields[1], 10, 64)
+		if stamp < latest && match == matchedPane {
+			continue
+		}
+		tag, _ := l.tmux(ctx, "show-options", "-v", "-t", fields[0], "@agentmux_view")
+		if strings.TrimSpace(tag) == runtime.AttemptID {
+			target = fields[0]
+			latest = stamp
+			matchedPane = match
+		}
+	}
+	if explicitView != "" {
+		target = explicitView
+	}
+	index, err := l.tmux(ctx, "display-message", "-p", "-t", pane, "#{window_index}")
+	if err != nil {
+		return err
+	}
+	if _, err = l.tmux(ctx, "select-window", "-t", target+":"+strings.TrimSpace(index)); err != nil {
+		return err
+	}
+	_, err = l.tmux(ctx, "select-pane", "-t", pane)
+	return err
 }
 
 func (l *Launcher) tmux(ctx context.Context, args ...string) (string, error) {

@@ -62,6 +62,16 @@ func run(args []string) int {
 	}
 
 	switch args[0] {
+	case "start", "attach", "reply", "inbox", "board", "down", "remove", "collaborate", "isolate":
+		return runWorkSession(args[0], args[1:], os.Stdin, os.Stdout, os.Stderr)
+	case "sessions":
+		return runWorkInventory(args[1:], os.Stdout, os.Stderr)
+	case "connect":
+		return runWorkConnect(args[1:], os.Stdout, os.Stderr)
+	case "add":
+		return runWorkAdd(args[1:], os.Stdout, os.Stderr)
+	case "web":
+		return runWorkWeb(args[1:], os.Stdout, os.Stderr)
 	case "load":
 		return runLoad(args[1:])
 	case "reload":
@@ -103,6 +113,9 @@ func run(args []string) int {
 	case "list":
 		return runList(args[1:])
 	case "dashboard":
+		if len(args) == 1 || hasWorkSessionFlag(args[1:]) {
+			return runWorkSession("dashboard", args[1:], os.Stdin, os.Stdout, os.Stderr)
+		}
 		return runDashboard(args[1:])
 	case "status":
 		return runStatus(args[1:])
@@ -133,6 +146,9 @@ func run(args []string) int {
 	case "capture":
 		return runCapture(args[1:])
 	case "send":
+		if len(args) == 3 || hasWorkSessionFlag(args[1:]) {
+			return runWorkSession("send", args[1:], os.Stdin, os.Stdout, os.Stderr)
+		}
 		return runSend(args[1:])
 	case "doctor":
 		return runDoctor(args[1:])
@@ -2086,6 +2102,21 @@ func printUsage() {
 	fmt.Println(`agentmux
 
 Usage:
+  agentmux start [--project DIR] [--session work] [--detach]
+  agentmux add NAME --harness claude|codex|pi --project DIR [--role "..."]
+  agentmux sessions [--session work | --state DIR]
+  agentmux connect OBSERVED_ID --name NAME [--session work | --state DIR]
+  agentmux collaborate AGENT AGENT [...] [--session work | --state DIR]
+  agentmux isolate AGENT [...] [--session work | --state DIR]
+  agentmux remove AGENT [--session work | --state DIR]
+  agentmux attach [AGENT] [--session work | --state DIR]
+  agentmux dashboard [--session work | --state DIR]
+  agentmux web [--session work | --state DIR] [--open]
+  agentmux send AGENT "message" [--session work | --state DIR]
+  agentmux reply TASK_OR_MESSAGE_ID "message" [--session work | --state DIR]
+  agentmux inbox [--session work | --state DIR]
+  agentmux board "note" [--session work | --state DIR]
+  agentmux down [--session work | --state DIR]
   agentmux templates
   agentmux init <template> <path> [--force]
   agentmux edit <path-or-session>
@@ -2124,6 +2155,11 @@ Usage:
 
 	fmt.Println(`
 Starter flow:
+  agentmux start
+  agentmux attach claude
+  agentmux web --open
+
+Legacy workspace flow:
   agentmux templates
   agentmux init default my-workflow.yaml
   agentmux init coding-starter coding.yaml

@@ -32,6 +32,8 @@ type Spec struct {
 // Auth is an explicit choice: none, native-local (trusted host login), file
 // (one private native credential file), or api-env (named environment only).
 type Agent struct {
+	Interaction   string               `json:"interaction,omitempty"`
+	Workdir       string               `json:"workdir,omitempty"`
 	ID            string               `json:"id"`
 	Role          string               `json:"role"`
 	Harness       string               `json:"harness"`
@@ -128,6 +130,13 @@ func Build(spec Spec) (Plan, error) {
 			return p, fmt.Errorf("agent %s: %w", a.ID, err)
 		}
 		agent := managedconfig.Agent{Harness: a.Harness, Role: a.Role, Model: a.Model, Sandbox: spec.Sandbox, Network: "host", Command: command, ReadOnlyPaths: deps, Workdir: filepath.Join(root, a.ID), Conversation: a.Conversation, CodexSandbox: a.CodexSandbox}
+		agent.Interaction = a.Interaction
+		if a.Workdir != "" {
+			agent.Workdir, err = filepath.Abs(a.Workdir)
+			if err != nil {
+				return p, err
+			}
+		}
 		if a.Network != "" {
 			agent.Network = a.Network
 		}
@@ -136,7 +145,9 @@ func Build(spec Spec) (Plan, error) {
 			agent.Command = append(agent.Command, "--allowedTools", "Read,Write,Edit,Bash")
 		}
 		if a.Harness == "pi" {
-			agent.Command = append(agent.Command, "--offline", "--no-extensions", "--no-skills", "--no-prompt-templates", "--no-context-files", "--no-approve")
+			if a.Interaction != "interactive" {
+				agent.Command = append(agent.Command, "--offline", "--no-extensions", "--no-skills", "--no-prompt-templates", "--no-context-files", "--no-approve")
+			}
 			if a.BaseURL == "" && a.AuthProvider != "" {
 				agent.Command = append(agent.Command, "--provider", a.AuthProvider)
 			}

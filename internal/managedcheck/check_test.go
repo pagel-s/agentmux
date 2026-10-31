@@ -50,6 +50,9 @@ func TestManagedcheckProcess(t *testing.T) {
 			os.Exit(5)
 		}
 		flags := requiredFlags("claude")
+		if scenario == "managedcheck-interactive" {
+			flags = requiredInteractiveFlags("claude")
+		}
 		if scenario == "managedcheck-pi" {
 			flags = requiredFlags("pi")
 		}
@@ -65,6 +68,17 @@ func TestManagedcheckProcess(t *testing.T) {
 		os.Exit(6) // A doctor must never send an actual prompt.
 	}
 	os.Exit(0)
+}
+
+func TestInteractiveDoctorChecksNativeInterfaceInsteadOfPrintProtocol(t *testing.T) {
+	cfg := testConfig(t, "managedcheck-interactive")
+	agent := cfg.Agents["worker"]
+	agent.Interaction = "interactive"
+	cfg.Agents["worker"] = agent
+	report := Check(context.Background(), cfg, Options{Executable: os.Args[0]})
+	if !report.OK {
+		t.Fatalf("native UI was rejected for lacking headless flags: %+v", report)
+	}
 }
 
 func testConfig(t *testing.T, scenario string) managedconfig.Config {

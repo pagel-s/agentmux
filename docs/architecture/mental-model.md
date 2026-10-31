@@ -4,7 +4,13 @@ Agentmux sits exactly between two extremes:
 1.  **Manual Multiplexing:** Hand-typing `tmux split-window` commands.
 2.  **Black-Box Daemons:** Complex background services that manage agent memory and execution opaquely.
 
-Agentmux is **declarative, stateless, and inspectable.**
+This page describes the legacy v1 workspace compiler (`apply`, `plan`, and raw
+tmux pane commands). Its declarative launch layer is stateless.
+
+The v2 [managed runtime](../managed-runtime.md) is stateful: it keeps authenticated
+coordination, tasks, permissions, memory, and process ownership in a private
+store. For the terminal-first daily workflow, start with
+[work sessions](../work-sessions.md).
 
 ## The Core Concept
 
@@ -28,4 +34,4 @@ A configuration breaks down into three core concepts:
 
 To manage these panes without a daemon, Agentmux injects state directly into the tmux processes using **Tmux User Options** (e.g., `@agentmux_name`, `@agentmux_startup_command`). 
 
-When you run `agentmux status`, Agentmux simply asks `tmux` to print these options. This stateless design makes the tool incredibly fast and resilient.
+When you run `agentmux status`, Agentmux simply asks `tmux` to print these options. These options make legacy layout state inspectable without a separate database.

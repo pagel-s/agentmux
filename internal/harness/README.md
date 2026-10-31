@@ -1,4 +1,11 @@
-# Managed harness adapters
+# Harness adapters
+
+`BuildInteractive` / `RunInteractive` start native Claude, Codex, Pi, or command
+interfaces on an inherited tmux PTY. They preserve native prompts and approvals,
+append role/boundary context through supported native flags, and keep broker
+messages in the inbox. They do not emulate terminal input or run the headless
+turn protocol described below. Direct interactive Antigravity role injection
+is unverified; use its Pi bridge. See [work sessions](../../docs/work-sessions.md).
 
 `Run` starts one serialized headless turn. It never sends keys to tmux or
 claims live steering support. By default each turn starts fresh; an explicit

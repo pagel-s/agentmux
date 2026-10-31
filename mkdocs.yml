@@ -54,6 +54,7 @@ nav:
       - Architecture: architecture/mental-model.md
       - Agentic Coordination: architecture/coordination.md
   - Managed Teams:
+      - Work Sessions: work-sessions.md
       - Runtime: managed-runtime.md
       - Setup: managed-setup.md
       - Persistent Workflows: autonomous-workflows.md

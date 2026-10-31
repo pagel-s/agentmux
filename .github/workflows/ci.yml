@@ -45,6 +45,9 @@ jobs:
       - name: Verify soak audit and cleanup regressions
         run: python3 scripts/test-soak-managed.py
 
+      - name: Verify acceptance verifier failure reporting
+        run: python3 scripts/test-managed-oracle.py
+
       - name: Validate release configuration
         uses: goreleaser/goreleaser-action@v5
         with:
@@ -91,6 +94,9 @@ jobs:
         run: |
           bwrap --version
           bwrap --unshare-all --die-with-parent --ro-bind /usr /usr --ro-bind /bin /bin --ro-bind /lib /lib --ro-bind /lib64 /lib64 --size 1048576 --tmpfs /tmp --proc /proc --dev /dev -- /usr/bin/true
+
+      - name: Verify acceptance oracle controls without model calls
+        run: python3 scripts/smoke-managed-models.py --check-fixtures
 
       - name: Verify sandbox, network, disk and team boundaries
         run: make test-sandbox

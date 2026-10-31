@@ -32,7 +32,11 @@ func inspectMetadata(ctx context.Context, agent managedconfig.Agent, binary stri
 	help, err := boundedMetadata(ctx, spec, true, true)
 	result := metadataResult{helpOK: err == nil}
 	if result.helpOK {
-		for _, flag := range requiredFlags(agent.Harness) {
+		flags := requiredFlags(agent.Harness)
+		if agent.Interaction == "interactive" {
+			flags = requiredInteractiveFlags(agent.Harness)
+		}
+		for _, flag := range flags {
 			if !strings.Contains(help, flag) {
 				result.missing = append(result.missing, flag)
 			}
@@ -64,6 +68,9 @@ func metadataArgs(agent managedconfig.Agent, kind string) []string {
 	if kind == "version" {
 		return append(args, "--version")
 	}
+	if agent.Interaction == "interactive" {
+		return append(args, "--help")
+	}
 	switch agent.Harness {
 	case "claude":
 		return append(args, "--safe-mode", "--help")
@@ -74,6 +81,18 @@ func metadataArgs(agent managedconfig.Agent, kind string) []string {
 	default:
 		return append(args, "--help")
 	}
+}
+
+func requiredInteractiveFlags(name string) []string {
+	switch name {
+	case "claude":
+		return []string{"--append-system-prompt", "--model"}
+	case "codex":
+		return []string{"--no-daemon", "--no-alt-screen", "--sandbox", "--config", "--model"}
+	case "pi":
+		return []string{"--append-system-prompt", "--provider", "--model"}
+	}
+	return nil
 }
 
 func requiredFlags(name string) []string {

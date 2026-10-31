@@ -69,3 +69,8 @@ those resources exist, exact mount execution is explicitly deferred; Node
 dependency closure is still checked statically. Native HTTP model harnesses
 with `network: none` are reported as unrunnable. Trusted `local` execution is
 always labeled as providing no isolation.
+
+Preflight checks the selected interaction mode. Native interactive agents require
+the root CLI role/context flags; managed workers require the headless turn flags.
+Help-cache identity includes the interaction mode. A successful headless check
+does not establish that an interactive adapter is ready, or vice versa.
