@@ -1,0 +1,39 @@
+version: 2
+mode: managed
+session: command-research-pilot
+
+# Deterministic fixtures for testing the runner. These commands do not simulate
+# intelligent collaboration and intentionally ignore the supplied task prompt.
+agents:
+  alice:
+    harness: command
+    command: [/bin/sh, -c, "printf OK"]
+    sandbox: local
+  bob:
+    harness: command
+    command: [/bin/sh, -c, "printf NO"]
+    sandbox: local
+
+boards:
+  common:
+    readers: ['*']
+    writers: ['*']
+
+memory:
+  project:
+    readers: ['*']
+    writers: ['*']
+
+policy:
+  default: deny
+  grants:
+    - from: ['*']
+      to: ['*']
+      actions: [message.send, ping.send]
+
+limits:
+  max_runtime_seconds: 30
+  max_messages: 100
+  max_tasks: 20
+  max_records: 1000
+  max_requests: 1000

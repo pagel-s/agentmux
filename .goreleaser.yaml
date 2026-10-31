@@ -1,11 +1,7 @@
 # .goreleaser.yaml
-version: 1
+version: 2
 
 project_name: agentmux
-
-before:
-  hooks:
-    - go mod tidy
 
 builds:
   - env:
@@ -21,7 +17,16 @@ builds:
       - -s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}} -X main.date={{.Date}}
 
 archives:
-  - format: tar.gz
+  - formats: [tar.gz]
+    files:
+      - README.md
+      - docs/*.md
+      - docs/*.json
+      - docs/**/*
+      - examples/*.yaml
+      - examples/**/*
+      - scripts/*.py
+      - scripts/**/*.py
     name_template: >-
       {{ .ProjectName }}_
       {{- .Os }}_
@@ -32,13 +37,23 @@ archives:
     # use zip for windows archives
     format_overrides:
       - goos: windows
-        format: zip
+        formats: [zip]
 
 checksum:
   name_template: 'checksums.txt'
 
 snapshot:
-  name_template: "{{ .Tag }}-next"
+  version_template: "{{ .Tag }}-next"
+
+release:
+  prerelease: auto
+  header: |
+    Managed runtime preview: roles, provider adapters, scoped coordination,
+    sandboxed workers/broker, memory lifecycle and controlled research studies.
+
+    Strict worker isolation requires Linux with working Bubblewrap namespaces.
+    Native/provider billing is not a hard-capped guarantee. See the bundled
+    hardening, provider, remote-worker and research documentation for limits.
 
 changelog:
   sort: asc

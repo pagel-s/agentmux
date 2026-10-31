@@ -8,6 +8,9 @@ func TestLookupNormalizesAliases(t *testing.T) {
 		wantID     string
 		wantBinary string
 	}{
+		{input: "antigravity", wantID: "antigravity", wantBinary: "agy"},
+		{input: " AGY ", wantID: "antigravity", wantBinary: "agy"},
+		{input: "pi", wantID: "pi", wantBinary: "pi"},
 		{input: "claude-cli", wantID: "claude", wantBinary: "claude"},
 		{input: "gemini-cli", wantID: "gemini", wantBinary: "gemini"},
 		{input: "openai", wantID: "codex", wantBinary: "codex"},
@@ -64,8 +67,14 @@ func TestIntegrationMetadata(t *testing.T) {
 	if got := IntegrationMode("gemini"); got != "native-mcp" {
 		t.Fatalf("IntegrationMode(gemini) = %q, want %q", got, "native-mcp")
 	}
-	if got := PersonaChannel("claude"); got != "system-prompt" {
-		t.Fatalf("PersonaChannel(claude) = %q, want %q", got, "system-prompt")
+	if got := IntegrationMode("antigravity"); got != "cli-bridge" {
+		t.Fatalf("IntegrationMode(antigravity) = %q, want %q", got, "cli-bridge")
+	}
+	if got := IntegrationMode("pi"); got != "cli-bridge" {
+		t.Fatalf("IntegrationMode(pi) = %q, want %q", got, "cli-bridge")
+	}
+	if got := PersonaChannel("claude"); got != "appended-system-prompt" {
+		t.Fatalf("PersonaChannel(claude) = %q, want %q", got, "appended-system-prompt")
 	}
 	if got := PersonaChannel("gemini"); got != "bootstrap-prompt" {
 		t.Fatalf("PersonaChannel(gemini) = %q, want %q", got, "bootstrap-prompt")
@@ -78,6 +87,34 @@ func TestIntegrationMetadata(t *testing.T) {
 	}
 	if got := PreferredToolInput("codex"); got != "stdin" {
 		t.Fatalf("PreferredToolInput(codex) = %q, want %q", got, "stdin")
+	}
+}
+
+func TestAntigravityUsesCLIBridgeEvenWithMCPHelp(t *testing.T) {
+	profile := ResolveLaunchWith("agy", func(name string) (string, error) {
+		if name != "agy" {
+			t.Fatalf("binary = %q, want agy", name)
+		}
+		return "/usr/bin/agy", nil
+	}, func(string, ...string) (string, error) {
+		return "--prompt-interactive\n--model\n--effort\n--settings\nmcp\n", nil
+	})
+	if profile.Mode != string(LaunchModeCLIBridge) || profile.ToolChannel != "bootstrap-prompt" {
+		t.Fatalf("profile = %#v, want CLI bridge with bootstrap instructions", profile)
+	}
+	requested := ProfileForMode("antigravity", "native-mcp")
+	if requested.Mode != string(LaunchModeCLIBridge) || requested.FallbackReason == "" {
+		t.Fatalf("requested native profile = %#v, want explained CLI bridge", requested)
+	}
+}
+
+func TestPiUsesCLIBridgeForRequestedNativeMCP(t *testing.T) {
+	profile := ProfileForMode("pi", "native-mcp")
+	if profile.Mode != string(LaunchModeCLIBridge) || profile.FallbackReason == "" {
+		t.Fatalf("requested native profile = %#v, want explained CLI bridge", profile)
+	}
+	if profile.PersonaChannel != "appended-system-prompt" || profile.ToolChannel != "appended-system-prompt" {
+		t.Fatalf("profile channels = %#v, want appended system prompt", profile)
 	}
 }
 
@@ -167,8 +204,27 @@ func TestProfileForModeUsesRequestedChannels(t *testing.T) {
 }
 
 func TestValidateReasoningEffort(t *testing.T) {
+	for _, effort := range []string{"off", "minimal", "low", "medium", "high", "xhigh", "max"} {
+		if err := ValidateReasoningEffort("pi", effort); err != nil {
+			t.Fatalf("ValidateReasoningEffort(pi, %q) returned error: %v", effort, err)
+		}
+	}
+	if err := ValidateReasoningEffort("pi", "ultra"); err == nil {
+		t.Fatal("ValidateReasoningEffort(pi, ultra) returned nil error, want unsupported")
+	}
+	for _, effort := range []string{"low", "medium", "high", "xhigh", "max"} {
+		if err := ValidateReasoningEffort("agy", effort); err != nil {
+			t.Fatalf("ValidateReasoningEffort(agy, %q) returned error: %v", effort, err)
+		}
+	}
+	if err := ValidateReasoningEffort("antigravity", "ultra"); err == nil {
+		t.Fatal("ValidateReasoningEffort(antigravity, ultra) returned nil error, want unsupported")
+	}
 	if err := ValidateReasoningEffort("claude", "max"); err != nil {
 		t.Fatalf("ValidateReasoningEffort(claude, max) returned error: %v", err)
+	}
+	if err := ValidateReasoningEffort("claude", "xhigh"); err != nil {
+		t.Fatalf("ValidateReasoningEffort(claude, xhigh) returned error: %v", err)
 	}
 	if err := ValidateReasoningEffort("gemini", "high"); err == nil {
 		t.Fatal("ValidateReasoningEffort(gemini, high) returned nil error, want unsupported")

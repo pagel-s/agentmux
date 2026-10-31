@@ -435,7 +435,7 @@ func TestDocumentRejectsUnsupportedReasoningEffort(t *testing.T) {
 	if !got[`agent "reviewer" provider "gemini" does not support reasoning_effort`] {
 		t.Fatalf("issues missing unsupported gemini reasoning error: %v", issues)
 	}
-	if !got[`pane 1 in window "main" provider "claude" reasoning_effort "ultra" is unsupported; allowed values: low, medium, high, max`] {
+	if !got[`pane 1 in window "main" provider "claude" reasoning_effort "ultra" is unsupported; allowed values: low, medium, high, xhigh, max`] {
 		t.Fatalf("issues missing invalid claude reasoning error: %v", issues)
 	}
 }

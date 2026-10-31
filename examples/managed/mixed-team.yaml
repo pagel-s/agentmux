@@ -1,0 +1,58 @@
+# Local mode trusts every process under the current OS user.
+# Authenticate each harness separately before using this example.
+version: 2
+mode: managed
+session: mixed-team
+
+agents:
+  lead:
+    role: Coordinate implementation, assign bounded tasks, and review results.
+    harness: claude
+    sandbox: local
+    network: host
+  builder:
+    role: Implement assigned changes and report validation and limitations.
+    harness: codex
+    sandbox: local
+    network: host
+  reviewer:
+    role: Review changes, challenge unsupported claims, and report concrete issues.
+    harness: antigravity
+    sandbox: local
+    network: host
+  researcher:
+    role: Research assigned questions and publish supporting evidence.
+    harness: pi
+    sandbox: local
+    network: host
+
+boards:
+  team:
+    readers: ["*"]
+    writers: ["*"]
+  leadership:
+    readers: [lead]
+    writers: [lead]
+
+memory:
+  project:
+    readers: ["*"]
+    writers: [lead]
+  findings:
+    readers: ["*"]
+    writers: [researcher, reviewer]
+
+policy:
+  default: deny
+  grants:
+    - from: [lead]
+      to: [builder, reviewer, researcher]
+      actions: [message.send, ping.send, instruct]
+    - from: [builder, reviewer, researcher]
+      to: ["*"]
+      actions: [message.send, ping.send]
+
+limits:
+  max_messages: 10000
+  max_tasks: 1000
+  max_runtime_seconds: 600

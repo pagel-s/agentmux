@@ -1,0 +1,98 @@
+# Schematic owner configuration: replace EVERY /opt/... and /home/you/... path
+# with your installed executable/dependency closure and private auth files.
+# Agentmux never discovers or mounts a whole host home for these credentials.
+# For an executable integration with installed-path discovery, use:
+#   python3 scripts/smoke-managed-models.py --help
+# See docs/mixed-harness-acceptance.md before opting into model turns.
+#
+# Place each harness + required Node/native package resources under its own
+# explicit read-only directory below; these paths contain CODE ONLY, no auth.
+# Native npm launchers may additionally require Node and optional platform
+# packages. Add their exact code paths to read_only_paths. Config validation and
+# doctor fail on missing/unsafe paths; do not fix a missing dependency by mounting
+# ~/.local, ~/.config, ~/.codex, or ~/.claude wholesale.
+#
+# Initialize first, populate workspaces, and git-init the Codex workspace:
+#   agentmux managed init <edited-file> --state /private/agentmux-coding
+#   git init /private/agentmux-coding/workspaces/coder
+#   agentmux managed doctor <edited-file> --state /private/agentmux-coding
+#   agentmux managed up <edited-file> --state /private/agentmux-coding --broker-sandbox bubblewrap
+# Starting the team does not submit a task. Owner instructions are explicit.
+version: 2
+mode: managed
+session: sandboxed-coding
+
+connections:
+  local-review:
+    protocol: openai-compatible
+    base_url: http://127.0.0.1:11434/v1
+
+agents:
+  lead:
+    role: Coordinate bounded work through the board and memory. Instruct the coder and reviewer when needed. Verify claims before marking work accepted.
+    harness: claude
+    command: [/opt/agentmux-harnesses/claude/bin/claude, --allowedTools, 'Read,Write,Edit,Bash']
+    auth:
+      file: /home/you/.claude/.credentials.json
+    sandbox: bubblewrap
+    network: host
+    read_only_paths: [/opt/agentmux-harnesses/claude]
+    resources: {memory_bytes: 2147483648, cpu_percent: 100, processes: 256, open_files: 1024, cpu_seconds: 120}
+  coder:
+    role: Implement the assigned change, run objective checks, and publish a bounded source artifact with its hash and test evidence to handoff memory. Report limitations honestly.
+    harness: codex
+    command: [/opt/agentmux-harnesses/codex/bin/codex]
+    # Explicitly delegate native tool isolation to the enforced outer bwrap.
+    # Rejected for local mode/other harnesses; never an automatic fallback.
+    codex_sandbox: external
+    auth:
+      file: /home/you/.codex/auth.json
+    sandbox: bubblewrap
+    network: host
+    read_only_paths: [/opt/agentmux-harnesses/codex]
+    resources: {memory_bytes: 2147483648, cpu_percent: 100, processes: 256, open_files: 1024, cpu_seconds: 120}
+  reviewer:
+    role: Review only the artifact supplied in your instruction. Tools are disabled. Distinguish source analysis from tests you did not run.
+    harness: pi
+    command: [/opt/agentmux-harnesses/node/bin/node, /opt/agentmux-harnesses/pi/dist/bundle/cli.js, --no-tools, --no-extensions, --no-context-files, --no-skills, --no-prompt-templates, --no-approve, --offline]
+    model: replace-with-exact-local-model-id
+    connection: local-review
+    sandbox: bubblewrap
+    network: host
+    read_only_paths: [/opt/agentmux-harnesses/node, /opt/agentmux-harnesses/pi]
+    resources: {memory_bytes: 2147483648, cpu_percent: 100, processes: 256, open_files: 1024, cpu_seconds: 120}
+
+boards:
+  work:
+    readers: [lead, coder, reviewer]
+    writers: [lead, coder, reviewer]
+  leadership:
+    readers: [lead]
+    writers: [lead]
+
+memory:
+  project:
+    readers: [lead]
+    writers: [lead]
+  handoff:
+    readers: [lead]
+    writers: [coder]
+
+policy:
+  default: deny
+  grants:
+    - from: [lead]
+      to: [coder, reviewer]
+      actions: [message.send, ping.send, instruct]
+    - from: [coder, reviewer]
+      to: [lead]
+      actions: [message.send, ping.send]
+
+limits:
+  max_messages: 100
+  max_message_bytes: 65536
+  max_tasks: 8
+  max_records: 2000
+  max_requests: 2000
+  max_runtime_seconds: 600
+  max_concurrent_tasks: 3

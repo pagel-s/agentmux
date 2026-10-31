@@ -1,0 +1,54 @@
+# Trusted local workers reuse existing native logins. The broker can still use
+# --broker-sandbox bubblewrap. Local workers can access host files: role text
+# and private workdirs are not filesystem isolation or enforced read-only access.
+#
+# Initialize before starting so both default workspaces are Git repositories:
+#   agentmux managed init examples/managed/claude-codex.yaml --state .agentmux-state/claude-codex
+#   git init .agentmux-state/claude-codex/workspaces/coder
+#   git init .agentmux-state/claude-codex/workspaces/reviewer
+#   agentmux managed up examples/managed/claude-codex.yaml --state .agentmux-state/claude-codex --broker-sandbox bubblewrap
+# No task or model call is started until an authorized instruction is submitted.
+version: 2
+mode: managed
+session: claude-codex
+
+agents:
+  coder:
+    role: Implement the assigned bounded change in your workdir, run its tests, and report exact changed paths and validation. Ask the reviewer to examine a submitted change when useful. Do not change unrelated workspaces or inspect authentication files.
+    harness: claude
+    # Owner-approved native tools; the adapter retains safe-mode and dontAsk.
+    # Narrow Bash patterns further for your own tasks. No permission bypass.
+    command: [claude, --allowedTools, 'Read,Write,Edit,Bash']
+    sandbox: local
+    network: host
+  reviewer:
+    role: Review the supplied changes and tests without editing files. Report concrete correctness issues and missing coverage. Read the coder files only at paths explicitly supplied in your assigned task. Do not inspect authentication files or unrelated workspaces.
+    harness: codex
+    sandbox: local
+    network: host
+
+boards:
+  team:
+    readers: [coder, reviewer]
+    writers: [coder, reviewer]
+
+memory:
+  project:
+    readers: [coder, reviewer]
+    writers: [coder]
+
+policy:
+  default: deny
+  grants:
+    - from: [coder]
+      to: [reviewer]
+      actions: [message.send, ping.send, instruct]
+    - from: [reviewer]
+      to: [coder]
+      actions: [message.send, ping.send]
+
+limits:
+  max_messages: 200
+  max_tasks: 20
+  max_runtime_seconds: 300
+  max_concurrent_tasks: 2

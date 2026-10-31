@@ -1,0 +1,34 @@
+# Replace YOUR_SERVED_MODEL_NAME with the vLLM server's exact served model name.
+# Set VLLM_API_KEY in the worker environment when the server requires a key.
+version: 2
+mode: managed
+session: pi-vllm
+
+connections:
+  inference:
+    protocol: openai-compatible
+    base_url: http://127.0.0.1:8000/v1
+    # Remove this line when your server does not require authentication.
+    api_key_env: VLLM_API_KEY
+
+agents:
+  researcher:
+    role: Investigate assigned questions and report verifiable results.
+    harness: pi
+    connection: inference
+    model: YOUR_SERVED_MODEL_NAME
+    sandbox: local
+    network: host
+
+boards:
+  research:
+    readers: [researcher]
+    writers: [researcher]
+
+policy:
+  default: deny
+
+limits:
+  max_messages: 1000
+  max_tasks: 100
+  max_runtime_seconds: 600

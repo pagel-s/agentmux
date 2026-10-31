@@ -1,0 +1,43 @@
+version: 2
+mode: managed
+session: command-demo
+
+agents:
+  lead:
+    role: Coordinate tasks and review submitted results.
+    harness: command
+    command: [/bin/cat]
+    sandbox: local
+    network: host
+  worker:
+    role: Complete assigned work and report the result.
+    harness: command
+    command: [/bin/cat]
+    sandbox: local
+    network: host
+
+boards:
+  team:
+    readers: ["*"]
+    writers: ["*"]
+
+memory:
+  project:
+    readers: [lead, worker]
+    writers: [lead]
+
+policy:
+  default: deny
+  grants:
+    - from: [lead]
+      to: [worker]
+      actions: [message.send, ping.send, instruct]
+    - from: [worker]
+      to: [lead]
+      actions: [message.send, ping.send]
+
+limits:
+  max_messages: 100
+  max_message_bytes: 65536
+  max_tasks: 50
+  max_runtime_seconds: 60

@@ -20,15 +20,43 @@ jobs:
           go-version: '1.24'
           cache: true
 
-      - name: Ensure tmux is available
+      - name: Ensure terminal and sandbox dependencies are available
         run: |
-          if ! command -v tmux >/dev/null 2>&1; then
+          if ! command -v tmux >/dev/null 2>&1 || ! command -v bwrap >/dev/null 2>&1; then
             sudo apt-get update
-            sudo apt-get install -y tmux
+            sudo apt-get install -y tmux bubblewrap
           fi
 
       - name: Check formatting
         run: test -z "$(gofmt -l cmd internal)"
 
+      - name: Build the CLI for lifecycle tests
+        run: go build -o bin/agentmux ./cmd/agentmux
+
       - name: Run test suite
-        run: go test ./...
+        env:
+          AGENTMUX_MANAGED_INTEGRATION: '1'
+          AGENTMUX_EXPERIMENT_INTEGRATION: '1'
+        run: go test -race ./...
+
+      - name: Verify release installer safety
+        run: python3 scripts/test-install-release.py
+
+      - name: Validate release configuration
+        uses: goreleaser/goreleaser-action@v5
+        with:
+          distribution: goreleaser
+          version: v2.19.0
+          args: check
+
+      - name: Verify strict sandbox handoffs when namespaces are available
+        shell: bash
+        run: |
+          if command -v bwrap >/dev/null && bwrap --unshare-all --die-with-parent --ro-bind /usr /usr --ro-bind /bin /bin --ro-bind /lib /lib --ro-bind /lib64 /lib64 --proc /proc --dev /dev -- /usr/bin/true; then
+            AGENTMUX_MANAGED_INTEGRATION=1 AGENTMUX_SANDBOX_INTEGRATION=1 AGENTMUX_INTEGRATION_BINARY="$PWD/bin/agentmux" go test -race ./internal/managed ./internal/managedlaunch ./internal/capsule ./internal/egress ./internal/sandbox
+            AGENTMUX_RESEARCH_INTEGRATION=1 AGENTMUX_TEST_BINARY="$PWD/bin/agentmux" go test -race ./internal/research
+            python3 scripts/smoke-managed.py
+            python3 scripts/smoke-managed-team.py
+          else
+            echo '::notice::This runner cannot create Bubblewrap namespaces; strict sandbox integrations were not run. Runtime sandbox requests still fail closed.'
+          fi

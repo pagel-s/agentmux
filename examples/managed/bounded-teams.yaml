@@ -1,0 +1,64 @@
+# No model calls: use this to inspect spawning, scoped access, and team consent.
+# Spawned workers always use separate bubblewrap sandboxes and private workdirs.
+version: 2
+mode: managed
+session: bounded-teams
+
+agents:
+  lead:
+    harness: command
+    command: [/bin/cat]
+    role: Coordinate bounded tasks. You may create teams and spawn the approved helper.
+    sandbox: bubblewrap
+    network: none
+  peer:
+    harness: command
+    command: [/bin/cat]
+    role: Independently review invitations and contribute when useful.
+    sandbox: bubblewrap
+    network: none
+
+boards:
+  team:
+    readers: [lead, peer]
+    writers: [lead, peer]
+
+memory:
+  findings:
+    readers: [lead, peer]
+    writers: [lead, peer]
+
+policy:
+  default: deny
+  grants:
+    - from: [lead]
+      to: [peer]
+      actions: [message.send, ping.send]
+    - from: [peer]
+      to: [lead]
+      actions: [message.send, ping.send]
+
+spawn:
+  enabled: true
+  allow:
+    lead: [helper]
+  templates:
+    helper:
+      harness: command
+      command: [/bin/cat]
+      role: Complete bounded delegated work and report to your parent.
+      sandbox: bubblewrap
+      network: none
+
+teams:
+  enabled: true
+  creators: [lead]
+  history: since-join
+
+limits:
+  max_runtime_seconds: 600
+  max_concurrent_tasks: 4
+  max_spawns: 4
+  max_spawn_depth: 1
+  max_teams: 4
+  max_team_members: 4

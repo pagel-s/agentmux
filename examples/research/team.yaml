@@ -1,0 +1,44 @@
+version: 2
+mode: managed
+session: finite-research-fixture
+
+# These are explicit deterministic test strategies. They exercise real broker
+# identities, messages, private observations, and voluntary team membership.
+# They provide no evidence about language-model cooperation or personalities.
+agents:
+  alice:
+    harness: command
+    command: [../../scripts/fixtures/research/agent.py]
+    sandbox: bubblewrap
+    network: none
+    read_only_paths: [../../scripts/fixtures/research/agent.py]
+  bob:
+    harness: command
+    command: [../../scripts/fixtures/research/agent.py]
+    sandbox: bubblewrap
+    network: none
+    read_only_paths: [../../scripts/fixtures/research/agent.py]
+  charlie:
+    harness: command
+    command: [../../scripts/fixtures/research/agent.py]
+    sandbox: bubblewrap
+    network: none
+    read_only_paths: [../../scripts/fixtures/research/agent.py]
+
+policy:
+  default: deny
+  grants:
+    - from: ['*']
+      to: ['*']
+      actions: [message.send, ping.send]
+
+limits:
+  max_tasks: 100
+  max_messages: 200
+  max_message_bytes: 65536
+  max_records: 3000
+  max_requests: 5000
+  max_runtime_seconds: 180
+  max_concurrent_tasks: 3
+  max_teams: 8
+  max_team_members: 3

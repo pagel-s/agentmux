@@ -28,6 +28,20 @@ This will place the `agentmux` binary in your `$GOPATH/bin` directory (usually `
 
 ### For Developers
 
+To install a specific binary release with its published SHA256 checked:
+
+```bash
+python3 scripts/install-release.py --version v0.10.0-rc.1 \
+  --destination /your/existing/bin/agentmux
+```
+
+The destination parent must exist. Replacing an existing executable requires
+`--replace`; stop managed workers first and follow the [upgrade/recovery
+guide](../traces-and-recovery.md). The installer supports published Linux/macOS
+amd64/arm64 archives. Strict Bubblewrap isolation requires Linux; macOS retains
+the existing tmux workflow and explicitly trusted local execution. A checksum
+checks consistency with the release manifest, not an independent signature.
+
 If you are contributing to Agentmux or want to build from source:
 
 1. Clone the repository.

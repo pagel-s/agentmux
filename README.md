@@ -28,12 +28,19 @@ Technical reference, tutorials, and architectural deep-dives are available on ou
 *   **[Your First AI Team](docs/tutorials/hello-team.md)**: A tutorial on building a coordinated 2-agent workflow.
 *   **[Architecture Mental Model](docs/architecture/mental-model.md)**: Understand the stateless "compiler" design.
 *   **[Portable Bundles](docs/tutorials/portable-bundles.md)**: How to package and share your sessions.
+*   **[Managed Runtime](docs/managed-runtime.md)**: Opt-in v2 foundation with authenticated boards, scoped messages, durable tasks, private/shared memory, mixed harnesses, and optional bubblewrap isolation. Start with the no-model `/bin/cat` demo; the existing tmux workflow remains available.
+*   **[Dynamic Teams](docs/dynamic-teams.md)**: Bounded sandbox spawning, delegated permissions, invitation-based membership, and team history controls.
+*   **[Research Pilots](docs/experiments.md)**: Seeded trial plans, fresh state, independent scoring, and cooperation/competition payoff comparisons.
+*   **[Autonomous Workflows](docs/autonomous-workflows.md)**: Private native conversations, durable subscriptions, observation wakeups and bounded execution from one goal.
+*   **[Repeated-Round Research](docs/research.md)**: Scarce resources, private information, declared incentives, objective feedback and optional consented teams.
+*   **[Mixed-Harness Sandbox Acceptance](docs/mixed-harness-acceptance.md)**: Reproduce the real Claude/Codex/local-Pi handoff with selected native login files, enforced worker resources, scoped artifacts, and independent verification.
+*   **[Provider Validation](docs/provider-validation.md)**: Measured Claude, Codex, Pi, Ollama, Antigravity and vLLM support, authentication boundaries and remaining limits.
 
 ---
 
 ## 🛠 Status
 
-Agentmux is production-ready and currently ships with:
+The established tmux workflow ships with:
 - **Agentic Orchestration:** `wait`, `kv-set`, and `scale`.
 - **Remote Loading:** Fetch and launch configurations directly from URLs.
 - **Declarative Workspaces:** YAML configs with `include` for modular reuse.
@@ -56,6 +63,20 @@ go install github.com/pagel-s/agentmux/cmd/agentmux@latest
 # Run diagnostics
 ./bin/agentmux doctor
 ```
+
+Start a managed team, inspect its published activity, and stop it:
+
+```bash
+./bin/agentmux managed up examples/managed/command-demo.yaml
+./bin/agentmux managed activity --state .agentmux-state/command-demo --watch
+./bin/agentmux managed down --state .agentmux-state/command-demo
+```
+
+This demo uses command processes and makes no model calls. Use the [setup wizard](docs/managed-setup.md) or configure Claude Code, Codex, Antigravity, or Pi in [managed team YAML](docs/managed-runtime.md). Claude, Codex and Pi support private persistent conversations in Bubblewrap; the [Antigravity bridge](docs/antigravity-bridge.md) supplies a local provider to sandboxed Pi. Managed mode and research runners are opt-in experimental features. Message wakeups require explicit autonomy configuration.
+
+Additional guides cover [network, budget and disk hardening](docs/hardening.md), [memory lifecycle and retrieval](docs/memory-lifecycle.md), [trace verification and recovery](docs/traces-and-recovery.md), [SSH workers and measured broker scale](docs/remote-workers.md), and [controlled factorial research studies](docs/research-study.md).
+
+See the [preview validation record](docs/release-validation.md) for measured coverage and operational limits.
 
 ---
 

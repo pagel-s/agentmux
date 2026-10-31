@@ -1,0 +1,21 @@
+{
+  "session": "local-team",
+  "workspace_root": "./agentmux-workspaces",
+  "sandbox": "bubblewrap",
+  "broker_sandbox": "bubblewrap",
+  "shared_board": true,
+  "init_git": true,
+  "agents": [
+    {
+      "id": "developer",
+      "role": "Implement small reviewed changes and verify them with local tests.",
+      "harness": "pi",
+      "model": "qwen2.5-coder:7b",
+      "auth": "none",
+      "base_url": "http://127.0.0.1:11434/v1",
+      "protocol": "ollama",
+      "conversation": "persistent",
+      "model_metadata": { "context_window": 8192, "max_output": 2048, "input": ["text"], "reasoning": false }
+    }
+  ]
+}

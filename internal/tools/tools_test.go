@@ -110,7 +110,7 @@ func TestPromptIncludesProviderChannels(t *testing.T) {
 		t.Fatalf("Prompt returned error: %v", err)
 	}
 	for _, want := range []string{
-		"Your role/persona instructions are delivered via system-prompt.",
+		"Your role/persona instructions are delivered via appended-system-prompt.",
 		"The Agentmux coordination contract is delivered via native-mcp.",
 	} {
 		if !strings.Contains(out, want) {
@@ -141,11 +141,28 @@ func TestPromptIncludesCLIBridgeChannelsForFallbackMode(t *testing.T) {
 		t.Fatalf("Prompt returned error: %v", err)
 	}
 	for _, want := range []string{
-		"Your role/persona instructions are delivered via system-prompt.",
+		"Your role/persona instructions are delivered via appended-system-prompt.",
 		"The Agentmux coordination contract is delivered via appended-system-prompt.",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("Prompt output %q does not include %q", out, want)
 		}
+	}
+}
+
+func TestPromptResolvesUnverifiedNativeMCPToCLIBridge(t *testing.T) {
+	for _, provider := range []string{"antigravity", "agy", "pi"} {
+		t.Run(provider, func(t *testing.T) {
+			out, err := Prompt(PromptOptions{Provider: provider, Mode: "native-mcp"})
+			if err != nil {
+				t.Fatalf("Prompt returned error: %v", err)
+			}
+			if strings.Contains(out, "available natively through MCP") {
+				t.Fatalf("Prompt claims unavailable native MCP: %q", out)
+			}
+			if !strings.Contains(out, "call `agentmux tool-call`") {
+				t.Fatalf("Prompt does not explain the CLI bridge: %q", out)
+			}
+		})
 	}
 }

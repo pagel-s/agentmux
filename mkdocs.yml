@@ -53,6 +53,21 @@ nav:
   - Core Concepts:
       - Architecture: architecture/mental-model.md
       - Agentic Coordination: architecture/coordination.md
+  - Managed Teams:
+      - Runtime: managed-runtime.md
+      - Setup: managed-setup.md
+      - Persistent Workflows: autonomous-workflows.md
+      - Antigravity Bridge: antigravity-bridge.md
+      - Hardening: hardening.md
+      - Memory: memory-lifecycle.md
+      - Traces and Recovery: traces-and-recovery.md
+      - SSH and Scale: remote-workers.md
+      - Research: research.md
+      - Controlled Studies: research-study.md
+      - Pilot Results: research-pilot-results.md
+      - Provider Validation: provider-validation.md
+      - Preview Validation: release-validation.md
+      - Environments: research-environments.md
   - Reference:
       - Configuration Guide: config-guide.md
       - CLI Commands: commands.md
