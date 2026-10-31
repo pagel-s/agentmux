@@ -165,6 +165,10 @@ Children receive only the requested capabilities that the parent may delegate. S
 
 Use `agent.list` with the owner credential to inspect registry metadata. `agent.stop` with `{"id":"AGENT_ID"}` revokes an agent and its descendants' credentials; the supervisor then interrupts their workers. Revocation itself returns `process_stopped: false` because authorization withdrawal is distinct from process termination. Exited workers are not automatically restarted.
 
+Revocation fences tasks addressed to the revoked agents. Previously accepted
+instructions they issued to other active agents remain durable; cancel those
+tasks explicitly with `task.cancel` when withdrawing the work itself.
+
 Team creation is separately enabled and restricted to configured creators or explicitly delegated child capabilities:
 
 ```bash

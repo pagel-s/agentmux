@@ -59,15 +59,35 @@ print('COMBINED_HARDENING_OK')
 	defer s.Close()
 	brokerCtx, stopBroker := context.WithCancel(ctx)
 	broker := exec.CommandContext(brokerCtx, binary, "managed", "serve", "--state", state, "--sandbox", "bubblewrap")
-	broker.Env = []string{"PATH=/usr/bin:/bin", "LANG=C.UTF-8"}
+	// CI can select a verified Bubblewrap from a private prefix. Keep that
+	// explicit tool selection without inheriting unrelated owner environment.
+	broker.Env = []string{"PATH=" + os.Getenv("PATH"), "LANG=C.UTF-8"}
+	brokerLog, err := os.OpenFile(filepath.Join(root, "broker.log"), os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer brokerLog.Close()
+	broker.Stdout, broker.Stderr = brokerLog, brokerLog
+	startupLog := func() string {
+		data := make([]byte, 4096)
+		n, _ := brokerLog.ReadAt(data, 0)
+		return strings.TrimSpace(string(data[:n]))
+	}
 	if err = broker.Start(); err != nil {
 		t.Fatal(err)
 	}
-	defer func() { stopBroker(); _ = broker.Wait() }()
+	brokerDone := make(chan error, 1)
+	go func() { brokerDone <- broker.Wait(); close(brokerDone) }()
+	defer func() { stopBroker(); <-brokerDone }()
 	owner := credential(t, s, "")
 	client := NewClient(owner)
 	ready := false
 	for i := 0; i < 100; i++ {
+		select {
+		case err := <-brokerDone:
+			t.Fatalf("isolated broker exited before readiness: %v; startup log: %s", err, startupLog())
+		default:
+		}
 		if _, f := client.Call(ctx, Request{Operation: "identity", Args: []byte(`{}`)}); f == nil {
 			ready = true
 			break
@@ -75,7 +95,7 @@ print('COMBINED_HARDENING_OK')
 		time.Sleep(20 * time.Millisecond)
 	}
 	if !ready {
-		t.Fatal("isolated broker did not become ready")
+		t.Fatalf("isolated broker did not become ready; startup log: %s", startupLog())
 	}
 	task := taskIn(t, call(t, s, "", "instruct", map[string]any{"to": []string{"worker"}, "text": "run one local bounded proof"}))
 	if err = RunWorker(ctx, WorkerOptions{StateDir: state, AgentID: "worker", Executable: binary, Once: true}); err != nil {

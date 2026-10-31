@@ -88,3 +88,32 @@ func TestEventCallbackFailureStopsTurnAndPreservesPartialResult(t *testing.T) {
 		t.Fatal("event was not consumed before recording")
 	}
 }
+
+func TestEventObserverReceivesDecisiveRejectingFrame(t *testing.T) {
+	req := protocolRequest("claude", `{"type":"assistant","message":{"content":[{"type":"text","text":"earlier text"}]}}`, `{"type":"result","subtype":"success","result":null}`)
+	var observed []json.RawMessage
+	req.OnEvent = func(raw json.RawMessage) error {
+		observed = append(observed, append(json.RawMessage(nil), raw...))
+		return nil
+	}
+	result, err := Run(context.Background(), req)
+	if !errors.Is(err, ErrProtocol) || len(observed) != 2 || len(result.Events) != 2 || string(observed[1]) != string(result.Events[1]) {
+		t.Fatalf("rejecting result disappeared from trace: observed=%d retained=%d err=%v", len(observed), len(result.Events), err)
+	}
+	traceErr := errors.New("trace write failed")
+	req.OnEvent = func(raw json.RawMessage) error {
+		if strings.Contains(string(raw), `"result":null`) {
+			return traceErr
+		}
+		return nil
+	}
+	if _, err := Run(context.Background(), req); !errors.Is(err, ErrProtocol) || !errors.Is(err, traceErr) {
+		t.Fatalf("trace failure hid protocol rejection or vice versa: %v", err)
+	}
+	req = helperRequest("claude", "invalid")
+	calls := 0
+	req.OnEvent = func(json.RawMessage) error { calls++; return nil }
+	if _, err := Run(context.Background(), req); err == nil || calls != 0 {
+		t.Fatal("malformed non-JSON was reported as a structured frame")
+	}
+}

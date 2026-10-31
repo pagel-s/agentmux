@@ -59,6 +59,7 @@ nav:
       - Persistent Workflows: autonomous-workflows.md
       - Antigravity Bridge: antigravity-bridge.md
       - Hardening: hardening.md
+      - Trust Boundaries: security-model.md
       - Memory: memory-lifecycle.md
       - Traces and Recovery: traces-and-recovery.md
       - SSH and Scale: remote-workers.md

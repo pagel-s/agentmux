@@ -699,6 +699,20 @@ func (s *Store) tasks(ctx context.Context, q queryer, a actor, r Request) (any, 
 		return nil, fault("not_found", "task not found")
 	}
 	if r.Operation == "task.get" {
+		// A worker must observe its exact execution attempt, not just the
+		// logical task ID: recovery and explicit retry can replace its lease
+		// while leaving the same task running. This validity check exposes no
+		// lease material and is unavailable to the issuer or owner.
+		if in.Lease != "" {
+			if a.ID != t.To || a.owner() {
+				return nil, forbidden()
+			}
+			if t.Instance != a.Instance || t.LeaseToken == "" || in.Lease != t.LeaseToken ||
+				(t.Delivery != "dispatching" && t.Delivery != "cancel_requested") ||
+				(t.Delivery == "dispatching" && t.Expires < time.Now().Unix()) {
+				return nil, fault("conflict", "task lease is no longer valid")
+			}
+		}
 		return map[string]any{"task": t.Task}, nil
 	}
 	if in.Version != t.Version {

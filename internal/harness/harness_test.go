@@ -29,6 +29,24 @@ func TestHarnessProcess(t *testing.T) {
 	scenario := os.Getenv("AGENTMUX_HARNESS_SCENARIO")
 	write := func(line string) { fmt.Fprintln(os.Stdout, line) }
 	switch scenario {
+	case "protocol-fixture":
+		if os.Getenv("AGENTMUX_PROTOCOL_NAME") == "pi" {
+			reader := bufio.NewScanner(os.Stdin)
+			if !reader.Scan() || !reader.Scan() {
+				os.Exit(8)
+			}
+		} else {
+			_, _ = io.ReadAll(os.Stdin)
+		}
+		fmt.Fprint(os.Stdout, os.Getenv("AGENTMUX_PROTOCOL_LINES"))
+		if os.Getenv("AGENTMUX_PROTOCOL_FAIL_EXIT") == "1" {
+			os.Exit(11)
+		}
+	case "early-success":
+		// A zero-exit wrapper can report completion before accepting stdin.
+		write(`{"type":"thread.started","thread_id":"fixture-session"}`)
+		write(`{"type":"item.completed","item":{"type":"agent_message","text":"unearned answer"}}`)
+		write(`{"type":"turn.completed"}`)
 	case "conversation-hook":
 		_, _ = io.ReadAll(os.Stdin)
 		_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"type": "result", "subtype": "success", "session_id": conversationTestID, "result": "checkpoint-answer"})

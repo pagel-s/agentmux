@@ -45,6 +45,7 @@ type Analysis struct {
 	FactorialEffects []FactorialEffect  `json:"factorial_effects,omitempty"`
 	PerAgent         []AgentSummary     `json:"per_agent,omitempty"`
 	PowerWarning     string             `json:"power_warning,omitempty"`
+	EvidenceWarnings []string           `json:"evidence_warnings,omitempty"`
 }
 
 func estimate(values []float64) Estimate {
@@ -71,6 +72,14 @@ func estimate(values []float64) Estimate {
 
 func Analyze(report Report) Analysis {
 	a := Analysis{Research: report.Research, ManifestHash: report.ManifestHash, Interpretation: "Descriptive environment outcomes, not inferred motives or traits. Standard errors assume independent runs; repeated worlds and model/provider dependence can violate this. Paired contrasts align seed/repetition blocks, not execution timing or native sampling."}
+	if err := validateReportEntries(report); err != nil {
+		a.Interpretation = "Invalid research evidence; estimates withheld."
+		a.EvidenceWarnings = []string{err.Error()}
+		return a
+	}
+	if report.Execution == nil {
+		a.EvidenceWarnings = append(a.EvidenceWarnings, "Legacy evidence coverage: no frozen executable/protocol evidence or mandatory authenticated native-trace verification; historical scores are unchanged.")
+	}
 	groups := map[string][]Result{}
 	for _, r := range report.Results {
 		if r.Status != "completed" {
@@ -209,6 +218,12 @@ func ReadReport(dir string) (Report, error) {
 	var r Report
 	if json.Unmarshal(data, &r) != nil || r.Research == "" || r.ManifestHash == "" {
 		return r, errors.New("invalid research result file")
+	}
+	if err := validateReportEntries(r); err != nil {
+		return r, err
+	}
+	if err := verifyReportEvidence(dir, r); err != nil {
+		return r, err
 	}
 	return r, nil
 }
