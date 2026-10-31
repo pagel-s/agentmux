@@ -1,7 +1,7 @@
 :root {
   color-scheme: dark;
-  --bg: #131217;
-  --panel: #18161e;
+  --bg: #000;
+  --panel: #000;
   --raised: #211d2b;
   --line: #312b3d;
   --text: #e9e5f0;
@@ -72,7 +72,7 @@ button.quiet:hover {
 input,
 textarea,
 select {
-  background: #15121c;
+  background: var(--bg);
   border: 1px solid var(--line);
   border-radius: 3px;
   padding: 8px;
@@ -454,7 +454,7 @@ h1 {
   max-height: none;
   overflow: auto;
   white-space: pre;
-  background: #100e15;
+  background: var(--bg);
   border: 1px solid var(--line);
   border-radius: 3px;
   padding: 16px;
@@ -496,7 +496,7 @@ h1 {
 .task-item pre {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  background: #100e15;
+  background: var(--bg);
   padding: 12px;
   font-size: 11px;
   max-height: 300px;
@@ -638,7 +638,7 @@ h1 {
 .error-overlay {
   position: fixed;
   inset: 48px 0 27px;
-  background: #131217f5;
+  background: var(--bg);
   display: grid;
   place-items: center;
   padding: 25px;
@@ -696,7 +696,7 @@ h1 {
   min-height: 0;
   overflow: auto;
   position: relative;
-  background: #121017;
+  background: var(--bg);
 }
 #interaction-graph {
   display: block;
@@ -771,7 +771,7 @@ h1 {
   right: 16px;
   top: 70px;
   width: 265px;
-  background: #1b1623;
+  background: var(--panel);
   border: 1px solid #56406e;
   border-radius: 4px;
   padding: 15px;
@@ -1136,7 +1136,7 @@ h1 {
 #bridge-setup {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  background: #100e15;
+  background: var(--bg);
   padding: 14px;
   border: 1px solid var(--line);
   font: 11px/1.8 var(--mono);
