@@ -19,10 +19,13 @@ builds:
 archives:
   - formats: [tar.gz]
     files:
-      - LICENSE*
       - README.md
+      - docs/*.md
+      - docs/*.json
       - docs/**/*
+      - examples/*.yaml
       - examples/**/*
+      - scripts/*.py
       - scripts/**/*.py
     name_template: >-
       {{ .ProjectName }}_
