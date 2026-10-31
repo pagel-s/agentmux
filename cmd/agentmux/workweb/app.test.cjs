@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
+const { domFixture } = require("./dom-fixture.cjs");
 const source = fs.readFileSync(path.join(__dirname, "app.js"), "utf8");
 
 // Execute the production identity helpers and submit callback as ordinary
@@ -198,6 +199,7 @@ function connectionContext() {
     if (!nodes.has(id))
       nodes.set(id, {
         disabled: false,
+        value: id === "message-kind" ? "direct" : "",
         textContent: "",
         classList: { add() {}, remove() {} },
         querySelectorAll() {
@@ -217,6 +219,7 @@ function connectionContext() {
       ],
     },
     selected: "a",
+    peer: "",
     connected: true,
     loading: false,
     mutating: false,
@@ -235,6 +238,7 @@ function connectionContext() {
     },
     queueMicrotask,
     updateTitleConflict() {},
+    renderMemoryReview() {},
     researchMutable: () => false,
     researchReviewReady: () => false,
     researchHeadless: () => false,
@@ -423,42 +427,23 @@ test("title conflicts preserve draft and require explicit review of current vers
 });
 
 test("editing memory while a save is pending preserves newer text as unsaved", async () => {
-  const nodes = {
-    "memory-form": {},
-    "memory-namespace": { value: "pair-a" },
-    "memory-key": { value: "proposal" },
-    "memory-value": { value: "Submitted draft" },
-    "memory-version": { textContent: "" },
-  };
-  let release, pending;
-  const context = vm.createContext({
-    $: (id) => nodes[id],
-    selectionReady: () => true,
-    memoryVersion: 4,
-    memoryEditorEpoch: 2,
-    call: () =>
-      new Promise((resolve) => {
-        release = resolve;
-      }),
-    action: (fn) => {
-      pending = fn();
-    },
-    loadMemory: async () => {},
-  });
-  vm.runInContext(
-    source.slice(
-      source.indexOf('$("memory-form").onsubmit ='),
-      source.indexOf("\nrefresh();"),
-    ),
-    context,
-  );
-  nodes["memory-form"].onsubmit({ preventDefault() {} });
-  nodes["memory-value"].value = "Newer text still being typed";
+  const f = memoryContext();
+  await f.context.loadMemory();
+  f.entry("plan").click();
+  f.type("Submitted draft");
+  let release;
+  f.context.call = () =>
+    new Promise((resolve) => {
+      release = resolve;
+    });
+  f.submit();
+  f.type("Newer text still being typed");
   release({ entry: { version: 5 } });
-  await pending;
-  assert.equal(nodes["memory-value"].value, "Newer text still being typed");
-  assert.equal(context.memoryVersion, 5);
-  assert.match(nodes["memory-version"].textContent, /Unsaved changes/);
+  await f.pending();
+  assert.equal(f.node("memory-value").value, "Newer text still being typed");
+  assert.equal(f.context.memoryVersion, 5);
+  assert.match(f.node("memory-version").textContent, /Unsaved changes/);
+  assert.equal(f.unload().prevented, true);
 });
 
 function replyContext(interaction) {
@@ -473,6 +458,7 @@ function replyContext(interaction) {
         focus() {},
         replaceChildren(...children) {
           this.options = children;
+          this.value = children[0]?.value || "";
         },
       });
     return nodes.get(id);
@@ -1426,4 +1412,962 @@ test("saved metadata roster and task count stay unknown, including after a searc
     /Agent registry not loaded/,
   );
   assert.equal(node("registered-count").textContent, "NOT LOADED");
+});
+
+function pollingContext() {
+  const dom = domFixture(),
+    view = dom.node("fixture-view", "view"),
+    writes = [],
+    replies = [];
+  for (const id of [
+    "feed",
+    "tasks",
+    "lifecycle-events",
+    "edge-controls",
+    "scope-controls",
+    "consented-teams",
+    "owner-groups",
+    "research-review",
+    "research-population",
+  ])
+    view.append(dom.node(id));
+  const context = vm.createContext({
+    document: dom.document,
+    $: dom.node,
+    el: dom.el,
+    selected: "a",
+    peer: "b",
+    connected: true,
+    mutating: false,
+    boardFilter: "all",
+    feedSignature: "",
+    taskSignature: "",
+    boundarySignature: "",
+    lifecycleSignature: "",
+    teamsSignature: "",
+    teamReview: null,
+    teamInviteDrafts: new Map(),
+    researchReview: null,
+    snapshot: {
+      selected: "a",
+      boundaries: {
+        agent: "a",
+        version: 1,
+        targets: [],
+        boards: [],
+        memory: [],
+      },
+      agents: ["a", "b", "c"].map((id) => ({
+        id,
+        state: "active",
+        config: {},
+      })),
+      activity: { messages: [], tasks: [], events: [] },
+      teams: [],
+      groups: [],
+    },
+    sessionReference: (id) => id,
+    scopeLabel: (id) => id,
+    stamp: (time) => time,
+    selectionReady: () => true,
+    updateTitleConflict() {},
+    renderMemoryReview() {},
+    nativeHeadless: () => false,
+    researchHeadless: () => false,
+    researchMutable: () => false,
+    researchReviewReady: () => false,
+    setReply: (id) => replies.push(id),
+    selectAgent: (id) => {
+      context.selected = id;
+    },
+    action: (fn) => fn(),
+    call: async (operation, args) => {
+      writes.push({ operation, args });
+      return {};
+    },
+  });
+  for (const [start, end] of [
+    ["function captureViewState(", "const notice ="],
+    ["function renderFeed()", "function toggle("],
+    ["function toggle(", "function replyRecipient("],
+    ["function renderLifecycle()", "function runnerHeartbeat("],
+    ["function selectionControls()", "function selectAgent("],
+  ])
+    vm.runInContext(
+      source.slice(source.indexOf(start), source.indexOf(end)),
+      context,
+    );
+  return { ...dom, context, view, writes, replies };
+}
+
+test("Board polling preserves Reply focus and reading position across unchanged and new messages", () => {
+  const f = pollingContext(),
+    message = {
+      id: "m1",
+      from: "b",
+      to: ["a"],
+      text: "First",
+      created_at: "12:00",
+    };
+  f.context.snapshot.activity.messages = [message];
+  f.context.renderFeed();
+  const reply = f.node("feed").querySelectorAll("button")[0];
+  reply.focus();
+  f.view.scrollTop = 140;
+  f.context.renderFeed();
+  assert.equal(
+    f.document.activeElement,
+    reply,
+    "an unchanged poll must not rebuild focused controls",
+  );
+  f.context.snapshot.activity.messages.unshift({
+    ...message,
+    id: "m2",
+    text: "New message",
+  });
+  f.context.renderFeed();
+  assert.notEqual(
+    f.document.activeElement,
+    reply,
+    "changed data exercises actual DOM replacement",
+  );
+  assert.equal(f.document.activeElement.dataset.focusKey, "reply:m1");
+  assert.equal(f.view.scrollTop, 140);
+  f.document.activeElement.click();
+  assert.deepEqual(
+    f.replies,
+    ["m1"],
+    "restored focus still acts on the original message",
+  );
+});
+
+test("lifecycle polling preserves an expanded event and its focused summary", () => {
+  const f = pollingContext(),
+    event = {
+      id: "event-1",
+      at: "12:00",
+      type: "team.join",
+      actor: "a",
+      entity_id: "team-one",
+      details: { version: 3 },
+    };
+  f.context.snapshot.activity.events = [event];
+  f.context.renderLifecycle();
+  const details = f.node("lifecycle-events").querySelectorAll("details")[0],
+    summary = details.children[0];
+  details.open = true;
+  summary.focus();
+  f.view.scrollTop = 250;
+  f.context.renderLifecycle();
+  assert.equal(f.document.activeElement, summary);
+  f.context.snapshot.activity.events.unshift({
+    ...event,
+    id: "event-2",
+    type: "agent.spawned",
+  });
+  f.context.renderLifecycle();
+  assert.equal(f.document.activeElement.dataset.focusKey, "event-1");
+  assert.equal(
+    f
+      .node("lifecycle-events")
+      .querySelectorAll("details")
+      .find((node) => node.dataset.disclosureKey === "event-1").open,
+    true,
+  );
+  assert.equal(f.view.scrollTop, 250);
+});
+
+test("task updates keep open provenance and return focus to the same completed task", () => {
+  const f = pollingContext(),
+    task = {
+      id: "task-1",
+      from: "$owner",
+      to: "a",
+      state: "running",
+      delivery: "dispatching",
+      text: "Inspect",
+      version: 1,
+      origin: { kind: "owner" },
+    };
+  f.context.snapshot.activity.tasks = [task];
+  f.context.renderTasks();
+  const details = f.node("tasks").querySelectorAll("details")[0];
+  details.open = true;
+  details.children[0].focus();
+  task.version++;
+  f.context.renderTasks();
+  assert.equal(f.document.activeElement.dataset.focusKey, "origin:task-1");
+  assert.equal(f.node("tasks").querySelectorAll("details")[0].open, true);
+  const cancel = f
+    .node("tasks")
+    .querySelectorAll("button")
+    .find((node) => node.dataset.focusKey === "cancel:task-1");
+  cancel.focus();
+  task.state = "submitted";
+  task.delivery = "completed";
+  task.version++;
+  f.context.renderTasks();
+  assert.equal(
+    f.document.activeElement.dataset.itemKey,
+    "task-1",
+    "vanished Cancel should retain focus at its task, not body",
+  );
+  assert.equal(
+    f.writes.length,
+    0,
+    "rendering/restoring focus must never trigger an owner action",
+  );
+});
+
+test("revoking a graph recipient never silently retargets controls to another active agent", () => {
+  const f = pollingContext();
+  f.context.renderBoundaries();
+  const toggle = f.node("edge-controls").querySelectorAll("button")[0];
+  toggle.focus();
+  f.context.snapshot.agents[1].state = "revoked";
+  f.context.renderBoundaries();
+  f.context.selectionControls();
+  assert.equal(f.context.peer, "b");
+  assert.equal(f.node("target-agent").value, "b");
+  assert.match(f.node("target-agent").options[1].textContent, /revoked/);
+  assert.ok(
+    f
+      .node("edge-controls")
+      .querySelectorAll("button")
+      .every((node) => node.disabled),
+  );
+  assert.equal(f.node("connect-pair").disabled, true);
+  assert.notEqual(
+    f.document.activeElement,
+    f.document.body,
+    "revoked control should fall back within its connection row",
+  );
+  f.document.activeElement.click();
+  assert.equal(f.writes.length, 0);
+  f.context.peer = "c";
+  f.context.renderBoundaries();
+  f.context.selectionControls();
+  assert.equal(
+    f.node("connect-pair").disabled,
+    false,
+    "explicit active recipient selection re-enables control",
+  );
+  f.context.snapshot.agents[0].parent = "delegator";
+  f.context.selectionControls();
+  assert.equal(f.node("connect-pair").disabled, true);
+  assert.equal(f.node("isolate-agent").disabled, true);
+});
+
+test("skip-to-workspace moves keyboard focus without changing the owner URL fragment", () => {
+  const f = pollingContext();
+  f.context.location = { hash: "#private-owner-capability" };
+  vm.runInContext(
+    source.slice(
+      source.indexOf('$("skip-workspace").onclick ='),
+      source.indexOf('$("refresh").onclick ='),
+    ),
+    f.context,
+  );
+  let prevented = false;
+  f.node("skip-workspace").onclick({
+    preventDefault() {
+      prevented = true;
+    },
+  });
+  assert.equal(prevented, true);
+  assert.equal(f.document.activeElement, f.node("workspace"));
+  assert.equal(f.context.location.hash, "#private-owner-capability");
+});
+
+function graphKeyboardContext() {
+  const f = pollingContext(),
+    canvas = f.node("graph-canvas", "graph-canvas");
+  canvas.append(f.node("interaction-graph"));
+  f.context.tab = "graph";
+  f.context.snapshot.runtime = { session: "keyboard-fixture" };
+  for (const agent of f.context.snapshot.agents)
+    agent.config.harness = "command";
+  f.context.sessionTitle = (agent) => agent.id;
+  f.context.providerName = (name) => name;
+  f.context.localStorage = { getItem: () => null, setItem() {} };
+  f.context.notice = () => {};
+  f.context.selectedCalls = [];
+  f.context.selectAgent = (id) => {
+    f.context.selected = id;
+    f.context.selectedCalls.push(id);
+  };
+  vm.runInContext(
+    fs.readFileSync(path.join(__dirname, "graph.js"), "utf8"),
+    f.context,
+  );
+  return { ...f, canvas };
+}
+
+test("graph redraw keeps keyboard focus and Space activates node/edge without losing inspector navigation", () => {
+  const f = graphKeyboardContext();
+  f.context.drawGraph();
+  const original = f
+    .node("interaction-graph")
+    .querySelectorAll("[data-node]")[0];
+  original.focus();
+  f.canvas.scrollTop = 180;
+  f.context.snapshot.boundaries.version++;
+  f.context.drawGraph();
+  assert.notEqual(f.document.activeElement, original);
+  assert.equal(f.document.activeElement.dataset.node, "agent:a");
+  assert.equal(f.canvas.scrollTop, 180);
+  const b = f
+    .node("interaction-graph")
+    .querySelectorAll("[data-node]")
+    .find((node) => node.dataset.node === "agent:b");
+  let prevented = false;
+  b.onkeydown({
+    key: " ",
+    preventDefault() {
+      prevented = true;
+    },
+  });
+  assert.equal(prevented, true);
+  assert.deepEqual(f.context.selectedCalls, ["b"]);
+  f.context.selected = "a";
+  f.context.drawGraph();
+  assert.equal(
+    f.node("interaction-graph").querySelectorAll(".edge-hit").length,
+    0,
+  );
+  f.context.graphPick("a", "b");
+  const edge = f.node("interaction-graph").querySelectorAll(".edge-hit")[0];
+  assert.ok(
+    edge,
+    "selecting an otherwise denied connection must redraw its editable edge",
+  );
+  edge.focus();
+  edge.onkeydown({ key: "Enter", preventDefault() {} });
+  assert.equal(f.document.activeElement.id, "close-inspector");
+  f.node("graph-inspector").onkeydown({ key: "Escape", preventDefault() {} });
+  assert.equal(f.document.activeElement.dataset.node, "agent:a");
+  assert.equal(vm.runInContext("graphSelection", f.context), null);
+  f.canvas.scrollTop = 180;
+  f.document.activeElement.onkeydown({
+    key: "ArrowRight",
+    preventDefault() {},
+  });
+  assert.equal(f.document.activeElement.dataset.node, "agent:a");
+  assert.equal(f.canvas.scrollTop, 180);
+  assert.equal(f.writes.length, 0);
+});
+
+test("research review polling preserves Confirm focus and invalidated controls retain review context", () => {
+  const f = pollingContext();
+  f.context.runnerHeartbeat = () => "fresh";
+  f.context.researchReviewReady = () => true;
+  f.context.applyResearchReview = () => {
+    throw new Error("poll must not submit an intervention");
+  };
+  f.context.researchReview = {
+    action: "pause",
+    reason: "Inspect",
+    trial: "trial",
+    attempt: 1,
+    version: 2,
+  };
+  vm.runInContext(
+    source.slice(
+      source.indexOf("function renderResearchReview("),
+      source.indexOf("async function applyResearchReview("),
+    ),
+    f.context,
+  );
+  f.context.renderResearchReview();
+  const original = f.node("research-review").querySelectorAll("button")[0];
+  original.focus();
+  f.context.renderResearchReview();
+  assert.notEqual(f.document.activeElement, original);
+  assert.equal(f.document.activeElement.dataset.focusKey, "confirm");
+  f.context.researchReviewReady = () => false;
+  f.context.renderResearchReview();
+  assert.equal(f.document.activeElement, f.node("research-review"));
+  assert.equal(
+    f.node("research-review").querySelectorAll("button")[0].disabled,
+    true,
+  );
+});
+
+test("session close reports descendant revocation without claiming process termination or following navigation", async () => {
+  const f = pollingContext();
+  vm.runInContext(
+    source.slice(
+      source.indexOf("function activeDescendants("),
+      source.indexOf("function nativeHeadless("),
+    ),
+    f.context,
+  );
+  const agents = [
+    { id: "a", state: "active" },
+    { id: "child", state: "active", parent: "a" },
+    { id: "grandchild", state: "active", parent: "child" },
+    { id: "unrelated", state: "active", parent: "$owner" },
+    { id: "old-child", state: "revoked", parent: "a" },
+  ];
+  assert.deepEqual(
+    [...f.context.activeDescendants(agents, "a")],
+    ["child", "grandchild"],
+  );
+  let pending;
+  f.context.action = (fn, success) => {
+    pending = fn().then(() => {
+      f.context.lastNotice = success();
+    });
+  };
+  f.context.call = async (operation, args) => {
+    f.writes.push({ operation, args });
+    return { revoked_agents: 3, process_stopped: false };
+  };
+  vm.runInContext(
+    source.slice(
+      source.indexOf('$("close-agent").onclick ='),
+      source.indexOf('$("connect-pair").onclick ='),
+    ),
+    f.context,
+  );
+  f.node("close-agent").onclick();
+  f.context.selected = "b";
+  await pending;
+  assert.equal(f.writes[0].args.id, "a");
+  assert.match(f.context.lastNotice, /a and 2 descendants/);
+  assert.match(f.context.lastNotice, /termination is not yet acknowledged/);
+  assert.doesNotMatch(f.context.lastNotice, /Closed|terminated successfully/);
+});
+
+function unloadContext() {
+  const f = pollingContext(),
+    listeners = new Map();
+  Object.assign(f.context, {
+    messageDrafts: new Map(),
+    titleDrafts: new Map(),
+    observedDrafts: new Map(),
+    titleEditor: null,
+    replyTo: "",
+    memoryEditorNamespace: "",
+    memoryEditorEpoch: 0,
+    memoryRequest: 0,
+    memoryVersion: 0,
+    memoryBaseline: { namespace: "", key: "", value: "" },
+    memoryReview: null,
+    memoryReviewRequest: 0,
+    memoryDrafts: new Map(),
+    memoryLastDrafts: new Map(),
+    memoryEntries: new Map(),
+    window: {
+      addEventListener: (name, handler) => listeners.set(name, handler),
+    },
+  });
+  vm.runInContext(
+    source.slice(
+      source.indexOf("function memoryDraftKey("),
+      source.indexOf('$("skip-workspace").onclick ='),
+    ),
+    f.context,
+  );
+  vm.runInContext(
+    source.slice(
+      source.indexOf("function hasUnsavedWork("),
+      source.indexOf("function renderGlobalHeading("),
+    ),
+    f.context,
+  );
+  vm.runInContext(
+    source.slice(
+      source.indexOf('window.addEventListener("beforeunload"'),
+      source.indexOf("function renderComposer()"),
+    ),
+    f.context,
+  );
+  return {
+    ...f,
+    unload() {
+      const event = {
+        prevented: false,
+        preventDefault() {
+          this.prevented = true;
+        },
+      };
+      listeners.get("beforeunload")(event);
+      return event;
+    },
+  };
+}
+
+test("beforeunload stays silent while idle/polling and protects unsaved messages, replies and pending writes", () => {
+  const f = unloadContext();
+  f.context.loading = true;
+  assert.equal(f.unload().prevented, false);
+  f.node("message").value = "Unsent coordination";
+  assert.equal(f.unload().prevented, true);
+  assert.equal(f.unload().returnValue, "");
+  f.node("message").value = "";
+  f.context.messageDrafts.set("a", {
+    text: "Stale cached current draft",
+    reply: "",
+  });
+  assert.equal(
+    f.unload().prevented,
+    false,
+    "current live editor supersedes its cached draft",
+  );
+  f.context.messageDrafts.set("b", {
+    text: "Other session's draft",
+    reply: "",
+  });
+  assert.equal(f.unload().prevented, true);
+  f.context.messageDrafts.clear();
+  f.context.replyTo = "message-to-reply";
+  assert.equal(f.unload().prevented, true);
+  f.context.replyTo = "";
+  f.context.mutating = true;
+  assert.equal(f.unload().prevented, true);
+  f.context.mutating = false;
+  f.context.researchReview = { action: "pause" };
+  assert.equal(f.unload().prevented, true);
+  f.context.researchReview = null;
+  assert.equal(f.unload().prevented, false);
+});
+
+test("beforeunload ignores unchanged copied memory but protects actual local memory edits", async () => {
+  const f = unloadContext();
+  f.node("memory-namespace").value = "team";
+  f.context.call = async () => ({
+    entries: [{ key: "plan", value: "Saved server value", version: 4 }],
+  });
+  vm.runInContext(
+    source.slice(
+      source.indexOf("function memoryDraftKey("),
+      source.indexOf('$("skip-workspace").onclick ='),
+    ),
+    f.context,
+  );
+  await f.context.loadMemory();
+  f.node("memory-list").querySelectorAll("button")[0].click();
+  assert.equal(
+    f.unload().prevented,
+    false,
+    "selecting a server entry creates no unsaved work",
+  );
+  f.node("memory-value").value = "Local change";
+  assert.equal(f.unload().prevented, true);
+  f.node("memory-value").value = "Saved server value";
+  assert.equal(f.unload().prevented, false);
+  f.node("memory-key").value = "new-key";
+  assert.equal(f.unload().prevented, true);
+});
+
+test("beforeunload distinguishes edited title drafts from merely opening an existing title", () => {
+  const f = unloadContext();
+  f.context.snapshot.agents[0].title = "Existing task";
+  f.context.titleEditor = { id: "a", version: 2, baseline: "Existing task" };
+  f.node("task-title").value = "Existing task";
+  assert.equal(f.unload().prevented, false);
+  f.context.snapshot.agents[0].title = "Another owner's concurrent rename";
+  assert.equal(
+    f.unload().prevented,
+    false,
+    "a read-only title view must not become a local edit because a server version changed",
+  );
+  f.node("task-title").value = "My new title";
+  assert.equal(f.unload().prevented, true);
+  f.context.titleEditor = null;
+  f.context.titleDrafts.set("a", {
+    title: "My new title",
+    baseline: "Existing task",
+    version: 2,
+  });
+  assert.equal(f.unload().prevented, true);
+  f.context.titleDrafts.clear();
+  assert.equal(f.unload().prevented, false);
+});
+
+function memoryContext() {
+  const f = unloadContext(),
+    entries = new Map([
+      [
+        "team",
+        [
+          { key: "plan", value: "Saved server value", version: 4 },
+          { key: "other", value: "Other saved", version: 2 },
+        ],
+      ],
+      ["pair", [{ key: "plan", value: "Pair saved", version: 1 }]],
+    ]),
+    requests = [];
+  let pending;
+  f.node("memory-namespace").value = "team";
+  f.context.selectionReady = () =>
+    f.context.connected && f.context.snapshot.selected === f.context.selected;
+  f.context.call = async (operation, args) => {
+    requests.push({ operation, args });
+    const list = entries.get(args.namespace) || [],
+      entry = list.find((item) => item.key === args.key);
+    if (operation === "memory.list")
+      return { entries: list.map((item) => ({ ...item })) };
+    if (operation === "memory.head")
+      return entry
+        ? { key: entry.key, state: "live", version: entry.version }
+        : { key: args.key, state: "missing", version: 0 };
+    if (operation === "memory.get") return { entry: { ...entry } };
+    if (operation === "memory.put") {
+      if ((entry?.version || 0) !== args.version)
+        throw new Error("Memory version conflict");
+      const saved = {
+        key: args.key,
+        value: args.value,
+        version: args.version + 1,
+      };
+      entries.set(args.namespace, [
+        ...list.filter((item) => item.key !== args.key),
+        saved,
+      ]);
+      return { entry: saved };
+    }
+    throw new Error("Unexpected operation " + operation);
+  };
+  f.context.action = (fn) => {
+    pending = fn().catch((error) => {
+      f.context.lastNotice = error.message;
+    });
+  };
+  vm.runInContext(
+    source.slice(
+      source.indexOf('$("memory-key").oninput ='),
+      source.indexOf("\nrefresh();"),
+    ),
+    f.context,
+  );
+  return {
+    ...f,
+    entries,
+    requests,
+    pending: () => pending,
+    entry: (key) =>
+      f
+        .node("memory-list")
+        .querySelectorAll("button")
+        .find((node) => node.children[0].textContent === key),
+    type(value) {
+      f.node("memory-value").value = value;
+      f.node("memory-value").oninput();
+    },
+    submit() {
+      f.node("memory-form").onsubmit({ preventDefault() {} });
+    },
+    async namespace(namespace) {
+      f.node("memory-namespace").value = namespace;
+      await f.context.loadMemory();
+    },
+  };
+}
+
+test("memory entry and namespace switches retain independent drafts without changing saved CAS", async () => {
+  const f = memoryContext();
+  await f.context.loadMemory();
+  f.entry("plan").click();
+  f.type("Long plan draft");
+  f.entry("other").click();
+  f.type("Other local draft");
+  f.entry("plan").click();
+  assert.equal(f.node("memory-value").value, "Long plan draft");
+  assert.equal(f.context.memoryVersion, 4);
+  await f.namespace("pair");
+  f.entry("plan").click();
+  f.type("Pair local draft");
+  await f.namespace("team");
+  assert.equal(f.node("memory-key").value, "plan");
+  assert.equal(f.node("memory-value").value, "Long plan draft");
+  f.entry("other").click();
+  assert.equal(f.node("memory-value").value, "Other local draft");
+  f.node("discard-memory-draft").click();
+  assert.equal(f.node("memory-value").value, "Other saved");
+  assert.equal(
+    f.unload().prevented,
+    true,
+    "other scopes' drafts still protected",
+  );
+  assert.equal(
+    f.requests.filter((r) => r.operation === "memory.put").length,
+    0,
+  );
+});
+
+test("memory conflict review keeps exact draft beside latest and requires explicit CAS adoption then Save", async () => {
+  const f = memoryContext();
+  await f.context.loadMemory();
+  f.entry("plan").click();
+  f.type("My plan draft");
+  f.entries.get("team")[0] = {
+    key: "plan",
+    value: "Other owner's revision",
+    version: 5,
+  };
+  f.submit();
+  await f.pending();
+  assert.equal(f.node("memory-value").value, "My plan draft");
+  assert.equal(f.context.memoryVersion, 4);
+  assert.match(
+    f.node("memory-version").textContent,
+    /draft kept.*Review latest/,
+  );
+  await f.context.reviewMemoryLatest();
+  assert.match(
+    f.node("memory-review-target").textContent,
+    /team \/ plan.*version 5/,
+  );
+  assert.equal(f.node("memory-review-draft").textContent, "My plan draft");
+  assert.equal(
+    f.node("memory-review-latest").textContent,
+    "Other owner's revision",
+  );
+  assert.equal(
+    f.context.memoryVersion,
+    4,
+    "read review does not adopt or retry",
+  );
+  assert.equal(
+    f.requests.filter((r) => r.operation === "memory.put").length,
+    1,
+  );
+  f.node("adopt-memory-version").click();
+  assert.equal(f.context.memoryVersion, 5);
+  assert.equal(f.node("memory-value").value, "My plan draft");
+  assert.match(f.node("memory-version").textContent, /not saved/);
+  assert.equal(
+    f.requests.filter((r) => r.operation === "memory.put").length,
+    1,
+  );
+  f.submit();
+  await f.pending();
+  assert.equal(
+    f.entries.get("team").find((e) => e.key === "plan").value,
+    "My plan draft",
+  );
+  assert.equal(f.context.memoryVersion, 6);
+  assert.equal(
+    f.unload().prevented,
+    false,
+    "saved entry creates no unload warning",
+  );
+});
+
+test("memory tombstone review uses its real CAS while late reviews and saves cannot replace another entry", async () => {
+  const f = memoryContext();
+  await f.context.loadMemory();
+  f.entry("plan").click();
+  f.type("Recreated plan");
+  const normalCall = f.context.call;
+  f.context.call = async (operation, args) =>
+    operation === "memory.head"
+      ? { key: args.key, state: "deleted", version: 9 }
+      : normalCall(operation, args);
+  await f.context.reviewMemoryLatest();
+  assert.match(f.node("memory-review-latest").textContent, /deleted/);
+  f.node("adopt-memory-version").click();
+  assert.equal(f.context.memoryVersion, 9);
+  assert.equal(f.node("memory-value").value, "Recreated plan");
+  let release;
+  f.context.call = () =>
+    new Promise((resolve) => {
+      release = resolve;
+    });
+  const reviewing = f.context.reviewMemoryLatest();
+  f.entry("other").click();
+  release({ state: "deleted", version: 10 });
+  await reviewing;
+  assert.equal(f.context.memoryReview, null);
+  assert.equal(f.node("memory-key").value, "other");
+  f.context.call = normalCall;
+  f.entry("plan").click();
+  // Use a valid base for the independent save race.
+  f.context.memoryVersion = 4;
+  f.context.call = () =>
+    new Promise((resolve) => {
+      release = resolve;
+    });
+  f.submit();
+  f.entry("other").click();
+  f.type("New other draft");
+  release({ entry: { version: 5 } });
+  await f.pending();
+  assert.equal(f.node("memory-key").value, "other");
+  assert.equal(f.node("memory-value").value, "New other draft");
+  assert.equal(f.context.memoryVersion, 2);
+});
+
+test("memory list refresh and offline typing retain drafts without adopting a newer saved version", async () => {
+  const f = memoryContext();
+  await f.context.loadMemory();
+  f.entry("plan").click();
+  f.type("Kept draft");
+  let release;
+  f.context.call = () =>
+    new Promise((resolve) => {
+      release = resolve;
+    });
+  const loading = f.context.loadMemory();
+  f.entry("other").click();
+  f.type("Other draft");
+  release({
+    entries: [
+      { key: "plan", value: "Updated saved value", version: 8 },
+      { key: "other", value: "Other saved", version: 2 },
+    ],
+  });
+  await loading;
+  assert.equal(f.node("memory-value").value, "Other draft");
+  f.entry("plan").click();
+  assert.equal(f.node("memory-value").value, "Kept draft");
+  assert.equal(f.context.memoryVersion, 4);
+  f.context.connected = false;
+  f.type("Offline edit");
+  assert.equal(f.unload().prevented, true);
+  const count = f.requests.length;
+  f.submit();
+  await f.context.reviewMemoryLatest();
+  assert.equal(
+    f.requests.length,
+    count,
+    "offline draft editing never writes or reads stale scope",
+  );
+});
+
+// Before the first authenticated snapshot, HTML itself must be safe while JS
+// and the network are still loading. Ready-state renderers enable these later.
+test("initial connecting document disables owner actions while keeping Refresh and draft typing available", () => {
+  const html = fs.readFileSync(path.join(__dirname, "index.html"), "utf8"),
+    tag = (id) =>
+      html.match(
+        new RegExp(
+          '<(?:button|select|input|textarea)\\b[^>]*\\bid="' + id + '"[^>]*>',
+        ),
+      )?.[0];
+  for (const id of [
+    "copy-attach",
+    "edit-title",
+    "focus-terminal",
+    "close-agent",
+    "pause-agent",
+    "save-title",
+    "clear-title",
+    "review-research",
+    "memory-namespace",
+    "load-memory",
+    "review-memory",
+    "adopt-memory-version",
+    "graph-edit",
+    "connect-pair",
+    "isolate-agent",
+    "message-kind",
+    "send-message",
+  ])
+    assert.match(
+      tag(id),
+      /\bdisabled\b/,
+      id + " must await a current snapshot",
+    );
+  assert.match(html, /<button type="submit" disabled>New session<\/button>/);
+  assert.match(html, /<button type="submit" disabled>Save entry<\/button>/);
+  for (const id of ["refresh", "message", "new-name"])
+    assert.doesNotMatch(
+      tag(id),
+      /\bdisabled\b/,
+      id + " remains usable while connecting",
+    );
+});
+
+for (const interaction of ["interactive", "managed"]) {
+  test(
+    "revoked board destination stays visible and unsendable for a retained " +
+      interaction +
+      " draft",
+    () => {
+      const f = replyContext(interaction);
+      f.context.snapshot.boundaries.boards = [
+        { name: "pair", read: true, write: true },
+      ];
+      f.node("message-kind").value = "board:pair";
+      f.context.renderComposer();
+      f.node("message").value = "Board-only coordination draft";
+      f.context.snapshot.boundaries.boards = [];
+      f.context.renderComposer();
+      assert.equal(f.node("message-kind").value, "board:pair");
+      const unavailable = f
+        .node("message-kind")
+        .options.find((option) => option.value === "board:pair");
+      assert.equal(unavailable.disabled, true);
+      assert.match(unavailable.textContent, /unavailable/);
+      assert.equal(f.node("send-message").disabled, true);
+      f.submit();
+      assert.equal(
+        f.requests.length,
+        0,
+        "revoked board draft never turns into an inbox/instruction",
+      );
+      assert.match(f.context.lastNotice, /explicitly choose/);
+      assert.equal(f.node("message").value, "Board-only coordination draft");
+      f.node("message-kind").value = "direct";
+      f.context.renderComposer();
+      assert.equal(
+        f.node("send-message").disabled,
+        false,
+        "explicit destination change reenables sending",
+      );
+    },
+  );
+}
+
+test("restoring an unavailable stashed board draft never defaults to direct, including read-only access", () => {
+  const f = replyContext("managed");
+  f.context.messageDrafts.set("b", {
+    text: "B private board context",
+    kind: "board:restricted",
+    reply: "",
+  });
+  f.context.selectAgent("b");
+  f.coherent();
+  assert.equal(f.node("message-kind").value, "board:restricted");
+  assert.equal(f.context.pendingDraftKind, "");
+  assert.equal(f.node("send-message").disabled, true);
+  f.submit();
+  assert.equal(f.requests.length, 0);
+  assert.equal(f.node("message").value, "B private board context");
+  f.context.snapshot.boundaries.boards = [
+    { name: "restricted", read: true, write: false },
+  ];
+  f.context.renderComposer();
+  assert.equal(f.node("message-kind").value, "board:restricted");
+  assert.match(f.node("message-kind").options[1].textContent, /read only/);
+  f.submit();
+  assert.equal(f.requests.length, 0);
+  f.context.snapshot.boundaries.boards[0].write = true;
+  f.context.renderComposer();
+  assert.equal(
+    f.node("send-message").disabled,
+    false,
+    "restored actual permission enables original destination",
+  );
+});
+
+test("rapid navigation keeps a pending unavailable board destination in its own session draft", () => {
+  const f = replyContext("interactive");
+  f.context.messageDrafts.set("b", {
+    text: "Restricted board draft",
+    kind: "board:restricted",
+    reply: "",
+  });
+  f.context.selectAgent("b");
+  assert.equal(f.context.pendingDraftKind, "board:restricted");
+  f.context.selectAgent("a");
+  assert.equal(f.context.messageDrafts.get("b").kind, "board:restricted");
+  f.context.selectAgent("b");
+  f.coherent();
+  assert.equal(f.node("message-kind").value, "board:restricted");
+  f.submit();
+  assert.equal(f.requests.length, 0);
 });

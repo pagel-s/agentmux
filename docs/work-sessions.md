@@ -1,7 +1,13 @@
 # Interactive work sessions
 
+Start with `agentmux start` from your project directory after installing and
+logging in to Claude Code and Codex. It opens a workbench for the default
+workspace `work`; select a session and press Enter to type into its native CLI.
+F1 returns to the workbench. A workspace contains sessions and an owner
+coordination service (the broker).
+
 Use `interaction: interactive` per agent for a native terminal; omit it for
-managed task execution. Both modes share the coordination broker and its ACLs.
+managed task execution. Both modes share the coordination broker and its permissions.
 Each agent has one terminal/worker lock. Changing interaction mode requires a
 new launch definition/run rather than a second process sharing a conversation.
 
@@ -30,6 +36,20 @@ terminal location; Enter selects the exact result. `L` edits the selected task
 title. `N` asks what you are working on and generates an ID automatically. In the
 web app use **Find a session**, **Rename**, and **Sessions**. Titles are labels,
 not role instructions; editing one never restarts the native conversation.
+When adding a session, `--harness` selects Claude Code, Codex or Pi;
+`--title` labels the human task, while `--role` supplies optional instructions
+to the agent at launch.
+
+| Name or ID | Where to use it |
+| --- | --- |
+| Workspace name, such as `work` | `--session work` selects the team and saved state |
+| Registered session ID, such as `claude` or an ID printed by `add`/`connect` | `attach`, `send`, `label`, `collaborate`, `isolate`, `remove` |
+| Observed terminal ID from `sessions` | `connect` registers that live external terminal |
+| Group ID printed by `collaborate` | `board --group ID` selects its shared board |
+
+Provider-native conversation IDs belong to the provider's own history UI;
+they are not Agentmux session IDs. Uppercase placeholders in examples below
+must be replaced with the IDs or paths from your own workspace.
 
 ## Start and attach
 
@@ -50,6 +70,25 @@ for a different project or definition. `down` stops owned agents and broker in
 order, retaining their data. Detaching or closing a dashboard leaves them running.
 Running `start` again in the same project attaches to its running default team.
 Use `managed restart --state DIRECTORY` for explicit restart.
+
+The current directory does not select a workspace for later commands. If you
+used `start --session api`, keep using `--session api`, including on `add`,
+`sessions`, `connect`, `attach`, `web` and `down`. For a second workspace:
+
+```sh
+agentmux start --session billing --project /path/to/billing
+# Later, from any directory:
+agentmux attach codex --session billing
+agentmux dashboard --session billing
+```
+
+If `start` reports a different saved project, use `attach --session NAME` to
+reopen that workspace, or choose a fresh name for the new project. If you only
+detached, attach again; no restart is needed. After `down`, running the original
+`start` command launches the saved definition again. Choose prior conversations
+through each provider's native history controls; relaunching does not promise
+automatic conversation resumption. See [recovery](traces-and-recovery.md) for
+broker/task uncertainty and upgrades.
 
 The coding preset preserves the normal local Claude/Codex environment, tools,
 skills, MCP configuration, native approval prompts, login and history. It does
@@ -104,6 +143,26 @@ input running. It does not cancel already accepted tasks or erase previous conte
 These owner-managed groups are distinct from consent-based agent-created research
 teams; neither operation bypasses those teams' membership rules.
 
+For several independent groups, save the **Group**, **Board**, and **Memory**
+values printed by each `collaborate` call. The web app lists them in
+**Teams → Owner collaboration groups**; select the exact board in the Board
+view or the exact memory namespace in Memory.
+
+```sh
+# Assume api, api-review, billing and billing-review are registered IDs.
+agentmux collaborate api api-review
+agentmux collaborate billing billing-review
+# Replace GROUP_ID with the first command's printed Group value:
+agentmux board "API proposal ready for review" --group GROUP_ID
+```
+
+Repeating `collaborate` with the same complete member set reuses its group and
+restores those members' access to its retained history. A different member set
+creates another group. A session in two groups can read both authorized contexts;
+it can carry that information between them. `isolate api-review` removes that
+session from **all** its groups and revokes peer coordination in both directions,
+not just the board currently displayed. It leaves other members running.
+
 Each `attach` opens an independent tmux client view. You can keep Claude in one
 terminal window and Codex in another; switching one does not move the other.
 Detaching removes that view, not the agent. Session IDs remain distinct from the
@@ -117,6 +176,10 @@ agentmux start --config team.yaml --session my-team
 ```
 
 ## Existing sessions
+
+These commands use an already running Agentmux workspace. If you have none,
+start one first with `agentmux start --detach`. The independently started native
+terminal remains in its original window throughout discovery and connection.
 
 ```sh
 agentmux sessions
@@ -139,8 +202,15 @@ normal shell capability. Native tool access must permit that helper path.
 
 A bridge does not retrofit process/filesystem isolation into an existing terminal.
 Disconnecting it revokes broker access and leaves the external process alone.
+Use `agentmux remove REGISTERED_ID` to disconnect that bridge; `isolate` keeps
+the bridge available but disables its peer collaboration. `attach` cannot move
+an external session into the workspace; return to its original terminal.
 Transport failures never trigger automatic registration retries. Explicit reconnect
 with the same name safely recovers an uncertain registration and preserves identity.
+If an observation is no longer live, run `sessions` again and select the new
+observation; an exited process cannot be reconnected by its old observation ID.
+If a terminal is absent from discovery, use `add` for a new supported native
+session instead of guessing an ID.
 
 Without `--project`, preset setup creates separate workspaces. JSON setup specs
 accept `interaction` and optional `workdir` per agent. Pi interactive sessions
@@ -149,6 +219,11 @@ interactive Antigravity role injection is unverified; use its Pi bridge.
 
 ## Terminal dashboard
 
+Keys are case-sensitive: `N`, `L`, and `P` mean Shift plus that letter. For
+`Ctrl-b b`, press Ctrl-b, release both keys, then press b. The same two-step
+prefix applies to the other Ctrl-b bindings. Shortcuts below depend on the
+active view; use Tab or a view number first.
+
 | Key | Action |
 | --- | --- |
 | ↑/↓ or j/k | Select agent |
@@ -156,7 +231,7 @@ interactive Antigravity role injection is unverified; use its Pi bridge.
 | / | Find by task, project, provider, ID or external terminal location |
 | L | Edit the selected session's human task title; empty clears |
 | F1 / Ctrl-b g in a native session | Return to the workbench |
-| Ctrl-b b / P / m / t | Open Board / Connections / Memory / Tasks in a popup |
+| Ctrl-b b / Ctrl-b P / Ctrl-b m / Ctrl-b t in a native session | Open Board / Connections / Memory / Tasks in a popup |
 | Tab / Shift-Tab or 1–8 | Switch Board, Agents, Connections, Memory, Tasks, Sessions, Teams, Events |
 | [ / ] in Teams; ← / → | Choose a team; choose an exact agent for a membership action |
 | i / r / d in Teams | Review invite / remove or revoke invitation / dissolve with the current version |
@@ -180,8 +255,40 @@ interactive Antigravity role injection is unverified; use its Pi bridge.
 | e / n in memory entries | Edit an existing entry / create a key and value |
 | [ / ] in Tasks | Select a recent task |
 | r / c in Tasks | Follow up / cancel |
+| o in Board, Agents, Memory, Tasks, Sessions, Teams or Events | Open the selected loaded content in a frozen, read-only reader |
+| ↑/↓ or j/k in the reader | Scroll one line |
+| PgUp / PgDn; Home / End in the reader | Scroll a page; jump to the start / end |
+| Esc / q / o in the reader | Return to the previous view while keeping the observer open |
+| Ctrl-R outside a composer | Restore the last failed message, board, memory or new-session draft for review |
+| Ctrl-R inside a memory editor | Review the latest saved value/version alongside the retained draft |
 | a | Pause/resume configured autonomy; does not stop in-flight work |
 | q | Detach from the persistent workbench, or close a popup/standalone view; team stays running |
+
+Use `o` when a preview is too short. The reader keeps the selected record and
+its loaded text fixed while activity refreshes, so scrolling cannot switch to a
+different result. Tasks show the result first, followed by the instruction and
+provenance/reported trace. Agents shows session details and a loaded terminal
+preview or unconfirmed external-bridge setup. Memory shows the selected entry or boundary details;
+Sessions can show loaded bridge setup, and Teams/Events show full record details.
+Previously loaded content remains readable offline. The reader does not fetch
+older history; close and reopen it to read a refreshed record. Control and
+mutation keys are inactive while reading.
+
+After a failed send/reply, board post, memory save or new-session setup, inspect
+current delivery/state before retrying: a lost response may follow a successful
+write. Close any newer composer with Esc, then press Ctrl-R to review the retained
+draft. It restores the original recipient, reply reference or namespace/key;
+memory edits retain their original version check, and new-session drafts retain
+provider, project and role. Nothing is sent automatically. Failed title edits
+are restored separately with `L` on their original session.
+
+For a memory version conflict, press Ctrl-R **inside the memory editor**. This
+loads a frozen comparison of the current saved value/version and your retained
+draft. Enter in that reader adopts only the displayed version and returns to
+the editor; it does not save. Esc/q/o returns with the original version and
+draft. After reviewing or editing your draft, a separate Enter in the editor
+saves with the adopted version check. A later concurrent change still conflicts.
+Offline or failed reviews retain the draft without adopting a new version.
 
 Human input goes directly to the native CLI, including its normal approval
 prompts. Broker messages do not inject keystrokes or impersonate user input.

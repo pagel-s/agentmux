@@ -42,6 +42,11 @@ Each session has a stable Agentmux ID. Collaboration and autonomous wakeups star
 off; you decide which sessions can work together. The native-only preset runs until you close it; managed automation retains
 explicit runtime budgets.
 
+The workspace name (`work`) selects the running team; a session ID (`claude`,
+`codex`, or an ID printed by `add`) selects one conversation inside it. Commands
+default to workspace `work`, including when run from another project directory.
+Use the same `--session NAME` on later commands when you start a named workspace.
+
 Give sessions task titles such as “Fix login redirect”; the title can change
 while its ID and native conversation stay the same. The overview shows project,
 provider and ID, with creation/start time and terminal location in session details.
@@ -55,6 +60,7 @@ agentmux label SESSION_ID "Investigate cookie expiry"
 
 Select an agent with ↑/↓ and press **Enter** for its native CLI. **F1** returns to
 the workbench; **Ctrl-b b** opens the board as a popup; **Ctrl-b d** detaches.
+For a Ctrl-b shortcut, press Ctrl-b, release both keys, then press the final key.
 Open another terminal window with `attach`: each attachment switches agents
 independently while sharing the same underlying sessions.
 
@@ -73,6 +79,9 @@ agentmux web --open
 Two unrelated groups do not silently share context. `isolate` revokes peer
 coordination and group membership while keeping native interaction running.
 Accepted tasks need separate cancellation; previously read information remains.
+Keep the printed group ID: with several groups, post using
+`agentmux board "Note for this group" --group GROUP_ID`. The web app's Teams view
+lists owner collaboration groups and their boards/memory.
 `send` queues an inbox note for native sessions and an instruction task for managed
 workers. Messages never become unsolicited terminal keystrokes.
 

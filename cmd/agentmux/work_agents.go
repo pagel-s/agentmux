@@ -15,6 +15,7 @@ import (
 	"agentmux/internal/managed"
 	"agentmux/internal/managedcheck"
 	"agentmux/internal/managedconfig"
+	"agentmux/internal/managedlaunch"
 	"agentmux/internal/managedsetup"
 )
 
@@ -140,7 +141,8 @@ func runWorkAddParsed(args []string, out, diagnostics io.Writer, resolvedID *str
 	if _, err = workCall(context.Background(), client, "agent.add", map[string]any{"id": id, "title": *title, "config": plan.Config.Agents[id]}); err != nil {
 		return fail(err)
 	}
-	fmt.Fprintf(out, "Added %s · %s · %s\nCollaboration is off. Open: agentmux attach %s --state %s\n", id, *provider, directory, id, options.state)
+	fmt.Fprintf(out, "Added %s · %s · %s\n", id, *provider, directory)
+	fmt.Fprintln(out, "Collaboration is off. Open:", managedlaunch.ShellCommand([]string{"agentmux", "attach", id, "--state", options.state}))
 	if *title != "" {
 		fmt.Fprintln(out, "Title:", *title)
 	}
@@ -185,10 +187,22 @@ func workAgentOperation(operation string, o workOptions, client *managed.Client,
 		if len(o.args) != 1 {
 			return errors.New("remove requires one agent name")
 		}
-		if _, err := workCall(ctx, client, "agent.stop", map[string]string{"id": o.args[0]}); err != nil {
+		raw, err := workCall(ctx, client, "agent.stop", map[string]string{"id": o.args[0]})
+		if err != nil {
 			return err
 		}
-		fmt.Fprintf(out, "Closing %s; its saved history remains. Other terminals keep running.\n", o.args[0])
+		var result struct {
+			RevokedAgents int `json:"revoked_agents"`
+		}
+		if err := json.Unmarshal(raw, &result); err != nil {
+			return err
+		}
+		if result.RevokedAgents > 0 {
+			fmt.Fprintf(out, "Revoked coordination for %s and its active descendants (%d session(s)).\n", o.args[0], result.RevokedAgents)
+		} else {
+			fmt.Fprintf(out, "%s is already revoked.\n", o.args[0])
+		}
+		fmt.Fprintln(out, "Saved history remains. The supervisor closes owned terminals after observing revocation; external native terminals stay open. Process termination is not yet confirmed.")
 	case "collaborate", "isolate":
 		if len(o.args) == 0 {
 			return errors.New("select agent names")

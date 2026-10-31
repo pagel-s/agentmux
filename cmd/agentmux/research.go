@@ -29,6 +29,13 @@ func runResearchIO(ctx context.Context, args []string, stdout, stderr io.Writer)
 		usage()
 		return exitSuccess
 	}
+	if len(args) == 2 && helpArgument(args[1]) {
+		switch args[0] {
+		case "plan", "run", "analyze", "status", "watch", "pause", "resume", "step", "stop":
+			usage()
+			return exitSuccess
+		}
+	}
 	if len(args) >= 2 {
 		switch args[0] {
 		case "status", "watch", "pause", "resume", "step", "stop":
@@ -47,7 +54,15 @@ func runResearchIO(ctx context.Context, args []string, stdout, stderr io.Writer)
 	rerun := flags.Bool("rerun-interrupted", false, "create a fresh attempt after stopping interrupted processes")
 	csvPath := flags.String("csv", "", "new private descriptive analysis CSV")
 	behaviorCSV := flags.String("behavior-csv", "", "new private per-decision behavior CSV")
-	if err := flags.Parse(args[2:]); err != nil || flags.NArg() != 0 {
+	if err := flags.Parse(args[2:]); err != nil {
+		if err == flag.ErrHelp {
+			usage()
+			return exitSuccess
+		}
+		return exitValidation
+	}
+	if flags.NArg() != 0 {
+		fmt.Fprintln(stderr, "research accepts one manifest/output path followed by flags; run agentmux research --help")
 		return exitValidation
 	}
 	if args[0] == "plan" && (*output != "" || *allow || *rerun || *startPaused || *csvPath != "" || *behaviorCSV != "") {
@@ -161,7 +176,14 @@ func runResearchLiveIO(ctx context.Context, args []string, stdout, stderr io.Wri
 	flags.SetOutput(stderr)
 	version := flags.Int("version", 0, "expected research control version from status")
 	reason := flags.String("reason", "", "auditable reason for this exploratory intervention")
-	if err := flags.Parse(args[2:]); err != nil || flags.NArg() != 0 {
+	if err := flags.Parse(args[2:]); err != nil {
+		if err == flag.ErrHelp {
+			return exitSuccess
+		}
+		return exitValidation
+	}
+	if flags.NArg() != 0 {
+		fmt.Fprintln(stderr, "research "+args[0]+" accepts one output/state path followed by flags")
 		return exitValidation
 	}
 	mutating := args[0] != "status" && args[0] != "watch"

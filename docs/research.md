@@ -14,12 +14,17 @@ Build Agentmux, inspect the entire execution matrix, then run the included
 deterministic command participants:
 
 ```sh
-go build -o /tmp/agentmux ./cmd/agentmux
-/tmp/agentmux research plan examples/research/public-goods.yaml
-/tmp/agentmux research run examples/research/public-goods.yaml --output /tmp/amx-research
-/tmp/agentmux research analyze /tmp/amx-research
-/tmp/agentmux research analyze /tmp/amx-research --csv /tmp/amx-research-analysis.csv
+make build
+./bin/agentmux research plan examples/research/public-goods.yaml
+./bin/agentmux research run examples/research/public-goods.yaml --output /tmp/amx-research
+./bin/agentmux research analyze /tmp/amx-research
+./bin/agentmux research analyze /tmp/amx-research --csv /tmp/amx-research-analysis.csv
 ```
+
+Run these commands from the repository root. Later examples use `agentmux` on
+your PATH; see [installation](getting-started/installation.md). `plan` validates
+and prints the trial matrix and task counts without starting participants.
+`run` occupies its terminal until completion; use another terminal to observe it.
 
 Use a new short private output path; directories are `0700`, artifact files
 `0600`, and Unix socket paths must fit within 100 bytes. The CSV must be a new
@@ -53,6 +58,20 @@ agentmux dashboard --state STATE --view research
 agentmux web --state STATE
 ```
 
+`OUTPUT` means the study's top-level output directory (here
+`/tmp/amx-live-study`); `STATE` means one attempt's broker directory printed by
+the runner. `status` and `watch` accept either. OUTPUT resolves the most recently
+published attempt; dashboard/web need the exact STATE and must be reopened for
+a later attempt. Before the first attempt is ready, there may be
+no live pointer yet. A missing `live.json` alone does not establish a failed run;
+check the runner terminal.
+
+`status` prints one JSON snapshot. `watch` prints JSON snapshots as they change
+and exits when the attempt finishes or is no longer live. Ctrl-C in the watcher
+stops observation while the runner continues. Closing a dashboard or stopping
+the web process also leaves the runner running. If `watch` exits between trials,
+run it again with OUTPUT to observe the next published attempt.
+
 The terminal Events view and web Research view show trial/condition, round and
 phase, population, authoritative phase-task delivery, finite deadline, reserved
 model-task count and requested versus acknowledged control versions. A fresh
@@ -61,12 +80,19 @@ does not establish that a task stopped. Heartbeats are ephemeral, consume no
 durable request receipts, and become unknown after broker restart.
 
 Pause, resume, single-phase step and stop require the displayed control version
-and an explicit reason. For example, after reading version 2:
+and an explicit reason. In CLI JSON, use
+`result.research.control.version` from a fresh `status` response; do not use the
+progress revision or acknowledged version. For example, after reading version 2:
 
 ```sh
 agentmux research step /tmp/amx-live-study --version 2 \
   --reason "Inspect team formation after one phase"
 ```
+
+Fetch `status` again before the next control, because accepted changes advance
+the version. A conflict means review the current state before submitting again.
+Use `research resume OUTPUT --version N --reason "..."` to release a paused
+live runner; this does not restart a stopped or interrupted runner.
 
 These controls act at phase barriers. A phase already admitted may finish;
 cancellation of accepted tasks is a separate action in Tasks. A step admits
@@ -95,7 +121,11 @@ evidence. This provenance assumes a trusted host owner.
 After broker shutdown, the web/terminal console can show saved research metadata
 without enabling writes or claiming live execution. The local read authenticates
 the original owner token; credential rotation and damaged state still fail
-closed. `research status OUTPUT` also distinguishes live and saved metadata.
+closed. `research status OUTPUT` and `research status STATE` both distinguish
+live and saved metadata. When the broker is unavailable, they authenticate and
+read the saved broker checkpoint; cached `live.json` content is not the status
+authority. Saved status reports `live: false` and no current runner heartbeat,
+and does not restart workers or prove their processes stopped.
 
 Research participants use bounded headless managed turns. There is no native
 terminal to type into during those turns; such a configuration is rejected
@@ -251,7 +281,7 @@ Actual native execution additionally requires explicit `--allow-models`, a
 strict preregistration, and positive `budget.max_model_tasks`:
 
 ```sh
-/tmp/agentmux research run /private/study.yaml --output /tmp/amx-model-study --allow-models
+agentmux research run /private/study.yaml --output /tmp/amx-model-study --allow-models
 ```
 
 Agent count, roles, harness/model versions, native permissions, tools, context,
@@ -278,7 +308,7 @@ output is the descriptive aggregate, not the private observations.
 Export those rows separately without raw prompts:
 
 ```sh
-/tmp/agentmux research analyze /tmp/amx-research --behavior-csv /tmp/amx-behavior.csv
+agentmux research analyze /tmp/amx-research --behavior-csv /tmp/amx-behavior.csv
 ```
 
 The overall trial and each phase have finite deadlines, including phase task
@@ -286,11 +316,15 @@ queuing, with a bounded cleanup window after workers stop. Native failures are
 recorded and invalid actions are scored under the declared rule. Worker or
 transport uncertainty interrupts the attempt; it never becomes an invented
 decision or an automatic model rerun. The runner joins workers and stops the
-broker on exit. Completed runs are skipped on resume. A partial or uncertain
-attempt requires stopping any remaining processes and explicit rerun consent:
+broker on exit. To continue a study after the runner has exited, invoke the same
+`research run MANIFEST --output OUTPUT` command again, retaining `--allow-models`
+for native studies. It skips completed trials and runs those not yet started.
+This differs from `research resume`, which only releases a live pause. A partial
+or uncertain attempt requires stopping any remaining processes and explicitly
+choosing a fresh attempt with `--rerun-interrupted`:
 
 ```sh
-/tmp/agentmux research run examples/research/public-goods.yaml \
+agentmux research run examples/research/public-goods.yaml \
   --output /tmp/amx-research --rerun-interrupted
 ```
 

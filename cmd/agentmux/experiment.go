@@ -28,6 +28,10 @@ func runExperimentIO(ctx context.Context, args []string, stdout, stderr io.Write
 		usage()
 		return exitSuccess
 	}
+	if len(args) == 2 && (args[0] == "plan" || args[0] == "run") && helpArgument(args[1]) {
+		usage()
+		return exitSuccess
+	}
 	if len(args) < 2 || (args[0] != "plan" && args[0] != "run") {
 		usage()
 		return exitValidation
@@ -37,7 +41,15 @@ func runExperimentIO(ctx context.Context, args []string, stdout, stderr io.Write
 	output := flags.String("output", "", "private result directory")
 	allowModels := flags.Bool("allow-models", false, "allow provider-backed harnesses and their charges")
 	rerun := flags.Bool("rerun-interrupted", false, "create fresh attempts after stopping interrupted trial processes")
-	if err := flags.Parse(args[2:]); err != nil || flags.NArg() != 0 {
+	if err := flags.Parse(args[2:]); err != nil {
+		if err == flag.ErrHelp {
+			usage()
+			return exitSuccess
+		}
+		return exitValidation
+	}
+	if flags.NArg() != 0 {
+		fmt.Fprintln(stderr, "experiment accepts one manifest path followed by flags; run agentmux experiment --help")
 		return exitValidation
 	}
 	if args[0] == "plan" && (*output != "" || *allowModels || *rerun) {

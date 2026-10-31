@@ -10,6 +10,9 @@
     <script src="/graph.js" defer></script>
   </head>
   <body>
+    <a id="skip-workspace" class="skip-link" href="#workspace"
+      >Skip to workspace</a
+    >
     <div class="app">
       <header class="topbar">
         <a class="brand" href="/" aria-label="Agentmux"
@@ -18,7 +21,7 @@
         ><span class="connection" id="connection">Connecting</span>
         <div class="top-actions">
           <button id="refresh" class="quiet">Refresh</button
-          ><button id="copy-attach">Attach command ↗</button>
+          ><button id="copy-attach" disabled>Attach command ↗</button>
         </div>
       </header>
       <aside class="agents">
@@ -42,7 +45,7 @@
           <div id="runtime-state">Loading</div>
         </div>
       </aside>
-      <main>
+      <main id="workspace" tabindex="-1" aria-label="Agentmux workspace">
         <div class="workspace-header">
           <div class="global-heading">
             <h1 id="global-view-title"></h1>
@@ -50,15 +53,21 @@
           </div>
           <div class="agent-title">
             <h1 id="agent-name">Select an agent</h1>
-            <button id="edit-title" class="quiet" aria-label="Edit task title">
+            <button
+              id="edit-title"
+              class="quiet"
+              aria-label="Edit task title"
+              disabled
+            >
               Rename
             </button>
             <span id="agent-harness"></span>
           </div>
           <div class="agent-actions">
-            <button id="focus-terminal">Focus in tmux ↗</button
-            ><button id="close-agent" class="quiet">Close session</button
-            ><button id="pause-agent" class="quiet">Autonomy</button>
+            <button id="focus-terminal" disabled>Focus in tmux ↗</button
+            ><button id="close-agent" class="quiet" disabled>
+              Close session</button
+            ><button id="pause-agent" class="quiet" disabled>Autonomy</button>
           </div>
           <p id="agent-role"></p>
           <form id="title-editor" class="title-editor" hidden>
@@ -69,13 +78,14 @@
               placeholder="e.g. Fix sign-in flow"
               autocomplete="off"
             />
-            <button type="submit" id="save-title">Save title</button
-            ><button type="button" id="clear-title" class="quiet">Clear</button
+            <button type="submit" id="save-title" disabled>Save title</button
+            ><button type="button" id="clear-title" class="quiet" disabled>
+              Clear</button
             ><button type="button" id="cancel-title" class="quiet">
               Cancel
             </button>
             <p id="title-conflict" class="title-conflict" hidden></p>
-            <button type="button" id="rebase-title" hidden>
+            <button type="button" id="rebase-title" hidden disabled>
               Keep my draft using this version
             </button>
           </form>
@@ -129,7 +139,12 @@
                 required
                 maxlength="512"
               />
-              <button type="submit" id="review-research" data-owner-write>
+              <button
+                type="submit"
+                id="review-research"
+                data-owner-write
+                disabled
+              >
                 Review intervention
               </button>
             </form>
@@ -188,7 +203,7 @@
                 aria-label="Project directory"
                 placeholder="/path/to/project"
                 required
-              /><button type="submit">New session</button>
+              /><button type="submit" disabled>New session</button>
               <details>
                 <summary>Role, isolation & stable ID</summary>
                 <input
@@ -268,8 +283,9 @@
               <select
                 id="memory-namespace"
                 aria-label="Memory namespace"
+                disabled
               ></select
-              ><button id="load-memory" class="quiet">Load</button>
+              ><button id="load-memory" class="quiet" disabled>Load</button>
             </div>
             <p id="research-memory-hint" class="session-note" hidden>
               Research steering through shared memory: changes are version
@@ -294,9 +310,53 @@
               </label>
               <div>
                 <span id="memory-version">New entry · version 0</span
-                ><button type="submit">Save entry</button>
+                ><button
+                  id="review-memory"
+                  type="button"
+                  class="quiet"
+                  disabled
+                >
+                  Review latest</button
+                ><button
+                  id="discard-memory-draft"
+                  type="button"
+                  class="quiet"
+                  disabled
+                >
+                  Discard draft</button
+                ><button type="submit" disabled>Save entry</button>
               </div>
             </form>
+            <section
+              id="memory-review"
+              class="memory-review"
+              tabindex="-1"
+              aria-label="Review latest memory version"
+              hidden
+            >
+              <h3>Review latest · draft kept</h3>
+              <p id="memory-review-target" class="session-note"></p>
+              <div class="memory-comparison">
+                <div>
+                  <h4>Your draft</h4>
+                  <pre id="memory-review-draft"></pre>
+                </div>
+                <div>
+                  <h4>Latest saved value</h4>
+                  <pre id="memory-review-latest"></pre>
+                </div>
+              </div>
+              <button id="adopt-memory-version" data-owner-write disabled>
+                Use reviewed version for my draft
+              </button>
+              <button id="close-memory-review" class="quiet">
+                Close review
+              </button>
+              <p class="session-note">
+                Using this version keeps your text and does not save. A later
+                concurrent write will still require another review.
+              </p>
+            </section>
           </section>
           <section id="view-graph" class="view">
             <div class="graph-toolbar">
@@ -306,7 +366,7 @@
                 ><button id="graph-scopes">Shared access</button>
               </div>
               <span id="graph-limit">Drag nodes · select a connection</span
-              ><button id="graph-edit">Connect…</button
+              ><button id="graph-edit" disabled>Connect…</button
               ><button id="graph-reset" class="quiet">Reset layout</button>
             </div>
             <div class="graph-canvas">
@@ -332,8 +392,8 @@
               </div>
               <div class="inspector-section" id="edge-section">
                 <div class="connection-actions">
-                  <button id="connect-pair">Collaborate</button
-                  ><button id="isolate-agent" class="quiet">
+                  <button id="connect-pair" disabled>Collaborate</button
+                  ><button id="isolate-agent" class="quiet" disabled>
                     Make independent
                   </button>
                 </div>
@@ -358,7 +418,11 @@
           <div class="composer-top">
             <label for="message"
               >To <strong id="send-target">agent</strong></label
-            ><select id="message-kind" aria-label="Message destination">
+            ><select
+              id="message-kind"
+              aria-label="Message destination"
+              disabled
+            >
               <option value="direct">Direct inbox</option>
               <option value="board">Team board</option></select
             ><span id="reply-context"></span
@@ -373,7 +437,7 @@
               placeholder="Message an agent or post to the shared board."
               required
             ></textarea
-            ><button type="submit" id="send-message">Send ↵</button>
+            ><button type="submit" id="send-message" disabled>Send ↵</button>
           </div>
           <div id="delivery-hint" class="delivery-hint"></div>
         </form>

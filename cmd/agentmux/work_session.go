@@ -29,11 +29,20 @@ type workOptions struct {
 
 func hasWorkSessionFlag(args []string) bool {
 	for _, arg := range args {
+		if arg == "--" {
+			break
+		}
 		if arg == "--state" || arg == "--session" || arg == "--view" || arg == "--popup" || strings.HasPrefix(arg, "--view=") || strings.HasPrefix(arg, "--state=") || strings.HasPrefix(arg, "--session=") {
 			return true
 		}
 	}
 	return false
+}
+
+// A single recipient before -- is the human message form. Two positionals
+// before -- remain the legacy SESSION PANE raw-input form.
+func workSendRequested(args []string) bool {
+	return len(args) == 2 || hasWorkSessionFlag(args) || workHelpRequested(args) || (len(args) == 3 && args[1] == "--")
 }
 func defaultWorkState(session string) (string, error) {
 	if !managedconfig.ValidID(session) {
@@ -148,9 +157,8 @@ func requestIDForWork() string {
 }
 
 func runWorkSession(operation string, args []string, in io.Reader, out, diagnostics io.Writer) int {
-	for _, arg := range args {
-		if arg == "--help" || arg == "-h" {
-			fmt.Fprintln(out, `Human work sessions:
+	if workHelpRequested(args) {
+		fmt.Fprintln(out, `Human work sessions:
   agentmux start [--project DIR] [--session work] [--detach]
                  [--config team.yaml] [--sandbox bubblewrap|local] [--state DIR]
   agentmux attach [AGENT] [--session work | --state DIR]
@@ -176,8 +184,7 @@ for a dedicated board/memory group, or --sandbox bubblewrap for isolated profile
 send/reply queue broker messages for interactive agents and instruction tasks for
 managed workers. Use attach to type directly into a native agent terminal.
 Legacy raw pane input remains: agentmux send SESSION PANE -- COMMAND.`)
-			return exitSuccess
-		}
+		return exitSuccess
 	}
 	o, err := parseWorkOptions(args)
 	if err != nil {
@@ -387,7 +394,7 @@ Legacy raw pane input remains: agentmux send SESSION PANE -- COMMAND.`)
 		}
 		fmt.Fprintf(out, "%s queued for %s: %s\n", kind, target, id)
 		if kind == "Message" {
-			fmt.Fprintf(out, "Interactive agent: read it from the agent's broker inbox, or use agentmux attach %s --state %s to talk directly.\n", target, o.state)
+			fmt.Fprintln(out, "Interactive agent: read its broker inbox, or talk directly with:", managedlaunch.ShellCommand([]string{"agentmux", "attach", target, "--state", o.state}))
 		}
 		return exitSuccess
 	}

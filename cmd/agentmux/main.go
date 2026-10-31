@@ -113,7 +113,7 @@ func run(args []string) int {
 	case "list":
 		return runList(args[1:])
 	case "dashboard":
-		if len(args) == 1 || hasWorkSessionFlag(args[1:]) {
+		if len(args) == 1 || hasWorkSessionFlag(args[1:]) || workHelpRequested(args[1:]) {
 			return runWorkSession("dashboard", args[1:], os.Stdin, os.Stdout, os.Stderr)
 		}
 		return runDashboard(args[1:])
@@ -146,7 +146,7 @@ func run(args []string) int {
 	case "capture":
 		return runCapture(args[1:])
 	case "send":
-		if len(args) == 3 || hasWorkSessionFlag(args[1:]) {
+		if workSendRequested(args[1:]) {
 			return runWorkSession("send", args[1:], os.Stdin, os.Stdout, os.Stderr)
 		}
 		return runSend(args[1:])

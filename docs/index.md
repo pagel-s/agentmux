@@ -11,6 +11,11 @@ bounded autonomous workflows, or the research runners for controlled experiments
 3. Use the terminal dashboard for attachment and the local web app for activity,
    tasks, shared-memory editing and live permission controls.
 
+Keep the [everyday command reference](commands.md#everyday-work-sessions) handy
+for selecting named workspaces, adding or connecting sessions, and choosing a
+collaboration group's board. For a repeated-round study, start with the
+[research planning and observation workflow](research.md).
+
 The managed runtime and workbench are experimental. Broker permissions, native
 approvals, provider networking and filesystem isolation are separate boundaries.
 The [trust model](security-model.md) and [validation record](release-validation.md)

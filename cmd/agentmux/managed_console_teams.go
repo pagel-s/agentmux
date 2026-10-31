@@ -9,6 +9,7 @@ import (
 
 	"agentmux/internal/managed"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // Review metadata is immutable while its modal is open. Registry or team polls
@@ -183,9 +184,13 @@ func (m console) teamReviewPanel(width, height int) string {
 		}
 		return consoleClip(out.String(), width, height)
 	}
-	fmt.Fprintf(&out, "%s\n%s\n\n%s\nTeam: %s\nID: %s\nVersion: %d\n", consoleAccent.Render("Review owner team action"), consoleMuted.Render("Enter applies exact versioned action · Esc cancels"), consoleAccent.Render(a.operation), consoleContent(a.teamName, 160), consoleContent(a.teamID, 80), a.version)
+	fmt.Fprintf(&out, "%s\n%s\n\n%s\nID: %s\nVersion: %d\n", consoleAccent.Render("Review owner team action"), consoleMuted.Render("Enter applies exact versioned action · Esc cancels"), consoleAccent.Render(a.operation), consoleContent(a.teamID, 80), a.version)
 	if a.agentID != "" {
-		fmt.Fprintf(&out, "Agent: %s\nStable ID: %s\n", consoleContent(m.agentLabel(a.agentID), 200), consoleContent(a.agentID, 80))
+		fmt.Fprintf(&out, "Stable ID: %s\n", consoleContent(a.agentID, 80))
+	}
+	fmt.Fprintf(&out, "Team: %s\n", consoleClip(consoleContent(a.teamName, 160), width-6, 1))
+	if a.agentID != "" {
+		fmt.Fprintf(&out, "Agent: %s\n", consoleClip(consoleContent(m.agentLabel(a.agentID), 200), width-7, 1))
 	}
 	if a.operation == "team.invite" {
 		out.WriteString("\nThis sends an invitation. Only the invited agent can consent to join.\n")
@@ -198,8 +203,9 @@ func (m console) teamReviewPanel(width, height int) string {
 
 func (m console) teamsPanel(width, height int) string {
 	var out strings.Builder
-	out.WriteString(consoleAccent.Render("Consented teams") + consoleMuted.Render("  [/] team · ←/→ agent · i invite · r remove · d dissolve\n"))
-	out.WriteString(consoleMuted.Render("v inspect team memory · b post to team board · Enter open selected agent\n\n"))
+	out.WriteString(consoleAccent.Render("Consented teams") + "\n")
+	out.WriteString(consoleMuted.Render(consoleClip("[/] team · ←/→ target · i invite · r remove · d dissolve", width, 1)) + "\n")
+	out.WriteString(consoleMuted.Render(consoleClip("v memory · b board · o full team · Enter opens target", width, 1)) + "\n\n")
 	if m.data.teamsErr != nil {
 		return consoleClip(out.String()+"Teams unavailable: "+consoleContent(m.data.teamsErr.Error(), 200), width, height)
 	}
@@ -209,9 +215,9 @@ func (m console) teamsPanel(width, height int) string {
 	}
 	selected := m.teamIndex % len(m.data.teams)
 	t := m.data.teams[selected]
-	fmt.Fprintf(&out, "%s · %s · %d/%d\n%s · v%d\n", consoleSelected.Render(consoleContent(t.Name, 90)), t.State, selected+1, len(m.data.teams), consoleMuted.Render(consoleContent(t.ID, 80)), t.Version)
+	fmt.Fprintf(&out, "%s · %s · %d/%d\n%s · v%d\n", consoleSelected.Render(ansi.Truncate(consoleContent(t.Name, 90), max(1, width-22), "…")), t.State, selected+1, len(m.data.teams), consoleMuted.Render(consoleContent(t.ID, 80)), t.Version)
 	if target := m.teamTarget(); target != nil {
-		fmt.Fprintf(&out, "Action target: %s\n", consoleAccent.Render(consoleContent(m.agentLabel(target.ID), 200)))
+		fmt.Fprintf(&out, "Action target: %s\n", consoleAccent.Render(consoleClip(consoleContent(target.ID+" · "+m.agentLabel(target.ID), 200), width-15, 1)))
 		membership := "not invited"
 		if teamContains(t.Invited, target.ID) {
 			membership = "awaiting consent"
@@ -243,7 +249,7 @@ func (m console) teamAgentLabels(ids []string) string {
 func (m console) eventsPanel(width, height int) string {
 	var out strings.Builder
 	out.WriteString(m.researchPanel(width))
-	out.WriteString(consoleAccent.Render("Events & topology") + consoleMuted.Render("  [/] select · Home latest/live\n\n"))
+	out.WriteString(consoleAccent.Render("Events & topology") + consoleMuted.Render("  [/] select · Home latest/live · o details") + "\n\n")
 	events := m.data.activity.Events
 	if len(events) == 0 {
 		return consoleClip(out.String()+consoleMuted.Render("No recent broker events. Agent thinking and native tool execution\nare visible only when exposed by the native terminal/provider."), width, height)

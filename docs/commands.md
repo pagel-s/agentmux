@@ -2,9 +2,74 @@
 
 This guide explains what each command is for, when to use it, and the most useful examples.
 
-If you want workflow-shaped examples instead of command reference, see [`recipes.md`](recipes.md).
+For a guided native-terminal workflow, see [work sessions](work-sessions.md).
+For original YAML pane-layout examples, see [recipes](recipes.md).
 
-## The Short Version
+## Everyday work sessions
+
+After building, put `bin/` on your PATH as shown in the [installation
+guide](getting-started/installation.md). With Claude Code and Codex installed and
+logged in, run `agentmux start` from your project directory. It creates the
+default workspace `work` and opens its workbench.
+
+| Command | Use it to |
+| --- | --- |
+| `agentmux start` | Start the default native Claude/Codex team, or attach when that same team is running |
+| `agentmux attach AGENT_ID` | Open one workspace-owned native conversation for direct typing |
+| `agentmux dashboard` | Return to the owner workbench |
+| `agentmux web --open` | Open the local owner app |
+| `agentmux add --harness claude --project DIR --title "Task"` | Start another native session; copy its printed stable ID |
+| `agentmux sessions` | List registered sessions and separately observed external terminals |
+| `agentmux connect OBSERVED_ID --title "Task"` | Prepare a helper for an existing external session; paste the printed setup into its original terminal |
+| `agentmux label AGENT_ID "Task"` | Rename its display title while keeping its ID and conversation |
+| `agentmux collaborate AGENT_ID OTHER_ID` | Give those sessions a dedicated board/memory group and allow notes/pings |
+| `agentmux send AGENT_ID "Message"` | Queue a native inbox note, or a managed worker instruction task |
+| `agentmux inbox` | Inspect recent coordination and task activity as the owner |
+| `agentmux board "Note" --group GROUP_ID` | Post to a particular collaboration group's board |
+| `agentmux reply TASK_OR_MESSAGE_ID "Follow-up"` | Follow up to the task recipient or original message sender |
+| `agentmux isolate AGENT_ID` | Revoke its peer coordination and memberships across groups; native input stays open |
+| `agentmux remove AGENT_ID` | Close an owned terminal or disconnect an external bridge; retain saved history |
+| `agentmux down` | Stop the workspace's owned processes while keeping saved data |
+
+Replace uppercase placeholders with actual paths or IDs. `DIR` must already
+exist. `--harness` chooses the native CLI (`claude`, `codex`, or `pi`);
+`--title` is a display label and `--role` supplies optional agent instructions.
+Session titles can repeat; commands address the stable ID shown under the title.
+An observed terminal must be connected before its registered ID can be used for
+collaboration. A prepared bridge does not mean the agent read the pasted setup;
+external sessions keep their original terminals for typing.
+
+These commands select workspace `work` by default, regardless of your current
+directory. For another workspace use `--session NAME` on each command, or select
+its exact directory with `--state DIR`. For example:
+
+```sh
+agentmux start --session review --project /path/to/project
+# In another terminal:
+agentmux attach codex --session review
+agentmux web --session review --open
+agentmux down --session review
+```
+
+`send` queues coordination; it does not type into a native terminal or start a
+native model turn. Use `attach` to talk directly. With several groups, copy the
+group ID printed by `collaborate` or shown under **Teams → Owner collaboration
+groups** in the web app. `board` can choose the only active group automatically;
+with multiple groups select `--group ID` or `--board NAMESPACE` explicitly.
+For terminal shortcuts, recovery and native history, see [work
+sessions](work-sessions.md). For bounded headless studies see
+[research](research.md).
+
+## Existing workspace commands
+
+The reference below covers the original YAML layout mode (`init` / `load`).
+Its pane IDs, raw terminal input and shared key/value store are separate from
+the work-session broker's messages, memory and permissions. In particular,
+`dashboard SESSION` opens the legacy pane dashboard; use
+`dashboard --session NAME` for a managed workbench. Legacy `send SESSION PANE --
+COMMAND` types into a pane, unlike the queued message form above.
+
+### The short version
 
 If you only remember a few commands, remember these:
 
@@ -420,7 +485,7 @@ Useful flags:
 - `--strip-empty`: remove blank and whitespace-only lines
 - `--json`: structured output
 
-### `send`
+### `send SESSION PANE -- COMMAND`
 
 What it does:
 - writes text into a named pane
@@ -432,8 +497,8 @@ When to use it:
 Examples:
 
 ```bash
-./bin/agentmux send my-workflow review "git status --short"
-./bin/agentmux send my-workflow review --no-enter "printf 'queued\n'"
+./bin/agentmux send my-workflow review -- "git status --short"
+./bin/agentmux send my-workflow review --no-enter -- "printf 'queued\n'"
 ```
 
 Useful note:
