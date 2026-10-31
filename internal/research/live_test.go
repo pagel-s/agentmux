@@ -131,6 +131,133 @@ func TestLivePauseHonorsExistingDeadline(t *testing.T) {
 	}
 }
 
+// Successful responses advance only runner metadata; injection points below
+// deterministically place context cancellation on either side of each RPC.
+func liveRPCFixture(t *testing.T, mode string) *liveRunner {
+	t.Helper()
+	l := &liveRunner{path: filepath.Join(t.TempDir(), "live.json"), budget: &modelBudget{}, progress: managed.ResearchProgress{Trial: "run-context", Attempt: 1, Revision: 1, AckVersion: 1, State: "starting"}}
+	l.call = func(_ context.Context, operation string, args any) (json.RawMessage, error) {
+		p := l.progress
+		if operation == "research.publish" {
+			p = args.(managed.ResearchProgress)
+		}
+		return json.Marshal(map[string]any{"research": managed.ResearchStatus{Progress: p, Control: managed.ResearchControl{Mode: mode, Version: 2}}})
+	}
+	return l
+}
+
+func TestLiveRPCContextCancellationRetainsCallerError(t *testing.T) {
+	for _, stage := range []string{"publish", "status", "paused_publish"} {
+		t.Run(stage, func(t *testing.T) {
+			l := liveRPCFixture(t, "paused")
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			original := l.call
+			injected := false
+			l.call = func(ctx context.Context, op string, args any) (json.RawMessage, error) {
+				matches := stage == "publish" && op == "research.publish" || stage == "status" && op == "research.status"
+				if stage == "paused_publish" && op == "research.publish" {
+					matches = args.(managed.ResearchProgress).State == "paused"
+				}
+				if matches {
+					injected = true
+					cancel()
+					return nil, &managed.Fault{Code: "cancelled", Message: "request cancelled"}
+				}
+				return original(ctx, op, args)
+			}
+			if err := l.barrier(ctx, 1, "coordinate", []string{"alice", "bob"}); !injected || !errors.Is(err, context.Canceled) {
+				t.Fatalf("RPC cancellation lost caller context: injected=%v err=%v", injected, err)
+			}
+		})
+	}
+}
+
+func TestLiveSuccessfulRPCAtCancellationNeverReleasesPhase(t *testing.T) {
+	for _, mode := range []string{"running", "step"} {
+		for _, stage := range []string{"status", "admission"} {
+			t.Run(mode+"/"+stage, func(t *testing.T) {
+				l := liveRPCFixture(t, mode)
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				original := l.call
+				calls := 0
+				l.call = func(ctx context.Context, op string, args any) (json.RawMessage, error) {
+					calls++
+					raw, err := original(ctx, op, args)
+					if stage == "status" && op == "research.status" || stage == "admission" && op == "research.publish" && args.(managed.ResearchProgress).State == "running" {
+						cancel()
+					}
+					return raw, err
+				}
+				if err := l.barrier(ctx, 1, "coordinate", []string{"alice", "bob"}); !errors.Is(err, context.Canceled) {
+					t.Fatalf("successful RPC released work after cancellation: %v", err)
+				}
+				if l.stepVersion != 0 {
+					t.Fatal("expired step consumed admission")
+				}
+				if stage == "admission" && (calls != 3 || l.progress.Revision != 3 || l.progress.State != "running") {
+					t.Fatalf("committed revision lost or admission retried: calls=%d progress=%+v", calls, l.progress)
+				}
+				if stage == "status" && (calls != 2 || l.progress.State != "barrier") {
+					t.Fatal("status read admitted a phase after cancellation")
+				}
+			})
+		}
+	}
+}
+
+func TestLivePausedSelectAndCommittedOwnerStopKeepTheirMeaning(t *testing.T) {
+	for _, mode := range []string{"paused", "stopped"} {
+		t.Run(mode, func(t *testing.T) {
+			l := liveRPCFixture(t, mode)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			original := l.call
+			l.call = func(ctx context.Context, op string, args any) (json.RawMessage, error) {
+				raw, err := original(ctx, op, args)
+				if op == "research.publish" && args.(managed.ResearchProgress).State == mode {
+					cancel()
+				}
+				return raw, err
+			}
+			want := error(context.Canceled)
+			if mode == "stopped" {
+				want = ErrResearchStopped
+			}
+			if err := l.barrier(ctx, 1, "coordinate", []string{"alice", "bob"}); !errors.Is(err, want) {
+				t.Fatalf("paused select or committed owner stop changed meaning: %v", err)
+			}
+			if l.progress.State != mode {
+				t.Fatal("terminal/paused publication was discarded")
+			}
+		})
+	}
+}
+
+func TestLiveRPCFaultWithLiveContextIsNotRewrittenOrRetried(t *testing.T) {
+	for _, operation := range []string{"research.publish", "research.status"} {
+		for _, code := range []string{"cancelled", "internal", "conflict"} {
+			t.Run(operation+"/"+code, func(t *testing.T) {
+				l := liveRPCFixture(t, "paused")
+				original := l.call
+				problem := &managed.Fault{Code: code, Message: "definitive broker fault"}
+				faults := 0
+				l.call = func(ctx context.Context, op string, args any) (json.RawMessage, error) {
+					if op == operation {
+						faults++
+						return nil, problem
+					}
+					return original(ctx, op, args)
+				}
+				if err := l.barrier(context.Background(), 1, "coordinate", []string{"alice", "bob"}); err != problem || faults != 1 {
+					t.Fatalf("live-context fault rewritten/retried: faults=%d err=%v", faults, err)
+				}
+			})
+		}
+	}
+}
+
 func TestLiveAdmissionDoesNotCrossCommittedOwnerStop(t *testing.T) {
 	for _, step := range []bool{false, true} {
 		t.Run(fmt.Sprint("step=", step), func(t *testing.T) {

@@ -29,12 +29,15 @@ type liveRunner struct {
 }
 
 func (l *liveRunner) publish(ctx context.Context) (*managed.ResearchStatus, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	p := l.progress
 	p.Revision++
 	p.ModelTasksLimit, p.ModelTasksReserved = l.budget.Limit, len(l.budget.Reserved)
 	raw, err := l.call(ctx, "research.publish", p)
 	if err != nil {
-		return nil, err
+		return nil, liveContextError(ctx, err)
 	}
 	var response struct {
 		Research *managed.ResearchStatus `json:"research"`
@@ -52,6 +55,9 @@ func (l *liveRunner) publish(ctx context.Context) (*managed.ResearchStatus, erro
 // barrier never extends the trial deadline or reserves work while paused.
 // A step grants exactly one phase, regardless of the number of status reads.
 func (l *liveRunner) barrier(ctx context.Context, round int, phase string, population []string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	l.progress.Round, l.progress.Phase, l.progress.Population = round, phase, population
 	l.progress.Tasks, l.progress.TaskIDs = map[string]string{}, nil
 	l.progress.State = "barrier"
@@ -59,8 +65,14 @@ func (l *liveRunner) barrier(ctx context.Context, round int, phase string, popul
 		return err
 	}
 	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		raw, err := l.call(ctx, "research.status", map[string]any{})
 		if err != nil {
+			return liveContextError(ctx, err)
+		}
+		if err := ctx.Err(); err != nil {
 			return err
 		}
 		var response struct {
@@ -82,6 +94,11 @@ func (l *liveRunner) barrier(ctx context.Context, round int, phase string, popul
 		case "running":
 			l.progress.State = "running"
 			_, err := l.publish(ctx)
+			if err == nil {
+				// Publication may have committed as the deadline expired. Keep
+				// its revision for cleanup, but never release new phase work.
+				err = ctx.Err()
+			}
 			if researchAdmissionConflict(err) {
 				l.progress.State = "barrier"
 				continue
@@ -91,6 +108,9 @@ func (l *liveRunner) barrier(ctx context.Context, round int, phase string, popul
 			if l.stepVersion != c.Version {
 				l.progress.State = "running"
 				_, err := l.publish(ctx)
+				if err == nil {
+					err = ctx.Err()
+				}
 				if researchAdmissionConflict(err) {
 					l.progress.State = "barrier"
 					continue
@@ -113,6 +133,16 @@ func (l *liveRunner) barrier(ctx context.Context, round int, phase string, popul
 		case <-time.After(250 * time.Millisecond):
 		}
 	}
+}
+
+// Broker cancellation faults lose Go's context error identity across RPC. Only
+// an actually ended caller context takes precedence over a transport fault;
+// live-context broker errors still retain their code and are never retried here.
+func liveContextError(ctx context.Context, err error) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	return err
 }
 
 // ResolveLiveState accepts an explicit broker state or a study output directory.
