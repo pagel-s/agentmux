@@ -130,15 +130,19 @@ processes. Recovery digests detect damaged state; they do not defend against an
 owner who can rewrite both records and their recovery metadata. Remote trace
 collection remains unsupported without a central collector and was not validated.
 
-One [CI run](https://github.com/pagel-s/agentmux/actions/runs/41242918692/job/124660332398)
-reported an unexpected tmux server exit during the two-client shutdown test on
-Ubuntu's tmux 3.2a. The cause remains unconfirmed: 270 isolated repetitions
-across upstream 3.2a, Ubuntu's exact 3.2a package and system 3.6 passed, as did the
-next [complete CI run](https://github.com/pagel-s/agentmux/actions/runs/41243366671)
-without a lifecycle code change. These local package tests
-used host libraries and do not reproduce the full CI VM. The fixture now also
-checks worker exit with both clients attached. Unexpected server death still
-fails shutdown; this sweep does not claim to have fixed that intermittent exit.
-CI now retains failed model-free tmux fixture logs for seven days. The diagnostic
-server and clients use an explicit minimal environment without inherited user or
-CI credentials; successful fixtures remove their logs.
+An earlier [CI run](https://github.com/pagel-s/agentmux/actions/runs/41242918692/job/124660332398)
+reported an unexpected tmux 3.2a server exit that initially resisted local
+reproduction. A subsequent [failure with retained diagnostics](https://github.com/pagel-s/agentmux/actions/runs/41247017287/job/124672444506)
+identified queued output in the test's two control-mode clients when a retained
+worker pane exits. A local stress reproducer also crashed Ubuntu's exact tmux
+3.2a package. Its pending-output path can use a freed pane event;
+[tmux 3.3 guards the exited descriptor before accessing that data](https://github.com/tmux/tmux/blob/3.3/control.c#L623-L630).
+
+Agentmux's ordinary attach uses native terminal clients. The integration fixture
+now uses real PTY clients too, retaining the independent navigation, simultaneous
+worker-exit, detach, owned cleanup and foreign-session assertions. It does not
+patch tmux or claim control-mode reliability on 3.2a. Unexpected server death still
+fails the test. CI retains failed model-free tmux logs for seven days; the fixture
+server and clients use a minimal environment without inherited user or CI
+credentials, and successful fixtures remove their logs. Local package checks use
+host libraries and do not reproduce the full CI VM.
