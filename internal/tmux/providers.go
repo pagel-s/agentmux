@@ -47,6 +47,8 @@ func compileProviderCommandWithProfile(session string, pane resolve.Pane, profil
 	}
 
 	switch spec.ID {
+	case "antigravity":
+		return compileAntigravityCommand(spec, pane, profile)
 	case "claude":
 		return compileClaudeCommand(spec, pane, profile, session)
 	case "gemini":
@@ -55,22 +57,37 @@ func compileProviderCommandWithProfile(session string, pane resolve.Pane, profil
 		return compileCodexCommand(spec, pane, profile, session)
 	case "gptme":
 		return compileGPTMeCommand(spec, pane, profile)
+	case "pi":
+		return compilePiCommand(spec, pane, profile)
 	default:
 		return ""
 	}
 }
 
+// Antigravity's CLI does not expose a per-session MCP configuration flag.
+// Use the CLI bridge rather than changing a shared workspace or user config.
+func compileAntigravityCommand(spec prov.Spec, pane resolve.Pane, profile prov.LaunchProfile) string {
+	cmd := []string{spec.Binary}
+	if pane.Model != "" {
+		cmd = append(cmd, "--model", singleQuote(pane.Model))
+	}
+	if pane.ReasoningEffort != "" {
+		cmd = append(cmd, "--effort", singleQuote(pane.ReasoningEffort))
+	}
+	cmd = append(cmd, "--prompt-interactive", providerInitialPrompt(pane, spec.ID, profile))
+	return strings.Join(cmd, " ")
+}
+
 func compileClaudeCommand(spec prov.Spec, pane resolve.Pane, profile prov.LaunchProfile, session string) string {
 	cmd := []string{"claude"}
 
-	if pane.Persona != "" {
-		cmd = append(cmd, "--system-prompt", fmt.Sprintf(`"$(cat %s)"`, singleQuote(pane.Persona)))
-	}
 	if profile.Mode == string(prov.LaunchModeNativeMCP) {
 		cmd = append(cmd, "--mcp-config", singleQuote(claudeMCPConfigJSON(session, pane)), "--strict-mcp-config")
 	}
 
-	cmd = append(cmd, "--append-system-prompt", providerContextPrompt(spec.ID, profile.Mode))
+	// Keep Claude Code's native system instructions and append the role alongside
+	// Agentmux's coordination contract.
+	cmd = append(cmd, "--append-system-prompt", providerInitialPrompt(pane, spec.ID, profile))
 
 	if pane.Model != "" {
 		cmd = append(cmd, "--model", singleQuote(pane.Model))
@@ -131,8 +148,19 @@ func compileGPTMeCommand(spec prov.Spec, pane resolve.Pane, profile prov.LaunchP
 	return strings.Join(cmd, " ")
 }
 
+func compilePiCommand(spec prov.Spec, pane resolve.Pane, profile prov.LaunchProfile) string {
+	cmd := []string{spec.Binary, "--append-system-prompt", providerInitialPrompt(pane, spec.ID, profile)}
+	if pane.Model != "" {
+		cmd = append(cmd, "--model", singleQuote(pane.Model))
+	}
+	if pane.ReasoningEffort != "" {
+		cmd = append(cmd, "--thinking", singleQuote(pane.ReasoningEffort))
+	}
+	return strings.Join(cmd, " ")
+}
+
 func providerInitialPrompt(pane resolve.Pane, providerName string, profile prov.LaunchProfile) string {
-	if pane.Persona != "" && profile.PersonaChannel == "bootstrap-prompt" {
+	if pane.Persona != "" && (profile.PersonaChannel == "bootstrap-prompt" || profile.PersonaChannel == "appended-system-prompt") {
 		return fmt.Sprintf(`"$(cat %s)
 
 $(%s)"`, singleQuote(pane.Persona), providerPromptCommand(providerName, profile.Mode))

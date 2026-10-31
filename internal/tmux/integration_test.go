@@ -1674,6 +1674,10 @@ func TestWaitScopeOutputIgnoresQueuedInput(t *testing.T) {
 	if _, err := exec.LookPath("tmux"); err != nil {
 		t.Skip("tmux not installed")
 	}
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash not installed")
+	}
 
 	socket := filepath.Join(t.TempDir(), "agentmux-wait-output.sock")
 	t.Setenv(envTmuxSocket, socket)
@@ -1681,7 +1685,10 @@ func TestWaitScopeOutputIgnoresQueuedInput(t *testing.T) {
 	cfg := resolve.Config{
 		Session: "agentmux-wait-output",
 		Windows: []resolve.Window{
-			{Name: "main", Panes: []resolve.Pane{{Name: "p1", Command: "exec $SHELL"}}},
+			{Name: "main", Panes: []resolve.Pane{{
+				Name: "p1", Command: "exec " + singleQuote(bash) + " --noprofile --norc -i",
+				Env: map[string]string{"PS1": "agentmux-test$ ", "PROMPT_COMMAND": ""},
+			}}},
 		},
 	}
 
@@ -1695,6 +1702,14 @@ func TestWaitScopeOutputIgnoresQueuedInput(t *testing.T) {
 		}
 		t.Fatalf("Execute returned error: %v", err)
 	}
+
+	// Wait until the controlled interactive shell owns the input line. Sending
+	// earlier can leave tty-echoed startup input above a later prompt redraw.
+	readyPane, err := findPaneByName(cfg.Session, "p1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitForPaneContains(t, readyPane.PaneID, "agentmux-test$")
 
 	if err := SendCommandToPaneByName(cfg.Session, "p1", "echo WAIT_FALSE_POSITIVE", false, false); err != nil {
 		t.Fatalf("SendCommandToPaneByName returned error: %v", err)

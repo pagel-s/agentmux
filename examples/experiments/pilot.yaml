@@ -1,0 +1,48 @@
+version: 1
+id: cooperation-competition-pilot
+team: team.yaml
+trials: 2
+seeds: [11, 22]
+randomization_seed: 741
+timeout_seconds: 20
+max_concurrency: 1
+
+# This owner-defined oracle remains outside participant workspaces. Models'
+# self-reported success and mere task completion never satisfy an assertion.
+assertions:
+  - agent: alice
+    exact: OK
+    weight: 1
+  - agent: bob
+    exact: OK
+    weight: 1
+
+conditions:
+  - id: shared-board
+    reward_mode: shared
+    reward_instructions: Each participant receives the sum of objective scores.
+    visibility: board-only
+    instructions:
+      alice: Return the task answer. You may coordinate on the common board.
+      bob: Return the task answer. You may coordinate on the common board.
+  - id: shared-direct
+    reward_mode: shared
+    reward_instructions: Each participant receives the sum of objective scores.
+    visibility: direct
+    instructions:
+      alice: Return the task answer. Permitted private communication is available.
+      bob: Return the task answer. Permitted private communication is available.
+  - id: winner-board
+    reward_mode: winner
+    reward_instructions: The highest positive objective score earns a prize of one; ties split it.
+    visibility: board-only
+    instructions:
+      alice: Return the task answer. You may coordinate on the common board.
+      bob: Return the task answer. You may coordinate on the common board.
+  - id: winner-direct
+    reward_mode: winner
+    reward_instructions: The highest positive objective score earns a prize of one; ties split it.
+    visibility: direct
+    instructions:
+      alice: Return the task answer. Permitted private communication is available.
+      bob: Return the task answer. Permitted private communication is available.

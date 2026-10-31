@@ -1,0 +1,36 @@
+# Replace YOUR_OLLAMA_MODEL with the exact model already served by Ollama.
+version: 2
+mode: managed
+session: pi-ollama
+
+connections:
+  ollama:
+    protocol: ollama
+    base_url: http://127.0.0.1:11434/v1
+
+agents:
+  researcher:
+    role: Investigate assigned questions and distinguish evidence from inference.
+    harness: pi
+    connection: ollama
+    model: YOUR_OLLAMA_MODEL
+    sandbox: local
+    network: host
+
+boards:
+  research:
+    readers: [researcher]
+    writers: [researcher]
+
+memory:
+  project:
+    readers: [researcher]
+    writers: [researcher]
+
+policy:
+  default: deny
+
+limits:
+  max_messages: 1000
+  max_tasks: 100
+  max_runtime_seconds: 600

@@ -60,6 +60,8 @@ For an LLM to coordinate effectively, it must "know" about these primitives and 
 5.  **JIT Compilation:** Using the `provider`, `persona`, and optional `reasoning_effort` fields, Agentmux compiles provider-specific CLI commands that deliver persona and operational coordination through the strongest real surfaces available, selecting `native-mcp` or `cli-bridge` per provider at launch time.
 
 Persona delivery is intentionally provider-specific:
-- Claude uses a native system prompt.
+- Claude appends the persona and coordination instructions to Claude Code's default system prompt.
+- Pi appends the persona and CLI bridge instructions to its default system prompt.
+- Antigravity uses an interactive bootstrap prompt through `agy`, with the CLI bridge. Agentmux does not modify shared Antigravity MCP configuration.
 - Gemini uses a native workspace context file via a session-scoped runtime artifact.
 - Codex and GPTMe currently use bootstrap prompt delivery.

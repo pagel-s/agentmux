@@ -118,3 +118,24 @@ func TestGeminiSystemSettingsPathUsesTempDir(t *testing.T) {
 		t.Fatalf("geminiSystemSettingsPath = %q, want pane-specific path", path)
 	}
 }
+
+func TestPrepareAntigravityRuntimeDoesNotCreateSharedConfiguration(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("TMPDIR", tmp)
+	profile := prov.ProfileForMode("antigravity", "native-mcp")
+	pane := resolve.Pane{Name: "researcher", Provider: "antigravity", Persona: "role.md"}
+	if err := prepareProviderRuntime("research-team", pane, profile); err != nil {
+		t.Fatalf("prepareProviderRuntime: %v", err)
+	}
+	descriptor := describeProviderRuntime("research-team", pane, profile)
+	if len(descriptor.Env) != 0 || descriptor.PersonaArtifact != "" || len(descriptor.IncludeDirectories) != 0 {
+		t.Fatalf("Antigravity runtime unexpectedly uses configuration artifacts: %#v", descriptor)
+	}
+	entries, err := os.ReadDir(tmp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("Antigravity runtime created configuration files: %#v", entries)
+	}
+}

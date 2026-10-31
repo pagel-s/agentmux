@@ -188,7 +188,7 @@ When to use it:
 
 Useful note:
 - this command describes coordination behavior, not necessarily persona delivery
-- persona may be delivered separately through a native provider channel such as Claude `system-prompt` or a Gemini workspace context file
+- persona may be delivered through a provider channel such as Claude's appended system prompt or a Gemini workspace context file
 
 Examples:
 

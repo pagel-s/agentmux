@@ -19,6 +19,23 @@ func TestCheckCLIReportsMissingBinary(t *testing.T) {
 	}
 }
 
+func TestCheckAntigravityCLIRequiresOnlyBridgeFlags(t *testing.T) {
+	report := checkCLIWith("agy", func(name string) (string, error) {
+		if name != "agy" {
+			t.Fatalf("binary = %q, want agy", name)
+		}
+		return "/tmp/agy", nil
+	}, func(string, ...string) (string, error) {
+		return "--prompt-interactive\n--model\n--effort\n", nil
+	})
+	if report.HasErrors() || len(report.Issues) != 0 {
+		t.Fatalf("report.Issues = %#v, want healthy CLI bridge", report.Issues)
+	}
+	if report.Launch.Mode != string(LaunchModeCLIBridge) {
+		t.Fatalf("report.Launch.Mode = %q, want CLI bridge", report.Launch.Mode)
+	}
+}
+
 func TestCheckCLIReportsMissingRequiredHelpToken(t *testing.T) {
 	report := checkCLIWith("gemini", func(string) (string, error) {
 		return "/tmp/gemini", nil

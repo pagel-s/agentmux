@@ -8,3 +8,5 @@ bin/
 *.test
 *.out
 coverage.txt
+.agentmux-state/
+__pycache__/

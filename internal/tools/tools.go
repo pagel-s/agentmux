@@ -207,6 +207,7 @@ func Prompt(opts PromptOptions) (string, error) {
 	mode := strings.ToLower(strings.TrimSpace(opts.Mode))
 	profile := prov.ProfileForMode(opts.Provider, mode)
 	if profile.Mode != "" {
+		mode = profile.Mode
 		if profile.PersonaChannel != "" {
 			personaChannel = profile.PersonaChannel
 		}

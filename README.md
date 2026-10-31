@@ -28,6 +28,10 @@ Technical reference, tutorials, and architectural deep-dives are available on ou
 *   **[Your First AI Team](docs/tutorials/hello-team.md)**: A tutorial on building a coordinated 2-agent workflow.
 *   **[Architecture Mental Model](docs/architecture/mental-model.md)**: Understand the stateless "compiler" design.
 *   **[Portable Bundles](docs/tutorials/portable-bundles.md)**: How to package and share your sessions.
+*   **[Managed Runtime](docs/managed-runtime.md)**: Opt-in v2 foundation with authenticated boards, scoped messages, durable tasks, private/shared memory, mixed harnesses, and optional bubblewrap isolation. Start with the no-model `/bin/cat` demo; the existing tmux workflow remains available.
+*   **[Dynamic Teams](docs/dynamic-teams.md)**: Bounded sandbox spawning, delegated permissions, invitation-based membership, and team history controls.
+*   **[Research Pilots](docs/experiments.md)**: Seeded trial plans, fresh state, independent scoring, and cooperation/competition payoff comparisons.
+*   **[Mixed-Harness Sandbox Acceptance](docs/mixed-harness-acceptance.md)**: Reproduce the real Claude/Codex/local-Pi handoff with selected native login files, enforced worker resources, scoped artifacts, and independent verification.
 
 ---
 
@@ -56,6 +60,16 @@ go install github.com/pagel-s/agentmux/cmd/agentmux@latest
 # Run diagnostics
 ./bin/agentmux doctor
 ```
+
+Start a managed team, inspect its published activity, and stop it:
+
+```bash
+./bin/agentmux managed up examples/managed/command-demo.yaml
+./bin/agentmux managed activity --state .agentmux-state/command-demo --watch
+./bin/agentmux managed down --state .agentmux-state/command-demo
+```
+
+This demo uses command processes and makes no model calls. Configure Claude Code, Codex, Antigravity, or Pi in [managed team YAML](docs/managed-runtime.md) for model-backed workers. Managed mode and the research runner are opt-in; native conversation resume and live steering are not implemented.
 
 ---
 

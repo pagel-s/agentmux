@@ -57,6 +57,23 @@ var registry = map[string]Spec{
 	"shell":   {ID: "shell", DisplayName: "Shell", Mode: ModeCommand},
 	"ssh":     {ID: "ssh", DisplayName: "SSH", Binary: "ssh", Mode: ModeCommand},
 	"aichat":  {ID: "aichat", DisplayName: "AIChat", Binary: "aichat", Mode: ModeCommand},
+	"antigravity": {
+		ID:                        "antigravity",
+		DisplayName:               "Antigravity",
+		Binary:                    "agy",
+		Mode:                      ModeNative,
+		IntegrationMode:           string(LaunchModeCLIBridge),
+		PersonaChannel:            "bootstrap-prompt",
+		PersonaSource:             "config-file",
+		ToolChannel:               "bootstrap-prompt",
+		PreferredToolInput:        "stdin",
+		ToolFormat:                "openai",
+		CoordinationMode:          "interactive prompt bootstrap + agentmux CLI bridge instructions",
+		ReasoningParameter:        "--effort",
+		SupportedReasoningEfforts: []string{"low", "medium", "high", "xhigh", "max"},
+		HelpArgs:                  []string{"--help"},
+		RequiredHelpTokens:        []string{"--prompt-interactive", "--model", "--effort"},
+	},
 	"claude": {
 		ID:                        "claude",
 		DisplayName:               "Claude Code",
@@ -64,14 +81,14 @@ var registry = map[string]Spec{
 		Mode:                      ModeNative,
 		IntegrationMode:           string(LaunchModeNativeMCP),
 		FallbackIntegrationMode:   string(LaunchModeCLIBridge),
-		PersonaChannel:            "system-prompt",
+		PersonaChannel:            "appended-system-prompt",
 		PersonaSource:             "config-file",
 		ToolChannel:               "appended-system-prompt",
 		PreferredToolInput:        "stdin",
 		ToolFormat:                "claude",
-		CoordinationMode:          "system prompt + appended agentmux CLI bridge instructions",
+		CoordinationMode:          "appended persona + agentmux CLI bridge instructions",
 		ReasoningParameter:        "--effort",
-		SupportedReasoningEfforts: []string{"low", "medium", "high", "max"},
+		SupportedReasoningEfforts: []string{"low", "medium", "high", "xhigh", "max"},
 		HelpArgs:                  []string{"--help"},
 		RequiredHelpTokens:        []string{"--append-system-prompt", "--model", "--effort"},
 	},
@@ -124,9 +141,27 @@ var registry = map[string]Spec{
 		CoordinationMode:   "initial prompt bootstrap + agentmux CLI bridge instructions",
 		HelpArgs:           []string{"--help"},
 	},
+	"pi": {
+		ID:                        "pi",
+		DisplayName:               "Pi",
+		Binary:                    "pi",
+		Mode:                      ModeNative,
+		IntegrationMode:           string(LaunchModeCLIBridge),
+		PersonaChannel:            "appended-system-prompt",
+		PersonaSource:             "config-file",
+		ToolChannel:               "appended-system-prompt",
+		PreferredToolInput:        "stdin",
+		ToolFormat:                "openai",
+		CoordinationMode:          "appended persona + agentmux CLI bridge instructions",
+		ReasoningParameter:        "--thinking",
+		SupportedReasoningEfforts: []string{"off", "minimal", "low", "medium", "high", "xhigh", "max"},
+		HelpArgs:                  []string{"--help"},
+		RequiredHelpTokens:        []string{"--append-system-prompt", "--model", "--thinking"},
+	},
 }
 
 var aliases = map[string]string{
+	"agy":        "antigravity",
 	"claude-cli": "claude",
 	"gemini-cli": "gemini",
 	"openai":     "codex",
@@ -418,6 +453,12 @@ func quote(value string) string {
 }
 
 func defaultLaunchProfile(spec Spec, mode string, fallbackReason string) LaunchProfile {
+	if (spec.ID == "antigravity" || spec.ID == "pi") && mode == string(LaunchModeNativeMCP) {
+		mode = string(LaunchModeCLIBridge)
+		if fallbackReason == "" {
+			fallbackReason = spec.DisplayName + " has no verified per-session MCP configuration; using the CLI bridge"
+		}
+	}
 	profile := LaunchProfile{
 		Spec:           spec,
 		Mode:           mode,
@@ -428,11 +469,11 @@ func defaultLaunchProfile(spec Spec, mode string, fallbackReason string) LaunchP
 	case string(LaunchModeNativeMCP):
 		switch spec.ID {
 		case "claude":
-			profile.PersonaChannel = "system-prompt"
+			profile.PersonaChannel = "appended-system-prompt"
 			profile.PersonaSource = "config-file"
 			profile.ToolChannel = "native-mcp"
 			profile.PreferredInput = "native-mcp"
-			profile.Coordination = "native MCP tools + appended operational instructions"
+			profile.Coordination = "native MCP tools + appended persona and operational instructions"
 		case "gemini":
 			profile.PersonaChannel = "workspace-context-file"
 			profile.PersonaSource = "session-runtime-file"

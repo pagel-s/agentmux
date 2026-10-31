@@ -157,8 +157,8 @@ Agents are reusable pane templates, not shared background runtimes.
 
 Current useful agent fields:
 
-- `provider`: `command` (default), `shell`, `ssh`, `claude`, `gemini`, `codex`, `gptme`, or `aichat`
-- aliases: `claude-cli` -> `claude`, `gemini-cli` -> `gemini`, `openai` -> `codex`
+- `provider`: `command` (default), `shell`, `ssh`, `claude`, `antigravity`, `pi`, `gemini`, `codex`, `gptme`, or `aichat`
+- aliases: `agy` -> `antigravity`, `claude-cli` -> `claude`, `gemini-cli` -> `gemini`, `openai` -> `codex`
 - `command`: raw shell command
 - `persona`: path to a Markdown file containing agent instructions
 - `model`: specific LLM model ID
@@ -180,7 +180,9 @@ When you use a native provider like `claude`, `gemini`, or `codex`, Agentmux act
 
 Current persona delivery defaults:
 
-- `claude`: native `system-prompt`
+- `claude`: `--append-system-prompt`, combining the persona with Agentmux instructions while preserving Claude Code's default system prompt
+- `antigravity`: interactive bootstrap prompt using the local `agy` executable
+- `pi`: `--append-system-prompt`, preserving Pi's default system prompt
 - `gemini`: native workspace context file from a session-scoped runtime artifact
 - `codex`: bootstrap prompt
 - `gptme`: bootstrap prompt
@@ -193,6 +195,11 @@ Current integration defaults:
 - `codex`: prefers `native-mcp`, falls back to `cli-bridge`
 - `gemini`: prefers `native-mcp`, falls back to `cli-bridge`
 - `gptme`: uses `cli-bridge`
+- `antigravity` and `pi`: use `cli-bridge`; Agentmux does not change global or workspace MCP settings for these harnesses
+
+Antigravity accepts `reasoning_effort: low|medium|high|xhigh|max` through `--effort`. Pi accepts `off|minimal|low|medium|high|xhigh|max` through `--thinking`; support depends on the selected model and installed harness version. Pi's `model` can include a provider prefix, such as `anthropic/<model-id>`, to select a configured endpoint. Agentmux uses each harness's existing authentication and endpoint configuration and does not copy credentials.
+
+Antigravity and Pi remain ordinary interactive pane processes in this launch mode. Their CLI bridge runs coordination commands through the harness's shell tool, subject to its permissions. A launcher is not a structured input channel or an isolation boundary. See [harness integration](harnesses.md) for capabilities and limits.
 
 Codex-specific runtime notes:
 
