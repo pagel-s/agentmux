@@ -72,3 +72,27 @@ already permitted direct communication, so its opportunity structure is narrow.
 Increasing population/tasks, testing multiple environments, counterbalancing
 actor/model assignments, and a separate powered design are required before
 broader claims about self-organization or durable behavioral characteristics.
+
+## Safeguards for subsequent collections
+
+New native research turns require `trace.enabled: true` for every participating
+native agent and eligible native spawn template. The preparation script now
+sets this explicitly. Traces retain adapter-visible event boundaries so final
+answer extraction can be audited; malformed non-JSON framing remains a reported
+protocol failure. Trace capacity is finite and exhaustion stops execution.
+These changes do not replace or rescore the original untraced pilot.
+
+Execution provenance records the decision protocol and hashes of the runner,
+worker/broker executable, native entrypoints and regular absolute file arguments.
+Continuation that would start more turns checks the fingerprint before proceeding,
+including phase boundaries. Use the same frozen executable and input files for
+the collection. Credentials remain independently refreshable; provider weights,
+all imported dependencies, remote infrastructure and the kernel are not pinned
+by these hashes.
+
+Completed phase evidence must remain associated with its declared configuration,
+trial and durable task reservations. Duplicate or inconsistent result cells are
+rejected instead of being silently counted twice. Analysis reports descriptive
+quality warnings and complete paired-block counts. Missing native traces, invalid
+actions, failures and inadequate sample sizes still limit interpretation even
+when the runner successfully completes.

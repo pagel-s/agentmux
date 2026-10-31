@@ -387,7 +387,7 @@ func executeWorkerTaskTrace(ctx context.Context, caller workerCaller, req harnes
 			return trace.append("native_event", event)
 		}
 	}
-	current, err := workerGetTask(ctx, caller, task.ID)
+	current, err := workerGetLeasedTask(ctx, caller, task.ID, lease)
 	if err != nil {
 		return err
 	}
@@ -403,7 +403,7 @@ func executeWorkerTaskTrace(ctx context.Context, caller workerCaller, req harnes
 	monitorCtx, stopMonitor := context.WithCancel(ctx)
 	monitorDone := make(chan error, 1)
 	go func() {
-		monitorDone <- monitorWorkerTask(monitorCtx, caller, task.ID, stopRun)
+		monitorDone <- monitorWorkerTask(monitorCtx, caller, task.ID, lease, stopRun)
 	}()
 	result, runErr := harness.Run(runCtx, req)
 	// harness.Run returns only after waiting for the child; task.stopped is
@@ -414,7 +414,7 @@ func executeWorkerTaskTrace(ctx context.Context, caller workerCaller, req harnes
 	}
 	finishCtx, finishCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer finishCancel()
-	current, err = workerGetTask(finishCtx, caller, task.ID)
+	current, err = workerGetLeasedTask(finishCtx, caller, task.ID, lease)
 	if err != nil {
 		return err
 	}
@@ -458,7 +458,7 @@ func executeWorkerTaskTrace(ctx context.Context, caller workerCaller, req harnes
 		// A definite version conflict can be a cancellation racing completion.
 		// Read it once and acknowledge a stopped process, never replay the turn.
 		if problem.Code == "conflict" {
-			if latest, err := workerGetTask(finishCtx, caller, task.ID); err == nil && latest.State == "cancelled" && latest.Delivery == "cancel_requested" {
+			if latest, err := workerGetLeasedTask(finishCtx, caller, task.ID, lease); err == nil && latest.State == "cancelled" && latest.Delivery == "cancel_requested" {
 				return workerStopped(caller, latest, lease)
 			}
 		}
@@ -467,10 +467,10 @@ func executeWorkerTaskTrace(ctx context.Context, caller workerCaller, req harnes
 	return nil
 }
 
-func monitorWorkerTask(ctx context.Context, caller workerCaller, taskID string, stop context.CancelFunc) error {
+func monitorWorkerTask(ctx context.Context, caller workerCaller, taskID, lease string, stop context.CancelFunc) error {
 	for {
 		pollCtx, pollCancel := context.WithTimeout(ctx, 500*time.Millisecond)
-		current, err := workerGetTask(pollCtx, caller, taskID)
+		current, err := workerGetLeasedTask(pollCtx, caller, taskID, lease)
 		pollCancel()
 		if ctx.Err() != nil {
 			return nil
@@ -517,7 +517,22 @@ func monitorWorkerTask(ctx context.Context, caller workerCaller, taskID string, 
 }
 
 func workerGetTask(ctx context.Context, caller workerCaller, id string) (Task, error) {
-	args, _ := json.Marshal(map[string]string{"id": id})
+	return workerObserveTask(ctx, caller, id, "")
+}
+
+func workerGetLeasedTask(ctx context.Context, caller workerCaller, id, lease string) (Task, error) {
+	if lease == "" {
+		return Task{}, errors.New("task observation requires its execution lease")
+	}
+	return workerObserveTask(ctx, caller, id, lease)
+}
+
+func workerObserveTask(ctx context.Context, caller workerCaller, id, lease string) (Task, error) {
+	input := map[string]string{"id": id}
+	if lease != "" {
+		input["lease"] = lease
+	}
+	args, _ := json.Marshal(input)
 	raw, problem := caller.Call(ctx, Request{Operation: "task.get", Args: args})
 	if problem != nil {
 		return Task{}, workerProblem("task.get", problem)

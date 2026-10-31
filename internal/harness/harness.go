@@ -65,9 +65,10 @@ type Request struct {
 	ExternalSandbox bool
 	Conversation    *Conversation
 	ModelMetadata   modelmeta.Metadata
-	// OnEvent receives an independent copy after each structured stdout event
-	// has been validated and consumed, before the next event is read. Returning
-	// an error stops the process; the partial result still contains that event.
+	// OnEvent receives an independent copy after each bounded JSON-object frame
+	// enters the partial result, before the next event is read. This includes
+	// the frame causing a semantic ErrProtocol, so traces retain its evidence.
+	// Malformed non-JSON is excluded. Returning an error stops the process.
 	// Command harness output is returned in Result.Text rather than streamed.
 	OnEvent func(json.RawMessage) error
 	// AfterProcess runs once after process execution/wait has finished and
@@ -76,6 +77,9 @@ type Request struct {
 	AfterProcess func() error
 }
 
+// Result preserves native evidence. Text is a completed answer only when Run
+// returns nil error; otherwise it is partial output and must not be promoted to
+// a verified result. Events/usage do not establish semantic task correctness.
 type Result struct {
 	Text      string
 	SessionID string
@@ -87,6 +91,7 @@ var (
 	ErrOutputLimit = errors.New("harness output limit exceeded")
 	ErrIncomplete  = errors.New("harness exited without a terminal result")
 	ErrToolDenied  = errors.New("harness reported a tool permission denial")
+	ErrProtocol    = errors.New("invalid harness protocol")
 )
 
 // Build validates a request and constructs argv. It does not create files or

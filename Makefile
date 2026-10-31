@@ -8,7 +8,7 @@ DATE ?= $(shell date -u +%Y-%m-%d)
 BINARY := bin/agentmux
 UNIT_PACKAGES := $(shell GOCACHE=$(GOCACHE) $(GO) list ./... | grep -v '^agentmux/internal/tmux$$')
 
-.PHONY: build test test-unit test-integration test-managed test-sandbox test-resources test-research fmt check clean
+.PHONY: build test test-unit test-integration test-managed test-sandbox test-resources test-research test-soak fmt check clean
 
 build:
 	mkdir -p bin
@@ -24,22 +24,27 @@ test-integration:
 
 # Command-only integration checks: no provider credentials or model calls.
 test-managed: build
-	GOCACHE=$(GOCACHE) AGENTMUX_MANAGED_INTEGRATION=1 AGENTMUX_EXPERIMENT_INTEGRATION=1 $(GO) test -race ./cmd/agentmux ./internal/managed ./internal/managedlaunch ./internal/managedcheck ./internal/experiment
+	GOCACHE=$(GOCACHE) AGENTMUX_MANAGED_INTEGRATION=1 AGENTMUX_EXPERIMENT_INTEGRATION=1 $(GO) test -race -count=1 ./cmd/agentmux ./internal/managed ./internal/managedlaunch ./internal/managedcheck ./internal/experiment
 
 # Requires Linux with working Bubblewrap namespaces; no isolation fallback.
 test-sandbox: build
-	GOCACHE=$(GOCACHE) AGENTMUX_MANAGED_INTEGRATION=1 AGENTMUX_SANDBOX_INTEGRATION=1 $(GO) test -race ./internal/managed ./internal/managedlaunch ./internal/sandbox
+	GOCACHE=$(GOCACHE) AGENTMUX_MANAGED_INTEGRATION=1 AGENTMUX_SANDBOX_INTEGRATION=1 AGENTMUX_INTEGRATION_BINARY="$(CURDIR)/$(BINARY)" $(GO) test -race -count=1 ./internal/managed ./internal/managedlaunch ./internal/capsule ./internal/egress ./internal/sandbox
 	python3 scripts/smoke-managed.py
 	python3 scripts/smoke-managed-team.py
 
 # Requires delegated cgroup v2 controllers and a recent systemd user manager.
 # Verifies actual controls, aggregate OOM, and escaped-descendant cleanup.
 test-resources:
-	GOCACHE=$(GOCACHE) AGENTMUX_SANDBOX_INTEGRATION=1 AGENTMUX_RESOURCE_INTEGRATION=1 $(GO) test -race ./internal/sandbox
+	GOCACHE=$(GOCACHE) AGENTMUX_SANDBOX_INTEGRATION=1 AGENTMUX_RESOURCE_INTEGRATION=1 $(GO) test -race -count=1 ./internal/sandbox
 
 # Repeated rounds, scarce credits and real consented teams; no model calls.
 test-research: build
-	GOCACHE=$(GOCACHE) AGENTMUX_RESEARCH_INTEGRATION=1 AGENTMUX_TEST_BINARY="$(CURDIR)/$(BINARY)" $(GO) test -race ./internal/research
+	GOCACHE=$(GOCACHE) AGENTMUX_RESEARCH_INTEGRATION=1 AGENTMUX_TEST_BINARY="$(CURDIR)/$(BINARY)" $(GO) test -race -count=1 ./internal/research
+
+# Model-free fault injection with a sandboxed broker and worker. Reports go
+# outside the source tree; a failed check exits nonzero and cleans up workers.
+test-soak: build
+	python3 scripts/soak-managed.py --turns 10 --interval 0
 
 fmt:
 	gofmt -w cmd internal

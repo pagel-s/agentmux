@@ -37,10 +37,13 @@ jobs:
         env:
           AGENTMUX_MANAGED_INTEGRATION: '1'
           AGENTMUX_EXPERIMENT_INTEGRATION: '1'
-        run: go test -race ./...
+        run: go test -race -count=1 ./...
 
       - name: Verify release installer safety
         run: python3 scripts/test-install-release.py
+
+      - name: Verify soak audit and cleanup regressions
+        run: python3 scripts/test-soak-managed.py
 
       - name: Validate release configuration
         uses: goreleaser/goreleaser-action@v5
@@ -49,14 +52,34 @@ jobs:
           version: v2.19.0
           args: check
 
-      - name: Verify strict sandbox handoffs when namespaces are available
-        shell: bash
+  sandbox:
+    # Keep isolation checks explicit and fail closed. A runner that cannot
+    # establish the boundary must fail this job, rather than skip every check.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+
+      - name: Install model-free test dependencies
         run: |
-          if command -v bwrap >/dev/null && bwrap --unshare-all --die-with-parent --ro-bind /usr /usr --ro-bind /bin /bin --ro-bind /lib /lib --ro-bind /lib64 /lib64 --proc /proc --dev /dev -- /usr/bin/true; then
-            AGENTMUX_MANAGED_INTEGRATION=1 AGENTMUX_SANDBOX_INTEGRATION=1 AGENTMUX_INTEGRATION_BINARY="$PWD/bin/agentmux" go test -race ./internal/managed ./internal/managedlaunch ./internal/capsule ./internal/egress ./internal/sandbox
-            AGENTMUX_RESEARCH_INTEGRATION=1 AGENTMUX_TEST_BINARY="$PWD/bin/agentmux" go test -race ./internal/research
-            python3 scripts/smoke-managed.py
-            python3 scripts/smoke-managed-team.py
-          else
-            echo '::notice::This runner cannot create Bubblewrap namespaces; strict sandbox integrations were not run. Runtime sandbox requests still fail closed.'
-          fi
+          sudo apt-get update
+          sudo apt-get install -y tmux bubblewrap python3
+
+      - name: Require working isolation
+        run: bwrap --unshare-all --die-with-parent --ro-bind /usr /usr --ro-bind /bin /bin --ro-bind /lib /lib --ro-bind /lib64 /lib64 --proc /proc --dev /dev -- /usr/bin/true
+
+      - name: Verify sandbox, network, disk and team boundaries
+        run: make test-sandbox
+
+      - name: Verify isolated research and resume
+        run: make test-research
+
+      - name: Verify crash recovery and trace continuity
+        run: make test-soak

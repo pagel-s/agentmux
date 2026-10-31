@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os/exec"
@@ -50,15 +51,22 @@ func run(ctx context.Context, req Request, spec Spec) (Result, error) {
 	if err := cmd.Start(); err != nil {
 		return Result{}, fmt.Errorf("start %s: %w", spec.Name, err)
 	}
+	var inputDone chan error
 	if stdin != nil {
 		defer stdin.Close()
+		inputDone = make(chan error, 1)
 		// Read stdout while delivering stdin so an initial event cannot deadlock
 		// a prompt larger than the OS pipe buffer.
 		go func() {
-			_, writeErr := stdin.Write(promptInput(spec.Name, req.Prompt))
+			data := promptInput(spec.Name, req.Prompt)
+			written, writeErr := stdin.Write(data)
+			if writeErr == nil && written != len(data) {
+				writeErr = io.ErrShortWrite
+			}
 			if spec.Name != "pi" || writeErr != nil {
 				_ = stdin.Close()
 			}
+			inputDone <- writeErr
 		}()
 	}
 	state := streamState{name: spec.Name}
@@ -74,6 +82,7 @@ func run(ctx context.Context, req Request, spec Spec) (Result, error) {
 		}
 		state.result.Text = output.String()
 		state.complete = true
+		state.answerSeen = true
 	} else {
 		scanner := bufio.NewScanner(stdout)
 		scanner.Buffer(make([]byte, 64*1024), maxEventBytes)
@@ -88,15 +97,19 @@ func run(ctx context.Context, req Request, spec Spec) (Result, error) {
 			if len(line) == 0 {
 				continue
 			}
-			if err := state.consume(line); err != nil {
-				readErr = err
-				break
-			}
-			if req.OnEvent != nil {
+			before := len(state.result.Events)
+			consumeErr := state.consume(line)
+			// A well-formed but semantically invalid frame is decisive failure
+			// evidence. Record it too, while excluding malformed non-JSON.
+			if req.OnEvent != nil && len(state.result.Events) > before {
 				if err := req.OnEvent(append(json.RawMessage(nil), line...)); err != nil {
-					readErr = fmt.Errorf("record %s event: %w", spec.Name, err)
+					readErr = errors.Join(consumeErr, fmt.Errorf("record %s event: %w", spec.Name, err))
 					break
 				}
+			}
+			if consumeErr != nil {
+				readErr = consumeErr
+				break
 			}
 			if spec.Name == "pi" && state.complete && shutdownTimer == nil {
 				// RPC remains alive until stdin closes; agent_end alone is not
@@ -119,6 +132,12 @@ func run(ctx context.Context, req Request, spec Spec) (Result, error) {
 		}
 	}
 	waitErr := cmd.Wait()
+	var inputErr error
+	if inputDone != nil {
+		if err := <-inputDone; err != nil {
+			inputErr = fmt.Errorf("deliver complete %s prompt: %w", spec.Name, err)
+		}
+	}
 	if shutdownTimer != nil {
 		shutdownTimer.Stop()
 	}
@@ -132,7 +151,10 @@ func run(ctx context.Context, req Request, spec Spec) (Result, error) {
 		return state.result, runCtx.Err()
 	}
 	if state.err != nil {
-		return state.result, state.err
+		return state.result, errors.Join(state.err, inputErr)
+	}
+	if inputErr != nil {
+		return state.result, inputErr
 	}
 	if state.denied || (spec.Name == "antigravity" && stderr.denied) {
 		return state.result, fmt.Errorf("%w: %s (partial response retained)", ErrToolDenied, spec.Name)
@@ -140,7 +162,7 @@ func run(ctx context.Context, req Request, spec Spec) (Result, error) {
 	if waitErr != nil {
 		return state.result, fmt.Errorf("%s process failed: %w%s", spec.Name, waitErr, stderr.suffix())
 	}
-	if !state.complete || (spec.Name == "pi" && !state.accepted) {
+	if !state.complete || !state.answerSeen || (spec.Name == "pi" && !state.accepted) {
 		return state.result, fmt.Errorf("%w: %s%s", ErrIncomplete, spec.Name, stderr.suffix())
 	}
 	if forcedShutdown.Load() {

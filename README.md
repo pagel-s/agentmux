@@ -77,6 +77,8 @@ This demo uses command processes and makes no model calls. Use the [setup wizard
 Additional guides cover [network, budget and disk hardening](docs/hardening.md), [memory lifecycle and retrieval](docs/memory-lifecycle.md), [trace verification and recovery](docs/traces-and-recovery.md), [SSH workers and measured broker scale](docs/remote-workers.md), and [controlled factorial research studies](docs/research-study.md).
 
 See the [preview validation record](docs/release-validation.md) for measured coverage and operational limits.
+The [trust model](docs/security-model.md) identifies the enforced boundaries,
+trusted components, required validation gates and remaining evidence work.
 
 ---
 

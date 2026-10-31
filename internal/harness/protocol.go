@@ -18,6 +18,9 @@ type streamState struct {
 	lastPiError error
 	piUsage     map[string]float64
 	piCost      map[string]float64
+	answerSeen  bool
+	turnStarted bool
+	lastPiStop  string
 }
 
 func (s *streamState) consume(raw []byte) error {
@@ -26,6 +29,13 @@ func (s *streamState) consume(raw []byte) error {
 		return fmt.Errorf("invalid %s JSON event", s.name)
 	}
 	s.result.Events = append(s.result.Events, append(json.RawMessage(nil), raw...))
+	// Subagent output is evidence, not the main Claude turn's answer or ID.
+	if s.name == "claude" && (stringField(event, "type") == "assistant" || stringField(event, "type") == "result") && (stringField(event, "parent_tool_use_id") != "" || stringField(event, "agent_id") != "") {
+		return nil
+	}
+	if err := s.validateEvent(event); err != nil {
+		return err
+	}
 	switch s.name {
 	case "claude":
 		s.claude(event)
@@ -34,15 +44,17 @@ func (s *streamState) consume(raw []byte) error {
 	case "antigravity":
 		s.antigravity(event)
 	case "pi":
+		if stringField(event, "type") == "message_end" && stringField(objectField(event, "message"), "role") == "assistant" {
+			if err := s.addPiUsage(objectField(event, "message")["usage"]); err != nil {
+				return err
+			}
+		}
 		s.pi(event)
 	}
 	return nil
 }
 
 func (s *streamState) claude(e object) {
-	if id := stringField(e, "session_id"); id != "" {
-		s.result.SessionID = id
-	}
 	switch stringField(e, "type") {
 	case "assistant":
 		// Subagent messages, when enabled, must not replace the main answer.
@@ -55,6 +67,7 @@ func (s *streamState) claude(e object) {
 			var text string
 			if json.Unmarshal(value, &text) == nil {
 				s.result.Text = text
+				s.answerSeen = true
 			}
 		}
 		s.result.Usage = cloneJSON(e["usage"])
@@ -68,6 +81,10 @@ func (s *streamState) claude(e object) {
 				message = errorText(e["errors"])
 			}
 			s.err = terminalError(s.name, stringField(e, "subtype"), message)
+		}
+	case "system":
+		if stringField(e, "subtype") == "permission_denied" {
+			s.denied = true
 		}
 	}
 }
@@ -84,16 +101,22 @@ func (s *streamState) codex(e object) {
 			// --output-last-message; the full stream stays in result.Events.
 			// https://learn.chatgpt.com/docs/non-interactive-mode
 			s.result.Text = stringField(item, "text")
+			s.answerSeen = true
 		}
+	case "turn.started":
+		s.turnStarted = true
 	case "turn.completed":
 		s.complete = true
-		s.err = nil // A transient stream error may have recovered.
+		// Exec currently drops app-server's will_retry flag from error
+		// notifications. A later explicit successful turn plus zero process
+		// exit resolves that ambiguity; raw preceding errors stay in Events.
+		s.err = nil
 		s.result.Usage = cloneJSON(e["usage"])
 	case "turn.failed":
 		s.complete = true
 		s.err = terminalError(s.name, "turn.failed", errorText(e["error"]))
 	case "error":
-		// A successful terminal event can clear a recoverable stream error.
+		// An error without a later successful terminal event remains failure.
 		s.err = terminalError(s.name, "error", stringField(e, "message"))
 	}
 }
@@ -119,6 +142,7 @@ func (s *streamState) antigravity(e object) {
 			s.result.SessionID = id
 		}
 		s.result.Text = stringField(result, "response")
+		s.answerSeen = true
 		s.result.Usage = cloneJSON(result["usage"])
 		if stringField(result, "status") != "SUCCESS" {
 			s.err = terminalError(s.name, stringField(result, "status"), errorText(result["error"]))
@@ -142,9 +166,11 @@ func (s *streamState) pi(e object) {
 			return
 		}
 		s.accepted = true
-		if stringField(objectField(e, "data"), "disposition") == "handled" {
-			// The protocol explicitly says no run follows a handled command.
+		if disposition := stringField(objectField(e, "data"), "disposition"); disposition != "started" {
+			// Handled/queued acknowledge receipt, not execution of our one
+			// submitted turn. Independent extension work is not its result.
 			s.complete = true
+			s.err = fmt.Errorf("%w: pi prompt was %s rather than started", ErrIncomplete, disposition)
 		}
 	case "message_end":
 		message := objectField(e, "message")
@@ -152,7 +178,8 @@ func (s *streamState) pi(e object) {
 			return
 		}
 		s.result.Text = messageText(message)
-		s.addPiUsage(message["usage"])
+		s.answerSeen = true
+		s.lastPiStop = stringField(message, "stopReason")
 		switch reason := stringField(message, "stopReason"); reason {
 		case "error", "aborted", "length":
 			s.lastPiError = terminalError(s.name, reason, stringField(message, "errorMessage"))
@@ -166,40 +193,13 @@ func (s *streamState) pi(e object) {
 	case "agent_settled":
 		s.complete = true
 		s.err = s.lastPiError
+		if !s.answerSeen || s.lastPiStop == "toolUse" {
+			s.err = fmt.Errorf("%w: pi settled without a final assistant completion", ErrIncomplete)
+		}
 		if boolField(e, "aborted") {
 			s.err = terminalError(s.name, "aborted", "")
 		}
 	}
-}
-
-func (s *streamState) addPiUsage(raw json.RawMessage) {
-	usage := object{}
-	if json.Unmarshal(raw, &usage) != nil {
-		return
-	}
-	if s.piUsage == nil {
-		s.piUsage, s.piCost = map[string]float64{}, map[string]float64{}
-	}
-	for _, key := range []string{"input", "output", "cacheRead", "cacheWrite", "totalTokens"} {
-		var value float64
-		if json.Unmarshal(usage[key], &value) == nil {
-			s.piUsage[key] += value
-		}
-	}
-	for key, rawValue := range objectField(usage, "cost") {
-		var value float64
-		if json.Unmarshal(rawValue, &value) == nil {
-			s.piCost[key] += value
-		}
-	}
-	result := map[string]any{}
-	for key, value := range s.piUsage {
-		result[key] = value
-	}
-	if len(s.piCost) > 0 {
-		result["cost"] = s.piCost
-	}
-	s.result.Usage, _ = json.Marshal(result)
 }
 
 func cloneJSON(value json.RawMessage) json.RawMessage {

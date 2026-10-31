@@ -61,7 +61,13 @@ agentmux managed call task.resolve --credential-file STATE/owner.json \
 ```
 
 Use `resolution: retry` only after checking side effects and deciding to execute
-again. It is a new charged attempt. Persistent native conversations can remain
+again. It is a new charged attempt. Workers validate the exact current lease
+before native launch, during monitoring and before completion; an old worker
+cannot borrow the replacement attempt's running state. A periodic check cannot
+undo side effects already in progress, so stopping the old process is still
+required before retry. Upgrade every worker, including SSH workers: a new
+broker does not add these observation checks to an older worker executable.
+Persistent native conversations can remain
 blocked after interrupted execution; `conversation.reset` explicitly starts a
 new generation after task delivery is resolved. Old history is retained, not
 silently resumed as confirmed work.

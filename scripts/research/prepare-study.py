@@ -43,6 +43,8 @@ def main():
             command += ["-c", 'model_reasoning_effort="low"']
         agent = {"harness": harness, "command": command, "model": model,
                  "role": role, "conversation": "fresh", "sandbox": "bubblewrap", "network": "host",
+                 "trace": {"enabled": True, "max_turn_bytes": 33554432,
+                           "max_total_bytes": 268435456},
                  "auth": {"file": helpers.auth_source(source)},
                  "read_only_paths": helpers.dependencies(selected),
                  "resources": {"memory_bytes": 2147483648, "cpu_percent": 100,
@@ -64,6 +66,7 @@ def main():
     shutil.copyfile(repository / "examples/research/factorial-pilot.yaml", output / "study.yaml")
     os.chmod(output / "study.yaml", 0o600)
     print(json.dumps({"prepared": str(output / "study.yaml"), "model_calls": 0,
+                      "native_event_traces": True,
                       "model_pins": {actor: value["model"] for actor, value in agents.items()},
                       "native_task_budget": 64, "billing_measured": False}))
 

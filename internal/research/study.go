@@ -126,10 +126,11 @@ func factor(c Condition, name string) string {
 }
 
 type modelBudget struct {
-	Limit    int      `json:"limit"`
-	Reserved []string `json:"reserved_task_ids"`
-	path     string
-	fresh    bool
+	Limit     int      `json:"limit"`
+	Reserved  []string `json:"reserved_task_ids"`
+	path      string
+	fresh     bool
+	execution *executionGuard
 }
 
 func loadBudget(dir string, limit int) (*modelBudget, error) {

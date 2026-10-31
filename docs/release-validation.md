@@ -43,3 +43,35 @@ Raw state, credentials, native histories, trial artifacts and host details stay
 private. The repository contains reproducible fixtures, sanitized methods and
 measurement summaries. The pre-existing private design website is separate
 from release source and artifacts.
+
+## Follow-up hardening checks (2026-10-31)
+
+A subsequent source hardening pass fixed stale-worker execution across task
+retries, malformed/missing native answer acceptance, contradictory completion
+records, incomplete stdin delivery and research continuation evidence gaps.
+The stale-worker regressions reproduced actual unwanted subprocess execution
+before the fix. New native collections require authenticated event traces and
+execution fingerprints; strict cached results reauthenticate their anchors and
+reject mismatched configuration, actor, plan or task-budget provenance.
+Historical pilot scores remain unchanged and carry their coverage caveat.
+
+The complete `go test -race -count=1 ./...` suite passed with managed,
+experiment, Bubblewrap, real cgroup, repeated-round research, installed-Pi mock
+endpoint and sandboxed-Pi mock endpoint checks enabled. `go vet`, formatting,
+installer and soak audit/cleanup regressions passed. Real sandbox smoke checks
+verified shared boards/memory, hierarchy, supervised spawning, consented teams,
+revocation, history controls and restart.
+
+The expanded model-free soak verified **250 command turns**, **50 clean broker
+restarts**, and one in-flight broker crash in **40.772 seconds**. It audited all
+251 tasks across pagination, reverified every completed trace after recovery,
+retained the original deadline and preserved uncertain delivery without replay.
+The [sanitized record](hardening-validation.json) includes the frozen test
+executable hash. This is broader turn/restart coverage, not multi-day operation.
+No paid model calls or replacement native study were made.
+
+CI now has a separate sandbox job whose namespace preflight must succeed;
+missing isolation fails the job instead of skipping every sandbox check.
+Integration targets use uncached test execution and include the actual disk and
+destination-proxy checks. See the [trust model](security-model.md) for enforced
+properties, operator assumptions and remaining evidence work.

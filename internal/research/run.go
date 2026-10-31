@@ -28,16 +28,18 @@ type RunOptions struct {
 }
 
 type Phase struct {
-	Round        int                     `json:"round"`
-	Kind         string                  `json:"kind"`
-	StartedAt    string                  `json:"started_at"`
-	FinishedAt   string                  `json:"finished_at"`
-	QueueOrder   []string                `json:"queue_order"`
-	Instructions map[string]string       `json:"instructions"`
-	Tasks        map[string]managed.Task `json:"tasks"`
-	Teams        []managed.Team          `json:"teams"`
+	Round         int                     `json:"round"`
+	Kind          string                  `json:"kind"`
+	StartedAt     string                  `json:"started_at"`
+	FinishedAt    string                  `json:"finished_at"`
+	QueueOrder    []string                `json:"queue_order"`
+	Instructions  map[string]string       `json:"instructions"`
+	Tasks         map[string]managed.Task `json:"tasks"`
+	Teams         []managed.Team          `json:"teams"`
+	TraceVerified map[string]bool         `json:"trace_verified,omitempty"`
 }
 type Result struct {
+	Protocol      string                `json:"decision_protocol,omitempty"`
 	Trial         Trial                 `json:"trial"`
 	Attempt       int                   `json:"attempt"`
 	Status        string                `json:"status"`
@@ -52,11 +54,12 @@ type Result struct {
 	ActorMetadata map[string]AgentLabel `json:"actor_metadata"`
 }
 type Report struct {
-	Research        string           `json:"research"`
-	ManifestHash    string           `json:"manifest_sha256"`
-	Results         []Result         `json:"results"`
-	Preregistration *Preregistration `json:"preregistration,omitempty"`
-	Conditions      []Condition      `json:"conditions,omitempty"`
+	Research        string             `json:"research"`
+	ManifestHash    string             `json:"manifest_sha256"`
+	Results         []Result           `json:"results"`
+	Preregistration *Preregistration   `json:"preregistration,omitempty"`
+	Conditions      []Condition        `json:"conditions,omitempty"`
+	Execution       *ExecutionEvidence `json:"execution_evidence,omitempty"`
 }
 
 func Run(ctx context.Context, m Manifest, opts RunOptions) (Report, error) {
@@ -110,6 +113,7 @@ func Run(ctx context.Context, m Manifest, opts RunOptions) (Report, error) {
 	if err != nil {
 		return report, err
 	}
+	newStudy := false
 	if data, err := os.ReadFile(filepath.Join(dir, "manifest.json")); err == nil {
 		if json.Unmarshal(data, &prior) != nil || prior.SHA256 != report.ManifestHash {
 			return report, errors.New("output belongs to a different research manifest or resolved team")
@@ -117,9 +121,16 @@ func Run(ctx context.Context, m Manifest, opts RunOptions) (Report, error) {
 		if budget.fresh && budget.Limit > 0 {
 			return report, errors.New("existing model study lacks its durable budget ledger; do not silently reset spending")
 		}
+		if err := checkStoredManifest(dir, report.ManifestHash); err != nil {
+			return report, err
+		}
+		if err := checkStoredPlan(dir, plan); err != nil {
+			return report, err
+		}
 	} else if !os.IsNotExist(err) {
 		return report, err
 	} else {
+		newStudy = true
 		entries, err := os.ReadDir(dir)
 		if err != nil {
 			return report, err
@@ -129,7 +140,20 @@ func Run(ctx context.Context, m Manifest, opts RunOptions) (Report, error) {
 				return report, errors.New("new research output must be empty")
 			}
 		}
-		if err := writeJSON(filepath.Join(dir, "manifest.json"), map[string]any{"sha256": report.ManifestHash, "manifest": m, "trace_scope": "owner observations, decisions, objective environment transitions, and broker coordination; not every native context/tool/network action"}); err != nil {
+		if err := requireNativeEvidence(m); err != nil {
+			return report, err
+		}
+		executionConfig := m.Config.Normalized()
+		if m.Population.Mode != "dynamic" {
+			executionConfig.Spawn = managedconfig.Spawn{}
+		}
+		snapshot, err := snapshotExecution(opts.Executable, executionConfig)
+		if err != nil {
+			return report, err
+		}
+		budget.execution = &executionGuard{worker: opts.Executable, config: executionConfig, expected: snapshot}
+		report.Execution = &snapshot
+		if err := writeJSON(filepath.Join(dir, "manifest.json"), map[string]any{"sha256": report.ManifestHash, "manifest": m, "trace_scope": "owner observations, decisions, objective environment transitions, broker coordination and required native adapter-visible traces; excludes hidden provider state and unreported native activity"}); err != nil {
 			return report, err
 		}
 		if err := writeJSON(filepath.Join(dir, "plan.json"), plan); err != nil {
@@ -140,27 +164,68 @@ func Run(ctx context.Context, m Manifest, opts RunOptions) (Report, error) {
 				return report, err
 			}
 		}
+		if err := writeJSON(filepath.Join(dir, "execution.json"), snapshot); err != nil {
+			return report, err
+		}
+	}
+	if !newStudy {
+		var snapshot ExecutionEvidence
+		if err := privateJSON(filepath.Join(dir, "execution.json"), &snapshot); err == nil {
+			if snapshot.Version != 1 || snapshot.Protocol != decisionProtocol {
+				return report, errors.New("unsupported research execution evidence protocol")
+			}
+			report.Execution = &snapshot
+		} else if !os.IsNotExist(err) {
+			return report, errors.New("research execution evidence is invalid or unsafe")
+		}
+	}
+	attempts, pending, err := inspectAttempts(m, plan, dir, opts.RerunInterrupted, budget, report.Execution != nil)
+	if err != nil {
+		return report, err
+	}
+	if pending {
+		if report.Execution == nil {
+			return report, errors.New("research continuation lacks execution fingerprint evidence; preserve historical data and start a new study")
+		}
+		if err := requireNativeEvidence(m); err != nil {
+			return report, err
+		}
+		states, err := filepath.Glob(filepath.Join(dir, "run-*", "attempt-*"))
+		if err != nil {
+			return report, err
+		}
+		for _, attemptDir := range states {
+			if err := checkAttemptStopped(attemptDir); err != nil {
+				return report, err
+			}
+		}
+		if err := checkBudgetHistory(ctx, dir, budget); err != nil {
+			return report, err
+		}
+		if budget.execution == nil {
+			executionConfig := m.Config.Normalized()
+			if m.Population.Mode != "dynamic" {
+				executionConfig.Spawn = managedconfig.Spawn{}
+			}
+			budget.execution = &executionGuard{worker: opts.Executable, config: executionConfig, expected: *report.Execution}
+		}
+		if err := budget.execution.check(); err != nil {
+			return report, err
+		}
 	}
 	for _, trial := range plan.Trials {
 		if err := ctx.Err(); err != nil {
 			return report, err
 		}
-		runDir := filepath.Join(dir, trial.ID)
-		if err := os.MkdirAll(runDir, 0700); err != nil {
-			return report, err
-		}
-		attempt, prior, err := resume(runDir, opts.RerunInterrupted)
-		if err != nil {
-			return report, fmt.Errorf("%s: %w", trial.ID, err)
-		}
-		if prior != nil {
-			if prior.Trial != trial || prior.ConfigHash == "" {
-				return report, errors.New("completed run metadata differs from plan")
-			}
-			report.Results = append(report.Results, *prior)
+		attempt := attempts[trial.ID]
+		if attempt.prior != nil {
+			report.Results = append(report.Results, *attempt.prior)
 			continue
 		}
-		result, runErr := runTrial(ctx, m, trial, condition(m, trial.Condition), attempt, filepath.Join(runDir, fmt.Sprintf("attempt-%03d", attempt)), opts.Executable, budget)
+		if err := budget.execution.check(); err != nil {
+			return report, err
+		}
+		result, runErr := runTrial(ctx, m, trial, condition(m, trial.Condition), attempt.number, filepath.Join(dir, trial.ID, fmt.Sprintf("attempt-%03d", attempt.number)), opts.Executable, budget)
 		report.Results = append(report.Results, result)
 		if err := writeJSON(filepath.Join(dir, "results.json"), report); err != nil {
 			return report, err
@@ -180,8 +245,8 @@ func Run(ctx context.Context, m Manifest, opts RunOptions) (Report, error) {
 }
 
 func runTrial(parent context.Context, m Manifest, trial Trial, c Condition, attempt int, dir, binary string, budget *modelBudget) (result Result, returned error) {
-	result = Result{Trial: trial, Attempt: attempt, Status: "interrupted", StartedAt: time.Now().UTC().Format(time.RFC3339Nano), Baselines: map[string][]Outcome{}, ActorMetadata: map[string]AgentLabel{}}
-	if err := os.MkdirAll(dir, 0700); err != nil {
+	result = Result{Protocol: decisionProtocol, Trial: trial, Attempt: attempt, Status: "interrupted", StartedAt: time.Now().UTC().Format(time.RFC3339Nano), Baselines: map[string][]Outcome{}, ActorMetadata: map[string]AgentLabel{}}
+	if err := os.Mkdir(dir, 0700); err != nil {
 		return result, err
 	}
 	defer func() {
@@ -448,6 +513,11 @@ type rpc func(context.Context, string, any) (json.RawMessage, error)
 func runPhase(ctx context.Context, m Manifest, trial Trial, c Condition, round int, kind string, observations map[string]json.RawMessage, feedback json.RawMessage, previous *Phase, state, binary string, cfg managedconfig.Config, parentCall rpc, budget *modelBudget) (phase Phase, returned error) {
 	phase = Phase{Round: round, Kind: kind, StartedAt: time.Now().UTC().Format(time.RFC3339Nano), Instructions: map[string]string{}, Tasks: map[string]managed.Task{}}
 	defer func() { phase.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano) }()
+	if budget.execution != nil {
+		if err := budget.execution.check(); err != nil {
+			return phase, err
+		}
+	}
 	phaseCtx, cancel := context.WithTimeout(ctx, time.Duration(m.PhaseTimeoutSeconds)*time.Second)
 	defer cancel()
 	callCtx := phaseCtx
@@ -501,8 +571,13 @@ func runPhase(ctx context.Context, m Manifest, trial Trial, c Condition, round i
 		var response struct {
 			Task managed.Task `json:"task"`
 		}
-		if json.Unmarshal(raw, &response) != nil || response.Task.ID == "" {
+		if json.Unmarshal(raw, &response) != nil || response.Task.ID == "" || response.Task.To != actor || response.Task.From != "$owner" || response.Task.Text != phase.Instructions[actor] || response.Task.State != "proposed" || response.Task.Delivery != "pending" {
 			return phase, errors.New("invalid research task response")
+		}
+		for _, prior := range phase.Tasks {
+			if prior.ID == response.Task.ID {
+				return phase, errors.New("research broker reused a task identity within one phase")
+			}
 		}
 		phase.Tasks[actor] = response.Task
 	}
@@ -543,7 +618,7 @@ func runPhase(ctx context.Context, m Manifest, trial Trial, c Condition, round i
 		var response struct {
 			Task managed.Task `json:"task"`
 		}
-		if json.Unmarshal(raw, &response) != nil {
+		if json.Unmarshal(raw, &response) != nil || response.Task.ID != phase.Tasks[actor].ID || response.Task.From != "$owner" || response.Task.To != actor || response.Task.Text != phase.Instructions[actor] {
 			return phase, errors.New("invalid phase task response")
 		}
 		phase.Tasks[actor] = response.Task
@@ -556,9 +631,26 @@ func runPhase(ctx context.Context, m Manifest, trial Trial, c Condition, round i
 		if response.Task.State == "running" || response.Task.Delivery == "uncertain" || response.Task.Delivery == "cancel_requested" || response.Task.Delivery == "cancel_uncertain" {
 			return phase, errors.New("research delivery remains active or uncertain; owner resolution required")
 		}
+		if !terminalResearchTask(response.Task) {
+			return phase, errors.New("research task has no confirmed terminal delivery")
+		}
+		if err := verifyNativeTaskTrace(state, actor, response.Task, cfg.Agents[actor]); err != nil {
+			return phase, err
+		}
+		if cfg.Agents[actor].Harness != "command" {
+			if phase.TraceVerified == nil {
+				phase.TraceVerified = map[string]bool{}
+			}
+			phase.TraceVerified[actor] = true
+		}
 	}
 	if workerError {
 		return phase, errors.New("research worker infrastructure failure; no automatic replay")
+	}
+	if budget.execution != nil {
+		if err := budget.execution.check(); err != nil {
+			return phase, err
+		}
 	}
 	if err := ensureNoExtraTasks(finishCtx, parentCall); err != nil {
 		return phase, err
@@ -848,27 +940,29 @@ func executableSnapshot(cfg managedconfig.Config) []map[string]string {
 }
 
 func resume(dir string, rerun bool) (int, *Result, error) {
-	entries, err := os.ReadDir(dir)
+	numbers, err := attemptNumbers(dir)
 	if err != nil {
 		return 0, nil, err
 	}
 	last := 0
-	for _, e := range entries {
-		var n int
-		if _, err := fmt.Sscanf(e.Name(), "attempt-%03d", &n); err == nil && n > last {
+	for _, n := range numbers {
+		if n > last {
 			last = n
 		}
 	}
 	if last == 0 {
 		return 1, nil, nil
 	}
-	data, err := os.ReadFile(filepath.Join(dir, fmt.Sprintf("attempt-%03d", last), "result.json"))
 	var result Result
-	if err == nil && json.Unmarshal(data, &result) == nil && result.Status == "completed" {
+	err = privateJSON(filepath.Join(dir, fmt.Sprintf("attempt-%03d", last), "result.json"), &result)
+	if err == nil && result.Status == "completed" {
 		return last, &result, nil
 	}
 	if !rerun {
 		return 0, nil, errors.New("interrupted/uncertain attempt exists; stop its processes before explicit --rerun-interrupted")
+	}
+	if err := checkAttemptStopped(filepath.Join(dir, fmt.Sprintf("attempt-%03d", last))); err != nil {
+		return 0, nil, err
 	}
 	return last + 1, nil, nil
 }
