@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"sort"
+	"strconv"
 
 	"agentmux/internal/managedconfig"
 )
@@ -49,11 +50,33 @@ type Boundaries struct {
 
 func controls(ctx context.Context, q queryer) (ControlState, error) {
 	c := ControlState{Version: 1, Edges: []EdgeControl{}, Scopes: []ScopeControl{}}
-	err := get(ctx, q, "control", "live_access", &c)
-	if errors.Is(err, sql.ErrNoRows) {
-		err = nil
+	var persisted *ControlState
+	var raw json.RawMessage
+	err := get(ctx, q, "control", "live_access", &raw)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return c, err
 	}
-	return c, err
+	if e := checkStateRecoveryDigest(ctx, q, "control", "live_access", raw); e != nil {
+		return c, e
+	}
+	var version string
+	markerErr := q.QueryRowContext(ctx, "SELECT value FROM metadata WHERE key='live_access_version'").Scan(&version)
+	if markerErr != nil && !errors.Is(markerErr, sql.ErrNoRows) {
+		return c, markerErr
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		if markerErr == nil {
+			return c, errors.New("persisted live permissions are missing; restore valid owner state")
+		}
+		return c, nil
+	}
+	if err = json.Unmarshal(raw, &persisted); err != nil {
+		return c, err
+	}
+	if persisted == nil || persisted.Version < 1 || persisted.Edges == nil || persisted.Scopes == nil || markerErr == nil && version != strconv.Itoa(persisted.Version) {
+		return c, errors.New("persisted live permissions are invalid; restore valid owner state")
+	}
+	return *persisted, nil
 }
 
 func edgeControl(ctx context.Context, q queryer, from, action, to string) (bool, bool) {
@@ -398,6 +421,12 @@ func (s *Store) control(ctx context.Context, q queryer, a actor, r Request) (any
 	}
 	c.Version++
 	if err := save(ctx, q, "control", "live_access", a.ID, "", "owner", c); err != nil {
+		return nil, internal(err)
+	}
+	if err := saveStateRecoveryDigest(ctx, q, "control", "live_access", c); err != nil {
+		return nil, internal(err)
+	}
+	if _, err := q.ExecContext(ctx, "INSERT INTO metadata(key,value) VALUES('live_access_version',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", strconv.Itoa(c.Version)); err != nil {
 		return nil, internal(err)
 	}
 	if err := event(ctx, q, a, "boundaries.changed", "live_access", map[string]any{"version": c.Version, "kind": in.Kind, "agent": in.Agent, "from": in.From, "to": in.To, "action": in.Action, "namespace": in.Namespace}); err != nil {

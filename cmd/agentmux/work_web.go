@@ -60,7 +60,12 @@ func workWebHandler(state string, client *managed.Client, token, host string) ht
 			reply := func(value any) { _ = json.NewEncoder(w).Encode(value) }
 			failure := func(err error) {
 				w.WriteHeader(http.StatusBadRequest)
-				reply(map[string]any{"ok": false, "error": err.Error()})
+				result := map[string]any{"ok": false, "error": err.Error()}
+				var problem *managed.Fault
+				if errors.As(err, &problem) {
+					result["code"] = problem.Code
+				}
+				reply(result)
 			}
 			if r.URL.Path == "/api/snapshot" && r.Method == http.MethodGet {
 				d := fetchWorkSnapshot(state, client, r.URL.Query().Get("agent"))
@@ -181,6 +186,10 @@ func workWebHandler(state string, client *managed.Client, token, host string) ht
 					target, err = workReplyTarget(r.Context(), client, in.ReplyTo)
 					if err != nil {
 						failure(err)
+						return
+					}
+					if target != in.Target {
+						failure(&managed.Fault{Code: "conflict", Message: "reply recipient differs from the reviewed target; refresh and review before sending"})
 						return
 					}
 					text = "Follow-up to " + in.ReplyTo + ":\n" + text

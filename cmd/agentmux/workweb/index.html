@@ -62,10 +62,14 @@
               placeholder="e.g. Fix sign-in flow"
               autocomplete="off"
             />
-            <button type="submit">Save title</button
+            <button type="submit" id="save-title">Save title</button
             ><button type="button" id="clear-title" class="quiet">Clear</button
             ><button type="button" id="cancel-title" class="quiet">
               Cancel
+            </button>
+            <p id="title-conflict" class="title-conflict" hidden></p>
+            <button type="button" id="rebase-title" hidden>
+              Keep my draft using this version
             </button>
           </form>
         </div>

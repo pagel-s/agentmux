@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -152,5 +153,92 @@ func TestConsoleComposerKeepsRecipientAndAllowsEditing(t *testing.T) {
 	}
 	if strings.Contains(consoleContent("note\x1b[31m\u202espoof", 100), "\x1b") {
 		t.Fatal("terminal escape reached owner UI")
+	}
+}
+
+func TestConsoleLateMemoryDoesNotReopenAnotherAgentsOrClosedEditor(t *testing.T) {
+	for _, navigation := range []tea.KeyMsg{{Type: tea.KeyDown}, {Type: tea.KeyEsc}, {Type: tea.KeyTab}} {
+		m := console{tab: 3, agents: []managed.AgentInfo{{ID: "alice"}, {ID: "bob"}}, data: consoleData{selected: "alice", boundaries: managed.Boundaries{Agent: "alice", Memory: []managed.BoundaryScope{{Name: "alice-group", Read: true}}}}}
+		next, cmd := m.key(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}})
+		m = next.(console)
+		request := m.memoryRequest
+		if cmd == nil || !m.memoryLoading || !m.busy {
+			t.Fatal("memory load did not capture an outstanding request")
+		}
+		next, _ = m.key(navigation)
+		m = next.(console)
+		next, _ = m.Update(consoleMemory{agent: "alice", request: request, namespace: "alice-group", entries: []managed.Memory{{Key: "old-project", Value: "old project data"}}})
+		m = next.(console)
+		if m.memoryOpen || m.memoryNamespace != "" || len(m.memoryEntries) != 0 || m.busy {
+			t.Fatalf("late memory response undid navigation %s: %+v", navigation.String(), m)
+		}
+	}
+}
+
+func TestConsoleMemoryWaitsForMatchingBoundariesAndKeepsNewestRequest(t *testing.T) {
+	m := console{tab: 3, selected: 1, agents: []managed.AgentInfo{{ID: "alice"}, {ID: "bob"}}, data: consoleData{selected: "alice", boundaries: managed.Boundaries{Agent: "alice", Memory: []managed.BoundaryScope{{Name: "alice-group", Read: true}}}}}
+	next, cmd := m.key(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}})
+	m = next.(console)
+	if cmd != nil || m.memoryLoading {
+		t.Fatal("rapid navigation loaded the previous agent's memory namespace")
+	}
+	m.data.boundaries = managed.Boundaries{Agent: "bob", Memory: []managed.BoundaryScope{{Name: "bob-group", Read: true}}}
+	_ = m.loadMemory("bob-group")
+	oldRequest := m.memoryRequest
+	_ = m.loadMemory("bob-group")
+	newRequest := m.memoryRequest
+	next, _ = m.Update(consoleMemory{agent: "bob", request: oldRequest, namespace: "bob-group", entries: []managed.Memory{{Key: "old"}}})
+	m = next.(console)
+	if m.memoryOpen || !m.memoryLoading || !m.busy {
+		t.Fatal("older same-agent response replaced the current outstanding read")
+	}
+	next, _ = m.Update(consoleMemory{agent: "bob", request: newRequest, namespace: "bob-group", entries: []managed.Memory{{Key: "current"}}})
+	m = next.(console)
+	if !m.memoryOpen || m.memoryLoading || m.busy || m.memoryNamespace != "bob-group" || len(m.memoryEntries) != 1 || m.memoryEntries[0].Key != "current" {
+		t.Fatal("current memory read was not applied to its selected agent")
+	}
+}
+
+func TestConsoleTitleConflictPreservesDraftForExplicitReviewByIdentity(t *testing.T) {
+	m := console{agents: []managed.AgentInfo{{ID: "alice", Title: "Concurrent owner edit", TitleVersion: 2}, {ID: "bob", Title: "Other project"}}}
+	next, _ := m.Update(consoleAction{labelID: "alice", labelText: "My unsaved investigation", err: errors.New("conflict: session title changed")})
+	m = next.(console)
+	if m.labelDrafts["alice"] != "My unsaved investigation" || !strings.Contains(m.message, "draft kept") {
+		t.Fatal("title conflict discarded the human's draft")
+	}
+	m.selected = 1
+	next, _ = m.key(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'L'}})
+	m = next.(console)
+	if string(m.text) != "Other project" || m.composeTarget != "bob" {
+		t.Fatal("failed title draft leaked into another session's editor")
+	}
+	m.composer, m.selected = "", 0
+	next, _ = m.key(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'L'}})
+	m = next.(console)
+	if string(m.text) != "My unsaved investigation" || m.composeTarget != "alice" || m.labelVersion != 2 {
+		t.Fatal("explicit review did not restore the draft against current identity/version")
+	}
+	next, _ = m.Update(consoleAction{labelID: "alice", labelText: "My unsaved investigation"})
+	if _, exists := next.(console).labelDrafts["alice"]; exists {
+		t.Fatal("successful label save retained an obsolete draft")
+	}
+}
+
+func TestConsoleCoalescedNavigationAndSearchPreserveKeyOrder(t *testing.T) {
+	m := console{agents: []managed.AgentInfo{{ID: "alice"}, {ID: "bob"}, {ID: "carol"}}}
+	next, _ := m.key(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("jj")})
+	m = next.(console)
+	if m.selectedID() != "carol" {
+		t.Fatal("coalesced rapid navigation was ignored")
+	}
+	next, _ = m.key(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/alice")})
+	m = next.(console)
+	if m.composer != "find" || string(m.text) != "alice" || m.selectedID() != "carol" {
+		t.Fatal("coalesced search was lost or silently changed action target")
+	}
+	m.composer = ""
+	next, cmd := m.key(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("xjj"), Paste: true})
+	if cmd != nil || next.(console).selectedID() != "carol" || next.(console).busy {
+		t.Fatal("bracketed pasted text executed commands outside an editor")
 	}
 }

@@ -34,23 +34,42 @@ func TestAttachAgentRealClientsHaveIndependentViewsAndOwnedCleanup(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
+	wrapperDir := t.TempDir()
+	fixturePath := strings.Join([]string{wrapperDir, filepath.Dir(realTMux), "/usr/bin", "/bin"}, string(os.PathListSeparator))
+	// Verbose tmux diagnostics include environment updates. Both owner commands
+	// and the foreground control client must see fixture-only values, never CI
+	// credentials or the user's native configuration/environment.
+	fixtureEnv := []string{"PATH=" + fixturePath, "HOME=" + state, "SHELL=/bin/sh", "TERM=xterm-256color", "LC_ALL=C"}
+	t.Setenv("AGENTMUX_FIXTURE_SECRET", "sentinel-must-stay-outside-tmux")
 	// Only AttachAgent's foreground client is converted to control mode. All
 	// owner-side commands still invoke the real tmux executable directly.
 	l.run = func(ctx context.Context, args ...string) (string, error) {
-		command := exec.CommandContext(ctx, realTMux, args...)
-		command.Env = withoutTMux(os.Environ())
+		// -u keeps machine-readable tab separators intact under the deliberately
+		// minimal C locale; non-UTF-8 tmux clients replace them with underscores.
+		commandArgs := append([]string{"-u"}, args...)
+		if os.Getenv("AGENTMUX_TMUX_DEBUG") == "1" {
+			commandArgs = append([]string{"-vv"}, commandArgs...)
+		}
+		command := exec.CommandContext(ctx, realTMux, commandArgs...)
+		command.Dir = state
+		command.Env = fixtureEnv
 		output, err := command.CombinedOutput()
 		if err != nil {
 			err = fmt.Errorf("tmux %q failed: %w: %s", args, err, output)
 		}
 		return string(output), err
 	}
-	wrapperDir := t.TempDir()
-	wrapper := "#!/bin/sh\nexec " + ShellCommand([]string{realTMux, "-C"}) + " \"$@\"\n"
+	controlCommand := append([]string{"/usr/bin/env", "-i"}, fixtureEnv...)
+	controlCommand = append(controlCommand, realTMux, "-u")
+	if os.Getenv("AGENTMUX_TMUX_DEBUG") == "1" {
+		controlCommand = append(controlCommand, "-vv")
+	}
+	controlCommand = append(controlCommand, "-C")
+	wrapper := "#!/bin/sh\n" + ShellCommand([]string{"cd", state}) + " || exit 1\nexec " + ShellCommand(controlCommand) + " \"$@\"\n"
 	if err := os.WriteFile(filepath.Join(wrapperDir, "tmux"), []byte(wrapper), 0700); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("PATH", wrapperDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("PATH", fixturePath)
 	t.Setenv("TMUX", "")
 	t.Cleanup(func() {
 		cleanup := context.Background()
@@ -58,7 +77,11 @@ func TestAttachAgentRealClientsHaveIndependentViewsAndOwnedCleanup(t *testing.T)
 		for _, session := range strings.Fields(out) {
 			_, _ = l.tmux(cleanup, "kill-session", "-t", session)
 		}
-		_ = os.RemoveAll(state)
+		if t.Failed() {
+			t.Logf("Private tmux client-view diagnostics retained at %s", state)
+		} else {
+			_ = os.RemoveAll(state)
+		}
 		_ = os.Remove(state + ".launch.lock")
 	})
 	tmux := func(args ...string) string {
@@ -144,6 +167,9 @@ func TestAttachAgentRealClientsHaveIndependentViewsAndOwnedCleanup(t *testing.T)
 	if first == runtime.Session || second == "" || second == runtime.Session {
 		t.Fatalf("clients did not get independent views: %q", clientSessions())
 	}
+	if environment := tmux("show-environment", "-g"); strings.Contains(environment, "AGENTMUX_FIXTURE_SECRET") || strings.Contains(environment, "sentinel-must-stay-outside-tmux") {
+		t.Fatal("model-free tmux fixture inherited the caller's environment")
+	}
 	current := func(view string) string { return tmux("display-message", "-p", "-t", view+":", "#{window_name}") }
 	if current(first) != "agent-alice" || current(second) != "agent-bob" {
 		t.Fatal("attaching a second agent moved the first client's selected window")
@@ -160,6 +186,20 @@ func TestAttachAgentRealClientsHaveIndependentViewsAndOwnedCleanup(t *testing.T)
 	}
 	if current(first) != "agent-alice" || current(second) != "agent-bob" {
 		t.Fatal("contextual Focus selected another client's view")
+	}
+	// Production keeps exited native windows visible. Exercise that transition
+	// while both real clients are attached, before testing detach and shutdown.
+	tmux("new-session", "-d", "-s", "foreign", "exec sleep 300")
+	tmux("set-option", "-t", "foreign", "@agentmux_view", "different-attempt")
+	tmux("send-keys", "-t", runtime.Agents["alice"].PaneID, "C-c")
+	wait("exited worker pane retained", func() bool {
+		return tmux("display-message", "-p", "-t", runtime.Agents["alice"].PaneID, "#{pane_dead}") == "1"
+	})
+	if current(first) != "agent-alice" || current(second) != "agent-bob" || len(clientSessions()) != 2 {
+		t.Fatal("one native process exit moved or disconnected an independent client")
+	}
+	if tmux("display-message", "-p", "-t", runtime.Agents["bob"].PaneID, "#{pane_dead}") != "0" || !l.ownsSession(ctx, runtime) {
+		t.Fatal("one native process exit destroyed another worker or the owner session")
 	}
 	if _, err := io.WriteString(firstInput, "detach-client\n"); err != nil {
 		t.Fatal(err)
@@ -179,8 +219,6 @@ func TestAttachAgentRealClientsHaveIndependentViewsAndOwnedCleanup(t *testing.T)
 	if current(second) != "agent-bob" || !l.ownsSession(ctx, runtime) {
 		t.Fatal("detaching one client destroyed the shared runtime or another view")
 	}
-	tmux("new-session", "-d", "-s", "foreign", "exec sleep 300")
-	tmux("set-option", "-t", "foreign", "@agentmux_view", "different-attempt")
 	stopped, err := l.Down(ctx)
 	if err != nil || stopped.State != "stopped" {
 		t.Fatalf("down: %+v %v", stopped, err)
@@ -193,6 +231,19 @@ func TestAttachAgentRealClientsHaveIndependentViewsAndOwnedCleanup(t *testing.T)
 	}
 	if got := tmux("list-sessions", "-F", "#{session_name}"); got != "foreign" {
 		t.Fatalf("down removed foreign state or left owned views: %s", got)
+	}
+	logs, err := filepath.Glob(filepath.Join(state, "tmux-*.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range logs {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if bytes.Contains(data, []byte("sentinel-must-stay-outside-tmux")) {
+			t.Fatal("verbose fixture diagnostics leaked the caller environment")
+		}
 	}
 }
 

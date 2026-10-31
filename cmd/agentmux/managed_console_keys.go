@@ -35,17 +35,30 @@ func (m console) boardMessages() []managed.Message {
 	}
 	return out
 }
-func (m console) loadMemory(namespace string) tea.Cmd {
+func (m *console) closeMemory() {
+	m.memoryRequest++
+	m.memoryOpen = false
+	m.memoryEntries = nil
+	m.memoryNamespace = ""
+	if m.memoryLoading {
+		m.memoryLoading = false
+		m.busy = false
+	}
+}
+func (m *console) loadMemory(namespace string) tea.Cmd {
+	m.memoryRequest++
+	m.memoryLoading, m.busy = true, true
+	agent, request, client := m.selectedID(), m.memoryRequest, m.client
 	return func() tea.Msg {
-		raw, err := workCall(context.Background(), m.client, "memory.list", map[string]any{"namespace": namespace, "limit": 100})
+		raw, err := workCall(context.Background(), client, "memory.list", map[string]any{"namespace": namespace, "limit": 100})
 		if err != nil {
-			return consoleMemory{err: err}
+			return consoleMemory{agent: agent, request: request, namespace: namespace, err: err}
 		}
 		var result struct {
 			Entries []managed.Memory `json:"entries"`
 		}
 		err = json.Unmarshal(raw, &result)
-		return consoleMemory{namespace: namespace, entries: result.Entries, err: err}
+		return consoleMemory{agent: agent, request: request, namespace: namespace, entries: result.Entries, err: err}
 	}
 }
 func (m console) close() tea.Cmd {
@@ -73,6 +86,28 @@ func (m *console) compose(kind, target, reference, text string) {
 	m.textCursor = len(m.text)
 }
 func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// A terminal read may coalesce quick keys (jjj or /query) into one rune
+	// message. Reduce actual keystrokes in order, then insert remaining editor
+	// text as one batch. Bracketed pastes outside an editor remain inert.
+	if m.composer == "" && msg.Type == tea.KeyRunes && !msg.Alt && !msg.Paste && len(msg.Runes) > 1 {
+		var commands []tea.Cmd
+		for i, r := range msg.Runes {
+			next, cmd := m.key(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+			m = next.(console)
+			if cmd != nil {
+				commands = append(commands, cmd)
+			}
+			if m.composer != "" && i+1 < len(msg.Runes) {
+				next, cmd = m.key(tea.KeyMsg{Type: tea.KeyRunes, Runes: msg.Runes[i+1:]})
+				m = next.(console)
+				if cmd != nil {
+					commands = append(commands, cmd)
+				}
+				break
+			}
+		}
+		return m, tea.Batch(commands...)
+	}
 	key := msg.String()
 	if m.composer != "" {
 		switch key {
@@ -127,7 +162,8 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.text = nil
 				if match.agent >= 0 {
 					m.selected, m.tab = match.agent, 1
-					m.scope, m.memoryOpen = 0, false
+					m.scope = 0
+					m.closeMemory()
 					return m, m.fetch
 				}
 				m.observedSelected, m.tab = match.observation, 5
@@ -157,7 +193,7 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg {
 				if kind == "label" {
 					_, err := workCall(context.Background(), m.client, "agent.label", map[string]any{"id": target, "title": text, "version": labelVersion})
-					return consoleAction{message: "Session title saved; permanent ID and native conversation unchanged.", err: err}
+					return consoleAction{message: "Session title saved; permanent ID and native conversation unchanged.", labelID: target, labelText: text, err: err}
 				}
 				if kind == "memory-value" {
 					_, err := workCall(context.Background(), m.client, "memory.put", map[string]any{"namespace": namespace, "key": memoryKey, "value": text, "version": version})
@@ -193,14 +229,18 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if !m.busy && m.selectedID() != "" && m.tab != 5 {
 			a := m.agents[m.selected%len(m.agents)]
 			m.labelVersion = a.TitleVersion
-			m.compose("label", a.ID+" (empty clears title)", "", a.Title)
+			title := a.Title
+			if draft, ok := m.labelDrafts[a.ID]; ok {
+				title = draft
+			}
+			m.compose("label", a.ID+" (empty clears title)", "", title)
 			// The submitted target must be the ID alone, not its display hint.
 			m.composeTarget = a.ID
 		}
 	case "q", "ctrl+c":
 		return m, m.close()
 	case "esc":
-		m.memoryOpen = false
+		m.closeMemory()
 	case "up", "k":
 		if m.tab == 5 {
 			if m.observedSelected > 0 {
@@ -212,7 +252,7 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.selected > 0 {
 			m.selected--
 			m.scope = 0
-			m.memoryOpen = false
+			m.closeMemory()
 			return m, m.fetch
 		}
 	case "down", "j":
@@ -226,14 +266,19 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.selected+1 < len(m.agents) {
 			m.selected++
 			m.scope = 0
-			m.memoryOpen = false
+			m.closeMemory()
 			return m, m.fetch
 		}
 	case "tab":
+		m.closeMemory()
 		m.tab = (m.tab + 1) % 6
 	case "shift+tab":
+		m.closeMemory()
 		m.tab = (m.tab + 5) % 6
 	case "1", "2", "3", "4", "5", "6":
+		if m.tab != int(key[0]-'1') {
+			m.closeMemory()
+		}
 		m.tab = int(key[0] - '1')
 	case "enter":
 		if m.tab == 5 {
@@ -343,16 +388,20 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "v":
 		if m.tab == 3 && !m.busy {
+			if m.data.boundaries.Agent != m.selectedID() {
+				m.message = "Loading the selected session's current memory boundaries."
+				return m, nil
+			}
 			if m.memoryOpen {
-				m.busy = true
-				return m, m.loadMemory(m.memoryNamespace)
+				cmd := m.loadMemory(m.memoryNamespace)
+				return m, cmd
 			}
 			scopes := append(append([]managed.BoundaryScope{}, m.data.boundaries.Boards...), m.data.boundaries.Memory...)
 			if len(scopes) > 0 {
 				index := m.scope % len(scopes)
 				if index >= len(m.data.boundaries.Boards) {
-					m.busy = true
-					return m, m.loadMemory(scopes[index].Name)
+					cmd := m.loadMemory(scopes[index].Name)
+					return m, cmd
 				}
 				m.message = "Select a memory namespace, then v. Board notes are in Board."
 			}

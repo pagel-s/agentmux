@@ -8,7 +8,7 @@ DATE ?= $(shell date -u +%Y-%m-%d)
 BINARY := bin/agentmux
 UNIT_PACKAGES := $(shell GOCACHE=$(GOCACHE) $(GO) list ./... | grep -v '^agentmux/internal/tmux$$')
 
-.PHONY: build test test-unit test-integration test-managed test-sandbox test-resources test-research test-soak fmt check clean
+.PHONY: build test test-unit test-integration test-managed test-sandbox test-resources test-research test-soak test-scale fmt check clean
 
 build:
 	mkdir -p bin
@@ -47,6 +47,11 @@ test-research: build
 # outside the source tree; a failed check exits nonzero and cleans up workers.
 test-soak: build
 	python3 scripts/soak-managed.py --turns 10 --interval 0
+
+# Two real isolated terminals plus synthetic registry entries up to the limit.
+# This tests admission/snapshot scaling, not 200 simultaneous model processes.
+test-scale: build
+	python3 scripts/smoke-managed-scale.py --live-agents 2 --registry-agents 200 --check-admission
 
 fmt:
 	gofmt -w cmd internal

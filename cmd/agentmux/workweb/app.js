@@ -12,6 +12,7 @@ let snapshot = null,
   peer = "",
   tab = "activity",
   loading = false,
+  connected = false,
   mutating = false,
   replyTo = "",
   memoryVersion = 0,
@@ -81,6 +82,31 @@ function sessionReference(id) {
 }
 function sessionOrigin(agent) {
   return agent.external ? "External bridge" : "Workspace";
+}
+// A registered bridge is not evidence that its original native terminal is
+// currently observable. Neither a missing observation nor revocation exits it.
+function sessionStatus(agent, runtime = {}, observations = []) {
+  if (agent.external) {
+    const observed =
+      !!agent.external_ref &&
+      observations.some((session) => session.id === agent.external_ref);
+    const active = agent.state === "active" && observed;
+    return {
+      text:
+        "bridge " +
+        agent.state +
+        " · native " +
+        (observed ? "observed" : "not currently observed"),
+      active,
+      muted: !active,
+    };
+  }
+  const state = runtime.agents?.[agent.id]?.state || agent.state;
+  return {
+    text: state,
+    active: state === "running" || state === "active",
+    muted: false,
+  };
 }
 function terminalIdentity(observed) {
   return [
@@ -220,13 +246,15 @@ function renderSessionLists() {
       ),
     );
     row.append(copy);
-    const status = snapshot.runtime.agents?.[item.id]?.state || item.state,
-      dot = el(
-        "span",
-        "agent-dot" +
-          (status !== "running" && status !== "active" ? " exited" : ""),
-      );
-    dot.title = status;
+    const status = sessionStatus(
+        item,
+        snapshot.runtime,
+        snapshot.observed || [],
+      ),
+      dot = el("span", "agent-dot" + (status.active ? "" : " exited"));
+    if (status.muted) dot.style.backgroundColor = "var(--faint)";
+    dot.title = status.text;
+    row.title += "\n" + status.text;
     row.append(dot);
     row.onclick = () => selectAgent(item.id);
     list.append(row);
@@ -242,9 +270,9 @@ function renderSessionLists() {
           " · " +
           providerName(config.harness) +
           " · " +
-          sessionOrigin(item) +
-          " · " +
-          status,
+          (item.external
+            ? status.text
+            : sessionOrigin(item) + " · " + status.text),
       ),
       el("small", "", config.workdir || "No project directory available"),
     );
@@ -289,39 +317,85 @@ function openTitleEditor() {
   $("task-title").value = draft?.title ?? agent.title ?? "";
   $("title-editor").hidden = false;
   $("task-title").focus();
+  updateTitleConflict();
+}
+function updateTitleConflict() {
+  const current = snapshot?.agents?.find(
+      (agent) => agent.id === titleEditor?.id,
+    ),
+    conflict = !!current && current.title_version !== titleEditor.version;
+  if (titleEditor) titleEditor.conflict = conflict;
+  $("title-conflict").hidden = !conflict;
+  $("rebase-title").hidden = !conflict;
+  $("rebase-title").disabled = !selectionReady() || mutating;
+  $("save-title").disabled = !selectionReady() || conflict;
+  $("clear-title").disabled = !selectionReady() || conflict;
+  if (conflict)
+    $("title-conflict").textContent =
+      "The saved title changed to “" +
+      (current.title || sessionTitle({ ...current, title: "" })) +
+      "” (version " +
+      current.title_version +
+      "). Your draft is preserved. Review it before replacing this version.";
 }
 async function api(path, body) {
+  const controller = new AbortController(),
+    timeout = setTimeout(
+      () => controller.abort(),
+      body === undefined ? 8000 : 30000,
+    );
   const options = {
     headers: { Authorization: "Bearer " + token },
     cache: "no-store",
+    signal: controller.signal,
   };
   if (body !== undefined) {
     options.method = "POST";
     options.headers["Content-Type"] = "application/json";
     options.body = JSON.stringify(body);
   }
-  const response = await fetch(path, options);
-  const raw = await response.text();
-  let value;
   try {
-    value = JSON.parse(raw);
-  } catch {
-    throw new Error(
-      response.status === 401
-        ? "The private owner link is missing or expired. Open the full link printed by agentmux web."
-        : "The local console is unavailable (HTTP " + response.status + ").",
-    );
+    const response = await fetch(path, options);
+    const raw = await response.text();
+    let value;
+    try {
+      value = JSON.parse(raw);
+    } catch {
+      const error = new Error(
+        response.status === 401
+          ? "The private owner link is missing or expired. Open the full link printed by agentmux web."
+          : "The local console is unavailable (HTTP " + response.status + ").",
+      );
+      if (response.status === 401 || response.status === 403)
+        error.code = "forbidden";
+      throw error;
+    }
+    if (!response.ok || value.ok === false) {
+      const error = new Error(value.error || "Operation failed");
+      error.code = value.code;
+      throw error;
+    }
+    return value;
+  } catch (error) {
+    if (controller.signal.aborted)
+      throw new Error(
+        body === undefined
+          ? "Snapshot request timed out. Refresh to reconnect."
+          : "Request timed out. The change may already be saved; refresh before retrying.",
+      );
+    throw error;
+  } finally {
+    clearTimeout(timeout);
   }
-  if (!response.ok || value.ok === false)
-    throw new Error(value.error || "Operation failed");
-  return value;
 }
 const call = async (operation, args = {}) =>
   (await api("/api/call", { operation, args })).result;
 const selectionReady = () =>
   !!snapshot &&
+  connected &&
   snapshot.selected === selected &&
-  snapshot.boundaries.agent === selected;
+  snapshot.boundaries.agent === selected &&
+  snapshot.agents.some((agent) => agent.id === selected);
 function selectionControls() {
   const ready = selectionReady(),
     agent = snapshot?.agents?.find((a) => a.id === selected);
@@ -356,15 +430,36 @@ function selectionControls() {
       (id === "close-agent" && agent?.state !== "active");
   }
   $("memory-form")
-    .querySelectorAll("input,textarea,button")
+    .querySelectorAll("button")
     .forEach((node) => {
       node.disabled = !ready;
     });
+  // An offline draft stays editable in its existing namespace. A pending
+  // session switch must not expose the previous session's editor as current.
+  $("memory-form")
+    .querySelectorAll("input,textarea")
+    .forEach((node) => {
+      node.disabled = !ready && (connected || snapshot?.selected !== selected);
+    });
+  document
+    .querySelectorAll(
+      "#title-editor button[type=submit], #clear-title, #add-session button[type=submit], .session-actions button",
+    )
+    .forEach((node) => {
+      node.disabled = !ready;
+    });
+  if (!ready)
+    document.querySelectorAll(".toggle, [data-owner-write]").forEach((node) => {
+      node.disabled = true;
+    });
   if (!ready) {
-    $("send-target").textContent = selected + " (loading…)";
-    $("delivery-hint").textContent =
-      "Loading this session's current boundaries before sending.";
+    $("send-target").textContent =
+      selected + (connected ? " (loading…)" : " (offline)");
+    $("delivery-hint").textContent = connected
+      ? "Loading this session's current boundaries before sending."
+      : "Last snapshot shown. Reconnect before sending or changing permissions; drafts stay here.";
   }
+  updateTitleConflict();
 }
 function selectAgent(id) {
   if (selected === id) return;
@@ -399,7 +494,9 @@ async function action(fn, success) {
   if (mutating) return;
   if (snapshot && !selectionReady()) {
     notice(
-      "Wait for the selected session's boundaries to load before making changes.",
+      connected
+        ? "Wait for the selected session's boundaries to load before making changes."
+        : "Connection lost. Refresh to load current state before making changes. Drafts are preserved.",
       true,
     );
     return;
@@ -409,11 +506,25 @@ async function action(fn, success) {
   notice("Applying change…");
   try {
     await fn();
-    notice(success);
+    notice(typeof success === "function" ? success() : success);
     await refresh();
   } catch (error) {
+    const definite = [
+      "conflict",
+      "forbidden",
+      "invalid",
+      "not_found",
+      "limit",
+      "unsupported",
+      "expired",
+    ].includes(error.code);
     notice(
-      error.message + " Refresh before retrying; delivery may be uncertain.",
+      error.message +
+        (definite
+          ? error.code === "conflict"
+            ? " Refresh current state before editing again."
+            : ""
+          : " Refresh before retrying; delivery may be uncertain."),
       true,
     );
     await refresh();
@@ -433,7 +544,10 @@ async function refresh() {
     if (requested !== selected) return;
     if (!snapshot)
       notice("Owner console ready. Direct terminal input stays in tmux.");
+    else if (!connected)
+      notice("Reconnected. Current state loaded; drafts are preserved.");
     snapshot = next;
+    connected = true;
     selected = next.selected;
     $("error-overlay").classList.add("hidden");
     $("connection").textContent = "Connected";
@@ -441,9 +555,18 @@ async function refresh() {
     render();
     $("updated").textContent = "Updated " + new Date().toLocaleTimeString();
   } catch (error) {
+    connected = false;
+    boundarySignature = taskSignature = observedSignature = "";
     $("connection").textContent = "Offline";
     $("connection").classList.add("offline");
-    notice(error.message, true);
+    notice(
+      error.message +
+        (snapshot
+          ? " Last snapshot shown; changes are disabled and drafts are preserved."
+          : ""),
+      true,
+    );
+    selectionControls();
     if (!snapshot) {
       $("error-message").textContent = error.message;
       $("error-overlay").classList.remove("hidden");
@@ -461,14 +584,20 @@ function render() {
   $("runtime-state").textContent =
     "Runtime · " + (snapshot.runtime.state || "unavailable");
   renderSessionLists();
-  if (!a) return;
+  if (!a) {
+    selectionControls();
+    return;
+  }
   $("agent-name").textContent = sessionTitle(a);
   $("agent-name").title = sessionTitle(a);
   $("agent-id").textContent = a.id;
   const observed = (snapshot.observed || []).find(
     (s) => s.id === a.external_ref,
   );
-  $("agent-origin").textContent = sessionOrigin(a);
+  $("agent-origin").textContent = a.external
+    ? "External " +
+      sessionStatus(a, snapshot.runtime, snapshot.observed || []).text
+    : sessionOrigin(a);
   $("agent-started").textContent = [
     sessionTime(a.created_at, "Added"),
     sessionTime(observed?.started_at, "Started"),
@@ -662,6 +791,8 @@ function renderTasks() {
     buttons.append(reply);
     if (["proposed", "running"].includes(t.state)) {
       const cancel = el("button", "quiet", "Cancel task");
+      cancel.dataset.ownerWrite = "true";
+      cancel.disabled = !selectionReady();
       cancel.onclick = () =>
         action(
           () => call("task.cancel", { id: t.id, version: t.version }),
@@ -815,7 +946,35 @@ function renderBoundaries() {
   if (!scopes.childElementCount)
     scopes.append(el("p", "empty", "No shared namespaces configured."));
 }
+function replyRecipient(id) {
+  const task = (snapshot?.activity.tasks || []).find((item) => item.id === id),
+    message = (snapshot?.activity.messages || []).find(
+      (item) => item.id === id,
+    ),
+    target = task
+      ? task.to
+      : message?.from !== "$owner"
+        ? message?.from
+        : message?.to?.length === 1
+          ? message.to[0]
+          : "";
+  return (snapshot?.agents || []).some(
+    (agent) => agent.id === target && agent.state === "active",
+  )
+    ? target
+    : "";
+}
 function setReply(id) {
+  const recipient = replyRecipient(id);
+  if (!recipient) {
+    notice(
+      "The original reply recipient is unavailable. Refresh and review before sending.",
+      true,
+    );
+    return;
+  }
+  selectAgent(recipient);
+  pendingDraftKind = "direct";
   activateTab("activity");
   replyTo = id;
   $("reply-context").textContent = "↳ " + id;
@@ -962,28 +1121,51 @@ $("composer").onsubmit = (event) => {
   if (!text.trim() || !selectionReady()) return;
   const recipient = snapshot.selected,
     reference = replyTo,
-    board = $("message-kind").value.startsWith("board:")
-      ? $("message-kind").value.slice(6)
-      : "";
+    destination = $("message-kind").value,
+    board = destination.startsWith("board:") ? destination.slice(6) : "";
+  if (!board && reference && replyRecipient(reference) !== recipient) {
+    notice(
+      "The original reply recipient is unavailable or changed. Refresh and review the reply before sending.",
+      true,
+    );
+    return;
+  }
+  let confirmation = "Posted to #" + board + ".";
   action(
     async () => {
       if (board) await call("board.post", { board, text });
-      else
-        await api("/api/send", {
+      else {
+        const result = await api("/api/send", {
           target: recipient,
           text,
           reply_to: reference,
         });
-      if (messageDrafts.get(recipient)?.text === text)
+        confirmation =
+          result.kind +
+          " queued for " +
+          sessionReference(result.target) +
+          (result.kind === "Message"
+            ? ". Native terminal input was not changed."
+            : ". The managed worker runs this instruction when ready.");
+      }
+      const draft = messageDrafts.get(recipient);
+      if (
+        draft?.text === text &&
+        draft.reply === reference &&
+        draft.kind === destination
+      )
         messageDrafts.delete(recipient);
-      if (selected === recipient && $("message").value === text) {
+      if (
+        selected === recipient &&
+        $("message").value === text &&
+        replyTo === reference &&
+        $("message-kind").value === destination
+      ) {
         $("message").value = "";
         clearReply();
       }
     },
-    board
-      ? "Posted to #" + board + "."
-      : "Queued for " + recipient + ". Native terminal input was not changed.",
+    () => confirmation,
   );
 };
 $("message").onkeydown = (event) => {
@@ -1002,6 +1184,10 @@ $("memory-key").oninput = () => {
   $("memory-version").textContent =
     "New key · version 0. Select an existing entry before updating it.";
 };
+$("memory-value").oninput = () => {
+  $("memory-version").textContent =
+    "Unsaved changes · based on version " + memoryVersion;
+};
 $("memory-form").onsubmit = (event) => {
   event.preventDefault();
   if (!selectionReady()) return;
@@ -1019,7 +1205,10 @@ $("memory-form").onsubmit = (event) => {
       version === memoryVersion
     ) {
       memoryVersion = result.entry.version;
-      $("memory-version").textContent = "Saved version " + memoryVersion;
+      $("memory-version").textContent =
+        $("memory-value").value === value
+          ? "Saved version " + memoryVersion
+          : "Unsaved changes · based on version " + memoryVersion;
     }
     if (epoch === memoryEditorEpoch) await loadMemory();
   }, "Shared memory saved with version checking.");
@@ -1245,9 +1434,7 @@ function scopeLabel(name) {
   const group = (snapshot?.groups || []).find(
     (g) => g.board === name || g.memory === name,
   );
-  return group
-    ? group.agents.map(sessionReference).join(" + ")
-    : name;
+  return group ? group.agents.map(sessionReference).join(" + ") : name;
 }
 
 $("session-search").oninput = () => {
@@ -1261,6 +1448,13 @@ $("clear-title").onclick = () => {
   $("task-title").value = "";
   $("title-editor").requestSubmit();
 };
+$("rebase-title").onclick = () => {
+  if (mutating || !selectionReady() || !titleEditor) return;
+  const current = snapshot.agents.find((agent) => agent.id === titleEditor.id);
+  if (!current) return;
+  titleEditor.version = current.title_version;
+  updateTitleConflict();
+};
 $("task-title").onkeydown = (event) => {
   if (event.key === "Escape") {
     event.preventDefault();
@@ -1269,7 +1463,7 @@ $("task-title").onkeydown = (event) => {
 };
 $("title-editor").onsubmit = (event) => {
   event.preventDefault();
-  if (!titleEditor || !selectionReady()) return;
+  if (!titleEditor || titleEditor.conflict || !selectionReady()) return;
   const { id, version } = titleEditor,
     title = $("task-title").value,
     epoch = titleEditorEpoch;

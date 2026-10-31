@@ -3,6 +3,7 @@ package managed
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"regexp"
 	"time"
@@ -23,15 +24,32 @@ var sessionReference = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
 
 func loadConversation(ctx context.Context, q queryer, id string) (ConversationState, error) {
 	c := ConversationState{Agent: id, Generation: 1, State: "ready"}
-	err := get(ctx, q, "conversation", "conversation_"+id, &c)
+	var raw json.RawMessage
+	err := get(ctx, q, "conversation", "conversation_"+id, &raw)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return c, err
+	}
+	if e := checkStateRecoveryDigest(ctx, q, "conversation", id, raw); e != nil {
+		return c, e
+	}
 	if errors.Is(err, sql.ErrNoRows) {
 		return c, nil
 	}
-	return c, err
+	var persisted *ConversationState
+	if err = json.Unmarshal(raw, &persisted); err != nil {
+		return c, err
+	}
+	if persisted == nil || persisted.Agent != id || persisted.Generation < 1 || (persisted.State != "ready" && persisted.State != "busy" && persisted.State != "blocked") || (persisted.State == "ready" && persisted.TaskID != "") || (persisted.State == "busy" && persisted.TaskID == "") || (persisted.SessionID != "" && !sessionReference.MatchString(persisted.SessionID)) {
+		return c, errors.New("persisted conversation state is invalid; restore valid owner state")
+	}
+	return *persisted, nil
 }
 
 func saveConversation(ctx context.Context, q queryer, c ConversationState) error {
-	return save(ctx, q, "conversation", "conversation_"+c.Agent, c.Agent, c.Agent, "", c)
+	if err := save(ctx, q, "conversation", "conversation_"+c.Agent, c.Agent, c.Agent, "", c); err != nil {
+		return err
+	}
+	return saveStateRecoveryDigest(ctx, q, "conversation", c.Agent, c)
 }
 
 func (s *Store) conversation(ctx context.Context, q queryer, a actor, r Request) (any, *Fault) {
