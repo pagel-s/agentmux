@@ -54,6 +54,7 @@ func TestManagedLaunchRealTMuxLifecycle(t *testing.T) {
 			return
 		}
 		_ = os.RemoveAll(state)
+		_ = os.RemoveAll(state + ".bin")
 		_ = os.Remove(state + ".launch.lock")
 	})
 	runtime, err := launcher.Up(ctx, cfg)
@@ -159,6 +160,7 @@ func TestManagedLaunchSpawnedSandboxWorker(t *testing.T) {
 			return
 		}
 		_ = os.RemoveAll(state)
+		_ = os.RemoveAll(state + ".bin")
 		_ = os.Remove(state + ".launch.lock")
 	})
 	if _, err := launcher.Up(ctx, cfg); err != nil {

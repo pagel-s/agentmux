@@ -31,6 +31,9 @@ type Capabilities struct {
 }
 type AgentInfo struct {
 	ID           string              `json:"id"`
+	External     bool                `json:"external,omitempty"`
+	ExternalRef  string              `json:"external_ref,omitempty"`
+	OwnerManaged bool                `json:"owner_managed,omitempty"`
 	Parent       string              `json:"parent,omitempty"`
 	Template     string              `json:"template,omitempty"`
 	State        string              `json:"state"`
@@ -84,6 +87,12 @@ func (s *Store) can(ctx context.Context, q queryer, from, action, to string) boo
 	if err != nil || target.State != "active" {
 		return false
 	}
+	if allow, exists := edgeControl(ctx, q, from, action, to); exists {
+		return allow
+	}
+	if independent(ctx, q, from) || independent(ctx, q, to) {
+		return false
+	}
 	// Creating a worker grants only a control edge to that worker. A child
 	// may report back, but cannot command its parent through this edge.
 	if target.Parent == from {
@@ -106,6 +115,22 @@ func (s *Store) namespace(ctx context.Context, q queryer, id, name string, memor
 	a, err := s.agent(ctx, q, id)
 	if err != nil || a.State != "active" {
 		return false
+	}
+	group, err := workspaceGroupNamespace(ctx, q, name, memory)
+	if err != nil {
+		return false
+	}
+	if group != nil && (group.State != "active" || !contains(group.Members, id)) {
+		return false
+	}
+	if allow, exists := scopeControl(ctx, q, id, name, memory, write); exists {
+		return allow
+	}
+	if independent(ctx, q, id) {
+		return false
+	}
+	if group != nil {
+		return true
 	}
 	if s.teamAccess(ctx, q, id, name, memory) {
 		return true
@@ -135,6 +160,11 @@ func (s *Store) namespace(ctx context.Context, q queryer, id, name string, memor
 	return contains(values, name) && (a.Parent == ownerID || s.namespace(ctx, q, a.Parent, name, memory, write))
 }
 func (s *Store) namespaceExists(ctx context.Context, q queryer, name string, memory bool) bool {
+	if group, err := workspaceGroupNamespace(ctx, q, name, memory); err != nil {
+		return false
+	} else if group != nil {
+		return true
+	}
 	if memory {
 		if _, ok := s.cfg.Memory[name]; ok {
 			return true
@@ -178,11 +208,19 @@ func (s *Store) readableBoards(ctx context.Context, q queryer, id string) []stri
 			}
 		}
 	}
+	groups, err := workspaceGroups(ctx, q)
+	if err == nil {
+		for _, group := range groups {
+			if contains(group.Members, id) && s.namespace(ctx, q, id, group.Board, false, false) {
+				boards = append(boards, group.Board)
+			}
+		}
+	}
 	sort.Strings(boards)
 	return boards
 }
 func (s *Store) spawnTemplates(ctx context.Context, q queryer, id string) []string {
-	if !s.cfg.Spawn.Enabled {
+	if !s.cfg.Spawn.Enabled || independent(ctx, q, id) {
 		return nil
 	}
 	a, err := s.agent(ctx, q, id)
@@ -195,6 +233,9 @@ func (s *Store) spawnTemplates(ctx context.Context, q queryer, id string) []stri
 	return s.cfg.Spawn.Allow[id]
 }
 func (s *Store) canCreateTeams(ctx context.Context, q queryer, id string) bool {
+	if independent(ctx, q, id) {
+		return false
+	}
 	if !s.cfg.Teams.Enabled {
 		return false
 	}
@@ -268,6 +309,8 @@ func (s *Store) agents(ctx context.Context, q queryer, a actor, r Request) (any,
 			}
 		}
 		return map[string]any{"agents": out, "cursor": cursor}, nil
+	case "agent.add":
+		return s.addWorkspaceAgent(ctx, q, a, r.Args)
 	case "agent.spawn":
 		return s.spawn(ctx, q, a, r.Args)
 	case "agent.stop":
@@ -293,6 +336,9 @@ func (s *Store) spawn(ctx context.Context, q queryer, a actor, raw json.RawMessa
 	}
 	parent := AgentInfo{}
 	if !a.owner() {
+		if independent(ctx, q, a.ID) {
+			return nil, forbidden()
+		}
 		if !contains(s.spawnTemplates(ctx, q, a.ID), in.Template) {
 			return nil, forbidden()
 		}
@@ -568,6 +614,11 @@ func (s *Store) RuntimeDeadline() (time.Time, error) {
 	return s.deadline(context.Background(), s.db)
 }
 func (s *Store) startRuntime(ctx context.Context) error {
+	// Human-led native workspaces end with owner cancellation/down. Preserve
+	// any explicit existing deadline rather than silently renewing/removing it.
+	if s.cfg.InteractiveWorkspace {
+		return nil
+	}
 	d := time.Now().Add(time.Duration(s.cfg.Limits.MaxRuntimeSeconds) * time.Second).UTC().Format(time.RFC3339Nano)
 	_, err := s.db.ExecContext(ctx, "INSERT INTO metadata(key,value) VALUES('deadline',?) ON CONFLICT(key) DO NOTHING", d)
 	return err

@@ -1,6 +1,24 @@
 # Quickstart
 
-Let's launch your first Agentmux session.
+For a human-led session with Claude and Codex installed and logged in:
+
+```sh
+agentmux start
+```
+
+Select an agent and press Enter to use its native terminal. F1 returns to
+the workbench; Ctrl-b b opens its board popup. In another terminal, try `agentmux attach codex`,
+`agentmux inbox`, or `agentmux web --open`. See [work sessions](../work-sessions.md)
+for setup, live permissions, control keys and current limits.
+
+Use `agentmux add NAME --harness claude --project DIR` for another project,
+`agentmux sessions` to discover existing terminals, `collaborate A B` to connect
+sessions, and `isolate A` to end collaboration without closing native input.
+
+## Existing workspace mode
+
+The following flow uses the original layout compiler. It creates tmux panes
+without the managed broker's authenticated board, memory or permissions.
 
 ## 1. Create a Configuration
 

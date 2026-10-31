@@ -1,5 +1,11 @@
 # Agentmux Config Guide
 
+This guide covers the legacy v1 workspace compiler. Its provider launch flags
+and raw pane commands differ from v2 managed work sessions. For native
+interactive teams with authenticated coordination and live boundaries, use
+[work sessions](work-sessions.md) and the [managed configuration](managed-runtime.md).
+
+
 Agentmux configs are local YAML files that define one tmux workspace.
 
 If you want use-case-driven starting points instead of field-by-field reference, see [`recipes.md`](recipes.md).

@@ -14,6 +14,7 @@ import (
 
 	"agentmux/internal/managed"
 	"agentmux/internal/managedcheck"
+	"agentmux/internal/managedconfig"
 	"agentmux/internal/managedsetup"
 )
 
@@ -27,6 +28,10 @@ func runManagedSetupIO(ctx context.Context, args []string, input io.Reader, stdo
 	output := flags.String("output", "agentmux-managed.yaml", "new private YAML file (never overwritten)")
 	specFile := flags.String("spec", "", "noninteractive JSON setup specification; - reads stdin")
 	initGit := flags.Bool("init-git", false, "initialize Git only in newly created dedicated workspaces")
+	preset := flags.String("preset", "", "coding: interactive Claude and Codex, with shared board/memory and no autonomous wakeups")
+	session := flags.String("session", "work", "session name for a preset")
+	project := flags.String("project", "", "existing shared project directory for a preset; omitted creates separate workspaces")
+	sandboxMode := flags.String("sandbox", "local", "preset agent and broker isolation: bubblewrap or explicitly trusted local")
 	flags.Usage = func() {
 		fmt.Fprintln(stderr, "Usage: agentmux managed setup [--spec setup.json] --output team.yaml [--init-git]\nWithout --spec, asks for agent roles, runtimes, isolation and explicit authentication choices.")
 		flags.PrintDefaults()
@@ -42,7 +47,16 @@ func runManagedSetupIO(ctx context.Context, args []string, input io.Reader, stdo
 	}
 	var spec managedsetup.Spec
 	var err error
-	if *specFile != "" {
+	if *preset != "" {
+		if *preset != "coding" || *specFile != "" {
+			return managedCLIError(stdout, "setup", "", exitValidation, errors.New("use --preset coding or --spec, not both"))
+		}
+		home, homeErr := os.UserHomeDir()
+		if homeErr != nil {
+			return managedCLIError(stdout, "setup", "", exitRuntime, homeErr)
+		}
+		spec = managedsetup.CodingPreset(*session, filepath.Join("agentmux-workspaces", *session), *project, *sandboxMode, home)
+	} else if *specFile != "" {
 		reader := input
 		if *specFile != "-" {
 			f, openErr := os.Open(expandUserPath(*specFile))
@@ -65,6 +79,11 @@ func runManagedSetupIO(ctx context.Context, args []string, input io.Reader, stdo
 	plan, err := managedsetup.Build(spec)
 	if err != nil {
 		return managedCLIError(stdout, "setup", "", exitValidation, err)
+	}
+	if *preset == "coding" {
+		plan.Config.Boards["team"] = managedconfig.Access{}
+		plan.Config.Memory["project"] = managedconfig.Access{}
+		plan.Config.InteractiveWorkspace = true
 	}
 	path, err := filepath.Abs(expandUserPath(*output))
 	if err != nil {

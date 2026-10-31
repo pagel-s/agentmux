@@ -111,6 +111,29 @@ verified run from a failed or uncertain attempt. Scripted broker and native
 protocol tests cover failure, revocation, budget and replay cases without cloud
 calls.
 
+Both live acceptance runners first check the independent verifier against known
+passing and failing implementations, without model calls. Verifier diagnostics
+(command, exit status and bounded output) are retained privately beside each
+artifact; a final verifier failure is also recorded in `report.json`. The
+verifier uses a system Python under `/usr`, so a host virtualenv or PATH shim
+outside its mounts cannot accidentally become its interpreter.
+
+To recheck a retained implementation without restarting agents or spending more
+model turns:
+
+```sh
+python3 scripts/smoke-managed-models.py \
+  --verify-artifact /path/to/retained/tag_normalizer.py
+```
+
+This produces a separate artifact-only report and private diagnostics. It does
+not change the original run's status or verify its broker tasks. A standalone
+verifier preflight is also available:
+
+```sh
+python3 scripts/smoke-managed-models.py --check-fixtures
+```
+
 The installed-CLI acceptance passed on 2026-10-31 with three persistent Claude
 turns, two persistent Codex turns, two observation wakeups and one initial owner
 goal. A broker restart preserved one queued ping, its cursor/version and the

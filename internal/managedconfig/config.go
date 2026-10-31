@@ -18,19 +18,22 @@ import (
 )
 
 type Config struct {
-	Version      int                   `yaml:"version" json:"version"`
-	Mode         string                `yaml:"mode" json:"mode"`
-	Session      string                `yaml:"session" json:"session"`
-	Connections  map[string]Connection `yaml:"connections" json:"connections,omitempty"`
-	Agents       map[string]Agent      `yaml:"agents" json:"agents"`
-	Boards       map[string]Access     `yaml:"boards" json:"boards,omitempty"`
-	Memory       map[string]Access     `yaml:"memory" json:"memory,omitempty"`
-	Policy       Policy                `yaml:"policy" json:"policy"`
-	Limits       Limits                `yaml:"limits" json:"limits"`
-	Spawn        Spawn                 `yaml:"spawn" json:"spawn"`
-	Teams        Teams                 `yaml:"teams" json:"teams"`
-	MemoryPolicy MemoryPolicy          `yaml:"memory_policy" json:"memory_policy"`
-	Budget       Budget                `yaml:"budget" json:"budget"`
+	// InteractiveWorkspace keeps human-controlled native terminals alive until
+	// the owner stops them. It is forbidden with managed agents or spawning.
+	InteractiveWorkspace bool                  `yaml:"interactive_workspace,omitempty" json:"interactive_workspace,omitempty"`
+	Version              int                   `yaml:"version" json:"version"`
+	Mode                 string                `yaml:"mode" json:"mode"`
+	Session              string                `yaml:"session" json:"session"`
+	Connections          map[string]Connection `yaml:"connections" json:"connections,omitempty"`
+	Agents               map[string]Agent      `yaml:"agents" json:"agents"`
+	Boards               map[string]Access     `yaml:"boards" json:"boards,omitempty"`
+	Memory               map[string]Access     `yaml:"memory" json:"memory,omitempty"`
+	Policy               Policy                `yaml:"policy" json:"policy"`
+	Limits               Limits                `yaml:"limits" json:"limits"`
+	Spawn                Spawn                 `yaml:"spawn" json:"spawn"`
+	Teams                Teams                 `yaml:"teams" json:"teams"`
+	MemoryPolicy         MemoryPolicy          `yaml:"memory_policy" json:"memory_policy"`
+	Budget               Budget                `yaml:"budget" json:"budget"`
 }
 
 type Connection struct {
@@ -41,6 +44,7 @@ type Connection struct {
 }
 
 type Agent struct {
+	Interaction   string            `yaml:"interaction,omitempty" json:"interaction,omitempty"`
 	Role          string            `yaml:"role" json:"role,omitempty"`
 	Harness       string            `yaml:"harness" json:"harness"`
 	Model         string            `yaml:"model" json:"model,omitempty"`
@@ -306,6 +310,9 @@ func (c Config) Validate() error {
 	if len(c.Agents) == 0 {
 		return fmt.Errorf("managed config requires at least one agent")
 	}
+	if c.InteractiveWorkspace && c.Spawn.Enabled {
+		return fmt.Errorf("interactive_workspace requires agent spawning to be disabled")
+	}
 	if err := c.validateDynamic(); err != nil {
 		return err
 	}
@@ -337,6 +344,20 @@ func (c Config) Validate() error {
 			return invalidID("agent", id)
 		}
 		agent := c.Agents[id]
+		if c.InteractiveWorkspace && agent.Interaction != "interactive" {
+			return fmt.Errorf("agent %q: interactive_workspace requires every agent to use interaction: interactive", id)
+		}
+		if agent.Interaction != "" && agent.Interaction != "managed" && agent.Interaction != "interactive" {
+			return fmt.Errorf("agent %q: interaction must be managed or interactive", id)
+		}
+		if agent.Interaction == "interactive" {
+			if agent.Autonomy.Enabled || agent.Conversation == "persistent" || agent.Trace.Enabled || agent.Disk.Enabled() || agent.Network == "allowlist" {
+				return fmt.Errorf("agent %q: interactive sessions use native history and require autonomy, managed conversation/trace, disk capsules and allowlist egress to be disabled", id)
+			}
+			if agent.Harness == "antigravity" {
+				return fmt.Errorf("agent %q: interactive Antigravity requires the Pi bridge; direct native role injection is unverified", id)
+			}
+		}
 		if agent.Conversation != "" && agent.Conversation != "fresh" && agent.Conversation != "persistent" {
 			return fmt.Errorf("agent %q: conversation must be fresh or persistent", id)
 		}

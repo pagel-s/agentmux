@@ -17,8 +17,9 @@ type paneInfo struct {
 	Dead                     bool
 }
 type registryAgent struct {
-	ID    string `json:"id"`
-	State string `json:"state"`
+	ID       string `json:"id"`
+	State    string `json:"state"`
+	External bool   `json:"external"`
 }
 
 // Supervise runs inside the dedicated supervisor pane. Broker and workers have
@@ -78,13 +79,16 @@ func (l *Launcher) Supervise(ctx context.Context, attempt string) error {
 	if err != nil {
 		return finish(err)
 	}
-	// The dashboard contains only metadata/counts. It is not an agent pane and
-	// receives no agent identity, role prompt, or credential in its command line.
-	runtime.DashboardPane, err = l.createPane(ctx, runtime, "status", "dashboard", "", []string{l.options.Executable, "managed", "status", "--state", l.options.StateDir, "--watch"})
+	// The owner console can inspect content and edit policy. Its credential is
+	// loaded from private host state and is never mounted into an agent pane.
+	runtime.DashboardPane, err = l.createPane(ctx, runtime, "dashboard", "dashboard", "", []string{l.options.Executable, "managed", "dashboard", "--state", l.options.StateDir})
 	if err != nil {
 		return finish(err)
 	}
 	if _, err := l.tmux(ctx, "select-window", "-t", runtime.DashboardPane); err != nil {
+		return finish(err)
+	}
+	if err := l.configureWorkbench(ctx, runtime); err != nil {
 		return finish(err)
 	}
 	for {
@@ -112,6 +116,9 @@ func (l *Launcher) Supervise(ctx context.Context, attempt string) error {
 			return finish(err)
 		}
 		for _, agent := range agents {
+			if agent.External {
+				continue
+			}
 			pane, exists := runtime.Agents[agent.ID]
 			if agent.State != "active" {
 				if exists && pane.State == "running" {

@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>Agentmux · Workbench</title>
+    <link rel="stylesheet" href="/app.css" />
+    <script src="/app.js" defer></script>
+    <script src="/graph.js" defer></script>
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="Agentmux"
+          ><span class="mark">↗</span><strong>agentmux</strong></a
+        ><span id="session">Work session</span
+        ><span class="connection" id="connection">Connecting</span>
+        <div class="top-actions">
+          <button id="refresh" class="quiet">Refresh</button
+          ><button id="copy-attach">Attach command ↗</button>
+        </div>
+      </header>
+      <aside class="agents">
+        <div class="rail-heading">
+          <span>AGENTS</span><span id="agent-count">0</span>
+        </div>
+        <div id="agents" class="agent-list"></div>
+        <div class="rail-bottom">
+          <kbd>F1</kbd> terminal workbench<br /><kbd>Ctrl-b b</kbd> shared board
+          <div id="runtime-state">Loading</div>
+        </div>
+      </aside>
+      <main>
+        <div class="workspace-header">
+          <div class="agent-title">
+            <h1 id="agent-name">Select an agent</h1>
+            <span id="agent-harness"></span>
+          </div>
+          <div class="agent-actions">
+            <button id="focus-terminal">Focus in tmux ↗</button
+            ><button id="close-agent" class="quiet">Close session</button
+            ><button id="pause-agent" class="quiet">Autonomy</button>
+          </div>
+          <p id="agent-role"></p>
+        </div>
+        <div class="workspace-meta">
+          <span id="agent-workdir"></span><span id="agent-boundary"></span>
+        </div>
+        <nav class="tabs" aria-label="Workspace views">
+          <button data-tab="activity" class="active">Board</button
+          ><button data-tab="agent">Agent</button
+          ><button data-tab="tasks">Tasks <span id="task-count">0</span></button
+          ><button data-tab="memory">Memory</button
+          ><button data-tab="graph">Graph</button
+          ><button data-tab="sessions">Sessions</button
+          ><span class="tab-tail" id="deadline"></span>
+        </nav>
+        <div class="workspace-content">
+          <section id="view-sessions" class="view">
+            <div class="section-label">
+              <h2>Sessions</h2>
+              <span>STABLE IDS · NATIVE TERMINALS</span>
+            </div>
+            <form id="add-session" class="session-form">
+              <input
+                id="new-name"
+                aria-label="New session ID"
+                placeholder="Session ID"
+                required
+                pattern="[A-Za-z][A-Za-z0-9_-]{0,63}"
+              /><select id="new-harness" aria-label="Native interface">
+                <option>claude</option>
+                <option>codex</option>
+                <option>pi</option></select
+              ><input
+                id="new-project"
+                aria-label="Project directory"
+                placeholder="/path/to/project"
+                required
+              /><button type="submit">New session</button>
+              <details>
+                <summary>Role & isolation</summary>
+                <input
+                  id="new-role"
+                  aria-label="Session role"
+                  placeholder="Optional role; otherwise your normal native session"
+                /><select id="new-sandbox" aria-label="Session isolation">
+                  <option value="local">
+                    Native configuration · trusted local
+                  </option>
+                  <option value="bubblewrap">
+                    Bubblewrap · isolated profile
+                  </option>
+                </select>
+              </details>
+            </form>
+            <div class="section-label">
+              <h2>Observed terminals</h2>
+              <span>NO INPUT INJECTION</span>
+            </div>
+            <div id="observed-sessions"></div>
+            <div id="bridge-panel" class="hidden">
+              <div class="section-label">
+                <h2>Connect this existing conversation</h2>
+                <button id="copy-bridge" class="quiet">Copy setup</button>
+              </div>
+              <p class="session-note">
+                Paste this once into its native terminal. Its conversation and
+                tools stay intact. Permissions are controlled here; inbox
+                processing stays explicit.
+              </p>
+              <pre id="bridge-setup"></pre>
+            </div>
+          </section>
+          <section id="view-activity" class="view active">
+            <div class="section-label">
+              <h2>Coordination</h2>
+              <select id="board-filter" aria-label="Filter messages">
+                <option value="all">All messages</option>
+                <option value="team">Shared boards</option>
+                <option value="agent">Agent inbox</option></select
+              ><span id="feed-count"></span>
+            </div>
+            <div id="feed" class="feed"></div>
+          </section>
+          <section id="view-agent" class="view">
+            <div class="section-label">
+              <h2>Native terminal</h2>
+              <span>LIVE OBSERVATION · INPUT IN TMUX</span>
+            </div>
+            <pre id="terminal" tabindex="0">Waiting for terminal output…</pre>
+          </section>
+          <section id="view-tasks" class="view">
+            <div class="section-label">
+              <h2>Tasks & results</h2>
+              <span>OWNER VIEW</span>
+            </div>
+            <div id="tasks" class="task-list"></div>
+          </section>
+          <section id="view-memory" class="view">
+            <div class="section-label">
+              <h2>Shared memory</h2>
+              <select
+                id="memory-namespace"
+                aria-label="Memory namespace"
+              ></select
+              ><button id="load-memory" class="quiet">Load</button>
+            </div>
+            <div id="memory-list" class="memory-list"></div>
+            <form id="memory-form" class="memory-editor">
+              <label
+                >Key<input
+                  id="memory-key"
+                  required
+                  maxlength="128"
+                  placeholder="e.g. architecture-decision" /></label
+              ><label
+                >Value<textarea
+                  id="memory-value"
+                  required
+                  rows="6"
+                  placeholder="A shared project note"
+                ></textarea>
+              </label>
+              <div>
+                <span id="memory-version">New entry · version 0</span
+                ><button type="submit">Save entry</button>
+              </div>
+            </form>
+          </section>
+          <section id="view-graph" class="view">
+            <div class="graph-toolbar">
+              <div class="segmented">
+                <button id="graph-agents" class="active">
+                  Agent connections</button
+                ><button id="graph-scopes">Shared access</button>
+              </div>
+              <span id="graph-limit">Drag nodes · select a connection</span
+              ><button id="graph-edit">Connect…</button
+              ><button id="graph-reset" class="quiet">Reset layout</button>
+            </div>
+            <div class="graph-canvas">
+              <svg
+                id="interaction-graph"
+                viewBox="0 0 960 580"
+                aria-label="Agent interaction graph"
+                role="group"
+              ></svg>
+              <div id="graph-empty" class="hidden">Loading permissions…</div>
+            </div>
+            <aside class="inspector hidden" id="graph-inspector">
+              <div class="inspector-heading">
+                <h2 id="inspector-title">Connection</h2>
+                <span id="policy-version">v—</span
+                ><button
+                  id="close-inspector"
+                  class="quiet"
+                  aria-label="Close connection controls"
+                >
+                  ×
+                </button>
+              </div>
+              <div class="inspector-section" id="edge-section">
+                <div class="connection-actions">
+                  <button id="connect-pair">Collaborate</button
+                  ><button id="isolate-agent" class="quiet">
+                    Make independent
+                  </button>
+                </div>
+                <label class="field-label" for="target-agent">RECIPIENT</label
+                ><select id="target-agent"></select>
+                <div id="edge-controls"></div>
+              </div>
+              <div class="inspector-section" id="scope-section">
+                <div class="field-label">
+                  SHARED ACCESS <span>READ / WRITE</span>
+                </div>
+                <div id="scope-controls"></div>
+              </div>
+              <p class="boundary-note">
+                Applies to future broker operations. Cancel accepted tasks
+                separately; previously read data remains known.
+              </p>
+            </aside>
+          </section>
+        </div>
+        <form id="composer" class="composer">
+          <div class="composer-top">
+            <label for="message"
+              >To <strong id="send-target">agent</strong></label
+            ><select id="message-kind" aria-label="Message destination">
+              <option value="direct">Direct inbox</option>
+              <option value="board">Team board</option></select
+            ><span id="reply-context"></span
+            ><button type="button" id="clear-reply" class="quiet hidden">
+              Clear reply
+            </button>
+          </div>
+          <div class="composer-input">
+            <textarea
+              id="message"
+              rows="2"
+              placeholder="Message an agent or post to the shared board."
+              required
+            ></textarea
+            ><button type="submit" id="send-message">Send ↵</button>
+          </div>
+          <div id="delivery-hint" class="delivery-hint"></div>
+        </form>
+      </main>
+      <footer class="statusbar">
+        <span id="notice" role="status">Connecting…</span
+        ><span id="updated">—</span>
+      </footer>
+    </div>
+    <div id="error-overlay" class="error-overlay hidden">
+      <div>
+        <h1>Session unavailable</h1>
+        <p id="error-message"></p>
+        <button id="retry">Reconnect</button>
+        <p>
+          Run <code>agentmux start</code>, then open the private link from
+          <code>agentmux web</code>.
+        </p>
+      </div>
+    </div>
+  </body>
+</html>

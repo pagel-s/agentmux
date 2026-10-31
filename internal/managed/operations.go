@@ -36,9 +36,9 @@ func internal(err error) *Fault {
 
 func isWrite(op string) bool {
 	switch op {
-	case "worker.next", "autonomy.control", "autonomy.ack", "memory.delete", "memory.prune", "memory.index":
+	case "control.update", "worker.next", "autonomy.control", "autonomy.ack", "memory.delete", "memory.prune", "memory.index":
 		return true
-	case "board.post", "message.send", "ping.send", "instruct", "task.claim", "task.complete", "task.stopped", "task.cancel", "task.verify", "task.resolve", "memory.put", "agent.spawn", "agent.stop", "team.create", "team.invite", "team.join", "team.leave", "team.remove", "team.dissolve", "conversation.begin", "conversation.reset":
+	case "board.post", "message.send", "ping.send", "instruct", "task.claim", "task.complete", "task.stopped", "task.cancel", "task.verify", "task.resolve", "memory.put", "agent.add", "agent.spawn", "agent.stop", "team.create", "team.invite", "team.join", "team.leave", "team.remove", "team.dissolve", "conversation.begin", "conversation.reset":
 		return true
 	}
 	return false
@@ -191,6 +191,9 @@ func (s *Store) Call(ctx context.Context, token string, r Request) (json.RawMess
 }
 
 func (s *Store) dispatch(ctx context.Context, q queryer, a actor, r Request) (any, *Fault) {
+	if r.Operation == "control.get" || r.Operation == "control.update" || r.Operation == "boundaries.get" {
+		return s.control(ctx, q, a, r)
+	}
 	switch r.Operation {
 	case "budget.status":
 		return s.budgetStatus(ctx, q, a, r.Args)
@@ -216,6 +219,11 @@ func (s *Store) dispatch(ctx context.Context, q queryer, a actor, r Request) (an
 			return nil, invalid(err)
 		}
 		result := map[string]any{"agent_id": a.ID, "instance_id": a.Instance, "generation": a.Generation, "owner": a.owner(), "session": s.cfg.Session}
+		control, controlErr := controls(ctx, q)
+		if controlErr != nil {
+			return nil, internal(controlErr)
+		}
+		result["boundaries_version"] = control.Version
 		if !a.owner() {
 			result["boards_read"] = s.readableBoards(ctx, q, a.ID)
 			result["spawn_templates"] = s.spawnTemplates(ctx, q, a.ID)
@@ -236,7 +244,7 @@ func (s *Store) dispatch(ctx context.Context, q queryer, a actor, r Request) (an
 		return s.tasks(ctx, q, a, r)
 	case "memory.get", "memory.list", "memory.put", "memory.head", "memory.search", "memory.delete", "memory.prune", "memory.index":
 		return s.memory(ctx, q, a, r)
-	case "agent.list", "agent.spawn", "agent.stop":
+	case "agent.list", "agent.add", "agent.spawn", "agent.stop":
 		return s.agents(ctx, q, a, r)
 	case "team.create", "team.list", "team.invite", "team.join", "team.leave", "team.remove", "team.dissolve":
 		return s.teams(ctx, q, a, r)
@@ -543,7 +551,11 @@ func (s *Store) messages(ctx context.Context, q queryer, a actor, raw json.RawMe
 		visible = append(visible, m)
 		cursor = m.ID
 	}
-	return map[string]any{"messages": visible, "cursor": cursor}, nil
+	control, controlErr := controls(ctx, q)
+	if controlErr != nil {
+		return nil, internal(controlErr)
+	}
+	return map[string]any{"messages": visible, "cursor": cursor, "boundaries_version": control.Version}, nil
 }
 
 func (s *Store) tasks(ctx context.Context, q queryer, a actor, r Request) (any, *Fault) {

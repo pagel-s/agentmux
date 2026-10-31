@@ -31,6 +31,8 @@ test-sandbox: build
 	GOCACHE=$(GOCACHE) AGENTMUX_MANAGED_INTEGRATION=1 AGENTMUX_SANDBOX_INTEGRATION=1 AGENTMUX_INTEGRATION_BINARY="$(CURDIR)/$(BINARY)" $(GO) test -race -count=1 ./internal/managed ./internal/managedlaunch ./internal/capsule ./internal/egress ./internal/sandbox
 	python3 scripts/smoke-managed.py
 	python3 scripts/smoke-managed-team.py
+	python3 scripts/smoke-managed-interactive.py
+	python3 scripts/smoke-managed-workspace.py
 
 # Requires delegated cgroup v2 controllers and a recent systemd user manager.
 # Verifies actual controls, aggregate OOM, and escaped-descendant cleanup.

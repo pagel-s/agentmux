@@ -47,6 +47,9 @@ func runManaged(args []string) int {
 }
 
 func runManagedIO(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	if len(args) > 0 && args[0] == "dashboard" {
+		return runWorkSession("dashboard", args[1:], stdin, stdout, stderr)
+	}
 	if len(args) > 0 && args[0] == "trace" {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
@@ -138,7 +141,7 @@ func runManagedIO(args []string, stdin io.Reader, stdout, stderr io.Writer) int 
 		}
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 		defer stop()
-		fmt.Fprintf(stderr, "Managed worker %s: waiting for authorized tasks; use status or the broker API to inspect work.\n", options.values["agent"])
+		fmt.Fprintf(stderr, "Agentmux agent %s: starting the configured terminal or managed worker.\n", options.values["agent"])
 		if err := managed.RunWorker(ctx, managed.WorkerOptions{StateDir: state, AgentID: options.values["agent"], Once: options.once, Executable: executable, DefinitionFile: options.values["definition"]}); err != nil && !errors.Is(err, context.Canceled) {
 			return managedCLIError(stdout, operation, "", exitRuntime, err)
 		}
