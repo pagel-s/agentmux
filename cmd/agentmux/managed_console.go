@@ -46,6 +46,7 @@ type consoleAction struct {
 	exit               bool
 	details            string
 	labelID, labelText string
+	draft              *consoleDraft
 }
 type console struct {
 	state                                  string
@@ -84,6 +85,8 @@ type console struct {
 	labelDrafts                            map[string]string
 	teamIndex, eventIndex, teamMemberIndex int
 	teamAction                             *consoleTeamAction
+	reader                                 *consoleReader
+	failedDraft                            *consoleDraft
 	offline                                bool
 }
 type consoleNativeDraft struct{ id, title, provider, project, role string }
@@ -334,6 +337,8 @@ type consoleAttach struct{ state, agent, controller string }
 
 func (m console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case consoleMemoryVersionReview:
+		m.receiveMemoryReview(msg)
 	case consoleMemory:
 		if msg.request != m.memoryRequest || msg.agent != m.selectedID() || m.tab != 3 || !m.memoryLoading {
 			return m, nil
@@ -343,9 +348,19 @@ func (m console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.message = "Memory unavailable: " + activityText(msg.err.Error(), 120)
 		} else {
+			key := ""
+			if m.memoryOpen && m.memoryNamespace == msg.namespace && len(m.memoryEntries) > 0 {
+				key = m.memoryEntries[m.memoryEntry%len(m.memoryEntries)].Key
+			}
 			m.memoryNamespace = msg.namespace
 			m.memoryEntries = msg.entries
 			m.memoryEntry = 0
+			for i, entry := range msg.entries {
+				if entry.Key == key {
+					m.memoryEntry = i
+					break
+				}
+			}
 			m.memoryOpen = true
 		}
 	case tea.WindowSizeMsg:
@@ -477,6 +492,10 @@ func (m console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.err != nil {
 			m.message = "Action failed: " + activityText(msg.err.Error(), 200) + ". Refresh before retrying; delivery may be uncertain."
+			if msg.draft != nil {
+				m.failedDraft = msg.draft
+				m.message = "Draft kept for " + msg.draft.target + "; Ctrl-R restores after reviewing delivery. " + m.message
+			}
 			if msg.labelID != "" {
 				m.message = "Title draft kept for " + msg.labelID + "; press L to review after refresh. " + m.message
 			}
@@ -589,7 +608,7 @@ func (m console) addNative(draft consoleNativeDraft) tea.Cmd {
 			args = append([]string{draft.id}, args...)
 		}
 		if code := runWorkAdd(args, &output, &diagnostics); code != exitSuccess {
-			return consoleAction{err: fmt.Errorf("%s", strings.TrimSpace(diagnostics.String()+output.String()))}
+			return consoleAction{err: fmt.Errorf("%s", strings.TrimSpace(diagnostics.String()+output.String())), draft: &consoleDraft{kind: "new-title", target: "What are you working on? (optional)", text: draft.title, native: &draft}}
 		}
 		return consoleAction{message: strings.TrimSpace(output.String())}
 	}

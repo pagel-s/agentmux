@@ -38,6 +38,10 @@ func observeWorkSessions(ctx context.Context, state string) []sessioninventory.S
 var discoverWorkSessions = observeWorkSessions
 
 func runWorkInventory(args []string, out, diagnostics io.Writer) int {
+	if workHelpRequested(args) {
+		fmt.Fprintln(out, "Usage: agentmux sessions [--session work | --state DIR]\nLists registered Agentmux sessions and recognizable existing native terminals.\nTitles describe tasks; use the stable ID to attach, label or connect.")
+		return exitSuccess
+	}
 	o, err := parseWorkOptions(args)
 	if err != nil {
 		fmt.Fprintln(diagnostics, "error:", err)
@@ -47,19 +51,23 @@ func runWorkInventory(args []string, out, diagnostics io.Writer) int {
 		fmt.Fprintln(diagnostics, "error: sessions accepts --session or --state")
 		return exitValidation
 	}
-	credential, err := managed.LoadCredential(managed.CredentialPath(o.state, ""))
+	credential, registryErr := managed.LoadCredential(managed.CredentialPath(o.state, ""))
 	observations := discoverWorkSessions(context.Background(), o.state)
 	var registered []managed.AgentInfo
-	if err == nil {
+	if registryErr == nil {
 		raw, e := workCall(context.Background(), managed.NewClient(credential), "agent.list", map[string]any{"limit": 200})
-		if e == nil {
+		registryErr = e
+		if registryErr == nil {
 			var registry struct {
 				Agents []managed.AgentInfo `json:"agents"`
 			}
-			_ = json.Unmarshal(raw, &registry)
+			registryErr = json.Unmarshal(raw, &registry)
+			if registryErr != nil {
+				registry.Agents = nil
+			}
 			registered = registry.Agents
 			for _, a := range registry.Agents {
-				mode := "connected"
+				mode := "workspace coordination"
 				if a.External {
 					mode = "external bridge · " + observationStatus(a.ExternalRef, observations)
 				}
@@ -67,10 +75,30 @@ func runWorkInventory(args []string, out, diagnostics io.Writer) int {
 			}
 		}
 	}
-	for _, s := range unconnectedObservations(registered, observations) {
+	unconnected := unconnectedObservations(registered, observations)
+	for _, s := range unconnected {
 		fmt.Fprintf(out, "%s\n  ID %s · %s · observed · %s · started %s\n  %s · %s\n", consoleContent(observedTitle(s), 160), s.ID, s.Harness, consoleContent(s.TTY, 60), sessionAdded(s.StartedAt), consoleContent(s.Project, 300), consoleContent(s.TmuxSession, 100))
 	}
-	fmt.Fprintln(out, "Titles describe the task; IDs remain stable. Label: agentmux label ID \"Fix login redirect\"\nObserved sessions keep their original terminals. Connect: agentmux connect OBSERVED_ID [--title \"Task\"] [--name ID]")
+	if registryErr != nil {
+		fmt.Fprintln(out, "Registered sessions unavailable; workspace session and bridge counts are unknown.")
+		if os.IsNotExist(registryErr) {
+			fmt.Fprintln(diagnostics, "Workspace registry not loaded: no owner credential at", consoleContent(o.state, 300))
+			fmt.Fprintln(diagnostics, "Start this workspace:", managedlaunch.ShellCommand([]string{"agentmux", "start", "--session", o.session, "--state", o.state}))
+			fmt.Fprintln(diagnostics, "Or select an existing --session/--state. Existing native terminals are still listed where recognizable.")
+		} else {
+			fmt.Fprintln(diagnostics, "Workspace registry unavailable:", consoleContent(registryErr.Error(), 300))
+			fmt.Fprintln(diagnostics, "Registered session and bridge status are unknown. Existing native terminals are listed observationally; refresh after restoring the broker.")
+			fmt.Fprintln(diagnostics, "Inspect this workspace:", managedlaunch.ShellCommand([]string{"agentmux", "managed", "status", "--state", o.state}))
+		}
+	} else if len(registered) == 0 {
+		fmt.Fprintln(out, "No registered Agentmux sessions in this workspace.")
+	}
+	if len(unconnected) == 0 {
+		fmt.Fprintln(out, "No additional recognizable native terminals observed. Generic wrappers and non-TTY clients may not appear.")
+	}
+	fmt.Fprintln(out, "Titles describe tasks; IDs remain stable. Observed terminals stay in their original application.")
+	fmt.Fprintln(out, "Label:", managedlaunch.ShellCommand([]string{"agentmux", "label", "ID", "Fix login redirect", "--state", o.state}))
+	fmt.Fprintln(out, "Connect:", managedlaunch.ShellCommand([]string{"agentmux", "connect", "OBSERVED_ID", "--title", "Task", "--state", o.state}))
 	return 0
 }
 
@@ -308,6 +336,10 @@ func bridgeInstructions(state, id string) string {
 }
 
 func runWorkConnect(args []string, out, diagnostics io.Writer) int {
+	if len(args) > 0 && helpArgument(args[0]) {
+		fmt.Fprintln(out, "Usage: agentmux connect OBSERVED_ID [--title TASK] [--name ID] [--session work | --state DIR]\nPrepare coordination for an existing native terminal. Run agentmux sessions to find its observation ID.\nThe command prints setup to paste manually; it does not restart the terminal or send input.")
+		return exitSuccess
+	}
 	if len(args) == 0 {
 		fmt.Fprintln(diagnostics, "Usage: agentmux connect OBSERVED_ID [--title TASK] [--name ID] [--session work | --state DIR]")
 		return exitValidation
@@ -323,6 +355,10 @@ func runWorkConnect(args []string, out, diagnostics io.Writer) int {
 		if err == flag.ErrHelp {
 			return 0
 		}
+		return exitValidation
+	}
+	if flags.NArg() != 0 {
+		fmt.Fprintln(diagnostics, "error: connect accepts one observation ID followed by flags; run agentmux connect --help")
 		return exitValidation
 	}
 	values := []string{"--session", *session}

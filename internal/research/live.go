@@ -189,7 +189,8 @@ func LiveStatus(ctx context.Context, path string) (LiveView, error) {
 	if err != nil {
 		return LiveView{}, err
 	}
-	raw, problem := managed.NewClient(credential).Call(ctx, managed.Request{Operation: "research.status", Args: json.RawMessage(`{}`)})
+	client := managed.NewClient(credential)
+	raw, problem := client.Call(ctx, managed.Request{Operation: "research.status", Args: json.RawMessage(`{}`)})
 	if problem == nil {
 		var view LiveView
 		if err := json.Unmarshal(raw, &view); err != nil {
@@ -198,16 +199,13 @@ func LiveStatus(ctx context.Context, path string) (LiveView, error) {
 		view.Live = true
 		return view, nil
 	}
-	abs, _ := filepath.Abs(path)
-	if abs == state {
+	// STATE and OUTPUT must reopen the same authenticated checkpoint. The
+	// pointer selects an attempt; its cached metadata is not authoritative.
+	status, problem := client.LocalResearchStatus(ctx, state)
+	if problem != nil {
 		return LiveView{}, problem
 	}
-	var view LiveView
-	if err := privateJSON(filepath.Join(abs, "live.json"), &view); err != nil {
-		return view, err
-	}
-	view.Live = false
-	return view, nil
+	return LiveView{Live: false, Research: status}, nil
 }
 
 func ControlLive(ctx context.Context, path, action, reason string, version int) (LiveView, error) {

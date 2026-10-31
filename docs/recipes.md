@@ -2,7 +2,12 @@
 
 This guide shows concrete starting points for common Agentmux workflows.
 
-Use it when you know roughly what you want to do, but do not want to assemble the config from the full reference docs.
+These recipes use the original YAML layout mode (`init` / `load`) and raw pane
+controls. For everyday Claude/Codex conversations, begin with `agentmux start`
+and the [work-session guide](work-sessions.md). That workflow provides the
+authenticated coordination broker, collaboration groups and live permissions.
+
+Use the recipes below when you want custom tmux pane layouts and commands.
 
 If you want the fastest copy-and-tweak path, start from one of these files:
 

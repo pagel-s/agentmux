@@ -131,6 +131,18 @@ func TestLivePauseHonorsExistingDeadline(t *testing.T) {
 	}
 }
 
+func TestLiveStatusReopensExplicitStateWithoutBroker(t *testing.T) {
+	l, _, _ := liveFixture(t)
+	l.progress.State = "completed"
+	if _, err := l.publish(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	view, err := LiveStatus(context.Background(), l.progress.StateDir)
+	if err != nil || view.Live || view.Research == nil || view.Research.Progress.State != "completed" || view.Research.RunnerHeartbeatAt != "" {
+		t.Fatalf("explicit STATE could not reopen final saved metadata: %+v %v", view, err)
+	}
+}
+
 // Successful responses advance only runner metadata; injection points below
 // deterministically place context cancellation on either side of each RPC.
 func liveRPCFixture(t *testing.T, mode string) *liveRunner {

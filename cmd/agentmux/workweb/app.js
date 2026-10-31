@@ -22,7 +22,9 @@ let snapshot = null,
   taskSignature = "",
   boardFilter = "all",
   observedSignature = "",
-  teamsSignature = "";
+  teamsSignature = "",
+  feedSignature = "",
+  lifecycleSignature = "";
 let teamReview = null;
 let researchReview = null;
 let researchSavedOffline = false;
@@ -36,13 +38,56 @@ let sessionQuery = "",
 let pendingDraftKind = "";
 let memoryEditorNamespace = "",
   memoryEditorEpoch = 0,
-  memoryRequest = 0;
+  memoryRequest = 0,
+  memoryBaseline = { namespace: "", key: "", value: "" },
+  memoryReview = null,
+  memoryReviewRequest = 0;
+const memoryDrafts = new Map(),
+  memoryLastDrafts = new Map(),
+  memoryEntries = new Map();
 const el = (tag, className, text) => {
   const node = document.createElement(tag);
   if (className) node.className = className;
   if (text !== undefined) node.textContent = text;
   return node;
 };
+function captureViewState(root) {
+  const active = document.activeElement,
+    inside = !!active && root.contains(active),
+    item = inside ? active.closest("[data-item-key]") : null;
+  return {
+    focusKey: inside ? active.dataset?.focusKey || "" : "",
+    itemKey: item?.dataset.itemKey || "",
+    inside,
+    open: new Set(
+      [...root.querySelectorAll("[data-disclosure-key]")]
+        .filter((node) => node.open)
+        .map((node) => node.dataset.disclosureKey),
+    ),
+    scroller: root.closest(".graph-canvas,.inspector,.view"),
+    scrollTop: root.closest(".graph-canvas,.inspector,.view")?.scrollTop || 0,
+    scrollLeft: root.closest(".graph-canvas,.inspector,.view")?.scrollLeft || 0,
+  };
+}
+function restoreViewState(root, state) {
+  for (const node of root.querySelectorAll("[data-disclosure-key]"))
+    node.open = state.open.has(node.dataset.disclosureKey);
+  if (state.inside) {
+    const control = [...root.querySelectorAll("[data-focus-key]")].find(
+        (node) => node.dataset.focusKey === state.focusKey && !node.disabled,
+      ),
+      item = [...root.querySelectorAll("[data-item-key]")].find(
+        (node) => node.dataset.itemKey === state.itemKey,
+      ),
+      target = control || item || root;
+    if (!control) target.setAttribute("tabindex", "-1");
+    target.focus({ preventScroll: true });
+  }
+  if (state.scroller) {
+    state.scroller.scrollTop = state.scrollTop;
+    state.scroller.scrollLeft = state.scrollLeft;
+  }
+}
 const notice = (text, error = false) => {
   $("notice").textContent = text;
   $("notice").classList.toggle("action-error", error);
@@ -100,6 +145,27 @@ function sessionLineage(agent) {
     " · depth " +
     agent.depth
   );
+}
+function activeDescendants(agents, id) {
+  const descendants = new Set(),
+    parents = new Set([id]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const agent of agents) {
+      if (
+        agent.id !== id &&
+        agent.state === "active" &&
+        parents.has(agent.parent) &&
+        !descendants.has(agent.id)
+      ) {
+        descendants.add(agent.id);
+        parents.add(agent.id);
+        changed = true;
+      }
+    }
+  }
+  return [...descendants];
 }
 function nativeHeadless(agent) {
   if (typeof snapshot?.headless === "boolean")
@@ -256,11 +322,15 @@ function renderSessionLists() {
   ]);
   if (signature === agentSignature) return;
   agentSignature = signature;
+  const rosterState = captureViewState(list),
+    registeredState = captureViewState($("registered-sessions"));
   list.replaceChildren();
   $("registered-sessions").replaceChildren();
   if (!agents.length) {
     emptySearch(list, "sessions");
     emptySearch($("registered-sessions"), "workspace sessions");
+    restoreViewState(list, rosterState);
+    restoreViewState($("registered-sessions"), registeredState);
     return;
   }
   for (const item of agents) {
@@ -272,6 +342,7 @@ function renderSessionLists() {
       );
     row.type = "button";
     row.dataset.agent = item.id;
+    row.dataset.focusKey = item.id;
     row.setAttribute("aria-pressed", String(item.id === selected));
     row.setAttribute(
       "aria-label",
@@ -338,23 +409,29 @@ function renderSessionLists() {
       .join(" · ");
     if (metadata) details.append(el("small", "", metadata));
     open.setAttribute("aria-label", "Select " + title + " (" + item.id + ")");
+    open.dataset.focusKey = item.id;
     open.onclick = () => selectAgent(item.id);
     entry.append(details, open);
     $("registered-sessions").append(entry);
   }
+  restoreViewState(list, rosterState);
+  restoreViewState($("registered-sessions"), registeredState);
 }
 function closeTitleEditor(preserve = false) {
+  const restoreFocus = $("title-editor").contains(document.activeElement);
   if (titleEditor) {
     if (preserve)
       titleDrafts.set(titleEditor.id, {
         title: $("task-title").value,
         version: titleEditor.version,
+        baseline: titleEditor.baseline,
       });
     else titleDrafts.delete(titleEditor.id);
   }
   titleEditor = null;
   titleEditorEpoch++;
   $("title-editor").hidden = true;
+  if (restoreFocus && !$("edit-title").disabled) $("edit-title").focus();
 }
 function openTitleEditor() {
   if (!selectionReady()) return;
@@ -364,6 +441,7 @@ function openTitleEditor() {
   titleEditor = {
     id: agent.id,
     version: draft?.version ?? agent.title_version ?? 0,
+    baseline: draft?.baseline ?? agent.title ?? "",
   };
   titleEditorEpoch++;
   $("title-editor-target").textContent = "Task title for " + agent.id;
@@ -529,7 +607,10 @@ const selectionReady = () =>
   snapshot.agents.some((agent) => agent.id === selected);
 function selectionControls() {
   const ready = selectionReady(),
-    agent = snapshot?.agents?.find((a) => a.id === selected);
+    agent = snapshot?.agents?.find((a) => a.id === selected),
+    recipient = snapshot?.agents?.find((a) => a.id === peer),
+    editable = (item) =>
+      !!item && item.state === "active" && (!item.parent || item.owner_managed);
   for (const id of [
     "send-message",
     "message-kind",
@@ -562,8 +643,25 @@ function selectionControls() {
       (id === "focus-terminal" &&
         (!!agent?.external || nativeHeadless(agent))) ||
       (id === "copy-attach" && nativeHeadless(agent)) ||
-      (id === "close-agent" && agent?.state !== "active");
+      (id === "connect-pair" &&
+        (!editable(agent) || !editable(recipient) || peer === selected)) ||
+      (id === "isolate-agent" && !editable(agent)) ||
+      (id === "close-agent" && agent?.state !== "active") ||
+      (id === "send-message" &&
+        $("message-kind").value.startsWith("board:") &&
+        !(snapshot?.boundaries.boards || []).some(
+          (scope) =>
+            scope.name === $("message-kind").value.slice(6) && scope.write,
+        ));
   }
+  $("connect-pair").title = !ready
+    ? "Load current boundaries before editing."
+    : !editable(agent) || !editable(recipient) || peer === selected
+      ? "Choose two active owner-managed sessions. Delegated agents retain inherited limits."
+      : "";
+  $("isolate-agent").title = editable(agent)
+    ? ""
+    : "Delegated agents retain inherited limits; manage their parent or stop the agent.";
   $("memory-form")
     .querySelectorAll("button")
     .forEach((node) => {
@@ -587,6 +685,7 @@ function selectionControls() {
     document.querySelectorAll(".toggle, [data-owner-write]").forEach((node) => {
       node.disabled = true;
     });
+  renderMemoryReview();
   $("review-research").disabled =
     !ready ||
     !!snapshot?.research_error ||
@@ -608,7 +707,7 @@ function selectAgent(id) {
   if (selected)
     messageDrafts.set(selected, {
       text: $("message").value,
-      kind: $("message-kind").value,
+      kind: pendingDraftKind || $("message-kind").value,
       reply: replyTo,
     });
   closeTitleEditor(true);
@@ -843,7 +942,14 @@ function render() {
   $("close-agent").disabled = a.state !== "active";
   $("close-agent").textContent = a.external
     ? "Disconnect bridge"
-    : "Close session";
+    : activeDescendants(agents, a.id).length
+      ? "Close " + (activeDescendants(agents, a.id).length + 1) + " sessions"
+      : "Close session";
+  $("close-agent").title = a.external
+    ? "Disconnect this bridge; its original native terminal remains."
+    : "Revoke " +
+      [a.id, ...activeDescendants(agents, a.id)].join(", ") +
+      ". Process termination is observed separately.";
   if (!$("new-project").value) $("new-project").value = a.config.workdir || "";
   $("bridge-panel").classList.toggle("hidden", !snapshot.bridge_setup);
   $("bridge-setup").textContent = snapshot.bridge_setup || "";
@@ -958,6 +1064,17 @@ function renderFeed() {
           ? !m.board && (m.from === selected || (m.to || []).includes(selected))
           : true,
     );
+  const signature = JSON.stringify([
+    boardFilter,
+    selected,
+    messages,
+    (snapshot.agents || []).map((a) => [a.id, a.title]),
+    snapshot.groups,
+    snapshot.teams,
+  ]);
+  if (signature === feedSignature) return;
+  feedSignature = signature;
+  const state = captureViewState(feed);
   feed.replaceChildren();
   $("feed-count").textContent = messages.length + " RECENT";
   if (!messages.length) {
@@ -968,11 +1085,13 @@ function renderFeed() {
         "No coordination yet. Post a team note or ask an agent to read its inbox.",
       ),
     );
+    restoreViewState(feed, state);
     return;
   }
   for (const m of messages) {
     const item = el("article", "feed-item"),
       content = el("div");
+    item.dataset.itemKey = m.id;
     item.append(el("span", "feed-icon", m.board ? "#" : "↗"));
     const heading = el("div", "feed-title");
     heading.append(
@@ -991,12 +1110,14 @@ function renderFeed() {
     if (!m.board && (m.from !== "$owner" || m.to?.length === 1)) {
       const reply = el("button", "quiet reply-button", "Reply");
       reply.type = "button";
+      reply.dataset.focusKey = "reply:" + m.id;
       reply.onclick = () => setReply(m.id);
       content.append(reply);
     }
     item.append(content);
     feed.append(item);
   }
+  restoreViewState(feed, state);
 }
 function renderTasks() {
   const tasks = snapshot.activity.tasks || [],
@@ -1008,6 +1129,7 @@ function renderTasks() {
   ]);
   if (nextTasks === taskSignature) return;
   taskSignature = nextTasks;
+  const state = captureViewState(list);
   list.replaceChildren();
   if (!tasks.length) {
     list.append(
@@ -1017,11 +1139,13 @@ function renderTasks() {
         "No managed tasks. Human input in native sessions is handled by the CLI itself.",
       ),
     );
+    restoreViewState(list, state);
     return;
   }
   for (const t of tasks) {
     const item = el("article", "task-item"),
       title = el("div", "task-title");
+    item.dataset.itemKey = t.id;
     title.append(
       el(
         "strong",
@@ -1036,6 +1160,8 @@ function renderTasks() {
     if (t.usage) {
       const details = el("details", "reported-usage"),
         summary = el("summary", "", "Provider-reported usage");
+      details.dataset.disclosureKey = "usage:" + t.id;
+      summary.dataset.focusKey = "usage:" + t.id;
       details.append(
         summary,
         el("pre", "", JSON.stringify(t.usage, null, 2).slice(0, 2000)),
@@ -1045,6 +1171,8 @@ function renderTasks() {
     if (t.origin || t.trace) {
       const details = el("details", "reported-usage"),
         summary = el("summary", "", "Origin & adapter trace");
+      details.dataset.disclosureKey = "origin:" + t.id;
+      summary.dataset.focusKey = "origin:" + t.id;
       details.append(summary);
       if (t.origin)
         details.append(
@@ -1070,11 +1198,13 @@ function renderTasks() {
     }
     const buttons = el("div", "task-buttons"),
       reply = el("button", "quiet", "Reply");
+    reply.dataset.focusKey = "reply:" + t.id;
     reply.onclick = () => setReply(t.id);
     buttons.append(reply);
     if (["proposed", "running"].includes(t.state)) {
       const cancel = el("button", "quiet", "Cancel task");
       cancel.dataset.ownerWrite = "true";
+      cancel.dataset.focusKey = "cancel:" + t.id;
       cancel.disabled = !selectionReady();
       cancel.onclick = () =>
         action(
@@ -1086,6 +1216,7 @@ function renderTasks() {
     item.append(buttons);
     list.append(item);
   }
+  restoreViewState(list, state);
 }
 function toggle(value, label, onchange) {
   const button = el("button", "toggle");
@@ -1101,10 +1232,7 @@ function renderBoundaries() {
     b = snapshot.boundaries,
     select = $("target-agent");
   if (b.agent !== selected) return;
-  if (
-    !agents.some((a) => a.id === peer && a.state === "active") ||
-    peer === selected
-  )
+  if (!peer || peer === selected)
     peer =
       agents.find((a) => a.id !== selected && a.state === "active")?.id ||
       selected;
@@ -1112,11 +1240,14 @@ function renderBoundaries() {
     selected,
     peer,
     b,
-    agents.map((a) => [a.id, a.title]),
+    agents.map((a) => [a.id, a.title, a.state]),
   ]);
   if (next === boundarySignature) return;
   boundarySignature = next;
-  const options = agents.map((a) => [a.id, sessionReference(a.id)]);
+  const options = agents.map((a) => [
+    a.id,
+    sessionReference(a.id) + (a.state === "active" ? "" : " · " + a.state),
+  ]);
   if (
     JSON.stringify([...select.options].map((o) => [o.value, o.textContent])) !==
     JSON.stringify(options)
@@ -1130,6 +1261,8 @@ function renderBoundaries() {
     );
   select.value = peer;
   const controls = $("edge-controls");
+  const controlsState = captureViewState(controls),
+    scopesState = captureViewState($("scope-controls"));
   controls.replaceChildren();
   const actions = b.targets?.find((t) => t.to === peer)?.actions || [];
   const source = selected,
@@ -1166,6 +1299,8 @@ function renderBoundaries() {
             ". Broker enforcement is immediate.",
         ),
     );
+    control.dataset.focusKey = JSON.stringify([source, recipient, key]);
+    row.dataset.itemKey = control.dataset.focusKey;
     control.disabled =
       (!!agents.find((a) => a.id === source)?.parent &&
         !agents.find((a) => a.id === source)?.owner_managed) ||
@@ -1215,6 +1350,13 @@ function renderBoundaries() {
                 ". Previously read data remains known.",
             ),
         );
+        control.dataset.focusKey = JSON.stringify([
+          source,
+          kind,
+          scope.name,
+          field,
+        ]);
+        row.dataset.itemKey = JSON.stringify([source, kind, scope.name]);
         control.disabled =
           scope.source === "team" ||
           (!!agents.find((a) => a.id === source)?.parent &&
@@ -1231,6 +1373,8 @@ function renderBoundaries() {
     }
   if (!scopes.childElementCount)
     scopes.append(el("p", "empty", "No shared namespaces configured."));
+  restoreViewState(controls, controlsState);
+  restoreViewState(scopes, scopesState);
 }
 function replyRecipient(id) {
   const task = (snapshot?.activity.tasks || []).find((item) => item.id === id),
@@ -1274,62 +1418,203 @@ function clearReply() {
   $("reply-context").textContent = "";
   $("clear-reply").classList.add("hidden");
 }
+function memoryDraftKey(namespace, key) {
+  return JSON.stringify([namespace, key]);
+}
+function memoryDirty() {
+  return (
+    !!memoryEditorNamespace &&
+    (memoryBaseline.namespace !== memoryEditorNamespace ||
+      $("memory-key").value !== memoryBaseline.key ||
+      $("memory-value").value !== memoryBaseline.value)
+  );
+}
+function stashMemoryDraft() {
+  if (!memoryEditorNamespace) return;
+  const key = $("memory-key").value,
+    identity = memoryDraftKey(memoryEditorNamespace, key);
+  if (memoryDirty()) {
+    memoryDrafts.set(identity, {
+      namespace: memoryEditorNamespace,
+      key,
+      value: $("memory-value").value,
+      version: memoryVersion,
+      baseline: { ...memoryBaseline },
+    });
+    memoryLastDrafts.set(memoryEditorNamespace, identity);
+  } else memoryDrafts.delete(identity);
+}
+function renderMemoryReview() {
+  const review = memoryReview;
+  $("memory-review").hidden = !review;
+  if (!review) return;
+  $("memory-review-target").textContent =
+    review.namespace +
+    " / " +
+    review.key +
+    " · " +
+    review.state +
+    " · version " +
+    review.version;
+  $("memory-review-draft").textContent = $("memory-value").value;
+  $("memory-review-latest").textContent =
+    review.state === "live"
+      ? review.value
+      : "No live value (" + review.state + ").";
+  $("adopt-memory-version").textContent =
+    "Use version " + review.version + " for my draft";
+  $("adopt-memory-version").disabled =
+    !selectionReady() ||
+    mutating ||
+    review.epoch !== memoryEditorEpoch ||
+    review.namespace !== memoryEditorNamespace ||
+    review.key !== $("memory-key").value;
+}
+function memoryEdit(entry, namespace) {
+  memoryEditorEpoch++;
+  memoryReviewRequest++;
+  memoryReview = null;
+  const draft = memoryDrafts.get(memoryDraftKey(namespace, entry.key));
+  $("memory-key").value = entry.key;
+  $("memory-value").value = draft ? draft.value : entry.value;
+  memoryVersion = draft ? draft.version : entry.version;
+  memoryBaseline = draft
+    ? { ...draft.baseline }
+    : { namespace, key: entry.key, value: entry.value };
+  $("memory-version").textContent = draft
+    ? "Draft kept · based on version " +
+      memoryVersion +
+      ". Review latest before saving if changed elsewhere."
+    : "Editing version " + memoryVersion;
+  renderMemoryReview();
+}
+function renderMemoryEntries(namespace) {
+  if (namespace !== memoryEditorNamespace) return;
+  const list = $("memory-list"),
+    state = captureViewState(list),
+    entries = new Map(
+      (memoryEntries.get(namespace) || []).map((entry) => [entry.key, entry]),
+    );
+  for (const draft of memoryDrafts.values())
+    if (draft.namespace === namespace && !entries.has(draft.key))
+      entries.set(draft.key, { key: draft.key, value: "", version: 0 });
+  list.replaceChildren();
+  for (const entry of entries.values()) {
+    const button = el("button", "memory-entry"),
+      hasDraft = memoryDrafts.has(memoryDraftKey(namespace, entry.key));
+    button.dataset.focusKey = memoryDraftKey(namespace, entry.key);
+    button.append(
+      el("strong", "", entry.key || "Untitled draft"),
+      el("span", "", "v" + entry.version + (hasDraft ? " · draft" : "")),
+    );
+    button.disabled = !selectionReady();
+    button.onclick = () => {
+      if (
+        namespace !== memoryEditorNamespace ||
+        namespace !== $("memory-namespace").value ||
+        !selectionReady()
+      )
+        return;
+      stashMemoryDraft();
+      // Consult the current cache, not a possibly stale closure from before a save.
+      const latest =
+        (memoryEntries.get(namespace) || []).find(
+          (item) => item.key === entry.key,
+        ) || entry;
+      memoryEdit(latest, namespace);
+      $("memory-value").focus();
+    };
+    list.append(button);
+  }
+  if (!list.childElementCount)
+    list.append(el("p", "empty", "No entries in this shared namespace."));
+  restoreViewState(list, state);
+}
 async function loadMemory() {
   const namespace = $("memory-namespace").value;
   resetMemoryNamespace(namespace);
   if (!namespace || !selectionReady()) return;
-  const request = ++memoryRequest,
-    epoch = memoryEditorEpoch;
+  const request = ++memoryRequest;
   try {
     const result = await call("memory.list", { namespace, limit: 100 });
     if (
       request !== memoryRequest ||
-      epoch !== memoryEditorEpoch ||
       namespace !== $("memory-namespace").value ||
       !selectionReady()
     )
       return;
     memoryNamespace = namespace;
-    const list = $("memory-list");
-    list.replaceChildren();
-    for (const entry of result.entries || []) {
-      const button = el("button", "memory-entry");
-      button.append(
-        el("strong", "", entry.key),
-        el("span", "", "v" + entry.version),
-      );
-      button.onclick = () => {
-        if (
-          epoch !== memoryEditorEpoch ||
-          namespace !== $("memory-namespace").value ||
-          !selectionReady()
-        )
-          return;
-        $("memory-key").value = entry.key;
-        $("memory-value").value = entry.value;
-        memoryVersion = entry.version;
-        $("memory-version").textContent = "Editing version " + memoryVersion;
-      };
-      list.append(button);
-    }
-    if (!list.childElementCount)
-      list.append(el("p", "empty", "No entries in this shared namespace."));
+    memoryEntries.set(namespace, result.entries || []);
+    renderMemoryEntries(namespace);
   } catch (error) {
     notice(error.message, true);
   }
 }
 function resetMemoryNamespace(namespace) {
   if (memoryEditorNamespace === namespace) return;
+  stashMemoryDraft();
   memoryEditorNamespace = namespace;
-  memoryEditorEpoch++;
   memoryRequest++;
   memoryNamespace = "";
-  memoryVersion = 0;
-  $("memory-key").value = "";
-  $("memory-value").value = "";
-  $("memory-version").textContent = "New entry · version 0";
+  const draft = memoryDrafts.get(memoryLastDrafts.get(namespace));
+  memoryEdit(draft || { key: "", value: "", version: 0 }, namespace);
   $("memory-list").replaceChildren();
 }
+async function reviewMemoryLatest() {
+  if (!selectionReady() || mutating) return;
+  const namespace = memoryEditorNamespace,
+    key = $("memory-key").value,
+    epoch = memoryEditorEpoch,
+    request = ++memoryReviewRequest;
+  if (!namespace || !key) return;
+  stashMemoryDraft();
+  $("memory-version").textContent = "Reviewing latest · draft kept";
+  const current = () =>
+    request === memoryReviewRequest &&
+    epoch === memoryEditorEpoch &&
+    namespace === memoryEditorNamespace &&
+    key === $("memory-key").value &&
+    selectionReady();
+  try {
+    const head = await call("memory.head", { namespace, key });
+    if (!current()) return;
+    let value = "";
+    if (head.state === "live") {
+      const result = await call("memory.get", { namespace, key });
+      if (result.entry.version !== head.version)
+        throw new Error(
+          "Memory changed during review. Review latest again; your draft is kept.",
+        );
+      value = result.entry.value;
+    }
+    if (!current()) return;
+    const cached = (memoryEntries.get(namespace) || []).filter(
+      (entry) => entry.key !== key,
+    );
+    if (head.state === "live")
+      cached.push({ key, value, version: head.version });
+    memoryEntries.set(namespace, cached);
+    renderMemoryEntries(namespace);
+    memoryReview = {
+      namespace,
+      key,
+      version: head.version,
+      state: head.state,
+      value,
+      epoch,
+    };
+    renderMemoryReview();
+    $("memory-review").focus();
+  } catch (error) {
+    if (current()) notice(error.message + " Draft kept.", true);
+  }
+}
+$("skip-workspace").onclick = (event) => {
+  event.preventDefault();
+  // The URL fragment carries the initial owner capability. A skip action must
+  // move focus without replacing that fragment with a navigation anchor.
+  $("workspace").focus({ preventScroll: true });
+};
 $("refresh").onclick = refresh;
 $("retry").onclick = refresh;
 $("clear-reply").onclick = clearReply;
@@ -1423,6 +1708,20 @@ $("composer").onsubmit = (event) => {
     reference = replyTo,
     destination = $("message-kind").value,
     board = destination.startsWith("board:") ? destination.slice(6) : "";
+  if (
+    pendingDraftKind ||
+    (destination !== "direct" &&
+      (!board ||
+        !(snapshot.boundaries.boards || []).some(
+          (scope) => scope.name === board && scope.write,
+        )))
+  ) {
+    notice(
+      "Original destination unavailable for writing. Draft kept; explicitly choose another destination before sending.",
+      true,
+    );
+    return;
+  }
   if (!board && reference && replyRecipient(reference) !== recipient) {
     notice(
       "The original reply recipient is unavailable or changed. Refresh and review the reply before sending.",
@@ -1491,12 +1790,61 @@ $("memory-namespace").onchange = () => {
 };
 $("memory-key").oninput = () => {
   memoryVersion = 0;
+  memoryEditorEpoch++;
+  memoryReviewRequest++;
+  memoryReview = null;
+  renderMemoryReview();
   $("memory-version").textContent =
-    "New key · version 0. Select an existing entry before updating it.";
+    "New key · version 0. Review latest to check an existing key.";
 };
 $("memory-value").oninput = () => {
+  stashMemoryDraft();
   $("memory-version").textContent =
     "Unsaved changes · based on version " + memoryVersion;
+  renderMemoryReview();
+};
+$("review-memory").onclick = reviewMemoryLatest;
+$("close-memory-review").onclick = () => {
+  memoryReview = null;
+  renderMemoryReview();
+  $("review-memory").focus({ preventScroll: true });
+};
+$("adopt-memory-version").onclick = () => {
+  const review = memoryReview;
+  if (
+    !review ||
+    !selectionReady() ||
+    mutating ||
+    review.epoch !== memoryEditorEpoch ||
+    review.namespace !== memoryEditorNamespace ||
+    review.key !== $("memory-key").value
+  )
+    return;
+  memoryVersion = review.version;
+  memoryBaseline = {
+    namespace: review.namespace,
+    key: review.key,
+    value: review.value,
+  };
+  memoryReview = null;
+  stashMemoryDraft();
+  renderMemoryReview();
+  $("memory-version").textContent =
+    "Reviewed version " +
+    memoryVersion +
+    " · draft kept, not saved. Save entry to submit.";
+  $("memory-value").focus({ preventScroll: true });
+};
+$("discard-memory-draft").onclick = () => {
+  const namespace = memoryEditorNamespace,
+    key = $("memory-key").value;
+  memoryDrafts.delete(memoryDraftKey(namespace, key));
+  memoryLastDrafts.delete(namespace);
+  const entry = (memoryEntries.get(namespace) || []).find(
+    (item) => item.key === key,
+  );
+  memoryEdit(entry || { key: "", value: "", version: 0 }, namespace);
+  renderMemoryEntries(namespace);
 };
 $("memory-form").onsubmit = (event) => {
   event.preventDefault();
@@ -1505,22 +1853,57 @@ $("memory-form").onsubmit = (event) => {
     key = $("memory-key").value,
     value = $("memory-value").value,
     version = memoryVersion,
-    epoch = memoryEditorEpoch;
+    epoch = memoryEditorEpoch,
+    identity = memoryDraftKey(namespace, key);
+  stashMemoryDraft();
   action(async () => {
-    const result = await call("memory.put", { namespace, key, value, version });
+    let result;
+    try {
+      result = await call("memory.put", { namespace, key, value, version });
+    } catch (error) {
+      if (namespace === memoryEditorNamespace && key === $("memory-key").value)
+        $("memory-version").textContent =
+          "Save failed · draft kept. Review latest for " +
+          namespace +
+          " / " +
+          key +
+          " before retrying.";
+      throw error;
+    }
+    memoryRequest++;
+    const saved = { key, value, version: result.entry.version },
+      entries = (memoryEntries.get(namespace) || []).filter(
+        (entry) => entry.key !== key,
+      );
+    entries.push(saved);
+    memoryEntries.set(namespace, entries);
+    const draft = memoryDrafts.get(identity);
+    if (draft && draft.version === version) {
+      if (draft.value === value) memoryDrafts.delete(identity);
+      else
+        memoryDrafts.set(identity, {
+          ...draft,
+          version: saved.version,
+          baseline: { namespace, key, value },
+        });
+    }
     if (
       epoch === memoryEditorEpoch &&
-      namespace === $("memory-namespace").value &&
+      namespace === memoryEditorNamespace &&
       key === $("memory-key").value &&
       version === memoryVersion
     ) {
-      memoryVersion = result.entry.version;
+      memoryVersion = saved.version;
+      memoryBaseline = { namespace, key, value };
+      memoryReview = null;
+      stashMemoryDraft();
       $("memory-version").textContent =
         $("memory-value").value === value
           ? "Saved version " + memoryVersion
           : "Unsaved changes · based on version " + memoryVersion;
+      renderMemoryReview();
     }
-    if (epoch === memoryEditorEpoch) await loadMemory();
+    if (namespace === memoryEditorNamespace) renderMemoryEntries(namespace);
   }, "Shared memory saved with version checking.");
 };
 refresh();
@@ -1529,6 +1912,11 @@ setInterval(() => {
 }, 1500);
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) refresh();
+});
+window.addEventListener("beforeunload", (event) => {
+  if (!hasUnsavedWork()) return;
+  event.preventDefault();
+  event.returnValue = "";
 });
 
 function renderComposer() {
@@ -1542,35 +1930,44 @@ function renderComposer() {
     prior = select.value;
   const research = researchHeadless(a),
     headless = nativeHeadless(a);
-  const boards = (snapshot.boundaries.boards || [])
-    .filter((s) => s.read || s.write)
-    .map((s) => s.name);
-  const values = ["direct", ...boards.map((b) => "board:" + b)];
+  const scopes = snapshot.boundaries.boards || [],
+    boards = scopes
+      .filter((scope) => scope.read || scope.write)
+      .map((scope) => scope.name),
+    desired = pendingDraftKind || prior || "direct",
+    values = ["direct", ...boards.map((board) => "board:" + board)];
+  // A retained draft must retain its destination even after its board access
+  // disappears. The owner can explicitly choose a new destination instead.
+  if (!values.includes(desired)) values.push(desired);
   if (
-    [...select.options].map((o) => o.value).join("\n") !== values.join("\n")
+    [...select.options].map((option) => option.value).join("\n") !==
+    values.join("\n")
   ) {
     select.replaceChildren(
       ...values.map((value) => {
-        const option = el(
-          "option",
-          "",
-          value === "direct"
-            ? a?.config.interaction === "interactive"
-              ? "Direct inbox"
-              : research
-                ? "Extra instruction · interrupts run"
-                : "Instruction task"
-            : "#" + scopeLabel(value.slice(6)),
-        );
+        const option = el("option", "", "");
         option.value = value;
         return option;
       }),
     );
-    if (values.includes(prior)) select.value = prior;
   }
-  if (pendingDraftKind) {
-    if (values.includes(pendingDraftKind)) select.value = pendingDraftKind;
-    pendingDraftKind = "";
+  select.value = desired;
+  pendingDraftKind = "";
+  for (const option of select.options) {
+    if (option.value === "direct") continue;
+    const name = option.value.startsWith("board:") ? option.value.slice(6) : "",
+      scope = scopes.find(
+        (scope) => scope.name === name && (scope.read || scope.write),
+      );
+    option.disabled = !scope?.write;
+    option.textContent =
+      "#" +
+      scopeLabel(name || option.value) +
+      (!scope
+        ? " · unavailable — choose another destination"
+        : !scope.write
+          ? " · read only"
+          : "");
   }
   select.options[0].textContent =
     a?.config.interaction === "interactive"
@@ -1582,17 +1979,23 @@ function renderComposer() {
   $("send-target").textContent = board
     ? "#" + scopeLabel(board)
     : sessionReference(selected);
-  $("delivery-hint").textContent = board
-    ? research
-      ? "Research steering note. Agents see permitted board context at their next read; this does not add an extra instruction task."
-      : "Shared board. Only sessions allowed to read this namespace receive its context."
-    : a?.config.interaction === "interactive"
-      ? "Inbox message. Direct conversation and native approvals remain in the agent terminal."
-      : research
-        ? "Extra owner instructions interrupt this research attempt's phase protocol. Use a shared board or memory for steering, or review phase controls in Research."
-        : headless
-          ? "Queues an instruction; this one-shot runner may not dispatch additional tasks. Inspect Tasks and lifecycle events for delivery."
-          : "Instruction task for this managed worker. The worker runs it when ready.";
+  const available =
+    select.value === "direct" ||
+    (board && scopes.some((scope) => scope.name === board && scope.write));
+  $("send-message").disabled = !available || a?.state !== "active";
+  $("delivery-hint").textContent = !available
+    ? "Original destination unavailable for writing. Draft kept; explicitly choose another destination before sending."
+    : board
+      ? research
+        ? "Research steering note. Agents see permitted board context at their next read; this does not add an extra instruction task."
+        : "Shared board. Only sessions allowed to read this namespace receive its context."
+      : a?.config.interaction === "interactive"
+        ? "Inbox message. Direct conversation and native approvals remain in the agent terminal."
+        : research
+          ? "Extra owner instructions interrupt this research attempt's phase protocol. Use a shared board or memory for steering, or review phase controls in Research."
+          : headless
+            ? "Queues an instruction; this one-shot runner may not dispatch additional tasks. Inspect Tasks and lifecycle events for delivery."
+            : "Instruction task for this managed worker. The worker runs it when ready.";
 }
 function renderObserved() {
   const connected = new Set(
@@ -1718,11 +2121,19 @@ $("copy-bridge").onclick = async () => {
 };
 $("close-agent").onclick = () => {
   const id = selected;
+  let confirmation = "";
   action(
-    () => call("agent.stop", { id }),
-    "Closed Agentmux session " +
-      id +
-      ". External terminals, if any, remain in their original window.",
+    async () => {
+      const result = await call("agent.stop", { id });
+      confirmation =
+        "Revocation requested for " +
+        id +
+        (result.revoked_agents > 1
+          ? " and " + (result.revoked_agents - 1) + " descendants"
+          : "") +
+        ". Process termination is not yet acknowledged; external terminals remain in their original window.";
+    },
+    () => confirmation,
   );
 };
 $("connect-pair").onclick = () => {
@@ -1783,6 +2194,7 @@ $("rebase-title").onclick = () => {
   const current = snapshot.agents.find((agent) => agent.id === titleEditor.id);
   if (!current) return;
   titleEditor.version = current.title_version;
+  titleEditor.baseline = current.title || "";
   updateTitleConflict();
 };
 $("task-title").onkeydown = (event) => {
@@ -1804,11 +2216,19 @@ $("title-editor").onsubmit = (event) => {
       const draft = titleDrafts.get(id);
       if (draft?.version === version) {
         if (draft.title === title) titleDrafts.delete(id);
-        else titleDrafts.set(id, { ...draft, version: nextVersion });
+        else
+          titleDrafts.set(id, {
+            ...draft,
+            version: nextVersion,
+            baseline: title,
+          });
       }
       if (titleEditorEpoch === epoch && titleEditor?.id === id) {
         if ($("task-title").value === title) closeTitleEditor(false);
-        else titleEditor.version = nextVersion;
+        else {
+          titleEditor.version = nextVersion;
+          titleEditor.baseline = title;
+        }
       }
     },
     title
@@ -1896,11 +2316,14 @@ function renderTeams() {
     teams.filter((t) => t.state === "active").length + " ACTIVE";
   const teamList = $("consented-teams"),
     groupList = $("owner-groups");
+  const teamState = captureViewState(teamList),
+    groupState = captureViewState(groupList);
   teamList.replaceChildren();
   groupList.replaceChildren();
-  const reference = (id) => {
+  const reference = (id, key) => {
     const button = el("button", "quiet team-agent", sessionReference(id));
     button.type = "button";
+    button.dataset.focusKey = key;
     button.onclick = () => selectAgent(id);
     if (id === "$owner") {
       button.textContent = "Owner ($owner)";
@@ -1925,13 +2348,17 @@ function renderTeams() {
   for (const team of teams) {
     const card = el("article", "team-card"),
       heading = el("div", "team-heading");
+    card.dataset.itemKey = team.id;
     heading.append(
       el("h3", "", team.name),
       el("span", "", team.state + " · v" + team.version),
     );
     card.append(heading, el("code", "team-id", team.id));
     const owner = el("div", "team-participants");
-    owner.append(el("span", "", "Created by"), reference(team.owner));
+    owner.append(
+      el("span", "", "Created by"),
+      reference(team.owner, "owner:" + team.id),
+    );
     card.append(owner);
     for (const [label, ids, pending] of [
       ["Members", team.members || [], false],
@@ -1942,7 +2369,7 @@ function renderTeams() {
       if (!ids.length) row.append(el("small", "", "None"));
       for (const id of ids) {
         const participant = el("span", "team-participant");
-        participant.append(reference(id));
+        participant.append(reference(id, JSON.stringify([team.id, label, id])));
         const joining = teamJoiningHint(
           snapshot.agents.find((agent) => agent.id === id),
         );
@@ -1955,6 +2382,7 @@ function renderTeams() {
           );
           remove.type = "button";
           remove.dataset.ownerWrite = "true";
+          remove.dataset.focusKey = JSON.stringify([team.id, "remove", id]);
           remove.disabled = !ready;
           remove.onclick = () => reviewTeamChange("team.remove", team, id);
           participant.append(remove);
@@ -1972,6 +2400,8 @@ function renderTeams() {
         "aria-label",
         "Invite an agent to " + team.name + " (" + team.id + ")",
       );
+      invite.dataset.focusKey = "invite:" + team.id;
+      submit.dataset.focusKey = "invite-review:" + team.id;
       const candidates = snapshot.agents.filter(
         (agent) =>
           agent.state === "active" &&
@@ -2011,6 +2441,7 @@ function renderTeams() {
       const dissolve = el("button", "quiet", "Dissolve…");
       dissolve.type = "button";
       dissolve.dataset.ownerWrite = "true";
+      dissolve.dataset.focusKey = "dissolve:" + team.id;
       dissolve.disabled = !ready;
       dissolve.onclick = () => reviewTeamChange("team.dissolve", team);
       form.append(invite, submit, dissolve);
@@ -2046,6 +2477,8 @@ function renderTeams() {
         cancel = el("button", "quiet", "Cancel");
       confirm.type = cancel.type = "button";
       confirm.dataset.ownerWrite = "true";
+      confirm.dataset.focusKey = "confirm:" + team.id;
+      cancel.dataset.focusKey = "cancel:" + team.id;
       confirm.disabled = !valid;
       confirm.onclick = applyTeamReview;
       cancel.onclick = () => {
@@ -2069,6 +2502,7 @@ function renderTeams() {
   for (const group of groups) {
     const card = el("article", "team-card"),
       heading = el("div", "team-heading");
+    card.dataset.itemKey = group.id;
     heading.append(
       el("h3", "", "Owner collaboration"),
       el("span", "", group.state + " · v" + group.version),
@@ -2076,7 +2510,8 @@ function renderTeams() {
     card.append(heading, el("code", "team-id", group.id));
     const members = el("div", "team-participants");
     members.append(el("span", "", "Current members"));
-    for (const id of group.members || []) members.append(reference(id));
+    for (const id of group.members || [])
+      members.append(reference(id, JSON.stringify([group.id, id])));
     if (!group.members?.length) members.append(el("small", "", "None"));
     card.append(members, scopes(group));
     groupList.append(card);
@@ -2089,6 +2524,8 @@ function renderTeams() {
         "No owner collaboration groups. Select agents in Graph to allow collaboration.",
       ),
     );
+  restoreViewState(teamList, teamState);
+  restoreViewState(groupList, groupState);
 }
 
 function renderWorkerRuntime(agent) {
@@ -2188,10 +2625,18 @@ function renderWorkerRuntime(agent) {
 }
 function renderLifecycle() {
   const list = $("lifecycle-events");
+  const signature = JSON.stringify([
+    snapshot.activity.events || [],
+    (snapshot.agents || []).map((agent) => [agent.id, agent.title]),
+  ]);
+  if (signature === lifecycleSignature) return;
+  lifecycleSignature = signature;
+  const state = captureViewState(list);
   list.replaceChildren();
   for (const event of snapshot.activity.events || []) {
     const row = el("article", "lifecycle-row"),
       heading = el("div", "lifecycle-heading");
+    row.dataset.itemKey = event.id;
     heading.append(
       el("time", "", stamp(event.at)),
       el("strong", "", event.type),
@@ -2207,8 +2652,11 @@ function renderLifecycle() {
     );
     if (event.details && Object.keys(event.details).length) {
       const detail = el("details");
+      detail.dataset.disclosureKey = event.id;
+      const summary = el("summary", "", "Event details");
+      summary.dataset.focusKey = event.id;
       detail.append(
-        el("summary", "", "Event details"),
+        summary,
         el("pre", "", JSON.stringify(event.details, null, 2).slice(0, 4000)),
       );
       row.append(detail);
@@ -2223,6 +2671,7 @@ function renderLifecycle() {
         "No recent lifecycle events. This is the bounded broker event page, not a full research archive.",
       ),
     );
+  restoreViewState(list, state);
 }
 
 function runnerHeartbeat(at, now = Date.now()) {
@@ -2252,9 +2701,13 @@ function researchReviewReady(review) {
 }
 function renderResearchReview() {
   const panel = $("research-review");
+  const state = captureViewState(panel);
   panel.hidden = !researchReview;
   panel.replaceChildren();
-  if (!researchReview) return;
+  if (!researchReview) {
+    if (state.inside) $("review-research").focus();
+    return;
+  }
   const review = researchReview,
     valid = researchReviewReady(review);
   const heartbeat = runnerHeartbeat(snapshot?.research?.runner_heartbeat_at);
@@ -2296,6 +2749,8 @@ function renderResearchReview() {
   confirm.id = "confirm-research";
   confirm.type = cancel.type = "button";
   confirm.dataset.ownerWrite = "true";
+  confirm.dataset.focusKey = "confirm";
+  cancel.dataset.focusKey = "cancel";
   confirm.disabled = !valid;
   confirm.onclick = applyResearchReview;
   cancel.onclick = () => {
@@ -2303,6 +2758,7 @@ function renderResearchReview() {
     renderResearchReview();
   };
   panel.append(confirm, cancel);
+  restoreViewState(panel, state);
 }
 async function applyResearchReview() {
   const review = researchReview;
@@ -2336,6 +2792,7 @@ function renderResearch() {
   const status = $("research-status"),
     population = $("research-population"),
     history = $("research-interventions");
+  const populationState = captureViewState(population);
   status.replaceChildren();
   population.replaceChildren();
   history.replaceChildren();
@@ -2351,6 +2808,7 @@ function renderResearch() {
           : "No research runner is registered with this workspace.",
       ),
     );
+    restoreViewState(population, populationState);
     renderResearchReview();
     return;
   }
@@ -2426,6 +2884,8 @@ function renderResearch() {
     const row = el("div", "research-stat"),
       button = el("button", "quiet team-agent", sessionReference(id));
     button.type = "button";
+    button.dataset.focusKey = id;
+    row.dataset.itemKey = id;
     button.onclick = () => selectAgent(id);
     row.append(
       button,
@@ -2460,6 +2920,7 @@ function renderResearch() {
     history.append(
       el("p", "empty", "No research control interventions recorded."),
     );
+  restoreViewState(population, populationState);
   renderResearchReview();
 }
 $("research-control").onsubmit = (event) => {
@@ -2496,6 +2957,40 @@ for (const id of ["research-action", "research-reason"])
     renderResearchReview();
   });
 
+function hasUnsavedWork() {
+  if (mutating || teamReview || researchReview) return true;
+  if ($("message").value.trim() || replyTo) return true;
+  for (const [id, draft] of messageDrafts)
+    if (id !== selected && (draft.text?.trim() || draft.reply)) return true;
+  const titleChanged = (id, title, baseline) =>
+    title !==
+    (baseline ??
+      snapshot?.agents?.find((agent) => agent.id === id)?.title ??
+      "");
+  if (
+    titleEditor &&
+    titleChanged(titleEditor.id, $("task-title").value, titleEditor.baseline)
+  )
+    return true;
+  for (const [id, draft] of titleDrafts)
+    if (id !== titleEditor?.id && titleChanged(id, draft.title, draft.baseline))
+      return true;
+  if (memoryDirty()) return true;
+  const currentMemory = memoryDraftKey(
+    memoryEditorNamespace,
+    $("memory-key").value,
+  );
+  if ([...memoryDrafts.keys()].some((key) => key !== currentMemory))
+    return true;
+  if ($("research-reason").value.trim()) return true;
+  if ([...observedDrafts.values()].some((draft) => draft.title || draft.name))
+    return true;
+  if (["new-name", "new-title", "new-role"].some((id) => $(id).value.trim()))
+    return true;
+  return [...document.querySelectorAll(".team-actions select")].some(
+    (node) => node.value,
+  );
+}
 function renderGlobalHeading() {
   const global = tab === "research" || tab === "teams";
   document.body.classList.toggle("global-view", global);

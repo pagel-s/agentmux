@@ -86,6 +86,10 @@ func (m *console) compose(kind, target, reference, text string) {
 	m.textCursor = len(m.text)
 }
 func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if msg.Paste && m.composer == "" && (m.teamAction == nil || m.teamAction.researchAction == "" || m.teamAction.reasonReady) {
+		// Even a one-character clipboard paste is text, never a control key.
+		return m, nil
+	}
 	// A terminal read may coalesce quick keys (jjj or /query) into one rune
 	// message. Reduce actual keystrokes in order, then insert remaining editor
 	// text as one batch. Bracketed pastes outside an editor remain inert.
@@ -109,6 +113,9 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(commands...)
 	}
 	key := msg.String()
+	if m.reader != nil {
+		return m.readerKey(msg)
+	}
 	if m.teamAction != nil {
 		return m.teamReviewKey(msg)
 	}
@@ -154,6 +161,15 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.textCursor < len(m.text) {
 				m.text = append(m.text[:m.textCursor], m.text[m.textCursor+1:]...)
 			}
+		case "ctrl+r":
+			if m.composer == "memory-value" && !m.busy {
+				if m.offline {
+					m.message = "Broker offline; draft kept. Review the latest memory version after reconnecting."
+					return m, nil
+				}
+				m.busy = true
+				return m, m.reviewMemoryVersion()
+			}
 		case "enter":
 			if m.composer == "find" {
 				matches := m.sessionMatches()
@@ -188,6 +204,7 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			text, target, kind, reference := string(m.text), m.composeTarget, m.composer, m.replyID
+			draft := &consoleDraft{kind: kind, target: target, reference: reference, text: text, namespace: m.memoryNamespace, key: m.memoryKey, version: m.memoryVersion}
 			if reference != "" {
 				text = "Follow-up to " + reference + ":\n" + text
 			}
@@ -204,18 +221,20 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				}
 				if kind == "memory-value" {
 					_, err := workCall(context.Background(), m.client, "memory.put", map[string]any{"namespace": namespace, "key": memoryKey, "value": text, "version": version})
-					return consoleAction{message: "Memory saved with version checking. Press v to refresh.", err: err}
+					return consoleAction{message: "Memory saved with version checking. Press v to refresh.", err: err, draft: draft}
 				}
 				if kind == "board" {
 					_, err := workCall(context.Background(), m.client, "board.post", map[string]string{"board": target, "text": text})
-					return consoleAction{message: "Posted to #" + target + ".", err: err}
+					return consoleAction{message: "Posted to #" + target + ".", err: err, draft: draft}
 				}
 				id, label, err := workSend(context.Background(), m.client, m.state, target, text)
-				return consoleAction{message: label + " queued for " + target + ": " + id, err: err}
+				return consoleAction{message: label + " queued for " + target + ": " + id, err: err, draft: draft}
 			}
 		default:
 			runes := msg.Runes
-			if key == "alt+enter" {
+			if key == " " {
+				runes = []rune{' '}
+			} else if key == "alt+enter" {
 				runes = []rune{'\n'}
 			} else if msg.Type != tea.KeyRunes && key != " " {
 				return m, nil
@@ -229,6 +248,10 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	switch key {
+	case "ctrl+r":
+		m.restoreDraft()
+	case "o":
+		m.openReader()
 	case "P", "R", "S", "T":
 		if m.tab == 7 {
 			action := map[string]string{"P": "pause", "R": "resume", "S": "step", "T": "stop"}[key]
@@ -298,6 +321,13 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.tab = int(key[0] - '1')
 	case "enter":
+		if m.tab == 6 && len(m.agents) > 0 {
+			m.selected = m.teamMemberIndex % len(m.agents)
+			m.closeMemory()
+			a := m.agents[m.selected]
+			m.data.headless = !a.External && m.data.runtime.Agents[a.ID].PaneID == "" && (m.data.research != nil || m.data.runtime.AttemptID == "" && a.Config.Interaction != "interactive")
+			return m, m.attach()
+		}
 		if m.tab == 5 {
 			if observations := m.observedSessions(); len(observations) > 0 {
 				v := observations[m.observedSelected%len(observations)]
@@ -348,11 +378,22 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if !m.busy && len(m.agents) > 0 {
 			a := m.agents[m.selected%len(m.agents)]
 			m.busy = true
-			label := "Closing " + a.ID + "; other native terminals remain running."
-			if a.External {
-				label = "Disconnected bridge " + a.ID + ". Its original native terminal keeps running."
+			return m, func() tea.Msg {
+				if m.offline {
+					return consoleAction{err: errors.New("broker offline; refresh before making changes")}
+				}
+				raw, err := workCall(context.Background(), m.client, "agent.stop", map[string]string{"id": a.ID})
+				if err != nil {
+					return consoleAction{err: err}
+				}
+				var result struct {
+					RevokedAgents int `json:"revoked_agents"`
+				}
+				if err := json.Unmarshal(raw, &result); err != nil {
+					return consoleAction{err: err}
+				}
+				return consoleAction{message: consoleRevocationMessage(a.ID, result.RevokedAgents)}
 			}
-			return m, m.mutate("agent.stop", map[string]string{"id": a.ID}, label)
 		}
 	case "f":
 		if m.tab == 0 {
@@ -360,43 +401,9 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.messageIndex = 0
 		}
 	case "]":
-		if m.tab == 6 {
-			m.teamIndex++
-			return m, nil
-		}
-		if m.tab == 7 {
-			m.eventIndex++
-			return m, nil
-		}
-		m.scope++
-		m.task++
-		m.messageIndex++
-		m.memoryEntry++
+		m.stepContent(1)
 	case "[":
-		if m.tab == 6 {
-			if m.teamIndex > 0 {
-				m.teamIndex--
-			}
-			return m, nil
-		}
-		if m.tab == 7 {
-			if m.eventIndex > 0 {
-				m.eventIndex--
-			}
-			return m, nil
-		}
-		if m.scope > 0 {
-			m.scope--
-		}
-		if m.task > 0 {
-			m.task--
-		}
-		if m.messageIndex > 0 {
-			m.messageIndex--
-		}
-		if m.memoryEntry > 0 {
-			m.memoryEntry--
-		}
+		m.stepContent(-1)
 	case "right", "l":
 		if m.tab == 6 && len(m.agents) > 0 {
 			m.teamMemberIndex = (m.teamMemberIndex + 1) % len(m.agents)
@@ -655,7 +662,7 @@ func (m console) nativeDraftNext() (tea.Model, tea.Cmd) {
 		m.compose("new-project", "project directory", "", m.newNative.project)
 	case "new-project":
 		m.newNative.project = text
-		m.compose("new-role", "optional role (Enter to leave empty)", "", "")
+		m.compose("new-role", "optional role (Enter to leave empty)", "", m.newNative.role)
 	case "new-role":
 		m.newNative.role = string(m.text)
 		draft := m.newNative
@@ -667,4 +674,11 @@ func (m console) nativeDraftNext() (tea.Model, tea.Cmd) {
 		return m, func() tea.Msg { return consoleAction{err: errors.New("unknown native session setup step")} }
 	}
 	return m, nil
+}
+
+func consoleRevocationMessage(id string, count int) string {
+	if count == 0 {
+		return id + " is already revoked. Process termination is not confirmed."
+	}
+	return fmt.Sprintf("Revoked %s and active descendants (%d sessions). Owned shutdown requested; external native terminals stay open. Process termination is not confirmed.", id, count)
 }

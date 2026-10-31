@@ -130,6 +130,98 @@ processes. Recovery digests detect damaged state; they do not defend against an
 owner who can rewrite both records and their recovery metadata. Remote trace
 collection remains unsupported without a central collector and was not validated.
 
+## Extended usability acceptance pass
+
+A further pass on the same day followed everyday terminal users, people with
+many independently started sessions, operators of overlapping groups, and
+researchers starting, observing and reopening studies. The fixtures used command
+participants and actual terminals; none made provider or model calls. The counts
+below describe separate fixtures and must not be added into a claim about one
+concurrent deployment.
+
+| Situation | Bounded validation in this pass |
+| --- | --- |
+| Terminal workbench | Thirteen actual command-only sessions, 30 team records and 20 memory entries; 80×24, 80×20 and 60×24 terminals, including resize while reading/editing |
+| Daily workspace | Twelve actual Bubblewrap command sessions plus 48 synthetic registry entries; duplicate, Unicode and long titles; eleven overlapping pairs alongside one existing group; 25 memory entries |
+| Reading and navigation | Long message/task/memory/event content, full frozen readers, scrolling to the tail, stable selection during refresh, off-screen team/memory selection and returning to the original view |
+| Input and failed drafts | Physical spaces, fast keys, single-character and longer bracketed paste, long editor drafts, delayed failures, explicit draft restoration and exact original recipients/namespaces |
+| Concurrent memory edits | Actual saved-version conflict, retained draft beside the latest saved value, explicit adoption of the displayed version without a save, then a separate version-checked save |
+| Knowledge and native input | Scoped board/shared-memory access in overlapping groups, isolation and retained historical context, private-memory separation, and continued native terminal interaction |
+| Research | Three complete model-free studies, completed-run cache reopening, saved status after broker shutdown through both output and state paths, and logical SQLite contents compared before/after reopening |
+| Automated regressions | Full uncached Go integration suite passed with the race detector; 55 frontend regression scenarios passed |
+
+The synthetic registry entries exercised identity, search and display behavior;
+they were not 48 additional running agents. The command-only terminal sessions
+exercised real process/input/focus and broker behavior; they do not establish
+how a native model will interpret instructions or cooperate.
+
+The pass found and fixed these usability problems:
+
+- Long results and dense lists could hide the information needed to act. The
+  terminal now offers a frozen full-content reader, keeps the selected row
+  visible, and shows task results before their instruction/provenance. Resizing
+  and polling preserve the reader's record and readable content.
+- Physical spaces could disappear from composer input, while a one-character
+  clipboard paste could be interpreted as a control key. Editors now retain
+  those spaces, and paste outside an editor does not execute shortcuts.
+- Failed messages, board posts, memory edits and native setup could lose useful
+  drafts. Ctrl-R explicitly restores the original target and draft without
+  resending it or replacing a newer open editor. A memory conflict can now be
+  reviewed against the exact saved value/version: one Enter adopts only that
+  displayed version, and a separate Enter in the editor attempts the save.
+- Team actions could open a different selected terminal. Opening an action
+  target now uses the exact agent selected in Teams.
+- CLI help sometimes attempted discovery or treated help as a session/path.
+  Help now returns before those actions. Literal message text after `--` stays
+  text, while the legacy two-target raw-pane form keeps its original routing.
+  Copied attach/connect hints quote paths and retain the selected state.
+- A failed session registry read could look like an empty workspace. Inventory
+  now reports unknown registered/bridge counts separately from observed native
+  terminals and gives a recovery command. Read failures no longer imply an
+  uncertain write. Removal reports descendant coordination revocation and
+  distinguishes it from confirmed process termination.
+- Saved research status through an explicit state directory was unavailable
+  after the broker exited. Output and state paths now reopen the same
+  authenticated broker checkpoint with an unknown runner heartbeat. Cached
+  pointer metadata is not accepted as authoritative status, and reopening does
+  not restart workers or create new turns. Logical SQLite comparison checks
+  durable content rather than relying on database-file byte identity.
+- Browser polling could disrupt reading position, expanded details or keyboard
+  focus. Regression scenarios cover preserving those contexts, graph keyboard
+  controls, stable recipients, unsaved-change protection and explicit memory
+  conflict review. These automated browser checks are distinct from manual
+  browser acceptance.
+- Onboarding mixed original pane-layout commands with everyday managed
+  work-session commands. The guides now explain workspace/session/group IDs,
+  role versus title, exact group-board selection, external-session recovery,
+  terminal shortcuts and research observation/resumption.
+
+Final manual browser acceptance used the live daily-workspace fixture and the
+compiled owner console. At 480×800 and 800×600, connection state, Refresh, focus,
+close and autonomy controls remained visible without page-wide horizontal
+overflow. The background computed to pure black. Keyboard skip navigation kept
+the owner connection and moved focus into the workspace. Reply focus, an expanded
+event and graph-node keyboard focus survived polling; Space selected the exact
+graph agent. A revoked synthetic recipient stayed selected with its switches
+disabled rather than selecting another recipient.
+
+The browser also retained a memory draft across entry and namespace switches.
+A competing broker write caused a version conflict; review displayed the exact
+draft beside version 2. Adopting that version left the broker value unchanged,
+and a separate Save wrote the draft as version 3. An attempted reload retained an
+unsent message; explicitly clearing that disposable draft allowed navigation.
+The final initial connecting view disabled owner mutations before the first
+snapshot. Independent review found one further destination problem: removing a
+board could silently change an unsent board draft to direct delivery. The fix
+keeps the original unavailable board selected and blocks Send until an explicit
+new choice. Manual access revocation confirmed that behavior against the broker;
+four added regressions cover revoked, read-only and restored board drafts.
+
+This pass adds no new remote-machine validation. The earlier SSH evidence above
+remains the remote coverage for this report. The results establish bounded
+model-free usability and orchestration behavior on the tested machine, not
+provider reliability, model quality, multi-day operation or unbounded scale.
+
 An earlier [CI run](https://github.com/pagel-s/agentmux/actions/runs/41242918692/job/124660332398)
 reported an unexpected tmux 3.2a server exit that initially resisted local
 reproduction. A subsequent [failure with retained diagnostics](https://github.com/pagel-s/agentmux/actions/runs/41247017287/job/124672444506)

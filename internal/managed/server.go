@@ -203,6 +203,9 @@ func (c *Client) Call(ctx context.Context, r Request) (json.RawMessage, *Fault) 
 	req.Header.Set("Content-Type", "application/json")
 	response, err := c.http.Do(req)
 	if err != nil {
+		if !isWrite(r.Operation) {
+			return nil, fault("transport", "broker response unavailable; refresh when the broker is reachable")
+		}
 		return nil, fault("transport", "broker response unavailable; write outcome may be uncertain; retry only with the same request_id")
 	}
 	defer response.Body.Close()

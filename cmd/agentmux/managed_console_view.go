@@ -96,7 +96,7 @@ func (m console) panel(width, height int) string {
 	var out strings.Builder
 	if len(m.agents) > 0 && m.tab != 5 && m.tab != 1 && m.tab != 6 && m.tab != 7 {
 		a := m.agents[m.selected%len(m.agents)]
-		fmt.Fprintf(&out, "%s\n%s\n\n", consoleAccent.Render(consoleContent(sessionTitle(a), 150)), consoleMuted.Render(consoleContent(a.ID+" · "+a.Config.Harness+" · "+a.Config.Workdir, 300)))
+		fmt.Fprintf(&out, "%s\n%s\n\n", consoleAccent.Render(consoleClip(consoleContent(sessionTitle(a), 150), width, 1)), consoleMuted.Render(consoleClip(consoleContent(a.ID+" · "+a.Config.Harness+" · "+a.Config.Workdir, 300), width, 1)))
 	}
 	switch m.tab {
 	case 0:
@@ -107,7 +107,7 @@ func (m console) panel(width, height int) string {
 		}
 		filters := []string{"All coordination", boardLabel, m.selectedID() + " inbox"}
 		messages := m.boardMessages()
-		fmt.Fprintf(&out, "%s  %s\n\n", consoleAccent.Render(filters[m.boardFilter%3]), consoleMuted.Render(fmt.Sprintf("%d recent · f filter · [/] select · r reply", len(messages))))
+		fmt.Fprintf(&out, "%s  %s\n\n", consoleAccent.Render(filters[m.boardFilter%3]), consoleMuted.Render(fmt.Sprintf("%d recent · f filter · [/] select · r reply · o read all", len(messages))))
 		if len(messages) == 0 {
 			out.WriteString(consoleMuted.Render("No messages here yet.\n\nPress b to post to a shared board; +/- chooses the board.\nPress s to send to the selected agent.\nEnter opens its full native terminal.\nConnections → c enables a scoped collaboration group."))
 		}
@@ -132,14 +132,14 @@ func (m console) panel(width, height int) string {
 			}
 		}
 	case 1:
-		hint := "Enter worker console · Tasks for structured output · L title"
+		hint := "Enter worker console · Tasks output · o details · L title"
 		if m.data.headless {
-			hint = "Headless managed worker · Tasks output · Events lifecycle · L title"
+			hint = "Headless managed worker · Tasks output · Events lifecycle · o details · L title"
 		}
 		if len(m.agents) > 0 && m.agents[m.selected%len(m.agents)].Config.Interaction == "interactive" {
-			hint = "Enter native terminal · L edit title"
+			hint = "Enter native terminal · o session details · L edit title"
 		}
-		fmt.Fprintf(&out, "%s\n%s\n\n", consoleAccent.Render(consoleContent(m.agentLabel(m.selectedID()), 200)), consoleMuted.Render(hint))
+		fmt.Fprintf(&out, "%s\n%s\n\n", consoleAccent.Render(consoleClip(consoleContent(m.agentLabel(m.selectedID()), 200), width, 1)), consoleMuted.Render(hint))
 		if len(m.agents) > 0 {
 			a := m.agents[m.selected%len(m.agents)]
 			if m.offline && a.Config.Interaction != "interactive" {
@@ -154,13 +154,13 @@ func (m console) panel(width, height int) string {
 			}
 		}
 		if m.data.headless {
-			out.WriteString(consoleMuted.Render("HEADLESS MANAGED WORKER\nInspect Tasks for results and reported traces; Events for lifecycle.\nThere is no native terminal pane for this bounded runner.\n"))
+			out.WriteString(consoleMuted.Render("HEADLESS MANAGED WORKER\nInspect Tasks for results and reported traces; Events for lifecycle.\nThere is no native terminal pane for this bounded runner.") + "\n")
 			if m.data.research != nil {
-				out.WriteString(consoleMuted.Render("Research controls in Events apply at phase barriers.\n"))
+				out.WriteString(consoleMuted.Render("Research controls in Events apply at phase barriers.") + "\n")
 			}
 			break
 		}
-		out.WriteString(consoleMuted.Render("LIVE TERMINAL PREVIEW\n"))
+		out.WriteString(consoleMuted.Render("LIVE TERMINAL PREVIEW") + "\n")
 		preview := strings.TrimSpace(m.data.preview)
 		if preview == "" {
 			preview = "Waiting for terminal output…"
@@ -171,7 +171,7 @@ func (m console) panel(width, height int) string {
 			out.WriteString(consoleMuted.Render("Loading this session's current boundaries…"))
 			break
 		}
-		out.WriteString(consoleAccent.Render("Connections") + consoleMuted.Render(fmt.Sprintf("  revision %d\n\n", m.data.boundaries.Version)))
+		out.WriteString(consoleAccent.Render("Connections") + consoleMuted.Render(fmt.Sprintf("  revision %d", m.data.boundaries.Version)) + "\n\n")
 		if len(m.agents) > 0 {
 			target := m.agents[m.target%len(m.agents)].ID
 			fmt.Fprintf(&out, "%s  →  %s\n%s\n\n", consoleAccent.Render(consoleContent(m.agentLabel(m.selectedID()), 150)), consoleAccent.Render(consoleContent(m.agentLabel(target), 150)), consoleMuted.Render("←/→ recipient · ↑/↓ sender"))
@@ -207,62 +207,73 @@ func (m console) panel(width, height int) string {
 			break
 		}
 		if m.memoryOpen {
-			fmt.Fprintf(&out, "%s  %s\n\n", consoleAccent.Render("Memory / "+m.scopeLabel(m.memoryNamespace)), consoleMuted.Render("owner view · [/] entry · e edit · n new · v refresh · Esc back"))
+			fmt.Fprintf(&out, "%s  %s\n\n", consoleAccent.Render("Memory / "+m.scopeLabel(m.memoryNamespace)), consoleMuted.Render("owner view · [/] entry · o read · e edit · n new · v refresh · Esc back"))
 			if len(m.memoryEntries) == 0 {
 				out.WriteString(consoleMuted.Render("No entries. Press n to create a shared note."))
 			}
-			first := max(0, m.memoryEntry-8)
-			for i := first; i < len(m.memoryEntries); i++ {
+			selected := 0
+			if len(m.memoryEntries) > 0 {
+				selected = m.memoryEntry % len(m.memoryEntries)
+			}
+			rows := max(1, min(3, height-lipgloss.Height(out.String())-4))
+			first := max(0, selected-rows+1)
+			for i := first; i < len(m.memoryEntries) && i < first+rows; i++ {
 				v := m.memoryEntries[i]
 				line := fmt.Sprintf("  %-24s v%d", consoleContent(v.Key, 24), v.Version)
 				if i == m.memoryEntry%len(m.memoryEntries) {
 					line = consoleSelected.Render(line)
 				}
 				out.WriteString(line + "\n")
-				if i-first >= 8 {
-					break
-				}
 			}
 			if len(m.memoryEntries) > 0 {
 				v := m.memoryEntries[m.memoryEntry%len(m.memoryEntries)]
 				out.WriteString("\n" + consoleContent(v.Value, 4000))
 			}
 		} else {
-			out.WriteString(consoleAccent.Render("Shared boundaries") + consoleMuted.Render("  [/] select · r read · w write · v inspect memory\n\n"))
+			out.WriteString(consoleAccent.Render("Shared boundaries") + consoleMuted.Render("  [/] select · r/w access · v memory · o details") + "\n\n")
 			scopes := append(append([]managed.BoundaryScope{}, m.data.boundaries.Boards...), m.data.boundaries.Memory...)
-			for i, v := range scopes {
+			selected := 0
+			if len(scopes) > 0 {
+				selected = m.scope % len(scopes)
+			}
+			rows := max(1, height-lipgloss.Height(out.String())-3)
+			first := max(0, selected-rows+1)
+			for i := first; i < len(scopes) && i < first+rows; i++ {
+				v := scopes[i]
 				kind := "board"
 				if i >= len(m.data.boundaries.Boards) {
 					kind = "memory"
 				}
-				line := fmt.Sprintf("  %-7s %-18s read %-7s write %s", kind, m.scopeLabel(v.Name), accessLabel(v.Read), accessLabel(v.Write))
+				line := fmt.Sprintf("  %-6s read %-7s write %-7s %s", kind, accessLabel(v.Read), accessLabel(v.Write), m.scopeLabel(v.Name))
 				if v.Source == "team" {
 					line += " · membership-managed"
 				}
 				if i == m.scope%len(scopes) {
 					line = consoleSelected.Render(line)
 				}
-				out.WriteString(line + "\n")
+				out.WriteString(consoleClip(line, width, 1) + "\n")
 			}
 			out.WriteString("\n" + consoleMuted.Render("Private memory is separate for every agent.\nRevocation prevents future reads; past knowledge remains."))
 		}
 	case 4:
-		out.WriteString(consoleAccent.Render("Tasks & results") + consoleMuted.Render("  [/] select · r follow up · c cancel\n\n"))
-		first := max(0, m.task-5)
-		for i := first; i < len(m.data.activity.Tasks); i++ {
+		out.WriteString(consoleAccent.Render("Tasks & results") + consoleMuted.Render("  [/] select · o read all · r follow up · c cancel") + "\n\n")
+		selected := 0
+		if len(m.data.activity.Tasks) > 0 {
+			selected = m.task % len(m.data.activity.Tasks)
+		}
+		rows := max(1, min(3, height-lipgloss.Height(out.String())-5))
+		first := max(0, selected-rows+1)
+		for i := first; i < len(m.data.activity.Tasks) && i < first+rows; i++ {
 			v := m.data.activity.Tasks[i]
 			line := fmt.Sprintf("  %-16s %-12s %s", v.To, v.State, v.Delivery)
 			if i == m.task%len(m.data.activity.Tasks) {
 				line = consoleSelected.Render(line)
 			}
 			out.WriteString(line + "\n")
-			if i-first >= 5 {
-				break
-			}
 		}
 		if len(m.data.activity.Tasks) > 0 {
 			v := m.data.activity.Tasks[m.task%len(m.data.activity.Tasks)]
-			out.WriteString("\n" + consoleMuted.Render(v.ID) + "\n" + consoleContent(v.Text, 1000) + "\n\n" + consoleContent(v.Result, 4000))
+			out.WriteString("\n" + consoleMuted.Render(v.ID) + "\nResult · o reads full result, instruction and trace\n" + consoleContent(v.Result, 4000))
 			if len(v.Usage) > 0 {
 				out.WriteString("\n\n" + consoleMuted.Render("Provider-reported usage: ") + consoleContent(string(v.Usage), 500))
 			}
@@ -271,8 +282,8 @@ func (m console) panel(width, height int) string {
 		}
 	case 5:
 		observations := m.observedSessions()
-		out.WriteString(consoleAccent.Render("Existing sessions") + consoleMuted.Render("  ↑/↓ select · Enter details · c prepare bridge\n\n"))
-		out.WriteString(consoleMuted.Render("Observed live terminals keep their native conversation and tools.\nObservation grants no communication rights and sends no input.\n\n"))
+		out.WriteString(consoleAccent.Render("Existing sessions") + consoleMuted.Render("  ↑/↓ select · Enter details · c prepare bridge") + "\n\n")
+		out.WriteString(consoleMuted.Render("Observed live terminals keep their native conversation and tools.\nObservation grants no communication rights and sends no input.") + "\n\n")
 		if len(observations) == 0 {
 			out.WriteString(consoleMuted.Render("No unregistered live TTY sessions found.\nRegistered bridges appear in Agents under their assigned names.\nN creates a native session. Generic interpreter wrappers may not be identifiable.\nDiscovery is local and best effort; custom tmux servers may be absent."))
 		}
@@ -323,7 +334,7 @@ func (m console) View() string {
 		}
 	}
 	var footer strings.Builder
-	if m.composer != "" {
+	if m.composer != "" && m.reader == nil {
 		label := m.composer + " → " + m.composeTarget
 		if m.replyID != "" {
 			label += " · reply " + m.replyID
@@ -332,20 +343,23 @@ func (m console) View() string {
 		if cursor < 0 || cursor > len(m.text) {
 			cursor = len(m.text)
 		}
-		text := consoleContent(string(m.text[:cursor]), 3000) + consoleAccent.Render("▏") + consoleContent(string(m.text[cursor:]), 3000)
-		footer.WriteString(consoleAccent.Render(label) + "\n" + consoleClip(text, width, 4) + "\n" + consoleMuted.Render("Enter submits · Alt-Enter newline · Esc cancels · Ctrl-U clears") + "\n")
+		text := consoleEditor(m.text, cursor, width, 4)
+		footer.WriteString(consoleAccent.Render(label) + "\n" + consoleClip(text, width, 4) + "\n" + consoleMuted.Render(m.editorHelp()) + "\n")
 	}
 	if m.busy {
 		footer.WriteString(consoleMuted.Render("Applying…") + "\n")
 	} else if m.message != "" {
 		footer.WriteString(consoleClip(consoleContent(m.message, 500), width, 2) + "\n")
 	}
-	help := "↑/↓ select · Enter native CLI · / find · L title · Tab views · F1 workbench\nN new · x close/disconnect · s send · b board · +/- board · q detach/close"
+	help := "↑/↓ select · Enter native CLI · / find · L title · Tab views · F1 workbench\nN new · x revoke + descendants · s send · b board · +/- board · q detach/close"
 	if m.data.headless {
-		help = "↑/↓ agent · / find · L title · Tab views · 7 Teams · 8 Events\nTasks: output/cancel · Events: lifecycle · q close observer"
+		help = "↑/↓ agent · / find · L title · Tab views · 7 Teams · 8 Events\nTasks: output/cancel · Events: lifecycle · x revoke tree · q close observer"
 		if m.data.research != nil {
 			help += " · P/R/S/T phase controls"
 		}
+	}
+	if m.reader != nil {
+		help = m.readerHelp()
 	}
 	footer.WriteString(consoleMuted.Render(help))
 	bottom := consoleClip(footer.String(), width, height/2)
@@ -354,7 +368,7 @@ func (m console) View() string {
 		bodyHeight = 1
 	}
 	var compact string
-	if width < 85 && len(m.agents) > 0 {
+	if width < 85 && len(m.agents) > 0 && m.reader == nil {
 		first := max(0, m.selected-1)
 		for i := first; i < len(m.agents) && i < first+3; i++ {
 			label := " " + consoleContent(sessionTitle(m.agents[i])+" ["+m.agents[i].ID+"]", 28) + " "
@@ -368,7 +382,9 @@ func (m console) View() string {
 		bodyHeight = max(1, bodyHeight-1)
 	}
 	var body string
-	if width >= 85 {
+	if m.reader != nil {
+		body = m.readerPanel(width, bodyHeight)
+	} else if width >= 85 {
 		sideWidth := 30
 		if width < 105 {
 			sideWidth = 24
@@ -399,4 +415,11 @@ func (m console) scopeLabel(name string) string {
 		}
 	}
 	return name
+}
+
+func (m console) editorHelp() string {
+	if m.composer == "memory-value" {
+		return "Enter saves · Ctrl-R review latest version · Alt-Enter newline · Esc back"
+	}
+	return "Enter submits · Alt-Enter newline · Esc cancels · Ctrl-U clears"
 }

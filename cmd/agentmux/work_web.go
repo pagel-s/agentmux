@@ -32,7 +32,7 @@ var workWebAssets embed.FS
 // bearer capability for every API call, validates Host/Origin, and serves no
 // cross-origin API. Native output is data, never HTML or terminal input.
 func workWebHandler(state string, client *managed.Client, token, host string) http.Handler {
-	allowed := map[string]bool{"activity": true, "agent.list": true, "agent.label": true, "boundaries.get": true, "control.get": true, "control.update": true, "task.get": true, "task.list": true, "task.cancel": true, "agent.stop": true, "autonomy.status": true, "autonomy.control": true, "memory.list": true, "memory.get": true, "memory.put": true, "board.post": true, "team.invite": true, "team.remove": true, "team.dissolve": true, "research.control": true}
+	allowed := map[string]bool{"activity": true, "agent.list": true, "agent.label": true, "boundaries.get": true, "control.get": true, "control.update": true, "task.get": true, "task.list": true, "task.cancel": true, "agent.stop": true, "autonomy.status": true, "autonomy.control": true, "memory.list": true, "memory.get": true, "memory.head": true, "memory.put": true, "board.post": true, "team.invite": true, "team.remove": true, "team.dissolve": true, "research.control": true}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")

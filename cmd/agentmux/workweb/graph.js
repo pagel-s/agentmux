@@ -68,6 +68,8 @@ function graphInspector() {
     graphSelection.source !== selected ||
     snapshot.boundaries.agent !== selected
   ) {
+    $("inspector-title").textContent =
+      "Loading " + sessionReference(graphSelection.source) + " boundaries…";
     $("edge-section").classList.add("hidden");
     $("scope-section").classList.add("hidden");
     return;
@@ -141,6 +143,8 @@ function drawGraph() {
     graphVersion,
     graphMode,
     selected,
+    peer,
+    graphSelection,
     graphPositions,
     snapshot.boundaries,
     snapshot.teams || [],
@@ -152,6 +156,7 @@ function drawGraph() {
     agents = graphAgents(),
     nodes = [],
     edges = [];
+  const viewState = captureViewState(svg);
   const scopeCount =
     (snapshot.boundaries.boards || []).length +
     (snapshot.boundaries.memory || []).length;
@@ -320,6 +325,13 @@ function drawGraph() {
       class: "edge-hit",
       tabindex: 0,
       role: "button",
+      "data-focus-key": JSON.stringify([
+        "edge",
+        edge.actor,
+        edge.recipient,
+        edge.kind,
+        edge.namespace,
+      ]),
       "aria-label":
         sessionReference(edge.actor) +
         " to " +
@@ -339,6 +351,8 @@ function drawGraph() {
       if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();
         choose();
+        graphInspector();
+        $("close-inspector").focus();
       }
     };
     svg.append(line, hit);
@@ -360,6 +374,8 @@ function drawGraph() {
         (node.scope ? " scope" : ""),
       transform: `translate(${node.x},${node.y})`,
       "data-node": node.key,
+      "data-focus-key": "node:" + node.key,
+      "data-item-key": node.key,
       tabindex: 0,
       role: "button",
       "aria-label":
@@ -392,15 +408,17 @@ function drawGraph() {
         graphPositions[node.key] = p;
         saveGraphLayout();
         drawGraph();
-        [...svg.querySelectorAll("[data-node]")]
-          .find((n) => n.getAttribute("data-node") === node.key)
-          ?.focus();
-      } else if (e.key === "Enter") {
+      } else if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
         if (node.source) {
           graphSelection = null;
           selectAgent(node.source);
           graphInspector();
-        } else graphPick(selected, "", node.kind, node.scope);
+        } else {
+          graphPick(selected, "", node.kind, node.scope);
+          graphInspector();
+          $("close-inspector").focus();
+        }
       }
     };
     svg.append(group);
@@ -411,6 +429,7 @@ function drawGraph() {
       : "Drag nodes · select a connection to edit";
   $("graph-agents").classList.toggle("active", graphMode === "agents");
   $("graph-scopes").classList.toggle("active", graphMode === "scopes");
+  restoreViewState(svg, viewState);
 }
 function saveGraphLayout() {
   try {
@@ -482,6 +501,15 @@ $("graph-scopes").onclick = () => {
 $("close-inspector").onclick = () => {
   graphSelection = null;
   graphInspector();
+  [...graph.querySelectorAll("[data-node]")]
+    .find((node) => node.getAttribute("data-node") === "agent:" + selected)
+    ?.focus();
+};
+$("graph-inspector").onkeydown = (event) => {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    $("close-inspector").click();
+  }
 };
 $("graph-reset").onclick = () => {
   graphPositions = {};
