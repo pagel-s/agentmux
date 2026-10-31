@@ -2,8 +2,15 @@ package managedlaunch
 
 import (
 	"context"
+	"errors"
 	"strings"
+
+	"agentmux/internal/managed"
 )
+
+// Option values are expanded once. q/h escapes status styling hashes; E/T
+// would interpret label text as another format and must never be used here.
+const workbenchWindowFormat = " #I:#{?@agentmux_title,#{q/h:@agentmux_title},#W} "
 
 // Bind only the dedicated managed server. User tmux servers and configuration
 // are never modified. Popups run owner controls outside agent sandboxes.
@@ -14,8 +21,8 @@ func (l *Launcher) configureWorkbench(ctx context.Context, runtime Runtime) erro
 		{"set-option", "-t", runtime.Session, "status-left-length", "60"},
 		{"set-option", "-t", runtime.Session, "status-right", "#[fg=#a78bfa]F1#[default] workbench  #[fg=#a78bfa]C-b b#[default] board "},
 		{"set-option", "-t", runtime.Session, "window-status-current-style", "fg=#ede9fe,bg=#4c1d95,bold"},
-		{"set-option", "-t", runtime.Session, "window-status-format", " #I:#W "},
-		{"set-option", "-t", runtime.Session, "window-status-current-format", " #I:#W "},
+		{"set-option", "-t", runtime.Session, "window-status-format", workbenchWindowFormat},
+		{"set-option", "-t", runtime.Session, "window-status-current-format", workbenchWindowFormat},
 		{"set-option", "-t", runtime.Session, "mouse", "on"},
 		{"bind-key", "-n", "F1", "select-window", "-t", runtime.DashboardPane},
 		{"bind-key", "g", "select-window", "-t", runtime.DashboardPane},
@@ -38,4 +45,27 @@ func (l *Launcher) configureWorkbench(ctx context.Context, runtime Runtime) erro
 		}
 	}
 	return nil
+}
+
+func (l *Launcher) syncWindowTitle(ctx context.Context, runtime Runtime, pane, agent, title string) error {
+	if !validPane(pane) || !validAgentID(agent) {
+		return errors.New("invalid labelled worker identity")
+	}
+	if err := managed.ValidateSessionTitle(title); err != nil {
+		return err
+	}
+	identity, err := l.tmux(ctx, "display-message", "-p", "-t", pane, "#{@agentmux_runtime}\t#{@agentmux_role}\t#{@agentmux_agent}")
+	if err != nil || strings.TrimSpace(identity) != runtime.AttemptID+"\tworker\t"+agent {
+		return errors.New("labelled worker ownership changed")
+	}
+	label := ""
+	if title != "" {
+		runes := []rune(title)
+		if len(runes) > 36 {
+			title = string(runes[:36]) + "…"
+		}
+		label = title + " [" + agent + "]"
+	}
+	_, err = l.tmux(ctx, "set-option", "-w", "-t", pane, "@agentmux_title", label)
+	return err
 }

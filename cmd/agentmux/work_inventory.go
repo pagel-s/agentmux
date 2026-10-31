@@ -63,20 +63,25 @@ func runWorkInventory(args []string, out, diagnostics io.Writer) int {
 				if a.External {
 					mode = "external bridge · " + observationStatus(a.ExternalRef, observations)
 				}
-				fmt.Fprintf(out, "%-24s %-8s %-16s %-8s %s\n", a.ID, a.Config.Harness, mode, a.State, a.Config.Workdir)
+				fmt.Fprintf(out, "%s\n  ID %s · %s · %s · %s · added %s\n  %s\n", consoleContent(sessionTitle(a), 160), a.ID, a.Config.Harness, mode, a.State, sessionAdded(a.CreatedAt), consoleContent(a.Config.Workdir, 300))
 			}
 		}
 	}
 	for _, s := range unconnectedObservations(registered, observations) {
-		fmt.Fprintf(out, "%-24s %-8s %-16s %s\n", s.ID, s.Harness, "observed", s.Project)
+		fmt.Fprintf(out, "%s\n  ID %s · %s · observed · %s · started %s\n  %s · %s\n", consoleContent(observedTitle(s), 160), s.ID, s.Harness, consoleContent(s.TTY, 60), sessionAdded(s.StartedAt), consoleContent(s.Project, 300), consoleContent(s.TmuxSession, 100))
 	}
-	fmt.Fprintln(out, "Observed sessions keep their original terminals. Connect: agentmux connect OBSERVED_ID --name NAME")
+	fmt.Fprintln(out, "Titles describe the task; IDs remain stable. Label: agentmux label ID \"Fix login redirect\"\nObserved sessions keep their original terminals. Connect: agentmux connect OBSERVED_ID [--title \"Task\"] [--name ID]")
 	return 0
 }
 
-func connectObservedSession(ctx context.Context, state, reference, id string) (string, error) {
-	if !managedconfig.ValidID(id) {
-		return "", errors.New("choose a valid distinct session name")
+func connectObservedSession(ctx context.Context, state, reference, id string, title ...string) (string, error) {
+	setup, _, err := connectObservedSessionWithID(ctx, state, reference, id, title...)
+	return setup, err
+}
+
+func connectObservedSessionWithID(ctx context.Context, state, reference, id string, title ...string) (string, string, error) {
+	if id != "" && !managedconfig.ValidID(id) {
+		return "", id, errors.New("choose a valid distinct session name")
 	}
 	var found *sessioninventory.Session
 	for _, s := range discoverWorkSessions(ctx, state) {
@@ -87,10 +92,10 @@ func connectObservedSession(ctx context.Context, state, reference, id string) (s
 		}
 	}
 	if found == nil {
-		return "", errors.New("observed terminal is no longer live; refresh sessions")
+		return "", id, errors.New("observed terminal is no longer live; refresh sessions")
 	}
 	if !filepath.IsAbs(found.Project) {
-		return "", errors.New("this platform could not discover its project; launch a new session with agentmux add instead")
+		return "", id, errors.New("this platform could not discover its project; launch a new session with agentmux add instead")
 	}
 	// Direct Antigravity context injection isn't needed for an external bridge:
 	// the human explicitly pastes the setup into the existing native interface.
@@ -104,32 +109,70 @@ func connectObservedSession(ctx context.Context, state, reference, id string) (s
 	}
 	credential, err := managed.LoadCredential(managed.CredentialPath(state, ""))
 	if err != nil {
-		return "", err
+		return "", id, err
 	}
 	client := managed.NewClient(credential)
+	if id == "" {
+		// Reconnecting without a hand-chosen ID recovers the existing bridge;
+		// labels never create a second identity for the same live terminal.
+		raw, e := workCall(ctx, client, "agent.list", map[string]any{"limit": 200})
+		if e != nil {
+			return "", id, e
+		}
+		var registry struct {
+			Agents []managed.AgentInfo `json:"agents"`
+		}
+		if e = json.Unmarshal(raw, &registry); e != nil {
+			return "", id, e
+		}
+		for _, a := range registry.Agents {
+			if a.External && a.State == "active" && a.ExternalRef == reference {
+				id = a.ID
+				break
+			}
+		}
+		if id == "" {
+			id = newWorkAgentID(found.Harness)
+		}
+	}
+	label := ""
+	if len(title) > 0 {
+		label = strings.TrimSpace(title[0])
+	}
+	if label == "" && found.Title != found.Harness && found.Title != sessionProject(found.Project) {
+		label = found.Title
+		// A native window title is observational and may exceed our editable
+		// label limit. Its full title still appears in discovery details.
+		if managed.ValidateSessionTitle(label) != nil {
+			label = ""
+		}
+	}
+	if err = managed.ValidateSessionTitle(label); err != nil {
+		return "", id, err
+	}
 	// Prepare the helper before registration. Only a definite rejection removes
 	// the newly created helper; an uncertain transport outcome retains it.
 	root := state + ".bridge"
 	if err = os.Mkdir(root, 0700); err != nil && !os.IsExist(err) {
-		return "", err
+		return "", id, err
 	}
 	info, err := os.Lstat(root)
 	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm()&0077 != 0 {
-		return "", errors.New("bridge directory must be private")
+		return "", id, errors.New("bridge directory must be private")
 	}
 	canonical, err := filepath.EvalSymlinks(root)
 	if err != nil || canonical != root {
-		return "", errors.New("bridge directory cannot have symlink parents")
+		return "", id, errors.New("bridge directory cannot have symlink parents")
 	}
 	runtime, err := managedlaunch.Snapshot(state)
 	if err != nil {
-		return "", err
+		return "", id, err
 	}
 	exe := runtime.Controller
 	if exe == "" {
 		exe, err = os.Executable()
 		if err != nil {
-			return "", err
+			return "", id, err
 		}
 	}
 	helper := filepath.Join(root, id)
@@ -140,32 +183,32 @@ func connectObservedSession(ctx context.Context, state, reference, id string) (s
 	for cursor := ""; ; {
 		raw, listErr := workCall(ctx, client, "agent.list", map[string]any{"limit": 200, "after": cursor})
 		if listErr != nil {
-			return "", listErr
+			return "", id, listErr
 		}
 		var registry struct {
 			Agents []managed.AgentInfo `json:"agents"`
 			Cursor string              `json:"cursor"`
 		}
 		if err = json.Unmarshal(raw, &registry); err != nil {
-			return "", err
+			return "", id, err
 		}
 		for _, info := range registry.Agents {
 			if info.ID == id && (!info.External || info.State != "active" || info.ExternalRef != reference) {
-				return "", errors.New("session name is already registered to another identity; choose a distinct name")
+				return "", id, errors.New("session name is already registered to another identity; choose a distinct name")
 			}
 			if !info.External || info.State != "active" || info.ExternalRef != reference {
 				continue
 			}
 			if info.ID != id {
-				return "", fmt.Errorf("observed terminal is already connected as %s", info.ID)
+				return "", id, fmt.Errorf("observed terminal is already connected as %s", info.ID)
 			}
 			if helperErr := validateBridgeHelper(helper, content); helperErr != nil {
-				return "", helperErr
+				return "", id, helperErr
 			}
 			if credentialErr := validateBridgeCredential(state, id, false); credentialErr != nil {
-				return "", credentialErr
+				return "", id, credentialErr
 			}
-			return bridgeInstructions(state, id), nil
+			return bridgeInstructions(state, id), id, nil
 		}
 		if len(registry.Agents) == 0 || registry.Cursor == "" || registry.Cursor == cursor {
 			break
@@ -179,13 +222,13 @@ func connectObservedSession(ctx context.Context, state, reference, id string) (s
 		// found no registration, so a retained, exact helper can be reused for
 		// this one new request. The previous request is never retried silently.
 		if err = validateBridgeHelper(helper, content); err != nil {
-			return "", err
+			return "", id, err
 		}
 		if err = validateBridgeCredential(state, id, true); err != nil {
-			return "", err
+			return "", id, err
 		}
 	} else if err != nil {
-		return "", errors.New("bridge helper could not be created")
+		return "", id, errors.New("bridge helper could not be created")
 	}
 	if createdHelper {
 		_, err = f.WriteString(content)
@@ -195,21 +238,21 @@ func connectObservedSession(ctx context.Context, state, reference, id string) (s
 		closeErr := f.Close()
 		if err != nil || closeErr != nil {
 			_ = os.Remove(helper)
-			return "", errors.New("bridge helper could not be created")
+			return "", id, errors.New("bridge helper could not be created")
 		}
 	}
-	_, err = workCall(ctx, client, "agent.add", map[string]any{"id": id, "config": definition, "external": true, "external_ref": reference})
+	_, err = workCall(ctx, client, "agent.add", map[string]any{"id": id, "config": definition, "external": true, "external_ref": reference, "title": label})
 	if err != nil {
 		var problem *managed.Fault
 		if errors.As(err, &problem) && problem.Code == "transport" {
-			return "", fmt.Errorf("registration outcome is uncertain; retained private helper for %s; refresh sessions and reconnect with the same observed ID and name to recover without changing its identity: %w", id, err)
+			return "", id, fmt.Errorf("registration outcome is uncertain; retained private helper for %s; refresh sessions and reconnect with the same observed ID and name to recover without changing its identity: %w", id, err)
 		}
 		if createdHelper {
 			_ = os.Remove(helper)
 		}
-		return "", err
+		return "", id, err
 	}
-	return bridgeInstructions(state, id), nil
+	return bridgeInstructions(state, id), id, nil
 }
 
 // readBridgeFile reads only a bounded private regular file and rejects symlinks
@@ -266,13 +309,14 @@ func bridgeInstructions(state, id string) string {
 
 func runWorkConnect(args []string, out, diagnostics io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(diagnostics, "Usage: agentmux connect OBSERVED_ID --name NAME [--session work | --state DIR]")
+		fmt.Fprintln(diagnostics, "Usage: agentmux connect OBSERVED_ID [--title TASK] [--name ID] [--session work | --state DIR]")
 		return exitValidation
 	}
 	reference := args[0]
 	flags := flag.NewFlagSet("connect", flag.ContinueOnError)
 	flags.SetOutput(diagnostics)
 	name := flags.String("name", "", "stable human-readable Agentmux session ID")
+	title := flags.String("title", "", "optional human task title; a stable ID is generated when --name is omitted")
 	state := flags.String("state", "", "workspace state directory")
 	session := flags.String("session", "work", "workspace")
 	if err := flags.Parse(args[1:]); err != nil {
@@ -288,9 +332,10 @@ func runWorkConnect(args []string, out, diagnostics io.Writer) int {
 	o, err := parseWorkOptions(values)
 	if err == nil {
 		var text string
-		text, err = connectObservedSession(context.Background(), o.state, reference, *name)
+		var id string
+		text, id, err = connectObservedSessionWithID(context.Background(), o.state, reference, *name, *title)
 		if err == nil {
-			fmt.Fprintln(out, "Bridge ready. Paste this setup into the existing native session:\n\n"+text)
+			fmt.Fprintln(out, "Bridge "+id+" ready. Paste this setup into the existing native session:\n\n"+text)
 			return 0
 		}
 	}

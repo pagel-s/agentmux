@@ -160,7 +160,8 @@ func runWorkSession(operation string, args []string, in io.Reader, out, diagnost
   agentmux reply TASK_OR_MESSAGE_ID "message" [--session work | --state DIR]
   agentmux inbox [--session work | --state DIR]
   agentmux board "note" [--group ID | --board NAMESPACE] [--session work | --state DIR]
-  agentmux add NAME --harness claude|codex|pi --project DIR [--role "..."]
+  agentmux add [NAME] --harness claude|codex|pi --project DIR [--title "..."] [--role "..."]
+  agentmux label ID "Fix login redirect"
   agentmux remove NAME
   agentmux sessions
   agentmux connect OBSERVED_ID --name NAME
@@ -303,7 +304,7 @@ Legacy raw pane input remains: agentmux send SESSION PANE -- COMMAND.`)
 		return fail(errors.New("work session not found; use agentmux start or select --state / --session"))
 	}
 	client := managed.NewClient(credential)
-	if operation == "remove" || operation == "collaborate" || operation == "isolate" {
+	if operation == "remove" || operation == "collaborate" || operation == "isolate" || operation == "label" {
 		if err := workAgentOperation(operation, o, client, out); err != nil {
 			return fail(err)
 		}

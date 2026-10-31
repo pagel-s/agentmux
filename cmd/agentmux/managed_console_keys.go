@@ -84,6 +84,17 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "ctrl+u":
 			m.text = nil
 			m.textCursor = 0
+			m.findIndex = 0
+		case "up", "down":
+			if m.composer == "find" {
+				if n := len(m.sessionMatches()); n > 0 {
+					step := 1
+					if key == "up" {
+						step = n - 1
+					}
+					m.findIndex = (m.findIndex + step) % n
+				}
+			}
 		case "left":
 			if m.textCursor > 0 {
 				m.textCursor--
@@ -106,7 +117,23 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.text = append(m.text[:m.textCursor], m.text[m.textCursor+1:]...)
 			}
 		case "enter":
-			if m.busy || strings.TrimSpace(string(m.text)) == "" && m.composer != "new-role" {
+			if m.composer == "find" {
+				matches := m.sessionMatches()
+				if len(matches) == 0 {
+					return m, nil
+				}
+				match := matches[m.findIndex%len(matches)]
+				m.composer, m.details = "", ""
+				m.text = nil
+				if match.agent >= 0 {
+					m.selected, m.tab = match.agent, 1
+					m.scope, m.memoryOpen = 0, false
+					return m, m.fetch
+				}
+				m.observedSelected, m.tab = match.observation, 5
+				return m, nil
+			}
+			if m.busy || strings.TrimSpace(string(m.text)) == "" && m.composer != "new-role" && m.composer != "new-title" && m.composer != "label" {
 				return m, nil
 			}
 			if strings.HasPrefix(m.composer, "new-") {
@@ -122,11 +149,16 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				text = "Follow-up to " + reference + ":\n" + text
 			}
 			namespace, memoryKey, version := m.memoryNamespace, m.memoryKey, m.memoryVersion
+			labelVersion := m.labelVersion
 			m.composer = ""
 			m.text = nil
 			m.textCursor = 0
 			m.busy = true
 			return m, func() tea.Msg {
+				if kind == "label" {
+					_, err := workCall(context.Background(), m.client, "agent.label", map[string]any{"id": target, "title": text, "version": labelVersion})
+					return consoleAction{message: "Session title saved; permanent ID and native conversation unchanged.", err: err}
+				}
 				if kind == "memory-value" {
 					_, err := workCall(context.Background(), m.client, "memory.put", map[string]any{"namespace": namespace, "key": memoryKey, "value": text, "version": version})
 					return consoleAction{message: "Memory saved with version checking. Press v to refresh.", err: err}
@@ -146,6 +178,7 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			if len(m.text)+len(runes) <= 16384 {
+				m.findIndex = 0
 				m.text = append(m.text[:m.textCursor], append(append([]rune{}, runes...), m.text[m.textCursor:]...)...)
 				m.textCursor += len(runes)
 			}
@@ -153,6 +186,17 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	switch key {
+	case "/":
+		m.findIndex = 0
+		m.compose("find", "task / project / provider / ID", "", "")
+	case "L":
+		if !m.busy && m.selectedID() != "" && m.tab != 5 {
+			a := m.agents[m.selected%len(m.agents)]
+			m.labelVersion = a.TitleVersion
+			m.compose("label", a.ID+" (empty clears title)", "", a.Title)
+			// The submitted target must be the ID alone, not its display hint.
+			m.composeTarget = a.ID
+		}
 	case "q", "ctrl+c":
 		return m, m.close()
 	case "esc":
@@ -195,7 +239,7 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.tab == 5 {
 			if observations := m.observedSessions(); len(observations) > 0 {
 				v := observations[m.observedSelected%len(observations)]
-				m.details = "Observed ID: " + v.ID + "\nOriginal terminal: " + v.TTY + "\n" + v.AttachCommand + "\nConnect bridge: press c, then copy the displayed setup into the existing native conversation. No terminal input is injected."
+				m.details = observedTitle(v) + "\nObserved ID: " + v.ID + "\nProject: " + v.Project + "\nStarted: " + sessionAdded(v.StartedAt) + "\nOriginal terminal: " + v.TTY + "\nTmux: " + v.TmuxSession + "\n" + v.AttachCommand + "\nConnect bridge: press c, then copy the displayed setup into the existing native conversation. No terminal input is injected."
 			}
 			return m, nil
 		}
@@ -226,7 +270,7 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "N":
 		if !m.busy {
 			m.newNative = consoleNativeDraft{provider: "claude", project: m.selectedProject()}
-			m.compose("new-id", "unique session ID", "", "")
+			m.compose("new-title", "What are you working on? (optional)", "", "")
 		}
 	case "x":
 		if m.tab == 5 {
@@ -452,6 +496,13 @@ func (m console) selectedBoard() string {
 func (m console) nativeDraftNext() (tea.Model, tea.Cmd) {
 	text := strings.TrimSpace(string(m.text))
 	switch m.composer {
+	case "new-title":
+		if err := managed.ValidateSessionTitle(text); err != nil {
+			m.message = err.Error()
+			return m, nil
+		}
+		m.newNative.title = text
+		m.compose("new-provider", "claude / codex / pi", "", m.newNative.provider)
 	case "new-id":
 		if !managedconfig.ValidID(text) {
 			m.message = "Use an ID starting with a letter, followed by letters, digits, - or _."

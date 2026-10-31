@@ -25,6 +25,14 @@
         <div class="rail-heading">
           <span>AGENTS</span><span id="agent-count">0</span>
         </div>
+        <label class="session-search"
+          ><span class="sr-only">Search sessions</span
+          ><input
+            id="session-search"
+            type="search"
+            placeholder="Find a session…"
+            autocomplete="off"
+        /></label>
         <div id="agents" class="agent-list"></div>
         <div class="rail-bottom">
           <kbd>F1</kbd> terminal workbench<br /><kbd>Ctrl-b b</kbd> shared board
@@ -35,6 +43,9 @@
         <div class="workspace-header">
           <div class="agent-title">
             <h1 id="agent-name">Select an agent</h1>
+            <button id="edit-title" class="quiet" aria-label="Edit task title">
+              Rename
+            </button>
             <span id="agent-harness"></span>
           </div>
           <div class="agent-actions">
@@ -43,9 +54,28 @@
             ><button id="pause-agent" class="quiet">Autonomy</button>
           </div>
           <p id="agent-role"></p>
+          <form id="title-editor" class="title-editor" hidden>
+            <label for="task-title" id="title-editor-target">Task title</label>
+            <input
+              id="task-title"
+              maxlength="120"
+              placeholder="e.g. Fix sign-in flow"
+              autocomplete="off"
+            />
+            <button type="submit">Save title</button
+            ><button type="button" id="clear-title" class="quiet">Clear</button
+            ><button type="button" id="cancel-title" class="quiet">
+              Cancel
+            </button>
+          </form>
         </div>
         <div class="workspace-meta">
-          <span id="agent-workdir"></span><span id="agent-boundary"></span>
+          <code id="agent-id"></code><span id="agent-workdir"></span
+          ><span id="agent-boundary"></span>
+        </div>
+        <div class="workspace-meta identity-meta">
+          <span id="agent-origin"></span><span id="agent-started"></span
+          ><span id="agent-terminal"></span>
         </div>
         <nav class="tabs" aria-label="Workspace views">
           <button data-tab="activity" class="active">Board</button
@@ -59,16 +89,15 @@
         <div class="workspace-content">
           <section id="view-sessions" class="view">
             <div class="section-label">
-              <h2>Sessions</h2>
-              <span>STABLE IDS · NATIVE TERMINALS</span>
+              <h2>New session</h2>
+              <span>NATIVE TERMINAL · COLLABORATION OFF</span>
             </div>
             <form id="add-session" class="session-form">
               <input
-                id="new-name"
-                aria-label="New session ID"
-                placeholder="Session ID"
-                required
-                pattern="[A-Za-z][A-Za-z0-9_-]{0,63}"
+                id="new-title"
+                aria-label="New task title"
+                placeholder="Task title (optional)"
+                maxlength="120"
               /><select id="new-harness" aria-label="Native interface">
                 <option>claude</option>
                 <option>codex</option>
@@ -80,7 +109,13 @@
                 required
               /><button type="submit">New session</button>
               <details>
-                <summary>Role & isolation</summary>
+                <summary>Role, isolation & stable ID</summary>
+                <input
+                  id="new-name"
+                  aria-label="New session ID"
+                  placeholder="Stable ID (generated if empty)"
+                  pattern="[A-Za-z][A-Za-z0-9_-]{0,63}"
+                />
                 <input
                   id="new-role"
                   aria-label="Session role"
@@ -95,6 +130,11 @@
                 </select>
               </details>
             </form>
+            <div class="section-label">
+              <h2>Workspace sessions</h2>
+              <span id="registered-count"></span>
+            </div>
+            <div id="registered-sessions"></div>
             <div class="section-label">
               <h2>Observed terminals</h2>
               <span>NO INPUT INJECTION</span>

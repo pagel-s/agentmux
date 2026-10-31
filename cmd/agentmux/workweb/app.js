@@ -22,6 +22,11 @@ let snapshot = null,
   boardFilter = "all",
   observedSignature = "";
 const messageDrafts = new Map();
+const titleDrafts = new Map(),
+  observedDrafts = new Map();
+let sessionQuery = "",
+  titleEditor = null,
+  titleEditorEpoch = 0;
 let pendingDraftKind = "";
 let memoryEditorNamespace = "",
   memoryEditorEpoch = 0,
@@ -46,6 +51,245 @@ const stamp = (text) => {
         second: "2-digit",
       });
 };
+const providerName = (name) =>
+  ({
+    claude: "Claude",
+    codex: "Codex",
+    pi: "Pi",
+    antigravity: "Antigravity",
+    command: "Command",
+  })[name] ||
+  name ||
+  "Agent";
+const projectName = (path) =>
+  path
+    ? path
+        .replace(/[\\/]+$/, "")
+        .split(/[\\/]/)
+        .pop() || path
+    : "";
+function sessionTitle(agent) {
+  if (!agent) return "Session";
+  if (agent.title) return agent.title;
+  const project = projectName(agent.config?.workdir || agent.project),
+    provider = providerName(agent.config?.harness || agent.harness);
+  return project ? project + " · " + provider : provider;
+}
+function sessionReference(id) {
+  const agent = snapshot?.agents?.find((a) => a.id === id);
+  return agent ? sessionTitle(agent) + " (" + id + ")" : id;
+}
+function sessionOrigin(agent) {
+  return agent.external ? "External bridge" : "Workspace";
+}
+function terminalIdentity(observed) {
+  return [
+    observed?.tmux_session ? "tmux " + observed.tmux_session : "",
+    observed?.pane || "",
+    observed?.tty || "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+function sessionTime(text, label) {
+  if (!text) return "";
+  const date = new Date(text);
+  return Number.isFinite(+date) && date.getUTCFullYear() > 1970
+    ? label +
+        " " +
+        date.toLocaleString([], {
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+    : "";
+}
+function matchesSession(item) {
+  const text = [
+    item.id,
+    item.title,
+    item.project,
+    item.harness,
+    item.config?.workdir,
+    item.config?.harness,
+    item.source,
+    item.tmux_session,
+    item.tty,
+    item.external ? "external" : "workspace",
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLocaleLowerCase();
+  return sessionQuery
+    .toLocaleLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .every((term) => text.includes(term));
+}
+function emptySearch(list, kind) {
+  const box = el(
+      "div",
+      "empty",
+      "No " + kind + " match “" + sessionQuery + "”.",
+    ),
+    clear = el("button", "quiet", "Clear search");
+  clear.onclick = () => {
+    $("session-search").value = "";
+    sessionQuery = "";
+    renderSessionLists();
+    renderObserved();
+  };
+  box.append(document.createElement("br"), clear);
+  list.append(box);
+}
+function renderSessionLists() {
+  if (!snapshot) return;
+  const all = snapshot.agents || [],
+    agents = all.filter(matchesSession),
+    list = $("agents");
+  $("agent-count").textContent = sessionQuery
+    ? agents.length + " / " + all.length
+    : all.length;
+  $("registered-count").textContent = agents.length + " OF " + all.length;
+  const signature = JSON.stringify([
+    selected,
+    sessionQuery,
+    (snapshot.observed || []).map((s) => [
+      s.id,
+      s.started_at,
+      s.tty,
+      s.tmux_session,
+      s.pane,
+    ]),
+    agents.map((a) => [
+      a.id,
+      a.title,
+      a.title_version,
+      a.created_at,
+      a.external,
+      a.state,
+      a.config.harness,
+      a.config.workdir,
+      a.config.interaction,
+      snapshot.runtime.agents?.[a.id]?.state,
+    ]),
+  ]);
+  if (signature === agentSignature) return;
+  agentSignature = signature;
+  list.replaceChildren();
+  $("registered-sessions").replaceChildren();
+  if (!agents.length) {
+    emptySearch(list, "sessions");
+    emptySearch($("registered-sessions"), "workspace sessions");
+    return;
+  }
+  for (const item of agents) {
+    const config = item.config,
+      row = el("button", "agent-row" + (item.id === selected ? " active" : "")),
+      title = sessionTitle(item),
+      observed = (snapshot.observed || []).find(
+        (s) => s.id === item.external_ref,
+      );
+    row.type = "button";
+    row.dataset.agent = item.id;
+    row.setAttribute("aria-pressed", String(item.id === selected));
+    row.setAttribute(
+      "aria-label",
+      title + " · " + item.id + " · " + providerName(config.harness),
+    );
+    row.title = [
+      title,
+      item.id,
+      config.workdir,
+      sessionOrigin(item),
+      sessionTime(item.created_at, "Added"),
+      terminalIdentity(observed),
+    ]
+      .filter(Boolean)
+      .join("\n");
+    row.append(el("span", "agent-icon", config.harness.slice(0, 2)));
+    const copy = el("span", "agent-copy");
+    copy.append(
+      el("strong", "", title),
+      el("small", "", item.id + " · " + providerName(config.harness)),
+      el(
+        "small",
+        "agent-project",
+        projectName(config.workdir) || sessionOrigin(item),
+      ),
+    );
+    row.append(copy);
+    const status = snapshot.runtime.agents?.[item.id]?.state || item.state,
+      dot = el(
+        "span",
+        "agent-dot" +
+          (status !== "running" && status !== "active" ? " exited" : ""),
+      );
+    dot.title = status;
+    row.append(dot);
+    row.onclick = () => selectAgent(item.id);
+    list.append(row);
+    const entry = el("article", "session-row"),
+      details = el("div"),
+      open = el("button", "quiet", "Select");
+    details.append(
+      el("strong", "", title),
+      el(
+        "small",
+        "",
+        item.id +
+          " · " +
+          providerName(config.harness) +
+          " · " +
+          sessionOrigin(item) +
+          " · " +
+          status,
+      ),
+      el("small", "", config.workdir || "No project directory available"),
+    );
+    const metadata = [
+      sessionTime(item.created_at, "Added"),
+      sessionTime(observed?.started_at, "Started"),
+      terminalIdentity(observed),
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    if (metadata) details.append(el("small", "", metadata));
+    open.setAttribute("aria-label", "Select " + title + " (" + item.id + ")");
+    open.onclick = () => selectAgent(item.id);
+    entry.append(details, open);
+    $("registered-sessions").append(entry);
+  }
+}
+function closeTitleEditor(preserve = false) {
+  if (titleEditor) {
+    if (preserve)
+      titleDrafts.set(titleEditor.id, {
+        title: $("task-title").value,
+        version: titleEditor.version,
+      });
+    else titleDrafts.delete(titleEditor.id);
+  }
+  titleEditor = null;
+  titleEditorEpoch++;
+  $("title-editor").hidden = true;
+}
+function openTitleEditor() {
+  if (!selectionReady()) return;
+  const agent = snapshot.agents.find((a) => a.id === selected);
+  if (!agent) return;
+  const draft = titleDrafts.get(agent.id);
+  titleEditor = {
+    id: agent.id,
+    version: draft?.version ?? agent.title_version ?? 0,
+  };
+  titleEditorEpoch++;
+  $("title-editor-target").textContent = "Task title for " + agent.id;
+  $("task-title").value = draft?.title ?? agent.title ?? "";
+  $("title-editor").hidden = false;
+  $("task-title").focus();
+}
 async function api(path, body) {
   const options = {
     headers: { Authorization: "Bearer " + token },
@@ -93,6 +337,7 @@ function selectionControls() {
     "graph-edit",
     "memory-namespace",
     "load-memory",
+    "edit-title",
   ]) {
     $(id).disabled =
       !ready ||
@@ -129,6 +374,7 @@ function selectAgent(id) {
       kind: $("message-kind").value,
       reply: replyTo,
     });
+  closeTitleEditor(true);
   selected = id;
   clearReply();
   boundarySignature = "";
@@ -214,54 +460,22 @@ function render() {
   $("session").textContent = snapshot.runtime.session || "Work session";
   $("runtime-state").textContent =
     "Runtime · " + (snapshot.runtime.state || "unavailable");
-  $("agent-count").textContent = agents.length;
-  const list = $("agents"),
-    nextAgents = JSON.stringify([
-      selected,
-      agents.map((a) => [
-        a.id,
-        a.state,
-        a.config.interaction,
-        snapshot.runtime.agents?.[a.id]?.state,
-      ]),
-    ]);
-  if (nextAgents !== agentSignature) {
-    agentSignature = nextAgents;
-    list.replaceChildren();
-    for (const item of agents) {
-      const config = item.config,
-        row = el(
-          "button",
-          "agent-row" + (item.id === selected ? " active" : ""),
-        );
-      row.type = "button";
-      row.dataset.agent = item.id;
-      row.setAttribute("aria-pressed", String(item.id === selected));
-      row.append(el("span", "agent-icon", config.harness.slice(0, 2)));
-      const copy = el("span", "agent-copy");
-      copy.append(
-        el("strong", "", item.id),
-        el(
-          "small",
-          "",
-          item.external ? "external bridge" : config.interaction || "managed",
-        ),
-      );
-      row.append(copy);
-      const status = snapshot.runtime.agents?.[item.id]?.state || item.state;
-      const dot = el(
-        "span",
-        "agent-dot" +
-          (status !== "running" && status !== "active" ? " exited" : ""),
-      );
-      dot.title = status;
-      row.append(dot);
-      row.onclick = () => selectAgent(item.id);
-      list.append(row);
-    }
-  }
+  renderSessionLists();
   if (!a) return;
-  $("agent-name").textContent = a.id;
+  $("agent-name").textContent = sessionTitle(a);
+  $("agent-name").title = sessionTitle(a);
+  $("agent-id").textContent = a.id;
+  const observed = (snapshot.observed || []).find(
+    (s) => s.id === a.external_ref,
+  );
+  $("agent-origin").textContent = sessionOrigin(a);
+  $("agent-started").textContent = [
+    sessionTime(a.created_at, "Added"),
+    sessionTime(observed?.started_at, "Started"),
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  $("agent-terminal").textContent = terminalIdentity(observed);
   $("agent-role").textContent = a.config.role || "No role configured";
   $("agent-harness").textContent =
     a.config.harness.toUpperCase() +
@@ -376,11 +590,14 @@ function renderFeed() {
     item.append(el("span", "feed-icon", m.board ? "#" : "↗"));
     const heading = el("div", "feed-title");
     heading.append(
-      el("strong", "", m.from),
+      el("strong", "", sessionReference(m.from)),
       el(
         "span",
         "destination",
-        "→ " + (m.board ? "#" + scopeLabel(m.board) : (m.to || []).join(", ")),
+        "→ " +
+          (m.board
+            ? "#" + scopeLabel(m.board)
+            : (m.to || []).map(sessionReference).join(", ")),
       ),
       el("time", "", stamp(m.created_at)),
     );
@@ -399,7 +616,10 @@ function renderTasks() {
   const tasks = snapshot.activity.tasks || [],
     list = $("tasks");
   $("task-count").textContent = tasks.length;
-  const nextTasks = JSON.stringify(tasks);
+  const nextTasks = JSON.stringify([
+    tasks,
+    (snapshot.agents || []).map((a) => [a.id, a.title]),
+  ]);
   if (nextTasks === taskSignature) return;
   taskSignature = nextTasks;
   list.replaceChildren();
@@ -417,7 +637,11 @@ function renderTasks() {
     const item = el("article", "task-item"),
       title = el("div", "task-title");
     title.append(
-      el("strong", "", t.from + " → " + t.to),
+      el(
+        "strong",
+        "",
+        sessionReference(t.from) + " → " + sessionReference(t.to),
+      ),
       el("span", "task-state", t.state + " / " + t.delivery),
       el("code", "", t.id),
     );
@@ -470,17 +694,23 @@ function renderBoundaries() {
     peer =
       agents.find((a) => a.id !== selected && a.state === "active")?.id ||
       selected;
-  const next = JSON.stringify([selected, peer, b, agents.map((a) => a.id)]);
+  const next = JSON.stringify([
+    selected,
+    peer,
+    b,
+    agents.map((a) => [a.id, a.title]),
+  ]);
   if (next === boundarySignature) return;
   boundarySignature = next;
+  const options = agents.map((a) => [a.id, sessionReference(a.id)]);
   if (
-    [...select.options].map((o) => o.value).join("\n") !==
-    agents.map((a) => a.id).join("\n")
+    JSON.stringify([...select.options].map((o) => [o.value, o.textContent])) !==
+    JSON.stringify(options)
   )
     select.replaceChildren(
-      ...agents.map((a) => {
-        const option = el("option", "", a.id);
-        option.value = a.id;
+      ...options.map(([id, label]) => {
+        const option = el("option", "", label);
+        option.value = id;
         return option;
       }),
     );
@@ -840,7 +1070,9 @@ function renderComposer() {
     pendingDraftKind = "";
   }
   const board = select.value.startsWith("board:") ? select.value.slice(6) : "";
-  $("send-target").textContent = board ? "#" + scopeLabel(board) : selected;
+  $("send-target").textContent = board
+    ? "#" + scopeLabel(board)
+    : sessionReference(selected);
   $("delivery-hint").textContent = board
     ? "Shared board. Only sessions allowed to read this namespace receive its context."
     : a?.config.interaction === "interactive"
@@ -856,7 +1088,8 @@ function renderObserved() {
   const observed = (snapshot.observed || []).filter(
     (s) => !connected.has(s.id),
   );
-  const signature = JSON.stringify(observed);
+  const filtered = observed.filter(matchesSession);
+  const signature = JSON.stringify([sessionQuery, filtered]);
   if (signature === observedSignature) return;
   observedSignature = signature;
   const list = $("observed-sessions");
@@ -871,32 +1104,65 @@ function renderObserved() {
     );
     return;
   }
-  for (const s of observed) {
+  if (!filtered.length) {
+    emptySearch(list, "observed terminals");
+    return;
+  }
+  for (const s of filtered) {
     const row = el("article", "session-row"),
       copy = el("div");
     copy.append(
-      el("strong", "", s.harness + " · " + (s.title || s.tty || s.id)),
-      el("small", "", s.project || "Original terminal"),
-      el("small", "", s.id + " · observed only"),
+      el("strong", "", s.title || sessionTitle(s)),
+      el(
+        "small",
+        "",
+        providerName(s.harness) + " · " + s.id + " · observed only",
+      ),
+      el("small", "", s.project || "Project unavailable"),
     );
+    const metadata = [sessionTime(s.started_at, "Started"), terminalIdentity(s)]
+      .filter(Boolean)
+      .join(" · ");
+    if (metadata) copy.append(el("small", "", metadata));
     const controls = el("div", "session-actions"),
-      name = el("input");
-    name.value = s.harness + "_" + s.pid;
+      title = el("input"),
+      name = el("input"),
+      details = el("details"),
+      summary = el("summary", "", "Stable ID");
+    const draft = observedDrafts.get(s.id);
+    title.value = draft?.title || "";
+    title.placeholder = "Task title (optional)";
+    title.maxLength = 120;
+    title.setAttribute("aria-label", "Task title for observed " + s.id);
+    name.value = draft?.name || "";
+    name.placeholder = "Generated automatically";
     name.setAttribute("aria-label", "Agentmux ID for " + s.id);
+    const saveDraft = () =>
+      observedDrafts.set(s.id, { title: title.value, name: name.value });
+    title.oninput = saveDraft;
+    name.oninput = saveDraft;
+    details.append(summary, name);
     const connect = el("button", "", "Connect");
     connect.onclick = () => {
-      const id = name.value;
+      const id = name.value,
+        taskTitle = title.value,
+        observedID = s.id,
+        initialSelection = selected;
       action(async () => {
         const result = await api("/api/connect", {
-          observed_id: s.id,
+          observed_id: observedID,
           name: id,
+          title: taskTitle,
         });
-        selectAgent(result.id);
-        $("bridge-setup").textContent = result.setup;
-        $("bridge-panel").classList.remove("hidden");
+        observedDrafts.delete(observedID);
+        if (selected === initialSelection) {
+          selectAgent(result.id);
+          $("bridge-setup").textContent = result.setup;
+          $("bridge-panel").classList.remove("hidden");
+        }
       }, "Bridge ready. Copy setup and paste it in the original native session. Its conversation was not changed.");
     };
-    controls.append(name, connect);
+    controls.append(title, details, connect);
     row.append(copy, controls);
     list.append(row);
   }
@@ -905,20 +1171,24 @@ $("message-kind").onchange = renderComposer;
 $("add-session").onsubmit = (event) => {
   event.preventDefault();
   const name = $("new-name").value,
+    title = $("new-title").value,
     harness = $("new-harness").value,
     project = $("new-project").value,
     role = $("new-role").value,
-    sandbox = $("new-sandbox").value;
+    sandbox = $("new-sandbox").value,
+    initialSelection = selected;
   action(async () => {
     const result = await api("/api/add", {
       name,
+      title,
       harness,
       project,
       role,
       sandbox,
     });
-    selectAgent(result.id);
-    $("new-name").value = "";
+    if (selected === initialSelection) selectAgent(result.id);
+    if ($("new-name").value === name) $("new-name").value = "";
+    if ($("new-title").value === title) $("new-title").value = "";
   }, "Session added. Collaboration stays off until you allow it.");
 };
 $("copy-bridge").onclick = async () => {
@@ -975,5 +1245,50 @@ function scopeLabel(name) {
   const group = (snapshot?.groups || []).find(
     (g) => g.board === name || g.memory === name,
   );
-  return group ? group.agents.join(" + ") : name;
+  return group
+    ? group.agents.map(sessionReference).join(" + ")
+    : name;
 }
+
+$("session-search").oninput = () => {
+  sessionQuery = $("session-search").value.trim();
+  renderSessionLists();
+  renderObserved();
+};
+$("edit-title").onclick = openTitleEditor;
+$("cancel-title").onclick = () => closeTitleEditor(false);
+$("clear-title").onclick = () => {
+  $("task-title").value = "";
+  $("title-editor").requestSubmit();
+};
+$("task-title").onkeydown = (event) => {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeTitleEditor(false);
+  }
+};
+$("title-editor").onsubmit = (event) => {
+  event.preventDefault();
+  if (!titleEditor || !selectionReady()) return;
+  const { id, version } = titleEditor,
+    title = $("task-title").value,
+    epoch = titleEditorEpoch;
+  action(
+    async () => {
+      const result = await call("agent.label", { id, title, version }),
+        nextVersion = result.agent.title_version;
+      const draft = titleDrafts.get(id);
+      if (draft?.version === version) {
+        if (draft.title === title) titleDrafts.delete(id);
+        else titleDrafts.set(id, { ...draft, version: nextVersion });
+      }
+      if (titleEditorEpoch === epoch && titleEditor?.id === id) {
+        if ($("task-title").value === title) closeTitleEditor(false);
+        else titleEditor.version = nextVersion;
+      }
+    },
+    title
+      ? "Task title saved for " + id + "."
+      : "Task title cleared for " + id + ".",
+  );
+};

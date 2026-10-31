@@ -2,9 +2,11 @@ package sessioninventory
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 )
 
 const started = "Sat Oct 31 19:51:40 2026"
@@ -138,5 +140,66 @@ func TestCanceledDiscoveryDoesNotReturnPartialObservations(t *testing.T) {
 	got := discover(ctx, processes, nil, nil, func(p process) string { return lifetimeID(p.pid, p.start) }, func(int) string { return "" })
 	if len(got) != 0 {
 		t.Fatalf("canceled inventory returned observations: %#v", got)
+	}
+}
+
+func TestObservedProcessStartUsesHostTimezoneAndSeasonalOffset(t *testing.T) {
+	newYork, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		raw      string
+		location *time.Location
+		want     string
+	}{
+		{started, time.UTC, "2026-10-31T19:51:40Z"},
+		{started, time.FixedZone("project-host", 5*3600+30*60), "2026-10-31T14:21:40Z"},
+		{"Wed Jul 15 09:12:13 2026", newYork, "2026-07-15T13:12:13Z"},
+		{"Thu Jan 15 09:12:13 2026", newYork, "2026-01-15T14:12:13Z"},
+		{"Sun Nov 1 01:30:00 2026", newYork, ""}, // Repeated hour has no unique offset.
+		{"Sun Mar 8 02:30:00 2026", newYork, ""}, // This wall time never occurred.
+		{"", time.UTC, ""},
+		{"unavailable", time.UTC, ""},
+		{"Sat Oct 99 19:51:40 2026", time.UTC, ""},
+		{started, nil, ""},
+	} {
+		if got := processStartedAt(tc.raw, tc.location); got != tc.want {
+			t.Errorf("start %q in %v: got %q, want %q", tc.raw, tc.location, got, tc.want)
+		}
+	}
+}
+
+func TestIdenticalProviderAndProjectRemainDistinctByLifetimeAndTerminal(t *testing.T) {
+	processes := map[int]process{
+		20: fixtureProcess(20, 1, "pts/1", "claude"),
+		21: fixtureProcess(21, 1, "pts/2", "claude"),
+	}
+	later := processes[21]
+	later.start = "Sat Oct 31 20:51:40 2026"
+	processes[21] = later
+	project := func(int) string { return "/work/same-project" }
+	inventory := discover(context.Background(), processes, nil, nil, func(p process) string { return lifetimeID(p.pid, p.start) }, project)
+	if len(inventory) != 2 {
+		t.Fatalf("same-project native terminals were collapsed: %+v", inventory)
+	}
+	a, b := inventory[0], inventory[1]
+	if a.Harness != b.Harness || a.Project != b.Project || a.Title != b.Title {
+		t.Fatal("fixture no longer represents identical provider/project labels")
+	}
+	if a.ID == b.ID || a.TTY == b.TTY || a.StartedAt == "" || b.StartedAt == "" || a.StartedAt == b.StartedAt {
+		t.Fatalf("observational identity metadata cannot distinguish sessions: %+v", inventory)
+	}
+	if a.Coordination || b.Coordination {
+		t.Fatal("start metadata implicitly connected a native session")
+	}
+	var fields map[string]any
+	known, _ := json.Marshal(a)
+	if err := json.Unmarshal(known, &fields); err != nil || fields["started_at"] != a.StartedAt {
+		t.Fatalf("start timestamp not exposed through JSON: %s (%v)", known, err)
+	}
+	unknown, _ := json.Marshal(Session{ID: "unknown-start"})
+	if strings.Contains(string(unknown), "started_at") {
+		t.Fatalf("unknown start was represented as a fabricated timestamp: %s", unknown)
 	}
 }

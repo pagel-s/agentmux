@@ -146,7 +146,7 @@ func Init(dir string, cfg managedconfig.Config) (*Store, error) {
 		return nil, err
 	}
 	data, _ := json.Marshal(cfg)
-	if _, err = db.Exec("INSERT INTO metadata(key,value) VALUES('config',?),('schema','1')", string(data)); err != nil {
+	if _, err = db.Exec("INSERT INTO metadata(key,value) VALUES('config',?),('schema','1'),('created_at',?)", string(data), now()); err != nil {
 		return nil, err
 	}
 	ids := []string{ownerID}

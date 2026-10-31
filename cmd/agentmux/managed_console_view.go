@@ -50,13 +50,7 @@ func consoleClip(value string, width, height int) string {
 func (m console) roster(width, height int) string {
 	var out strings.Builder
 	out.WriteString(consoleMuted.Render("AGENTS") + "\n\n")
-	start := 0
-	if m.selected > height/3-2 {
-		start = m.selected - height/3 + 2
-	}
-	if start < 0 {
-		start = 0
-	}
+	start := max(0, m.selected-max(1, (height-5)/4)+1)
 	for i := start; i < len(m.agents); i++ {
 		a := m.agents[i]
 		mode := a.Config.Interaction
@@ -73,20 +67,27 @@ func (m console) roster(width, height int) string {
 		if pane, ok := m.data.runtime.Agents[a.ID]; ok {
 			status = pane.State
 		}
-		name := "  " + a.ID
+		name := "  " + consoleContent(sessionTitle(a), 150)
 		if i == m.selected {
-			name = consoleSelected.Render("› " + a.ID)
+			name = consoleSelected.Render("› " + consoleContent(sessionTitle(a), 150))
 		}
-		out.WriteString(consoleClip(name, width, 1) + "\n" + consoleMuted.Render(consoleClip("  "+mode+" · "+status, width, 1)) + "\n\n")
+		out.WriteString(consoleClip(name, width, 1) + "\n" + consoleMuted.Render(consoleClip("  "+a.ID+" · "+a.Config.Harness, width, 1)) + "\n" + consoleMuted.Render(consoleClip(consoleContent("  "+sessionProject(a.Config.Workdir)+" · "+mode+" · "+status, 300), width, 1)) + "\n\n")
 		if lipgloss.Height(out.String()) >= height-2 {
 			break
 		}
 	}
-	out.WriteString(consoleMuted.Render("↑/↓ select\nEnter open native CLI"))
+	out.WriteString(consoleMuted.Render("↑/↓ select · / find\nEnter native CLI · L title"))
 	return consoleClip(out.String(), width, height)
 }
 func (m console) panel(width, height int) string {
+	if m.composer == "find" {
+		return m.sessionSearchPanel(width, height)
+	}
 	var out strings.Builder
+	if len(m.agents) > 0 && m.tab != 5 && m.tab != 1 {
+		a := m.agents[m.selected%len(m.agents)]
+		fmt.Fprintf(&out, "%s\n%s\n\n", consoleAccent.Render(consoleContent(sessionTitle(a), 150)), consoleMuted.Render(consoleContent(a.ID+" · "+a.Config.Harness+" · "+a.Config.Workdir, 300)))
+	}
 	switch m.tab {
 	case 0:
 		board := m.selectedBoard()
@@ -121,10 +122,10 @@ func (m console) panel(width, height int) string {
 			}
 		}
 	case 1:
-		fmt.Fprintf(&out, "%s  %s\n\n", consoleAccent.Render(m.selectedID()), consoleMuted.Render("Enter opens the native terminal"))
+		fmt.Fprintf(&out, "%s  %s\n\n", consoleAccent.Render(consoleContent(m.agentLabel(m.selectedID()), 200)), consoleMuted.Render("Enter native terminal · L edit title"))
 		if len(m.agents) > 0 {
 			a := m.agents[m.selected%len(m.agents)]
-			fmt.Fprintf(&out, "%s\n%s\n%s\n\n", consoleContent(a.Config.Role, 300), consoleMuted.Render(consoleContent(a.Config.Workdir, 200)), consoleMuted.Render(a.Config.Harness+" · "+a.Config.Sandbox+" · network "+a.Config.Network))
+			fmt.Fprintf(&out, "%s\n%s\n%s\n%s\n\n", consoleContent(a.Config.Role, 300), consoleMuted.Render(consoleContent(a.Config.Workdir, 200)), consoleMuted.Render(a.Config.Harness+" · "+a.Config.Sandbox+" · network "+a.Config.Network), consoleMuted.Render(consoleContent(sessionOrigin(a)+" · added "+sessionAdded(a.CreatedAt), 200)))
 			if a.External {
 				fmt.Fprintf(&out, "%s  %s\n\n%s\n\n%s\n", consoleAccent.Render("EXTERNAL NATIVE SESSION"), consoleMuted.Render(observationStatus(a.ExternalRef, m.data.observed)), consoleContent("Use its original terminal. Helper: "+m.bridgeHelper(a.ID), 500), consoleMuted.Render("Registration prepares a bridge; it does not prove the native agent read the setup.\nCopy the setup below into its existing conversation yourself."))
 				out.WriteString("\n" + consoleContent(bridgeInstructions(m.state, a.ID), 6000))
@@ -141,7 +142,7 @@ func (m console) panel(width, height int) string {
 		out.WriteString(consoleAccent.Render("Connections") + consoleMuted.Render(fmt.Sprintf("  revision %d\n\n", m.data.boundaries.Version)))
 		if len(m.agents) > 0 {
 			target := m.agents[m.target%len(m.agents)].ID
-			fmt.Fprintf(&out, "%s  →  %s\n%s\n\n", consoleAccent.Render(m.selectedID()), consoleAccent.Render(target), consoleMuted.Render("←/→ recipient · ↑/↓ sender"))
+			fmt.Fprintf(&out, "%s  →  %s\n%s\n\n", consoleAccent.Render(consoleContent(m.agentLabel(m.selectedID()), 150)), consoleAccent.Render(consoleContent(m.agentLabel(target), 150)), consoleMuted.Render("←/→ recipient · ↑/↓ sender"))
 			for _, row := range []struct{ key, action, label string }{{"m", "message.send", "Messages"}, {"p", "ping.send", "Pings"}, {"i", "instruct", "Commands"}} {
 				enabled := boundaryAllows(m.data.boundaries, target, row.action)
 				value := "○  denied"
@@ -242,11 +243,11 @@ func (m console) panel(width, height int) string {
 		}
 		for i := first; i < len(observations) && i < first+count; i++ {
 			v := observations[i]
-			line := fmt.Sprintf("  %s · %s · %s", v.Harness, v.Source, v.TTY)
+			line := "  " + consoleContent(observedTitle(v), 160)
 			if i == m.observedSelected {
 				line = consoleSelected.Render(line)
 			}
-			fmt.Fprintf(&out, "%s\n  %s\n  %s\n", line, consoleContent(v.ID, 100), consoleMuted.Render(consoleContent(v.Project, 200)))
+			fmt.Fprintf(&out, "%s\n  %s\n  %s\n  %s\n", line, consoleContent(v.ID+" · "+v.Harness+" · "+v.TTY, 200), consoleMuted.Render(consoleContent(v.Project, 200)), consoleMuted.Render(consoleContent("started "+sessionAdded(v.StartedAt)+" · "+v.TmuxSession, 200)))
 		}
 		if m.details != "" {
 			out.WriteString("\n" + consoleAccent.Render("Manual setup / terminal details") + "\n" + consoleContent(m.details, 7000))
@@ -290,7 +291,7 @@ func (m console) View() string {
 	} else if m.message != "" {
 		footer.WriteString(consoleClip(consoleContent(m.message, 500), width, 2) + "\n")
 	}
-	footer.WriteString(consoleMuted.Render("↑/↓ select · Enter native CLI · Tab views · F1 workbench\nN new · x close/disconnect · s send · b board · +/- board · q detach/close"))
+	footer.WriteString(consoleMuted.Render("↑/↓ select · Enter native CLI · / find · L title · Tab views · F1 workbench\nN new · x close/disconnect · s send · b board · +/- board · q detach/close"))
 	bottom := consoleClip(footer.String(), width, height/2)
 	bodyHeight := height - lipgloss.Height(bottom) - 4
 	if bodyHeight < 1 {
@@ -300,7 +301,7 @@ func (m console) View() string {
 	if width < 85 && len(m.agents) > 0 {
 		first := max(0, m.selected-1)
 		for i := first; i < len(m.agents) && i < first+3; i++ {
-			label := " " + consoleContent(m.agents[i].ID, 16) + " "
+			label := " " + consoleContent(sessionTitle(m.agents[i])+" ["+m.agents[i].ID+"]", 28) + " "
 			if i == m.selected {
 				compact += consoleSelected.Render(label)
 			} else {
@@ -312,7 +313,10 @@ func (m console) View() string {
 	}
 	var body string
 	if width >= 85 {
-		sideWidth := 23
+		sideWidth := 30
+		if width < 105 {
+			sideWidth = 24
+		}
 		separator := consoleMuted.Render("│")
 		bar := strings.TrimSuffix(strings.Repeat(separator+"\n", bodyHeight), "\n")
 		right := lipgloss.NewStyle().PaddingLeft(2).Render(m.panel(width-sideWidth-4, bodyHeight))
@@ -326,7 +330,11 @@ func (m console) View() string {
 func (m console) scopeLabel(name string) string {
 	for _, g := range m.data.controls.Groups {
 		if g.Board == name || g.Memory == name {
-			return strings.Join(g.Agents, " + ")
+			labels := make([]string, 0, len(g.Agents))
+			for _, id := range g.Agents {
+				labels = append(labels, m.agentLabel(id))
+			}
+			return strings.Join(labels, " + ")
 		}
 	}
 	return name

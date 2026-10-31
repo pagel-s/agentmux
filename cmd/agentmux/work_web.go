@@ -32,7 +32,7 @@ var workWebAssets embed.FS
 // bearer capability for every API call, validates Host/Origin, and serves no
 // cross-origin API. Native output is data, never HTML or terminal input.
 func workWebHandler(state string, client *managed.Client, token, host string) http.Handler {
-	allowed := map[string]bool{"activity": true, "agent.list": true, "boundaries.get": true, "control.get": true, "control.update": true, "task.get": true, "task.list": true, "task.cancel": true, "agent.stop": true, "autonomy.status": true, "autonomy.control": true, "memory.list": true, "memory.get": true, "memory.put": true, "board.post": true}
+	allowed := map[string]bool{"activity": true, "agent.list": true, "agent.label": true, "boundaries.get": true, "control.get": true, "control.update": true, "task.get": true, "task.list": true, "task.cancel": true, "agent.stop": true, "autonomy.status": true, "autonomy.control": true, "memory.list": true, "memory.get": true, "memory.put": true, "board.post": true}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -119,6 +119,7 @@ func workWebHandler(state string, client *managed.Client, token, host string) ht
 				Text       string          `json:"text"`
 				ReplyTo    string          `json:"reply_to"`
 				Name       string          `json:"name"`
+				Title      string          `json:"title"`
 				Harness    string          `json:"harness"`
 				Project    string          `json:"project"`
 				Role       string          `json:"role"`
@@ -134,14 +135,18 @@ func workWebHandler(state string, client *managed.Client, token, host string) ht
 			}
 			switch r.URL.Path {
 			case "/api/connect":
-				setup, err := connectObservedSession(r.Context(), state, in.ObservedID, in.Name)
+				setup, assignedID, err := connectObservedSessionWithID(r.Context(), state, in.ObservedID, in.Name, in.Title)
 				if err != nil {
 					failure(err)
 					return
 				}
-				reply(map[string]any{"ok": true, "setup": setup, "id": in.Name})
+				reply(map[string]any{"ok": true, "setup": setup, "id": assignedID})
 			case "/api/add":
-				args := []string{in.Name, "--state", state, "--harness", in.Harness, "--project", in.Project, "--role", in.Role}
+				args := []string{}
+				if in.Name != "" {
+					args = append(args, in.Name)
+				}
+				args = append(args, "--state", state, "--harness", in.Harness, "--project", in.Project, "--role", in.Role, "--title", in.Title)
 				if in.Sandbox != "" {
 					args = append(args, "--sandbox", in.Sandbox)
 				}
@@ -149,11 +154,12 @@ func workWebHandler(state string, client *managed.Client, token, host string) ht
 					args = append(args, "--model", in.Model)
 				}
 				var output, diagnostics bytes.Buffer
-				if code := runWorkAdd(args, &output, &diagnostics); code != 0 {
+				code, id := runWorkAddWithID(args, &output, &diagnostics)
+				if code != 0 {
 					failure(errors.New(diagnostics.String()))
 					return
 				}
-				reply(map[string]any{"ok": true, "id": in.Name, "message": output.String()})
+				reply(map[string]any{"ok": true, "id": id, "message": output.String()})
 			case "/api/call":
 				if !allowed[in.Operation] {
 					http.Error(w, "operation is not exposed by the owner console", http.StatusForbidden)
