@@ -57,7 +57,13 @@ func (s *Store) addWorkspaceAgent(ctx context.Context, q queryer, a actor, raw j
 			}
 		}
 	}
-	n, err := count(ctx, q, "agent")
+	configured := make([]string, 0, len(s.cfg.Agents))
+	for id := range s.cfg.Agents {
+		configured = append(configured, id)
+	}
+	encodedIDs, _ := json.Marshal(configured)
+	var n int
+	err := q.QueryRowContext(ctx, "SELECT count(*) FROM records WHERE kind='agent' AND target NOT IN (SELECT value FROM json_each(?))", string(encodedIDs)).Scan(&n)
 	if err != nil {
 		return nil, internal(err)
 	}

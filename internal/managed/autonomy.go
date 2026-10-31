@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -67,14 +68,43 @@ type AutonomyStatus struct {
 
 func loadAutonomy(ctx context.Context, q queryer, id string) (autonomyState, error) {
 	state := autonomyState{Agent: id, Mode: "running", Version: 1, Pending: []string{}}
-	err := get(ctx, q, "autonomy", "autonomy_"+id, &state)
+	var raw json.RawMessage
+	err := get(ctx, q, "autonomy", "autonomy_"+id, &raw)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return state, err
+	}
+	if e := checkStateRecoveryDigest(ctx, q, "autonomy", id, raw); e != nil {
+		return state, e
+	}
 	if errors.Is(err, sql.ErrNoRows) {
 		return state, nil
 	}
-	return state, err
+	// Legacy serializers always wrote these fields, even at zero. An omitted
+	// budget/cooldown counter is damaged state rather than permission to reset it.
+	var fields map[string]json.RawMessage
+	if err = json.Unmarshal(raw, &fields); err != nil {
+		return state, err
+	}
+	for _, key := range []string{"agent", "mode", "version", "turns_used", "dropped", "suppressed", "next_allowed", "pending"} {
+		value, present := fields[key]
+		if !present || key != "pending" && strings.TrimSpace(string(value)) == "null" {
+			return state, errors.New("persisted autonomy state is incomplete; restore valid owner state")
+		}
+	}
+	var persisted *autonomyState
+	if err = json.Unmarshal(raw, &persisted); err != nil {
+		return state, err
+	}
+	if persisted == nil || persisted.Agent != id || persisted.Version < 1 || persisted.TurnsUsed < 0 || persisted.Dropped < 0 || persisted.Suppressed < 0 || (persisted.Mode != "running" && persisted.Mode != "paused" && persisted.Mode != "stopped") {
+		return state, errors.New("persisted autonomy state is invalid; restore valid owner state")
+	}
+	return *persisted, nil
 }
 func saveAutonomy(ctx context.Context, q queryer, state autonomyState) error {
-	return save(ctx, q, "autonomy", "autonomy_"+state.Agent, state.Agent, state.Agent, "", state)
+	if err := save(ctx, q, "autonomy", "autonomy_"+state.Agent, state.Agent, state.Agent, "", state); err != nil {
+		return err
+	}
+	return saveStateRecoveryDigest(ctx, q, "autonomy", state.Agent, state)
 }
 
 func (s *Store) autonomousAgents(ctx context.Context, q queryer) ([]AgentInfo, error) {

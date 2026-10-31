@@ -104,6 +104,7 @@ func (l *Launcher) Supervise(ctx context.Context, attempt string) error {
 		if err != nil {
 			return finish(err)
 		}
+		observeAgentPaneStates(&runtime, panes)
 		brokerAlive := false
 		for _, pane := range panes {
 			if pane.ID == runtime.BrokerPane && pane.Attempt == attempt && !pane.Dead {
@@ -154,15 +155,6 @@ func (l *Launcher) Supervise(ctx context.Context, attempt string) error {
 				return finish(err)
 			}
 		}
-		for _, pane := range panes {
-			if pane.Attempt != attempt || pane.Role != "worker" || !pane.Dead {
-				continue
-			}
-			if agent, ok := runtime.Agents[pane.Agent]; ok && agent.State == "running" {
-				agent.State = "exited"
-				runtime.Agents[pane.Agent] = agent
-			}
-		}
 		runtime.State = "running"
 		if err := writeRuntime(l.options.StateDir, runtime); err != nil {
 			return finish(err)
@@ -170,6 +162,30 @@ func (l *Launcher) Supervise(ctx context.Context, attempt string) error {
 		if err := pause(ctx); err != nil {
 			return finish(nil)
 		}
+	}
+}
+
+// Only call after a successful complete pane inventory. Missing or retagged
+// terminals are unavailable, never an invitation to respawn or stop peers.
+func observeAgentPaneStates(runtime *Runtime, panes []paneInfo) {
+	for id, tracked := range runtime.Agents {
+		var observed *paneInfo
+		for i := range panes {
+			p := &panes[i]
+			if p.ID == tracked.PaneID && p.Agent == id && p.Attempt == runtime.AttemptID && p.Role == "worker" {
+				observed = p
+				break
+			}
+		}
+		switch {
+		case observed == nil && tracked.State == "running":
+			tracked.State = "unavailable"
+		case observed != nil && observed.Dead && tracked.State != "stopped":
+			tracked.State = "exited"
+		case observed != nil && !observed.Dead && tracked.State != "stopped":
+			tracked.State = "running"
+		}
+		runtime.Agents[id] = tracked
 	}
 }
 
@@ -367,13 +383,12 @@ func (l *Launcher) Describe(ctx context.Context) (Runtime, error) {
 		}
 		for _, pane := range panes {
 			if pane.Attempt == runtime.AttemptID && pane.Role == "worker" {
-				state := "running"
-				if pane.Dead {
-					state = "exited"
+				if _, tracked := runtime.Agents[pane.Agent]; !tracked {
+					runtime.Agents[pane.Agent] = AgentPane{PaneID: pane.ID, State: "running"}
 				}
-				runtime.Agents[pane.Agent] = AgentPane{PaneID: pane.ID, State: state}
 			}
 		}
+		observeAgentPaneStates(&runtime, panes)
 	} else if runtime.State == "running" || runtime.State == "starting" {
 		runtime.State = "unavailable"
 	}

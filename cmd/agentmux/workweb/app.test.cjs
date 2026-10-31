@@ -153,3 +153,261 @@ test("a newer draft left behind on switch receives only its own successful versi
   assert.equal(fixture.context.titleDrafts.get("native-b").version, 8);
   assert.equal(fixture.closed(), 0);
 });
+
+function connectionContext() {
+  const nodes = new Map(),
+    requests = [],
+    timers = new Map();
+  const node = (id) => {
+    if (!nodes.has(id))
+      nodes.set(id, {
+        disabled: false,
+        textContent: "",
+        classList: { add() {}, remove() {} },
+        querySelectorAll() {
+          return [];
+        },
+      });
+    return nodes.get(id);
+  };
+  const context = vm.createContext({
+    token: "fixture",
+    AbortController,
+    snapshot: {
+      selected: "a",
+      boundaries: { agent: "a" },
+      agents: [
+        { id: "a", state: "active", config: { autonomy: { enabled: false } } },
+      ],
+    },
+    selected: "a",
+    connected: true,
+    loading: false,
+    mutating: false,
+    boundarySignature: "previous",
+    taskSignature: "previous",
+    observedSignature: "previous",
+    $: node,
+    document: {
+      body: { classList: { add() {}, remove() {} } },
+      querySelectorAll() {
+        return [];
+      },
+    },
+    notice: (message) => {
+      context.lastNotice = message;
+    },
+    queueMicrotask,
+    updateTitleConflict() {},
+    setTimeout(fn) {
+      const id = timers.size + 1;
+      timers.set(id, fn);
+      return id;
+    },
+    clearTimeout(id) {
+      timers.delete(id);
+    },
+    fetch: (path, options) => {
+      requests.push({ path, options });
+      return new Promise((resolve, reject) =>
+        options.signal.addEventListener("abort", () =>
+          reject(new Error("aborted")),
+        ),
+      );
+    },
+  });
+  vm.runInContext(
+    source.slice(
+      source.indexOf("async function api("),
+      source.indexOf("const call ="),
+    ),
+    context,
+  );
+  vm.runInContext(
+    source.slice(
+      source.indexOf("const selectionReady ="),
+      source.indexOf("function selectAgent("),
+    ),
+    context,
+  );
+  vm.runInContext(
+    source.slice(
+      source.indexOf("async function action("),
+      source.indexOf("function render()"),
+    ),
+    context,
+  );
+  context.render = () => vm.runInContext("selectionControls()", context);
+  return { context, nodes, node, requests, timers };
+}
+
+test("a hung snapshot aborts, disables stale actions, and recovers without losing state", async () => {
+  const f = connectionContext(),
+    before = f.context.snapshot;
+  const pending = f.context.refresh();
+  assert.equal(f.requests.length, 1);
+  [...f.timers.values()][0]();
+  await pending;
+  assert.equal(f.context.loading, false);
+  assert.equal(f.context.connected, false);
+  assert.equal(f.context.snapshot, before);
+  assert.equal(f.node("send-message").disabled, true);
+  assert.match(f.context.lastNotice, /Last snapshot shown/);
+  let writes = 0;
+  await f.context.action(async () => {
+    writes++;
+  }, "saved");
+  assert.equal(
+    writes,
+    0,
+    "offline action must not submit a mutation against stale permissions",
+  );
+  f.context.fetch = async () => ({
+    ok: true,
+    status: 200,
+    text: async () => JSON.stringify(before),
+  });
+  await f.context.refresh();
+  assert.equal(f.context.connected, true);
+  assert.equal(f.node("send-message").disabled, false);
+  assert.equal(f.timers.size, 0);
+});
+
+test("a timed out write reports uncertainty and is never replayed automatically", async () => {
+  const f = connectionContext();
+  const pending = f.context.api("/api/call", {
+    operation: "memory.put",
+    args: { key: "draft" },
+  });
+  [...f.timers.values()][0]();
+  await assert.rejects(pending, /may already be saved/);
+  assert.equal(f.requests.length, 1);
+  assert.equal(f.timers.size, 0);
+});
+
+test("definite version conflicts are distinguished from uncertain delivery", async () => {
+  const f = connectionContext();
+  f.context.refresh = async () => {};
+  await f.context.action(async () => {
+    const error = new Error("memory version changed");
+    error.code = "conflict";
+    throw error;
+  }, "saved");
+  assert.match(f.context.lastNotice, /Refresh current state/);
+  assert.doesNotMatch(f.context.lastNotice, /delivery may be uncertain/);
+});
+
+test("large graph keeps selected session and recipient visible without overlap", () => {
+  const graph = fs.readFileSync(path.join(__dirname, "graph.js"), "utf8");
+  const agents = Array.from({ length: 200 }, (_, i) => ({
+    id: "agent-" + i,
+    state: "active",
+  }));
+  const context = vm.createContext({
+    snapshot: { agents },
+    selected: "agent-199",
+    peer: "agent-180",
+  });
+  vm.runInContext(
+    graph.slice(
+      graph.indexOf("function graphAgents()"),
+      graph.indexOf("function graphPoint("),
+    ),
+    context,
+  );
+  const shown = context.graphAgents();
+  assert.equal(shown.length, 40);
+  assert.equal(
+    shown[0].id,
+    "agent-199",
+    "selected session starts in view without scrolling",
+  );
+  assert.ok(shown.some((a) => a.id === "agent-199"));
+  assert.ok(shown.some((a) => a.id === "agent-180"));
+  const points = shown.map((_, i) =>
+    context.graphDefaultPosition(i, 40, "agents"),
+  );
+  for (let i = 0; i < points.length; i++)
+    for (let j = 0; j < i; j++)
+      assert.ok(
+        Math.abs(points[i].x - points[j].x) >= 144 ||
+          Math.abs(points[i].y - points[j].y) >= 56,
+        "overlapping readable cards",
+      );
+});
+
+test("title conflicts preserve draft and require explicit review of current version", () => {
+  const elements = new Map();
+  const element = (id) => {
+    if (!elements.has(id)) elements.set(id, {});
+    return elements.get(id);
+  };
+  const context = vm.createContext({
+    $: element,
+    selected: "a",
+    mutating: false,
+    titleEditor: { id: "a", version: 2 },
+    snapshot: {
+      agents: [{ id: "a", title: "Other owner's title", title_version: 3 }],
+    },
+    selectionReady: () => true,
+    sessionTitle: () => "Default",
+  });
+  vm.runInContext(
+    source.slice(
+      source.indexOf("function updateTitleConflict()"),
+      source.indexOf("async function api("),
+    ),
+    context,
+  );
+  element("task-title").value = "My unsaved draft";
+  context.updateTitleConflict();
+  assert.equal(context.titleEditor.version, 2);
+  assert.equal(context.titleEditor.conflict, true);
+  assert.equal(element("save-title").disabled, true);
+  assert.match(element("title-conflict").textContent, /Other owner's title/);
+  assert.equal(element("task-title").value, "My unsaved draft");
+  context.titleEditor.version = 3;
+  context.updateTitleConflict();
+  assert.equal(context.titleEditor.conflict, false);
+  assert.equal(element("save-title").disabled, false);
+});
+
+test("editing memory while a save is pending preserves newer text as unsaved", async () => {
+  const nodes = {
+    "memory-form": {},
+    "memory-namespace": { value: "pair-a" },
+    "memory-key": { value: "proposal" },
+    "memory-value": { value: "Submitted draft" },
+    "memory-version": { textContent: "" },
+  };
+  let release, pending;
+  const context = vm.createContext({
+    $: (id) => nodes[id],
+    selectionReady: () => true,
+    memoryVersion: 4,
+    memoryEditorEpoch: 2,
+    call: () =>
+      new Promise((resolve) => {
+        release = resolve;
+      }),
+    action: (fn) => {
+      pending = fn();
+    },
+    loadMemory: async () => {},
+  });
+  vm.runInContext(
+    source.slice(
+      source.indexOf('$("memory-form").onsubmit ='),
+      source.indexOf("\nrefresh();"),
+    ),
+    context,
+  );
+  nodes["memory-form"].onsubmit({ preventDefault() {} });
+  nodes["memory-value"].value = "Newer text still being typed";
+  release({ entry: { version: 5 } });
+  await pending;
+  assert.equal(nodes["memory-value"].value, "Newer text still being typed");
+  assert.equal(context.memoryVersion, 5);
+  assert.match(nodes["memory-version"].textContent, /Unsaved changes/);
+});

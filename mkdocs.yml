@@ -69,6 +69,7 @@ nav:
       - Pilot Results: research-pilot-results.md
       - Provider Validation: provider-validation.md
       - Preview Validation: release-validation.md
+      - Usability and Failure Sweep: uat-sweep.md
       - Environments: research-environments.md
   - Reference:
       - Configuration Guide: config-guide.md

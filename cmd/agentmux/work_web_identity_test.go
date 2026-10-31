@@ -145,7 +145,9 @@ func TestWebIdentityClientGuards(t *testing.T) {
 	if err != nil {
 		t.Skip("Node.js unavailable; run node --test workweb/app.test.cjs to validate client identity guards")
 	}
-	command := exec.Command(node, "--test", "workweb/app.test.cjs")
+	// Running node:test from its main module retains individual failure
+	// diagnostics on Node versions whose --test subprocess reporter hides them.
+	command := exec.Command(node, "workweb/app.test.cjs")
 	output, err := command.CombinedOutput()
 	if err != nil {
 		t.Fatalf("client identity unit tests: %v\n%s", err, output)

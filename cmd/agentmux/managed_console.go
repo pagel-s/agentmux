@@ -33,10 +33,11 @@ type consoleData struct {
 	err        error
 }
 type consoleAction struct {
-	message string
-	err     error
-	exit    bool
-	details string
+	message            string
+	err                error
+	exit               bool
+	details            string
+	labelID, labelText string
 }
 type console struct {
 	state                  string
@@ -64,15 +65,20 @@ type console struct {
 	memoryOpen             bool
 	memoryKey              string
 	memoryVersion          int
+	memoryRequest          uint64
+	memoryLoading          bool
 	observedSelected       int
 	boardSelected          int
 	details                string
 	newNative              consoleNativeDraft
 	findIndex              int
 	labelVersion           int
+	labelDrafts            map[string]string
 }
 type consoleNativeDraft struct{ id, title, provider, project, role string }
 type consoleMemory struct {
+	agent     string
+	request   uint64
 	namespace string
 	entries   []managed.Memory
 	err       error
@@ -236,6 +242,10 @@ type consoleAttach struct{ state, agent, controller string }
 func (m console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case consoleMemory:
+		if msg.request != m.memoryRequest || msg.agent != m.selectedID() || m.tab != 3 || !m.memoryLoading {
+			return m, nil
+		}
+		m.memoryLoading = false
 		m.busy = false
 		if msg.err != nil {
 			m.message = "Memory unavailable: " + activityText(msg.err.Error(), 120)
@@ -268,6 +278,9 @@ func (m console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if len(m.agents) > 0 && m.selected >= len(m.agents) {
 			m.selected = len(m.agents) - 1
+		}
+		if oldID != m.selectedID() {
+			m.closeMemory()
 		}
 		if msg.err != nil {
 			m.message = "Refresh failed: " + activityText(msg.err.Error(), 160)
@@ -317,8 +330,21 @@ func (m console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 		m.busy = false
+		if msg.labelID != "" {
+			if msg.err != nil {
+				if m.labelDrafts == nil {
+					m.labelDrafts = map[string]string{}
+				}
+				m.labelDrafts[msg.labelID] = msg.labelText
+			} else {
+				delete(m.labelDrafts, msg.labelID)
+			}
+		}
 		if msg.err != nil {
 			m.message = "Action failed: " + activityText(msg.err.Error(), 200) + ". Refresh before retrying; delivery may be uncertain."
+			if msg.labelID != "" {
+				m.message = "Title draft kept for " + msg.labelID + "; press L to review after refresh. " + m.message
+			}
 		} else {
 			m.message = msg.message
 			if msg.details != "" {

@@ -21,6 +21,29 @@ function svgNode(tag, attrs = {}, text) {
 function graphPosition(key, fallback) {
   return graphPositions[key] || fallback;
 }
+function graphAgents() {
+  const active = (snapshot?.agents || []).filter(
+      (agent) => agent.state === "active",
+    ),
+    priority = new Set([selected, peer]),
+    required = [...priority]
+      .map((id) => active.find((agent) => agent.id === id))
+      .filter(Boolean),
+    rest = active
+      .filter((agent) => !priority.has(agent.id))
+      .slice(0, 40 - required.length),
+    shown = new Set([...required, ...rest].map((agent) => agent.id));
+  return active.length > 12
+    ? [...required, ...rest]
+    : active.filter((agent) => shown.has(agent.id));
+}
+function graphDefaultPosition(index, count, mode) {
+  if (mode !== "agents") return { x: 190, y: 95 + index * 100 };
+  if (count > 12)
+    return { x: 120 + (index % 5) * 180, y: 86 + Math.floor(index / 5) * 104 };
+  const angle = (2 * Math.PI * index) / Math.max(count, 1) - Math.PI / 2;
+  return { x: 480 + 300 * Math.cos(angle), y: 290 + 200 * Math.sin(angle) };
+}
 function graphPoint(event) {
   const point = $("interaction-graph").createSVGPoint();
   point.x = event.clientX;
@@ -83,21 +106,21 @@ async function renderGraph() {
   }
   const signature = JSON.stringify([
     snapshot.boundaries.version,
-    (snapshot.agents || [])
-      .filter((a) => a.state === "active")
-      .map((a) => a.id),
+    graphAgents().map((a) => a.id),
   ]);
   if (graphVersion !== signature && !graphLoading) {
     graphLoading = true;
     const version = snapshot.boundaries.version,
-      agents = (snapshot.agents || [])
-        .filter((a) => a.state === "active")
-        .slice(0, 40);
+      agents = graphAgents();
     try {
       const values = await Promise.all(
         agents.map((a) => call("boundaries.get", { agent: a.id })),
       );
-      if (values.every((v) => v.version === version)) {
+      const current = JSON.stringify([
+        snapshot.boundaries.version,
+        graphAgents().map((a) => a.id),
+      ]);
+      if (current === signature && values.every((v) => v.version === version)) {
         graphCache = new Map(values.map((v) => [v.agent, v]));
         graphVersion = signature;
       } else notice("Permissions changed while loading the graph. Refreshing…");
@@ -123,9 +146,7 @@ function drawGraph() {
   if (signature === graphDrawSignature) return;
   graphDrawSignature = signature;
   const svg = $("interaction-graph"),
-    agents = (snapshot.agents || [])
-      .filter((a) => a.state === "active")
-      .slice(0, 40),
+    agents = graphAgents(),
     nodes = [],
     edges = [];
   const scopeCount =
@@ -138,12 +159,18 @@ function drawGraph() {
           95 + Math.max(0, agents.length - 1) * 100 + 80,
           140 + Math.max(0, scopeCount - 1) * 130 + 80,
         )
-      : 580;
+      : Math.max(
+          580,
+          agents.length > 12
+            ? 146 + (Math.ceil(agents.length / 5) - 1) * 104
+            : 580,
+        );
   for (const position of Object.values(graphPositions))
     graphHeight = Math.max(graphHeight, position.y + 60);
   svg.setAttribute("viewBox", `0 0 ${graphWidth} ${graphHeight}`);
   svg.setAttribute("preserveAspectRatio", "xMidYMin meet");
   svg.style.height = graphHeight > 580 ? graphHeight + "px" : "100%";
+  svg.style.minWidth = agents.length > 12 ? "960px" : "";
   const defs = svgNode("defs"),
     pattern = svgNode("pattern", {
       id: "grid",
@@ -176,11 +203,7 @@ function drawGraph() {
   );
   for (let i = 0; i < agents.length; i++) {
     const a = agents[i],
-      angle = (2 * Math.PI * i) / Math.max(agents.length, 1) - Math.PI / 2;
-    const fallback =
-      graphMode === "agents"
-        ? { x: 480 + 300 * Math.cos(angle), y: 290 + 200 * Math.sin(angle) }
-        : { x: 190, y: 95 + i * 100 };
+      fallback = graphDefaultPosition(i, agents.length, graphMode);
     const key = "agent:" + a.id,
       p = graphPosition(key, fallback);
     nodes.push({
@@ -381,7 +404,7 @@ function drawGraph() {
   }
   $("graph-limit").textContent =
     (snapshot.agents || []).filter((a) => a.state === "active").length > 40
-      ? "First 40 active agents shown"
+      ? "40 active sessions shown, including selected session and recipient"
       : "Drag nodes · select a connection to edit";
   $("graph-agents").classList.toggle("active", graphMode === "agents");
   $("graph-scopes").classList.toggle("active", graphMode === "scopes");

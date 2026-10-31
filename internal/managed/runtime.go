@@ -356,7 +356,7 @@ func (s *Store) spawn(ctx context.Context, q queryer, a actor, raw json.RawMessa
 		return nil, fault("limit", "spawn depth exhausted")
 	}
 	var spawned int
-	if err := q.QueryRowContext(ctx, "SELECT count(*) FROM records WHERE kind='agent' AND json_extract(data,'$.parent') IS NOT NULL").Scan(&spawned); err != nil {
+	if err := q.QueryRowContext(ctx, "SELECT count(*) FROM records WHERE kind='agent' AND json_extract(data,'$.parent') IS NOT NULL AND COALESCE(json_extract(data,'$.owner_managed'),0)=0").Scan(&spawned); err != nil {
 		return nil, internal(err)
 	}
 	if spawned >= s.cfg.Limits.MaxSpawns {

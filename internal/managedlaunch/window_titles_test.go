@@ -225,4 +225,8 @@ func TestSupervisorRefreshesSessionLabelsWithoutRestartingNativePane(t *testing.
 	}
 	label(4, "Owner removed original pane")
 	assertUnrelatedSurvives()
+	observed, err := Snapshot(state)
+	if err != nil || observed.Agents["opaque-id"].State != "unavailable" || observed.Agents["opaque-id"].PaneID != pane || observed.Agents["unrelated"].State != "running" {
+		t.Fatalf("successful inventory concealed missing pane or changed identities: %+v %v", observed, err)
+	}
 }
