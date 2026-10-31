@@ -42,6 +42,17 @@ Each session has a stable Agentmux ID. Collaboration and autonomous wakeups star
 off; you decide which sessions can work together. The native-only preset runs until you close it; managed automation retains
 explicit runtime budgets.
 
+Give sessions task titles such as “Fix login redirect”; the title can change
+while its ID and native conversation stay the same. The overview shows project,
+provider and ID, with creation/start time and terminal location in session details.
+Press **/** to find a session and **L** to edit its title. The web app has the same
+search and title controls. New sessions can generate their IDs automatically:
+
+```sh
+agentmux add --harness claude --project ~/projects/api --title "Fix login redirect"
+agentmux label SESSION_ID "Investigate cookie expiry"
+```
+
 Select an agent with ↑/↓ and press **Enter** for its native CLI. **F1** returns to
 the workbench; **Ctrl-b b** opens the board as a popup; **Ctrl-b d** detaches.
 Open another terminal window with `attach`: each attachment switches agents
@@ -69,7 +80,7 @@ Existing sessions can join without restarting their conversation:
 
 ```sh
 agentmux sessions
-agentmux connect OBSERVATION_ID --name existing-review
+agentmux connect OBSERVATION_ID --title "Review API changes"
 # Paste the printed setup once into that existing native session.
 ```
 

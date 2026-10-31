@@ -5,6 +5,32 @@ managed task execution. Both modes share the coordination broker and its ACLs.
 Each agent has one terminal/worker lock. Changing interaction mode requires a
 new launch definition/run rather than a second process sharing a conversation.
 
+## Recognize sessions throughout the day
+
+Use a task title such as “Fix login redirect” to recognize a conversation. Titles
+are editable and may repeat; the permanent session ID remains visible and is
+used for every attach, message, permission and collaboration operation.
+
+```sh
+agentmux add --harness claude --project ~/projects/api --title "Fix login redirect"
+# The command prints a generated stable ID; choosing a name is optional.
+agentmux label SESSION_ID "Investigate expired login cookie"
+agentmux label SESSION_ID ""  # Clear the title without changing the session.
+agentmux sessions
+```
+
+The workbench and web app show title, project, provider and ID. Session details
+also distinguish workspace sessions from connected external terminals and show
+creation/start times and tmux/TTY locations when available. Untitled sessions use
+a project/provider fallback. No task description is inferred from prompts or
+transcripts. Two sessions with the same title remain separate identities.
+
+In the terminal press `/` to find a session by task, project, provider, ID or
+terminal location; Enter selects the exact result. `L` edits the selected task
+title. `N` asks what you are working on and generates an ID automatically. In the
+web app use **Find a session**, **Rename**, and **Sessions**. Titles are labels,
+not role instructions; editing one never restarts the native conversation.
+
 ## Start and attach
 
 With Claude Code and Codex installed and logged in:
@@ -94,7 +120,8 @@ agentmux start --config team.yaml --session my-team
 
 ```sh
 agentmux sessions
-agentmux connect OBSERVATION_ID --name existing-review
+agentmux connect OBSERVATION_ID --title "Review login changes"
+# Optional: --name existing-review chooses the stable ID explicitly.
 ```
 
 Discovery inspects current-user live TTY process names and the default tmux
@@ -126,6 +153,8 @@ interactive Antigravity role injection is unverified; use its Pi bridge.
 | --- | --- |
 | ↑/↓ or j/k | Select agent |
 | Enter | Focus its tracked terminal; attach when outside that tmux server |
+| / | Find by task, project, provider, ID or external terminal location |
+| L | Edit the selected session's human task title; empty clears |
 | F1 / Ctrl-b g in a native session | Return to the workbench |
 | Ctrl-b b / P / m / t | Open Board / Connections / Memory / Tasks in a popup |
 | Tab / Shift-Tab or 1–6 | Switch Board, Agents, Connections, Memory, Tasks, Sessions |

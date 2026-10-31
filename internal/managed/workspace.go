@@ -23,6 +23,7 @@ func (s *Store) addWorkspaceAgent(ctx context.Context, q queryer, a actor, raw j
 		Config      managedconfig.Agent `json:"config"`
 		ExternalRef string              `json:"external_ref"`
 		External    bool                `json:"external"`
+		Title       string              `json:"title"`
 	}
 	if err := strictJSON(raw, &in); err != nil {
 		return nil, invalid(err)
@@ -30,6 +31,10 @@ func (s *Store) addWorkspaceAgent(ctx context.Context, q queryer, a actor, raw j
 	if !managedconfig.ValidID(in.ID) {
 		return nil, fault("invalid", "invalid agent ID")
 	}
+	if err := ValidateSessionTitle(in.Title); err != nil {
+		return nil, invalid(err)
+	}
+	in.Title = strings.TrimSpace(in.Title)
 	if _, err := s.agent(ctx, q, in.ID); err == nil {
 		return nil, fault("conflict", "agent ID already exists; choose a new name")
 	} else if !errors.Is(err, sql.ErrNoRows) {
@@ -119,6 +124,10 @@ func (s *Store) addWorkspaceAgent(ctx context.Context, q queryer, a actor, raw j
 		return nil, internal(err)
 	}
 	info := AgentInfo{ID: in.ID, Parent: ownerID, OwnerManaged: true, External: in.External, ExternalRef: in.ExternalRef, State: "active", Config: definition, CreatedAt: now()}
+	info.Title = in.Title
+	if in.Title != "" {
+		info.TitleVersion = 1
+	}
 	if err = save(ctx, q, "agent", "agent_"+in.ID, a.ID, in.ID, "", info); err != nil {
 		return nil, internal(err)
 	}

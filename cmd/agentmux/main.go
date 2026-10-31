@@ -62,7 +62,7 @@ func run(args []string) int {
 	}
 
 	switch args[0] {
-	case "start", "attach", "reply", "inbox", "board", "down", "remove", "collaborate", "isolate":
+	case "start", "attach", "reply", "inbox", "board", "down", "remove", "collaborate", "isolate", "label":
 		return runWorkSession(args[0], args[1:], os.Stdin, os.Stdout, os.Stderr)
 	case "sessions":
 		return runWorkInventory(args[1:], os.Stdout, os.Stderr)
@@ -2103,7 +2103,8 @@ func printUsage() {
 
 Usage:
   agentmux start [--project DIR] [--session work] [--detach]
-  agentmux add NAME --harness claude|codex|pi --project DIR [--role "..."]
+  agentmux add [NAME] --harness claude|codex|pi --project DIR [--title "..."] [--role "..."]
+  agentmux label ID "Fix login redirect" [--session work | --state DIR]
   agentmux sessions [--session work | --state DIR]
   agentmux connect OBSERVED_ID --name NAME [--session work | --state DIR]
   agentmux collaborate AGENT AGENT [...] [--session work | --state DIR]

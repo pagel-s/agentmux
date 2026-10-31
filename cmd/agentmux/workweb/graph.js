@@ -51,7 +51,9 @@ function graphInspector() {
   }
   const edge = graphSelection.kind === "edge";
   $("inspector-title").textContent =
-    selected + " → " + (edge ? peer : scopeLabel(graphSelection.namespace));
+    sessionReference(selected) +
+    " → " +
+    (edge ? sessionReference(peer) : scopeLabel(graphSelection.namespace));
   $("edge-section").classList.toggle("hidden", !edge);
   $("scope-section").classList.toggle("hidden", edge);
   for (const row of $("scope-controls").children)
@@ -116,6 +118,7 @@ function drawGraph() {
     selected,
     graphPositions,
     snapshot.boundaries,
+    (snapshot.agents || []).map((a) => [a.id, a.title, a.config.harness]),
   ]);
   if (signature === graphDrawSignature) return;
   graphDrawSignature = signature;
@@ -182,8 +185,8 @@ function drawGraph() {
       p = graphPosition(key, fallback);
     nodes.push({
       key,
-      label: a.id,
-      kind: a.external ? "external bridge" : a.config.interaction || "managed",
+      label: sessionTitle(a),
+      kind: a.id + " · " + providerName(a.config.harness),
       source: a.id,
       ...p,
     });
@@ -292,9 +295,9 @@ function drawGraph() {
       tabindex: 0,
       role: "button",
       "aria-label":
-        edge.actor +
+        sessionReference(edge.actor) +
         " to " +
-        (edge.recipient || edge.namespace) +
+        (edge.recipient ? sessionReference(edge.recipient) : edge.namespace) +
         ": " +
         edge.label,
     });
@@ -333,12 +336,24 @@ function drawGraph() {
       "data-node": node.key,
       tabindex: 0,
       role: "button",
-      "aria-label": node.label + " " + node.kind,
+      "aria-label":
+        node.label + " " + node.kind + (node.scope ? " · " + node.scope : ""),
     });
+    const shorten = (text, max) =>
+      Array.from(text).length > max
+        ? Array.from(text)
+            .slice(0, max - 1)
+            .join("") + "…"
+        : text;
     group.append(
+      svgNode(
+        "title",
+        {},
+        node.label + " · " + node.kind + (node.scope ? " · " + node.scope : ""),
+      ),
       svgNode("rect", { x: -72, y: -28, width: 144, height: 56 }),
-      svgNode("text", { y: -2 }, node.label),
-      svgNode("text", { y: 16, class: "node-kind" }, node.kind),
+      svgNode("text", { y: -2 }, shorten(node.label, 20)),
+      svgNode("text", { y: 16, class: "node-kind" }, shorten(node.kind, 26)),
     );
     group.onkeydown = (e) => {
       if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {

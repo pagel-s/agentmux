@@ -68,8 +68,10 @@ type console struct {
 	boardSelected          int
 	details                string
 	newNative              consoleNativeDraft
+	findIndex              int
+	labelVersion           int
 }
-type consoleNativeDraft struct{ id, provider, project, role string }
+type consoleNativeDraft struct{ id, title, provider, project, role string }
 type consoleMemory struct {
 	namespace string
 	entries   []managed.Memory
@@ -417,7 +419,10 @@ func (m console) addNative(draft consoleNativeDraft) tea.Cmd {
 	state := m.state
 	return func() tea.Msg {
 		var output, diagnostics bytes.Buffer
-		args := []string{draft.id, "--harness", draft.provider, "--project", draft.project, "--role", draft.role, "--sandbox", "local", "--state", state}
+		args := []string{"--title", draft.title, "--harness", draft.provider, "--project", draft.project, "--role", draft.role, "--sandbox", "local", "--state", state}
+		if draft.id != "" {
+			args = append([]string{draft.id}, args...)
+		}
 		if code := runWorkAdd(args, &output, &diagnostics); code != exitSuccess {
 			return consoleAction{err: fmt.Errorf("%s", strings.TrimSpace(diagnostics.String()+output.String()))}
 		}

@@ -31,6 +31,8 @@ type Capabilities struct {
 }
 type AgentInfo struct {
 	ID           string              `json:"id"`
+	Title        string              `json:"title"`
+	TitleVersion int                 `json:"title_version"`
 	External     bool                `json:"external,omitempty"`
 	ExternalRef  string              `json:"external_ref,omitempty"`
 	OwnerManaged bool                `json:"owner_managed,omitempty"`
@@ -48,13 +50,13 @@ func (s *Store) agent(ctx context.Context, q queryer, id string) (AgentInfo, err
 	var info AgentInfo
 	err := get(ctx, q, "agent", "agent_"+id, &info)
 	if err == nil {
-		return info, nil
+		return sessionPresentation(ctx, q, info)
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		return info, err
 	}
 	if a, ok := s.cfg.Agents[id]; ok {
-		return AgentInfo{ID: id, State: "active", Config: copyAgent(a)}, nil
+		return sessionPresentation(ctx, q, AgentInfo{ID: id, State: "active", Config: copyAgent(a)})
 	}
 	return info, sql.ErrNoRows
 }
@@ -311,6 +313,8 @@ func (s *Store) agents(ctx context.Context, q queryer, a actor, r Request) (any,
 		return map[string]any{"agents": out, "cursor": cursor}, nil
 	case "agent.add":
 		return s.addWorkspaceAgent(ctx, q, a, r.Args)
+	case "agent.label":
+		return s.labelSession(ctx, q, a, r.Args)
 	case "agent.spawn":
 		return s.spawn(ctx, q, a, r.Args)
 	case "agent.stop":

@@ -22,6 +22,7 @@ type Session struct {
 	Harness       string `json:"harness"`
 	Project       string `json:"project"`
 	Title         string `json:"title"`
+	StartedAt     string `json:"started_at,omitempty"`
 	Source        string `json:"source"`
 	PID           int    `json:"pid"`
 	TTY           string `json:"tty,omitempty"`
@@ -235,7 +236,7 @@ func discover(ctx context.Context, processes map[int]process, panes []pane, excl
 		if skip {
 			continue
 		}
-		s := Session{ID: identity(p), Harness: harness, Project: project(p.pid), Source: "external-terminal", PID: p.pid, TTY: p.tty}
+		s := Session{ID: identity(p), Harness: harness, Project: project(p.pid), Source: "external-terminal", PID: p.pid, TTY: p.tty, StartedAt: processStartedAt(p.start, time.Local)}
 		var selected *pane
 		for i := range panes {
 			item := &panes[i]
@@ -266,6 +267,35 @@ func discover(ctx context.Context, processes map[int]process, panes []pane, excl
 	}
 	sortSessions(result)
 	return result
+}
+
+// ps lstart is a wall-clock timestamp in the command's local timezone, not UTC.
+// Normalize it for clients so displaying it never depends on the viewer's zone.
+// This is the observed process start, not a conversation's creation timestamp.
+func processStartedAt(raw string, location *time.Location) string {
+	if location == nil {
+		return ""
+	}
+	started, err := time.ParseInLocation("Mon Jan 2 15:04:05 2006", raw, location)
+	if err != nil {
+		return ""
+	}
+	wall := strings.Join(strings.Fields(raw), " ")
+	formatWall := func(t time.Time) string { return t.In(location).Format("Mon Jan 2 15:04:05 2006") }
+	if formatWall(started) != wall {
+		return "" // A skipped daylight-saving wall time cannot be a real start.
+	}
+	// lstart omits the UTC offset. A repeated wall time during a timezone
+	// transition cannot identify an instant accurately; leave it unknown.
+	_, offset := started.Zone()
+	for _, nearby := range []time.Time{started.Add(-48 * time.Hour), started.Add(48 * time.Hour)} {
+		_, otherOffset := nearby.In(location).Zone()
+		candidate := started.Add(time.Duration(offset-otherOffset) * time.Second)
+		if !candidate.Equal(started) && formatWall(candidate) == wall {
+			return ""
+		}
+	}
+	return started.UTC().Format(time.RFC3339)
 }
 
 func lifetimeID(pid int, start string) string {

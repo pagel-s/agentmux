@@ -18,6 +18,7 @@ type paneInfo struct {
 }
 type registryAgent struct {
 	ID       string `json:"id"`
+	Title    string `json:"title"`
 	State    string `json:"state"`
 	External bool   `json:"external"`
 }
@@ -91,6 +92,7 @@ func (l *Launcher) Supervise(ctx context.Context, attempt string) error {
 	if err := l.configureWorkbench(ctx, runtime); err != nil {
 		return finish(err)
 	}
+	windowTitles := map[string]string{}
 	for {
 		if ctx.Err() != nil || shouldStop(l.options.StateDir, attempt) {
 			return finish(nil)
@@ -120,6 +122,13 @@ func (l *Launcher) Supervise(ctx context.Context, attempt string) error {
 				continue
 			}
 			pane, exists := runtime.Agents[agent.ID]
+			if previous, labelled := windowTitles[pane.PaneID]; exists && (!labelled || previous != agent.Title) {
+				// Presentation is best effort. A removed or retagged window
+				// must not stop unrelated workers; retry only unsaved labels.
+				if err := l.syncWindowTitle(ctx, runtime, pane.PaneID, agent.ID, agent.Title); err == nil {
+					windowTitles[pane.PaneID] = agent.Title
+				}
+			}
 			if agent.State != "active" {
 				if exists && pane.State == "running" {
 					if err := l.stopPaneSet(ctx, runtime, []string{pane.PaneID}); err != nil {
@@ -138,6 +147,9 @@ func (l *Launcher) Supervise(ctx context.Context, attempt string) error {
 				return finish(err)
 			}
 			runtime.Agents[agent.ID] = AgentPane{PaneID: id, State: "running"}
+			if err := l.syncWindowTitle(ctx, runtime, id, agent.ID, agent.Title); err == nil {
+				windowTitles[id] = agent.Title
+			}
 			if err := writeRuntime(l.options.StateDir, runtime); err != nil {
 				return finish(err)
 			}

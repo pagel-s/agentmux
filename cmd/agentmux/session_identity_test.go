@@ -1,0 +1,79 @@
+package main
+
+import (
+	"strings"
+	"testing"
+
+	"agentmux/internal/managed"
+	"agentmux/internal/managedconfig"
+	"agentmux/internal/sessioninventory"
+	tea "github.com/charmbracelet/bubbletea"
+)
+
+func TestSessionPickerDistinguishesDuplicateTitlesAndDoesNotRetarget(t *testing.T) {
+	m := console{agents: []managed.AgentInfo{
+		{ID: "morning", Title: "Fix login", TitleVersion: 2, Config: managedconfig.Agent{Harness: "claude", Workdir: "/work/api"}},
+		{ID: "afternoon", Title: "Fix login", Config: managedconfig.Agent{Harness: "codex", Workdir: "/work/api"}},
+	}, data: consoleData{observed: []sessioninventory.Session{{ID: "process:9:abc", Harness: "claude", Project: "/work/other", TTY: "pts/9", Title: "Other bug"}}}}
+	next, _ := m.key(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	m = next.(console)
+	next, _ = m.key(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("fix login")})
+	m = next.(console)
+	matches := m.sessionMatches()
+	if len(matches) != 2 || matches[0].agent == matches[1].agent || !strings.Contains(matches[1].detail, "afternoon") {
+		t.Fatal("same title collapsed separate session identities")
+	}
+	if m.selectedID() != "morning" {
+		t.Fatal("typing a search silently changed action target")
+	}
+	next, _ = m.key(tea.KeyMsg{Type: tea.KeyDown})
+	m = next.(console)
+	next, _ = m.key(tea.KeyMsg{Type: tea.KeyEnter})
+	m = next.(console)
+	if m.selectedID() != "afternoon" || m.composer != "" || m.tab != 1 {
+		t.Fatal("picker selected a title instead of its exact identity")
+	}
+	next, _ = m.key(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'L'}})
+	m = next.(console)
+	if m.composeTarget != "afternoon" || m.labelVersion != 0 {
+		t.Fatal("rename did not freeze ID/version")
+	}
+	m.selected = 0
+	if m.composeTarget != "afternoon" {
+		t.Fatal("rename draft followed navigation")
+	}
+}
+
+func TestSessionPickerFindsExternalTerminalAndHandlesNoMatches(t *testing.T) {
+	m := console{agents: []managed.AgentInfo{{ID: "owned"}}, data: consoleData{observed: []sessioninventory.Session{{ID: "process:9:abc", Harness: "claude", Project: "/work/api", TTY: "pts/9", Title: "Login redirect"}}}}
+	m.compose("find", "", "", "api pts/9")
+	if len(m.sessionMatches()) != 1 {
+		t.Fatal("external location not searchable")
+	}
+	next, _ := m.key(tea.KeyMsg{Type: tea.KeyEnter})
+	m = next.(console)
+	if m.tab != 5 || m.observedSessions()[m.observedSelected].ID != "process:9:abc" {
+		t.Fatal("search failed to select observed lifetime")
+	}
+	m.compose("find", "", "", "nonexistent")
+	next, cmd := m.key(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd != nil || next.(console).composer != "find" || !strings.Contains(m.sessionSearchPanel(100, 20), "No sessions match") {
+		t.Fatal("empty results triggered an action")
+	}
+}
+
+func TestSessionIdentityPresentationRetainsIDAndShowsSelectedRoster(t *testing.T) {
+	m := console{selected: 8}
+	for _, id := range []string{"a", "b", "c", "d", "e", "f", "g", "h", "last"} {
+		m.agents = append(m.agents, managed.AgentInfo{ID: id, Title: "Same human title", Config: managedconfig.Agent{Harness: "claude", Workdir: "/work/api"}})
+	}
+	if !strings.Contains(m.roster(40, 22), "last") {
+		t.Fatal("selected session clipped out of roster")
+	}
+	if label := m.agentLabel("last"); !strings.Contains(label, "Same human title") || !strings.Contains(label, "[last]") {
+		t.Fatal("label hid stable identity")
+	}
+	if sessionTitle(managed.AgentInfo{ID: "opaque", Config: managedconfig.Agent{Harness: "codex", Workdir: "/work/api"}}) != "api · codex" {
+		t.Fatal("untitled fallback lacks project/provider")
+	}
+}

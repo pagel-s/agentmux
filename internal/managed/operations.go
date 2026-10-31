@@ -38,7 +38,7 @@ func isWrite(op string) bool {
 	switch op {
 	case "control.update", "worker.next", "autonomy.control", "autonomy.ack", "memory.delete", "memory.prune", "memory.index":
 		return true
-	case "board.post", "message.send", "ping.send", "instruct", "task.claim", "task.complete", "task.stopped", "task.cancel", "task.verify", "task.resolve", "memory.put", "agent.add", "agent.spawn", "agent.stop", "team.create", "team.invite", "team.join", "team.leave", "team.remove", "team.dissolve", "conversation.begin", "conversation.reset":
+	case "board.post", "message.send", "ping.send", "instruct", "task.claim", "task.complete", "task.stopped", "task.cancel", "task.verify", "task.resolve", "memory.put", "agent.add", "agent.label", "agent.spawn", "agent.stop", "team.create", "team.invite", "team.join", "team.leave", "team.remove", "team.dissolve", "conversation.begin", "conversation.reset":
 		return true
 	}
 	return false
@@ -140,7 +140,7 @@ func (s *Store) Call(ctx context.Context, token string, r Request) (json.RawMess
 				if in.Mode != "paused" && in.Mode != "stopped" {
 					return nil, fault("limit", "session runtime budget exhausted")
 				}
-			case "task.complete", "task.stopped", "task.cancel", "task.verify", "agent.stop", "team.leave", "team.remove", "team.dissolve", "conversation.reset", "memory.delete", "memory.prune":
+			case "task.complete", "task.stopped", "task.cancel", "task.verify", "agent.stop", "agent.label", "team.leave", "team.remove", "team.dissolve", "conversation.reset", "memory.delete", "memory.prune":
 			case "task.resolve":
 				var in struct {
 					Resolution string `json:"resolution"`
@@ -244,7 +244,7 @@ func (s *Store) dispatch(ctx context.Context, q queryer, a actor, r Request) (an
 		return s.tasks(ctx, q, a, r)
 	case "memory.get", "memory.list", "memory.put", "memory.head", "memory.search", "memory.delete", "memory.prune", "memory.index":
 		return s.memory(ctx, q, a, r)
-	case "agent.list", "agent.add", "agent.spawn", "agent.stop":
+	case "agent.list", "agent.add", "agent.label", "agent.spawn", "agent.stop":
 		return s.agents(ctx, q, a, r)
 	case "team.create", "team.list", "team.invite", "team.join", "team.leave", "team.remove", "team.dissolve":
 		return s.teams(ctx, q, a, r)

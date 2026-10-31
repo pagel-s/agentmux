@@ -117,6 +117,40 @@ func inventoryRegistry(t *testing.T, client *managed.Client) []managed.AgentInfo
 	return result.Agents
 }
 
+func TestExternalBridgeGeneratedIDAndCosmeticTitleStaySeparate(t *testing.T) {
+	state, client, observed := inventoryBroker(t)
+	setup, id, err := connectObservedSessionWithID(context.Background(), state, observed.ID, "", "Investigate login")
+	if err != nil || id == "" || !strings.Contains(setup, id) {
+		t.Fatalf("generated identity was lost: %q %v", id, err)
+	}
+	_, err = workCall(context.Background(), client, "agent.label", map[string]any{"id": id, "title": "Fix cookie expiry", "version": 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, recovered, err := connectObservedSessionWithID(context.Background(), state, observed.ID, "", "A different connection label")
+	if err != nil || recovered != id {
+		t.Fatalf("reconnect replaced identity: %q %v", recovered, err)
+	}
+	var found managed.AgentInfo
+	for _, a := range inventoryRegistry(t, client) {
+		if a.ID == id {
+			found = a
+		}
+	}
+	if found.Title != "Fix cookie expiry" || found.TitleVersion != 2 || found.ExternalRef != observed.ID {
+		t.Fatalf("reconnect changed identity/title metadata: %+v", found)
+	}
+}
+
+func TestExternalBridgeLongObservedTitleDoesNotBlockConnection(t *testing.T) {
+	state, _, observed := inventoryBroker(t)
+	observed.Title = strings.Repeat("Native window ", 40)
+	discoverWorkSessions = func(context.Context, string) []sessioninventory.Session { return []sessioninventory.Session{observed} }
+	if _, _, err := connectObservedSessionWithID(context.Background(), state, observed.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestExternalBridgeRetainsObservationAndUsesAssignedIdentity(t *testing.T) {
 	state, client, observed := inventoryBroker(t)
 	instructions, err := connectObservedSession(context.Background(), state, observed.ID, "native-one")
