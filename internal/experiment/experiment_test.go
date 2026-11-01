@@ -220,11 +220,11 @@ func TestExperimentCommandIntegration(t *testing.T) {
 	}
 }
 
-func TestExperimentInterruptedIntegration(t *testing.T) {
+func TestExperimentDeadlineIntegration(t *testing.T) {
 	if os.Getenv("AGENTMUX_EXPERIMENT_INTEGRATION") != "1" {
-		t.Skip("set AGENTMUX_EXPERIMENT_INTEGRATION=1 for real interruption/recovery")
+		t.Skip("set AGENTMUX_EXPERIMENT_INTEGRATION=1 for a real trial deadline")
 	}
-	root, err := os.MkdirTemp("", "amx-interrupt-")
+	root, err := os.MkdirTemp("", "amx-deadline-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -239,9 +239,91 @@ func TestExperimentInterruptedIntegration(t *testing.T) {
 	}
 	started := time.Now()
 	report, err := Run(context.Background(), m, RunOptions{OutputDir: root})
-	if err == nil || len(report.Results) != 1 || report.Results[0].Status != "interrupted" || time.Since(started) > 8*time.Second {
-		t.Fatalf("interruption not bounded: %+v, %v", report, err)
+	elapsed := time.Since(started)
+	if err == nil || len(report.Results) != 1 || report.Results[0].Status != "interrupted" || elapsed < time.Second || elapsed > 8*time.Second {
+		t.Fatalf("trial deadline did not bound interruption: %+v, %v (%s)", report, err, elapsed)
 	}
+	// The deadline includes startup, so a valid interruption can precede
+	// broker readiness. When a live pointer was published, it must be terminal.
+	if _, err := os.Lstat(filepath.Join(root, "live.json")); err == nil {
+		if live := readLiveState(t, root); live.State != "interrupted" || live.Attempt != 1 {
+			t.Fatalf("deadline lost terminal live state: %+v", live)
+		}
+	} else if !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	if _, err := Run(context.Background(), m, RunOptions{OutputDir: root}); err == nil || !strings.Contains(err.Error(), "rerun-interrupted") {
+		t.Fatal("deadline-interrupted trials must not automatically replay")
+	}
+}
+
+func TestExperimentInterruptedIntegration(t *testing.T) {
+	if os.Getenv("AGENTMUX_EXPERIMENT_INTEGRATION") != "1" {
+		t.Skip("set AGENTMUX_EXPERIMENT_INTEGRATION=1 for real interruption/recovery")
+	}
+	root, err := os.MkdirTemp("", "amx-interrupt-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(root)
+	m := testManifest()
+	m.Trials = 1
+	m.Seeds = []int64{7}
+	m.TimeoutSeconds = 30
+	for id, agent := range m.Config.Agents {
+		agent.Command = []string{"/bin/sh", "-c", "set -e; : > worker-started; exec /bin/sleep 30"}
+		m.Config.Agents[id] = agent
+	}
+	runInterrupted := func(rerun bool) Report {
+		t.Helper()
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		workStarted := make(chan time.Time, 1)
+		livePublished := false
+		report, err := Run(ctx, m, RunOptions{OutputDir: root, RerunInterrupted: rerun, OnLive: func(state string) {
+			livePublished = true
+			// The trial timeout includes initialization and preflight. Cancel
+			// only after the live pointer and both actual worker commands exist,
+			// so loaded CI startup cannot turn this into a pre-start timeout.
+			go func() {
+				ticker := time.NewTicker(10 * time.Millisecond)
+				defer ticker.Stop()
+				for {
+					ready := true
+					for id := range m.Config.Agents {
+						if _, err := os.Stat(filepath.Join(state, "workspaces", id, "worker-started")); err != nil {
+							ready = false
+							break
+						}
+					}
+					if ready {
+						workStarted <- time.Now()
+						cancel()
+						return
+					}
+					select {
+					case <-ctx.Done():
+						workStarted <- time.Time{}
+						return
+					case <-ticker.C:
+					}
+				}
+			}()
+		}})
+		cancel()
+		if !livePublished {
+			t.Fatalf("runner exited before publishing live state: %+v, %v", report, err)
+		}
+		cancelledAt := <-workStarted
+		if cancelledAt.IsZero() {
+			t.Fatalf("runner exited before both worker commands started: %+v, %v", report, err)
+		}
+		if err == nil || len(report.Results) != 1 || report.Results[0].Status != "interrupted" || time.Since(cancelledAt) > 8*time.Second {
+			t.Fatalf("interruption not bounded after worker startup: %+v, %v", report, err)
+		}
+		return report
+	}
+	report := runInterrupted(false)
 	if live := readLiveState(t, root); live.State != "interrupted" || live.Attempt != 1 {
 		t.Fatalf("interruption lost live pointer: %+v", live)
 	}
@@ -252,9 +334,7 @@ func TestExperimentInterruptedIntegration(t *testing.T) {
 	if _, err := Run(context.Background(), m, RunOptions{OutputDir: root}); err == nil || !strings.Contains(err.Error(), "rerun-interrupted") {
 		t.Fatal("interrupted trials must not automatically replay")
 	}
-	if _, err := Run(context.Background(), m, RunOptions{OutputDir: root, RerunInterrupted: true}); err == nil {
-		t.Fatal("same sleeping workload should time out in its fresh retry")
-	}
+	runInterrupted(true)
 	if live := readLiveState(t, root); live.State != "interrupted" || live.Attempt != 2 {
 		t.Fatalf("retry pointer did not preserve new attempt identity: %+v", live)
 	}
