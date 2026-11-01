@@ -395,7 +395,8 @@ func (m console) agentRuntimePanel(width int) string {
 				out.WriteString("Native process: running\n")
 			}
 		}
-		out.WriteString("Human-led native session · automatic wakeups disabled\nNative inference/tools/history stay in its original CLI.\n")
+		out.WriteString("Human-led native session · direct terminal interaction available\n")
+		out.WriteString(m.nativeDeliverySummary(width))
 	} else if m.data.runtimeErr != nil {
 		out.WriteString("Managed runtime status unavailable: " + consoleContent(m.data.runtimeErr.Error(), 150) + "\n")
 	} else if m.data.autonomy.Agent == a.ID {

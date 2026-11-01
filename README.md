@@ -102,6 +102,12 @@ lists owner collaboration groups and their boards/memory.
 `send` defaults to an inbox note for native sessions and an instruction task for
 managed workers. Choose `--mode note` or `--mode instruction` explicitly; the
 terminal editor uses **Ctrl-T** and the web composer shows the same intent.
+To receive instructions inside a native conversation, also choose receiver
+delivery: `agentmux delivery codex review` or `agentmux delivery codex auto`.
+Manual is the default. Command permissions and delivery mode are separate;
+the Agents view exposes both delivery evidence and approvals. See
+[native collaboration](docs/native-delivery.md) for subscriptions, limits,
+provider capabilities and upgrade instructions.
 Replies retain broker-checked ancestry and an explicit shared or private
 audience. Messages never become unsolicited terminal keystrokes. An exited owned
 native session can be relaunched under its existing ID without restarting peers:

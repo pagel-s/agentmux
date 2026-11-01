@@ -2,9 +2,10 @@
 
 Autonomy is opt-in per agent. It lets an idle worker react to selected observations while keeping `instruct` as a separately authorized command. Subscriptions grant no board access, team membership, or instruction authority.
 
-These controls dispatch managed task workers. Interactive native sessions keep
-their ordinary terminal workflow and read coordination explicitly; an inbox
-note or role update never becomes unsolicited terminal input. Use
+These controls dispatch managed task workers. Interactive native sessions use
+the separate [native delivery](native-delivery.md) policy: Manual by default,
+with explicit Review/Auto and observation subscriptions. They retain
+their ordinary terminal workflow. Use
 [work sessions](work-sessions.md) for that daily interactive setup and
 [autonomous workflows](autonomous-workflows.md) for persistent managed turns.
 

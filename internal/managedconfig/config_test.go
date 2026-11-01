@@ -269,6 +269,7 @@ func TestNormalizedDeepClonesEveryMutableField(t *testing.T) {
 	agent := cfg.Agents["lead"]
 	agent.Env = map[string]string{"EXPLICIT": "original"}
 	agent.ReadOnlyPaths = []string{"/some/package"}
+	agent.NativeDelivery = &NativeDelivery{Mode: "review", MaxTurns: 20}
 	cfg.Agents["lead"] = agent
 	cfg.Connections = map[string]Connection{"model": {Protocol: "ollama"}}
 	cfg.Boards = map[string]Access{"board": {Readers: []string{"lead"}, Writers: []string{"worker"}}}
@@ -282,6 +283,7 @@ func TestNormalizedDeepClonesEveryMutableField(t *testing.T) {
 	clone.Agents["lead"].Env["EXPLICIT"] = "changed"
 	clone.Agents["lead"].Command[0] = "changed"
 	clone.Agents["lead"].ReadOnlyPaths[0] = "/changed/package"
+	clone.Agents["lead"].NativeDelivery.Mode = "auto"
 	clone.Agents["extra"] = Agent{Harness: "pi"}
 	clone.Connections["model"] = Connection{Protocol: "anthropic"}
 	clone.Boards["board"].Readers[0] = "worker"

@@ -127,5 +127,8 @@ fails closed rather than restoring larger defaults.
 
 Role changes use a separate owner `agent.role {id,role,version}` operation and
 `role_version`, rather than the resource or permission revision. They apply at
-the next managed claim or through a native session's broker notice; they never
-alter native terminal input or the permission sources above. See [managed runtime](managed-runtime.md#boards-messages-instructions-and-memory).
+the next managed claim or through a native session's broker notice. In native
+Review/Auto mode, a role/boundary notice can become an attributed native turn;
+Manual mode leaves it for explicit inbox access. They never grant additional
+permissions. See [native collaboration](native-delivery.md) and
+[managed runtime](managed-runtime.md#boards-messages-instructions-and-memory).

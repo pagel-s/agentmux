@@ -4,6 +4,11 @@
 
 Changes on `main` after the tagged `v0.10.0-rc.1` preview:
 
+- Opt-in native collaboration for Claude, Codex and Pi: independent
+  Manual/Review/Auto receiver modes, exact approvals, scoped observations and
+  correlated results, with terminal/web controls and bounded broker recovery.
+  See [native delivery](docs/native-delivery.md) for provider guarantees and
+  the explicit upgrade path for existing pinned sessions.
 - Terminal-first workspaces with native interactive sessions, recognizable
   titles and stable IDs, existing-session discovery/bridges, prompt-free
   additions, versioned roles, workspace inventory and individual relaunch.

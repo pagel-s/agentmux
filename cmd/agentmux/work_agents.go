@@ -236,7 +236,7 @@ func workAgentOperation(operation string, o workOptions, client *managed.Client,
 			if control.Group != nil {
 				fmt.Fprintf(out, "Group %s\nBoard %s\nMemory %s\n", control.Group.ID, control.Group.Board, control.Group.Memory)
 			}
-			fmt.Fprintln(out, "Ask native agents to read their updated boundaries/inbox.")
+			fmt.Fprintln(out, "Native delivery follows each recipient's Manual/Review/Auto policy; inspect with agentmux delivery ID. In Manual, ask the agent to read its updated boundaries/inbox.")
 		}
 	}
 	return nil

@@ -110,7 +110,7 @@ point. Configuration requesting `enforcement: hard` is rejected. A provider
 account's own spending controls, or a separately enforceable credential-holding
 gateway, are necessary for a hard external bill ceiling. Do not treat a reported
 usage observation or `max_tokens` on one request as a total-turn bill cap.
-Reservations govern managed task claims in either local or isolated mode;
+Reservations govern managed and [native bridge](native-delivery.md) task claims in either local or isolated mode;
 human-driven inference inside an interactive native CLI does not claim broker
 tasks and is outside these turn allowances.
 

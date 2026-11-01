@@ -10,6 +10,7 @@ const source = fs.readFileSync(path.join(__dirname, "app.js"), "utf8");
 function createTestContext(values) {
   return vm.createContext({
     tab: "activity", relaunchReview: null, teamEditDrafts: new Map(), roleDrafts: new Map(), resourceDrafts: new Map(), resourceReview: null, researchSavedOffline: false, legacyGroupChoices: new Map(), legacyGroupReview: null, memoryMetadataSelection: "",
+    nativeDrafts: new Map(), nativeSignature: "",
     sessionTitle: agent => agent?.title || agent?.id || "Session",
     taskHistory: {tasks:null,cursor:"",hasMore:false,query:"",to:"",state:"",loading:false,epoch:0,updatedAt:0,error:""},
     workspaceLoadedAt: 0, workspaceLoading: false, workspaceListings: [],
@@ -1508,6 +1509,7 @@ function pollingContext() {
       source.slice(source.indexOf(start), source.indexOf(end)),
       context,
     );
+  vm.runInContext(source.slice(source.indexOf("function nativeInfo(")), context);
   return { ...dom, context, view, writes, replies };
 }
 
@@ -2867,4 +2869,135 @@ test("root and reply ancestry remain inspectable in collapsed stable conversatio
   f.context.appendThreadMetadata(node,{id:"message-reply",reply_to:"machine-parent-id",thread_id:"machine-root-id"});
   const reply=node.children[1];assert.equal(reply.open,false);assert.equal(reply.children[0].textContent,"Reply details");
   assert.deepEqual(reply.querySelectorAll("code").map(code=>code.textContent),["machine-parent-id","machine-root-id"]);
+});
+
+function nativeViewContext() {
+  const f=pollingContext();
+  f.context.snapshot.agents[0].config.interaction="interactive";
+  f.context.snapshot.agents[1].config.interaction="interactive";
+  const status={agent:"a",mode:"manual",state:"manual",reason:"automatic delivery off",session:"native-a",connected:true,turns:0,capabilities:{instructions:true,native_queue:true,preserves_draft:false,cancellation:false},policy:{version:1,mode:"manual",max_turns:20,max_hops:4,cooldown_seconds:0,results:true},pending:[]};
+  f.context.snapshot.native=status;f.context.snapshot.native_statuses={a:status,b:{...status,agent:"b",session:"native-b"}};
+  f.context.notice=(text)=>{f.lastNotice=text};
+  return {...f,status,panel:f.node("native-delivery"),notices:()=>f.lastNotice};
+}
+const textTree=node=>[node.textContent,...node.children.map(textTree)].join(" ");
+
+test("native command permission is distinct from receiver delivery mode",()=>{
+  const f=nativeViewContext();
+  assert.match(f.context.nativeDeliveryHint("b"),/Manual inbox/);
+  f.context.renderBoundaries();
+  assert.match(textTree(f.node("edge-controls")),/Permission to request work/);
+  assert.match(textTree(f.node("edge-controls")),/Manual inbox/);
+  f.context.snapshot.native_statuses.b.mode="review";
+  f.context.renderBoundaries();
+  assert.match(textTree(f.node("edge-controls")),/Review delivery/);
+  f.context.snapshot.native_statuses.b.connected=false;
+  assert.match(f.context.nativeDeliveryHint("b"),/not connected|automatic delivery off/);
+});
+
+test("native UI exposes limits and truthful capabilities without claiming draft safety",()=>{
+  const f=nativeViewContext();f.status.capabilities.completion_evidence="receiver-ack";f.context.renderNativeDelivery();
+  assert.equal(f.panel.hidden,false);
+  assert.match(textTree(f.panel),/Draft preservation unverified/);
+  assert.match(textTree(f.panel),/cannot be retracted/);
+  assert.match(textTree(f.panel),/Completion: receiver acknowledgment/);
+  assert.doesNotMatch(textTree(f.panel),/Completion: correlated native events/);
+  assert.equal(f.panel.querySelectorAll("input").length,8);
+  const auto=f.panel.querySelectorAll("button").find(node=>node.textContent==="Auto");
+  auto.click();
+  assert.equal(f.writes[0].operation,"native.configure");
+  assert.deepEqual(JSON.parse(JSON.stringify(f.writes[0].args)),{agent:"a",version:1,mode:"auto"});
+  f.context.selectionReady=()=>false;f.context.renderNativeDelivery();
+  assert.ok(f.panel.querySelectorAll("[data-owner-write]").every(node=>node.disabled));
+});
+
+test("native drafts survive polling and require explicit CAS rebase",()=>{
+  const f=nativeViewContext();f.context.renderNativeDelivery();
+  const turns=f.panel.querySelectorAll("input").find(node=>node.dataset.focusKey==="native:max_turns");
+  turns.value="37";turns.oninput();
+  f.status.policy.version=2;f.status.policy.max_turns=24;
+  f.context.renderNativeDelivery();
+  assert.equal(f.panel.querySelectorAll("input").find(node=>node.dataset.focusKey==="native:max_turns").value,"37");
+  let form=f.panel.querySelectorAll("form")[0];
+  assert.equal(form.querySelectorAll("button").find(node=>node.type==="submit").disabled,true);
+  form.onsubmit({preventDefault(){}});assert.equal(f.writes.length,0);
+  f.panel.querySelectorAll("button").find(node=>node.textContent==="Use reviewed current version").click();
+  form=f.panel.querySelectorAll("form")[0];form.onsubmit({preventDefault(){}});
+  assert.equal(f.writes[0].args.version,2);assert.equal(f.writes[0].args.max_turns,37);
+  assert.equal(f.writes[0].args.mode,undefined,"saving subscriptions must not reset delivery mode");
+});
+
+test("native approval is bound to reviewed candidate text and exact selected identity",()=>{
+  const f=nativeViewContext();f.status.mode=f.status.policy.mode="review";
+  f.status.pending=[{id:"task-one",kind:"instruction",from:"b",text:"Original request"}];
+  f.context.renderNativeDelivery();
+  const approve=f.panel.querySelectorAll("button").find(node=>node.textContent==="Approve this exact turn");
+  f.status.pending[0].text="Changed request";approve.click();assert.equal(f.writes.length,0);
+  f.context.renderNativeDelivery();
+  const refreshed=f.panel.querySelectorAll("button").find(node=>node.textContent==="Approve this exact turn");
+  f.context.selected="b";refreshed.click();assert.equal(f.writes.length,0,"selection switch must not approve previous agent's turn");
+  f.context.selected="a";refreshed.click();
+  assert.equal(f.writes[0].operation,"native.approve");
+  assert.deepEqual(JSON.parse(JSON.stringify(f.writes[0].args)),{agent:"a",version:1,candidate:"task-one"});
+});
+
+test("native queue remains bounded while preserving complete reviewed text as data",()=>{
+  const f=nativeViewContext();f.status.mode="review";
+  f.status.pending=Array.from({length:200},(_,i)=>({id:"task-"+i,kind:"instruction",from:"b",text:i===0?'<img src=x onerror="run()">':"request"}));
+  f.context.renderNativeDelivery();
+  assert.equal(f.panel.querySelectorAll(".native-candidate").length,5);
+  assert.match(textTree(f.panel),/195 additional requests/);
+  assert.equal(f.panel.querySelectorAll("pre")[0].textContent,'<img src=x onerror="run()">');
+});
+
+test("selected native full queue wins over paged inventory summaries",()=>{
+  const f=nativeViewContext();f.status.mode="review";
+  f.status.pending=[{id:"review-full",kind:"instruction",from:"b",text:"Exact full request"}];
+  f.status.pending_count=19;f.status.pending_more=true;
+  f.context.snapshot.native_statuses.a={...f.status,pending:[]};
+  f.context.renderNativeDelivery();
+  assert.equal(f.panel.querySelectorAll(".native-candidate").length,1);
+  assert.match(textTree(f.panel),/Exact full request/);
+  assert.match(textTree(f.panel),/19\+/);
+  assert.match(textTree(f.panel),/More requests waiting/);
+});
+
+test("native dirty settings protect page close while an untouched view stays quiet",()=>{
+  const f=unloadContext();
+  f.context.nativeDrafts.set("a",{dirty:false});
+  assert.equal(f.unload().prevented,false);
+  f.context.nativeDrafts.set("a",{dirty:true,max_turns:37});
+  assert.equal(f.unload().prevented,true);
+  f.context.nativeDrafts.delete("a");
+  assert.equal(f.unload().prevented,false);
+});
+
+test("native policy conflict shows latest settings and explicit discard keeps them",()=>{
+  const f=nativeViewContext();f.context.renderNativeDelivery();
+  const input=f.panel.querySelectorAll("input").find(node=>node.dataset.focusKey==="native:max_turns");input.value="37";input.oninput();
+  f.status.policy={...f.status.policy,version:2,max_turns:24,max_hops:9,notes:true};
+  f.context.renderNativeDelivery();
+  const latest=f.panel.querySelectorAll(".native-policy-current")[0];
+  assert.match(textTree(latest),/policy v2/);assert.match(textTree(latest),/Turn limit: 24/);assert.match(textTree(latest),/Maximum hops: 9/);assert.match(textTree(latest),/Direct notes: on/);
+  assert.equal(f.panel.querySelectorAll("input").find(node=>node.dataset.focusKey==="native:max_turns").value,"37");
+  f.panel.querySelectorAll("button").find(node=>node.dataset.focusKey==="native-discard").click();
+  assert.equal(f.panel.querySelectorAll("input").find(node=>node.dataset.focusKey==="native:max_turns").value,"24");
+  assert.equal(f.context.nativeDrafts.get("a").dirty,false);assert.equal(f.writes.length,0,"discarding a local draft must never save a policy");
+});
+
+test("native save keeps newer typing and advances only its saved policy version",async()=>{
+  const f=nativeViewContext();let release,pending;
+  f.context.call=()=>new Promise(resolve=>{release=resolve});f.context.action=fn=>{pending=fn()};
+  f.context.renderNativeDelivery();
+  const input=f.panel.querySelectorAll("input").find(node=>node.dataset.focusKey==="native:max_turns");
+  input.value="37";input.oninput();f.panel.querySelectorAll("form")[0].onsubmit({preventDefault(){}});
+  input.value="41";input.oninput();release({policy:{version:2}});await pending;
+  assert.equal(f.context.nativeDrafts.get("a").max_turns,"41");assert.equal(f.context.nativeDrafts.get("a").version,2);assert.equal(f.context.nativeDrafts.get("a").dirty,true);
+});
+
+test("untouched native settings follow saved policy changes without a false conflict",()=>{
+  const f=nativeViewContext();f.context.renderNativeDelivery();f.status.policy.version=2;f.status.policy.max_turns=31;f.context.renderNativeDelivery();
+  assert.equal(f.context.nativeDrafts.get("a").version,2);assert.equal(f.context.nativeDrafts.get("a").dirty,false);
+  assert.equal(f.panel.querySelectorAll("input").find(node=>node.dataset.focusKey==="native:max_turns").value,"31");
+  assert.equal(f.panel.querySelectorAll(".native-policy-current").length,0);
 });

@@ -55,6 +55,9 @@ func workLegacyGroupEdges(control managed.ControlState) map[string][]managed.Edg
 // cross-origin API. Native output is data, never HTML or terminal input.
 func workWebHandler(state string, client *managed.Client, token, host string) http.Handler {
 	allowed := map[string]bool{"activity": true, "agent.list": true, "agent.label": true, "agent.role": true, "boundaries.get": true, "control.get": true, "control.update": true, "capacity.get": true, "capacity.update": true, "task.get": true, "task.list": true, "task.cancel": true, "agent.stop": true, "autonomy.status": true, "autonomy.control": true, "memory.list": true, "memory.get": true, "memory.head": true, "memory.put": true, "board.post": true, "team.invite": true, "team.remove": true, "team.update": true, "team.transfer": true, "team.accept-owner": true, "team.dissolve": true, "research.control": true}
+	for _, operation := range []string{"native.status", "native.configure", "native.approve"} {
+		allowed[operation] = true
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -151,13 +154,50 @@ func workWebHandler(state string, client *managed.Client, token, host string) ht
 						}
 					}
 				}
+				nativeStatuses := map[string]managed.NativeStatus{}
+				nativeError := ""
+				after := ""
+				for page := 0; page < 50; page++ {
+					args, _ := json.Marshal(map[string]any{"after": after, "limit": 200})
+					raw, problem := client.Call(r.Context(), managed.Request{Operation: "native.status", Args: args})
+					if problem != nil {
+						nativeError = problem.Error()
+						break
+					}
+					var result struct {
+						Statuses []managed.NativeStatus `json:"statuses"`
+						Cursor   string                 `json:"cursor"`
+						HasMore  bool                   `json:"has_more"`
+					}
+					if json.Unmarshal(raw, &result) != nil {
+						nativeError = "Native delivery status could not be read"
+					} else {
+						for _, status := range result.Statuses {
+							nativeStatuses[status.Agent] = status
+						}
+					}
+					if nativeError != "" || !result.HasMore {
+						break
+					}
+					if result.Cursor == "" || result.Cursor == after {
+						nativeError = "Native status pagination did not advance"
+						break
+					}
+					after = result.Cursor
+					if page == 49 {
+						nativeError = "Native status inventory exceeds this view's pagination budget"
+					}
+				}
+				if d.nativeErr != nil {
+					nativeError = d.nativeErr.Error()
+				}
 				errorText := func(err error) string {
 					if err == nil {
 						return ""
 					}
 					return err.Error()
 				}
-				reply(map[string]any{"ok": true, "headless": d.headless, "groups": d.controls.Groups, "legacy_group_edges": workLegacyGroupEdges(d.controls), "teams": d.teams, "autonomy": d.autonomy, "conversation": d.conversation, "research": d.research, "runtime_error": errorText(d.runtimeErr), "teams_error": errorText(d.teamsErr), "research_error": errorText(d.researchErr), "observed": d.observed, "bridge_setup": func() string {
+				reply(map[string]any{"ok": true, "headless": d.headless, "native": d.native, "native_statuses": nativeStatuses, "native_error": nativeError, "groups": d.controls.Groups, "legacy_group_edges": workLegacyGroupEdges(d.controls), "teams": d.teams, "autonomy": d.autonomy, "conversation": d.conversation, "research": d.research, "runtime_error": errorText(d.runtimeErr), "teams_error": errorText(d.teamsErr), "research_error": errorText(d.researchErr), "observed": d.observed, "bridge_setup": func() string {
 					for _, a := range d.agents {
 						if a.ID == d.selected && a.External {
 							return bridgeInstructions(state, a.ID)

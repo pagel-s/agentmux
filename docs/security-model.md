@@ -50,6 +50,12 @@ See [memory lifecycle](memory-lifecycle.md), [live permissions](live-permissions
 and [portable traces](traces-and-recovery.md#portable-authenticated-bundles).
 
 Native interactive input and managed task execution have separate boundaries.
+The opt-in [native delivery bridge](native-delivery.md) rechecks recipient policy,
+sender authority and source visibility before reserving an attributed turn.
+Transport acceptance, execution evidence and task verification remain separate.
+Supported cancellation only targets the correlated peer turn; Claude's already
+queued inbox turns cannot be retracted. Manual native input retains the provider's
+own approval and execution behavior.
 An interactive `native_only` session omits Agentmux prompt injection; a live
 role edit sends a broker notice rather than keystrokes. Relaunch requires an
 exited workspace-owned native session and an explicit history choice when

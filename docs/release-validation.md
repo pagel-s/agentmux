@@ -9,6 +9,7 @@ checks; limitations below are part of the supported scope.
 | --- | --- | --- |
 | Setup | Interactive/spec-based role, harness, endpoint, auth and sandbox setup; private config output | Setup/config tests; [guide](managed-setup.md) |
 | Providers | Claude, Codex, Pi and Antigravity adapters; local Antigravity-to-Pi bridge; explicit compatible endpoint metadata | Native provider checks and [provider matrix](provider-validation.md) |
+| Native collaboration | Independent Manual/Review/Auto receiver policy, native turn delivery, exact approvals, scoped observations/results, bounded recovery and terminal/web controls | Installed Claude/Codex/Pi TUIs with synthetic providers; two-Pi production local/Bubblewrap broker-recovery acceptance; [native collaboration](native-delivery.md) |
 | Hardening | Exact destination proxy, aggregate admission accounting, capped workspace/history/tmp filesystems, safe checkpoint recovery | Actual proxy-bypass rejection, kernel ENOSPC, checkpoint and budget integration tests; [boundaries](hardening.md) |
 | Operation | Between-turn credential reload, explicit interruption handling, native history generations, individual native relaunch, owner recovery, versioned installer | Credential/relaunch regressions and bounded restart/crash soaks; [recovery](traces-and-recovery.md) |
 | Memory | TTL, structured archive-source claims, tombstones, scoped lexical/vector retrieval, explicit cross-run CAS import/export | ACL/expiry/receipt/CAS/vector/archive regression tests; [guide](memory-lifecycle.md) |

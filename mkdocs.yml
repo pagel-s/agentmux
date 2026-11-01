@@ -55,6 +55,7 @@ nav:
       - Pane Coordination (v1): architecture/coordination.md
   - Managed Teams:
       - Work Sessions: work-sessions.md
+      - Native Collaboration: native-delivery.md
       - Runtime: managed-runtime.md
       - Setup: managed-setup.md
       - Persistent Workflows: autonomous-workflows.md

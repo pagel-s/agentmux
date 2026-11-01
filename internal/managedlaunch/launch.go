@@ -53,6 +53,7 @@ type Runtime struct {
 	Session               string               `json:"session"`
 	State                 string               `json:"state"`
 	BrokerSandbox         string               `json:"broker_sandbox"`
+	BrokerRecovering      bool                 `json:"broker_recovering,omitempty"`
 	SupervisorPane        string               `json:"supervisor_pane,omitempty"`
 	BrokerPane            string               `json:"broker_pane,omitempty"`
 	DashboardPane         string               `json:"dashboard_pane,omitempty"`
@@ -187,18 +188,39 @@ func (l *Launcher) Up(ctx context.Context, cfg managedconfig.Config) (Runtime, e
 	}
 	readyCtx, cancel := context.WithTimeout(ctx, startupTimeout)
 	defer cancel()
+	return l.awaitStartup(readyCtx, runtime, cfg.InteractiveWorkspace)
+}
+
+func (l *Launcher) awaitStartup(ctx context.Context, runtime Runtime, nativeWorkspace bool) (Runtime, error) {
 	for {
 		current, err := Snapshot(l.options.StateDir)
-		if err == nil && current.AttemptID == attempt {
+		if err == nil && current.AttemptID == runtime.AttemptID {
 			if current.State == "running" {
 				return current, nil
 			}
-			if current.State == "failed" || current.State == "attention" || current.State == "stopped" {
+			recoverable := nativeWorkspace && current.State == "attention" && current.BrokerRecovering
+			if current.State == "failed" || current.State == "attention" && !recoverable || current.State == "stopped" {
 				return current, errors.New("managed startup did not complete; inspect status and the supervisor pane")
 			}
 		}
-		if err := pause(readyCtx); err != nil {
-			_ = writeStop(l.options.StateDir, attempt)
+		if err := pause(ctx); err != nil {
+			if nativeWorkspace {
+				// Up still holds the lifecycle lock. Reuse Down's ordered cleanup
+				// without reacquiring it, under a fresh bounded shutdown context.
+				// Otherwise a recovering supervisor could launch hidden workers
+				// after Up already reported failure to the human.
+				if latest, e := Snapshot(l.options.StateDir); e == nil && latest.AttemptID == runtime.AttemptID {
+					runtime = latest
+				}
+				cleanup, cancel := context.WithTimeout(context.Background(), 3*stopTimeout+5*time.Second)
+				defer cancel()
+				stopped, problem := l.downOwned(cleanup, runtime)
+				if problem != nil {
+					return stopped, errors.New("managed startup did not become ready; ordered shutdown is unconfirmed; inspect status")
+				}
+				return stopped, errors.New("managed startup did not become ready; this attempt was stopped")
+			}
+			_ = writeStop(l.options.StateDir, runtime.AttemptID)
 			return runtime, errors.New("managed startup did not become ready; shutdown requested for this attempt")
 		}
 	}
@@ -273,17 +295,24 @@ func (l *Launcher) Down(ctx context.Context) (Runtime, error) {
 	if err != nil {
 		return runtime, err
 	}
+	return l.downOwned(ctx, runtime)
+}
+
+// The caller holds the lifecycle lock, including startup-timeout cleanup.
+func (l *Launcher) downOwned(ctx context.Context, runtime Runtime) (Runtime, error) {
 	owned, absent, ownershipErr := l.inspectOwnership(ctx, runtime)
 	if ownershipErr != nil {
 		return runtime, ownershipErr
 	}
 	if !owned && absent {
 		runtime.State, runtime.Problem = "stopped", ""
+		runtime.BrokerRecovering = false
 		return runtime, writeRuntime(l.options.StateDir, runtime)
 	}
 	if err := writeStop(l.options.StateDir, runtime.AttemptID); err != nil {
 		return runtime, err
 	}
+	runtime.BrokerRecovering = false
 	// The controller also performs ordered shutdown so cleanup works after a
 	// supervisor crash. A live supervisor performs the same idempotent steps.
 	if err := l.stopOwned(ctx, runtime); err != nil {

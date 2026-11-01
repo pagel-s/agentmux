@@ -164,6 +164,21 @@ func (m console) contextualKeys() string {
 	if m.workspacePicker != nil {
 		return "↑/↓ workspace · Enter opens observer · Esc/q back"
 	}
+	if m.nativeAction != nil {
+		if m.nativeAction.latest != nil {
+			return "↑/↓ scroll · Enter adopts displayed version (no save) · Esc keeps old version"
+		}
+		if m.nativeAction.needsRefresh {
+			return "Draft kept · Ctrl-R reviews current policy · Esc edits/cancels · Ctrl-G help"
+		}
+		if m.nativeAction.confirm {
+			return "↑/↓ scroll · Enter applies exact reviewed action · Esc back · Ctrl-G help"
+		}
+		if m.nativeAction.approve {
+			return "↑/↓ request · Enter reads selected request · Esc cancels · Ctrl-G help"
+		}
+		return "↑/↓ field · ←/→ change · digits edit limits\nEnter reviews · Esc cancels · Ctrl-G help"
+	}
 	if m.teamAction != nil {
 		if m.teamAction.editKind != "" || m.teamAction.researchAction != "" && !m.teamAction.reasonReady {
 			return "Enter reviews · Esc cancels · Ctrl-G help · Ctrl-C detach/close"
@@ -188,6 +203,12 @@ func (m console) contextualKeys() string {
 		context = "↑/↓ agent · " + m.nativeEntryHint()
 		if m.selectedID() != "" {
 			context += " · o details · Shift+L title"
+			if len(m.agents) > 0 && m.agents[m.selected%len(m.agents)].Config.Interaction == "interactive" {
+				context += "\nShift+D delivery"
+				if m.data.native.Agent == m.selectedID() && m.data.native.Policy.Mode == "review" && len(m.data.native.Pending) > 0 {
+					context += " · Shift+A review inbox"
+				}
+			}
 		}
 	case 2:
 		if m.selectedID() != "" {

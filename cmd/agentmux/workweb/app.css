@@ -1651,3 +1651,25 @@ h1 {
     grid-template-columns: 1fr;
   }
 }
+
+.native-delivery { padding: 0 0 18px; margin-bottom: 18px; border-bottom: 1px solid var(--line); }
+.native-modes { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+.native-mode.selected { background: #30213f; border-color: var(--accent); color: var(--accent); }
+.native-capabilities { display: flex; gap: 6px 16px; flex-wrap: wrap; color: var(--muted); font: 11px/1.6 var(--mono); }
+.native-settings { border-block: 1px solid var(--line); padding: 10px 0; margin: 12px 0; }
+.native-settings summary, .native-candidate summary { cursor: pointer; color: var(--text); }
+.native-policy-form { padding-top: 12px; }
+.native-limits { display: flex; flex-wrap: wrap; gap: 12px; }
+.native-limits label { display: grid; gap: 4px; color: var(--muted); }
+.native-limits input { width: 130px; }
+.native-subscriptions { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 14px 0; }
+.native-subscriptions label { display: flex; gap: 6px; align-items: center; }
+.native-subscriptions input { accent-color: var(--accent); }
+.native-queue h3 { font-size: 12px; font-weight: 500; color: var(--muted); }
+.native-candidate { border-top: 1px solid var(--line); padding: 10px 0; }
+.native-candidate code { display: block; margin-top: 8px; color: var(--muted); overflow-wrap: anywhere; }
+.native-candidate pre { max-height: 240px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.native-edge-status { color: var(--accent); }
+.native-policy-current { border-left: 2px solid var(--accent); padding: 8px 12px; margin: 12px 0; }
+.native-policy-current pre { white-space: pre-wrap; color: var(--muted); font: 12px/1.6 var(--mono); }
+.native-policy-form > button { margin-right: 6px; }

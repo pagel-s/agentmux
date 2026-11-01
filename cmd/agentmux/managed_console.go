@@ -31,6 +31,8 @@ type consoleData struct {
 	teams        []managed.Team
 	autonomy     managed.AutonomyStatus
 	conversation managed.ConversationState
+	native       managed.NativeStatus
+	nativeErr    error
 	research     *managed.ResearchStatus
 	runtimeErr   error
 	teamsErr     error
@@ -52,6 +54,7 @@ type consoleAction struct {
 	details            string
 	labelID, labelText string
 	draft              *consoleDraft
+	nativeDraft        *consoleNativeAction
 }
 type console struct {
 	workspaceRequest                       uint64
@@ -99,6 +102,7 @@ type console struct {
 	labelDrafts                            map[string]string
 	teamIndex, eventIndex, teamMemberIndex int
 	teamAction                             *consoleTeamAction
+	nativeAction                           *consoleNativeAction
 	reader                                 *consoleReader
 	failedDraft                            *consoleDraft
 	offline                                bool
@@ -227,6 +231,20 @@ func fetchWorkSnapshot(state string, client *managed.Client, selected string, ta
 	for _, agent := range d.agents {
 		if agent.ID == d.selected {
 			active = agent.State == "active"
+			if active && agent.Config.Interaction == "interactive" {
+				if raw, err = workCall(ctx, client, "native.status", map[string]string{"agent": d.selected}); err != nil {
+					d.nativeErr = err
+				} else {
+					var status struct {
+						Status managed.NativeStatus `json:"status"`
+					}
+					if err = json.Unmarshal(raw, &status); err != nil {
+						d.nativeErr = err
+					} else {
+						d.native = status.Status
+					}
+				}
+			}
 		}
 	}
 	if d.selected != "" && active {
@@ -395,7 +413,7 @@ type consoleAttachGuidance struct{ command string }
 func (m console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case consoleWorkspaceList:
-		if msg.request != m.workspaceRequest || m.composer != "" || m.reader != nil || m.teamAction != nil {
+		if msg.request != m.workspaceRequest || m.composer != "" || m.reader != nil || m.teamAction != nil || m.nativeAction != nil {
 			return m, nil
 		}
 		if msg.err != nil {
@@ -407,6 +425,8 @@ func (m console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.receiveMemoryReview(msg)
 	case consoleRoleReview:
 		m.receiveRoleReview(msg)
+	case consoleNativeVersionReview:
+		m.receiveNativeVersionReview(msg)
 	case consoleAttachGuidance:
 		m.reader = &consoleReader{title: "Open native session in another terminal", body: "This observer is inside a different tmux workspace.\n\nRun this command in a separate terminal:\n\n" + consoleContent(msg.command, 4000) + "\n\nThis keeps the current workspace, other clients and observer drafts unchanged.\nYou can continue observing and controlling this workspace here.\nEsc returns to this observer."}
 		m.message = "Native attachment needs a separate terminal; the exact command is shown above."
@@ -580,6 +600,12 @@ func (m console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			m.message = "Action failed: " + activityText(msg.err.Error(), 200) + ". " + advice
+			if msg.nativeDraft != nil {
+				draft := *msg.nativeDraft
+				draft.needsRefresh = true
+				m.nativeAction = &draft
+				m.message = "Native delivery draft kept for " + draft.agent + ". Ctrl-R reviews the current policy before another submission. " + m.message
+			}
 			if msg.draft != nil {
 				m.failedDraft = msg.draft
 				m.message = "Draft kept for " + msg.draft.target + "; Ctrl-R restores after reviewing delivery. " + m.message
