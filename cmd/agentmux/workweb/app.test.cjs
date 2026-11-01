@@ -2371,3 +2371,83 @@ test("rapid navigation keeps a pending unavailable board destination in its own 
   f.submit();
   assert.equal(f.requests.length, 0);
 });
+
+test("memory browsing follows all broker pages and retains exact namespace and final key", async () => {
+  const f = memoryContext(), calls = [];
+  f.context.call = async (operation, args) => {
+    assert.equal(operation, "memory.list");
+    calls.push({ ...args });
+    if (!args.after) return { entries: Array.from({length:100}, (_,i)=>({key:`key-${i}`, value:`knowledge ${i}`, version:1})), cursor:"key-99" };
+    if (args.after === "key-99") return { entries: [{key:"beyond-first-page",value:"exact scope knowledge",version:7}], cursor:"beyond-first-page" };
+    return { entries: [], cursor:args.after };
+  };
+  await f.context.loadMemory();
+  assert.equal(f.context.memoryEntries.get("team").length,101);
+  assert.deepEqual(calls.map(c=>c.namespace),["team","team","team"]);
+  f.entry("beyond-first-page").click();
+  assert.equal(f.node("memory-key").value,"beyond-first-page");
+  assert.equal(f.node("memory-value").value,"exact scope knowledge");
+  assert.equal(f.context.memoryVersion,7);
+});
+
+test("memory pagination discards late pages after namespace changes and never publishes a partial failed refresh", async () => {
+  const f = memoryContext();
+  f.context.notice = message => { f.context.lastNotice = message; };
+  await f.context.loadMemory();
+  let release, reached;
+  const waiting = new Promise(resolve => { reached = resolve; });
+  f.context.call = async (_operation,args) => {
+    if (!args.after) return {entries:[{key:"old-first",value:"old",version:1}],cursor:"old-first"};
+    return new Promise(resolve=>{release=resolve; reached();});
+  };
+  const pending=f.context.loadMemory();
+  await waiting;
+  f.node("memory-namespace").value="pair";
+  f.context.resetMemoryNamespace("pair");
+  release({entries:[{key:"old-late",value:"wrong namespace",version:1}],cursor:"old-late"});
+  await pending;
+  assert.equal(f.context.memoryEntries.get("team")[0].key,"plan");
+  assert.equal(f.context.memoryEditorNamespace,"pair");
+  assert.equal(f.node("memory-list").childElementCount,0);
+  f.node("memory-namespace").value="team";
+  f.context.resetMemoryNamespace("team");
+  f.context.call=async (_operation,args)=>{
+    if (!args.after) return {entries:[{key:"partial",value:"not complete",version:1}],cursor:"partial"};
+    throw new Error("second page unavailable");
+  };
+  await f.context.loadMemory();
+  assert.equal(f.context.memoryEntries.get("team")[0].key,"plan");
+  assert.match(f.context.lastNotice,/second page unavailable/);
+});
+
+test("Teams separates retained membership from broker-derived recursive access and updates on polling", () => {
+  const f = pollingContext();
+  vm.runInContext(source.slice(source.indexOf("function teamJoiningHint("), source.indexOf("function renderWorkerRuntime(")), f.context);
+  const team = {
+    id: "team-recursive", name: "Recursive collaboration", owner: "$owner",
+    state: "active", version: 4, members: ["b"], invited: ["c"],
+    board: "board-exact", memory: "memory-exact",
+    member_access: { b: { allowed: false, reason: "ancestor is not a team member", blocked_by: "stable-ancestor-not-in-roster" } },
+  };
+  f.context.snapshot.teams = [team];
+  const text = () => {
+    const all = node => [node.textContent, ...node.children.flatMap(child => all(child))];
+    return all(f.node("consented-teams")).join("\n");
+  };
+  f.context.renderTeams();
+  assert.match(text(), /Membership retained · effective access blocked/);
+  assert.match(text(), /ancestor is not a team member/);
+  assert.match(text(), /Blocked by stable-ancestor-not-in-roster/);
+  assert.doesNotMatch(text(), /Current board \+ memory access allowed/);
+  // A metadata-only poll must refresh this status even with unchanged team
+  // version, and must not send an owner command or need parent-name guessing.
+  team.member_access.b = { allowed: true };
+  f.context.renderTeams();
+  assert.match(text(), /Current board \+ memory access allowed/);
+  assert.doesNotMatch(text(), /effective access blocked/);
+  delete team.member_access;
+  f.context.renderTeams();
+  assert.match(text(), /Membership recorded · effective access unavailable/);
+  assert.doesNotMatch(text(), /access allowed/);
+  assert.equal(f.writes.length, 0);
+});

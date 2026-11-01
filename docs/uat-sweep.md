@@ -130,6 +130,71 @@ processes. Recovery digests detect damaged state; they do not defend against an
 owner who can rewrite both records and their recovery metadata. Remote trace
 collection remains unsupported without a central collector and was not validated.
 
+## Ten-reviewer usability pass — 1 November 2026
+
+Ten additional reviewers independently exercised distinct user journeys, in
+batches of three alongside the coordinating reviewer. Each used disposable
+fixtures and cleaned owned processes. The original reviewed binary was
+`69c0c68`; confirmed issues were then retested against candidate builds. These
+are separate fixtures, not one concurrent deployment or ten model participants.
+
+| Reviewer | Actual scenarios and outcome |
+| --- | --- |
+| 1 — First day | Default and named workspace setup, paths with spaces, cross-directory use, repeated start, project mismatch, coordination, stop/restart and missing providers. Recovery text and unlimited-run deadline display improved. |
+| 2 — Terminal operator | Twelve native command sessions and two independent PTY clients; duplicate Unicode titles, exact focus/input, three editor sizes, frozen long readers and popup return. Multiline cursor movement and explicit input-limit feedback added. |
+| 3 — Web operator | Keyboard search/selection, scoped memory, Unicode drafts across views, 480×800 layout, graph Space selection, literal HTML titles and broker outage/reconnect. Draft/target retained; joined emoji title support added. |
+| 4 — Communication | Ten native terminals, forty assigned-credential checks and a separate mixed-mode hierarchy. Overlapping pairs, scoped/public boards, directional command authority, isolation and reconnect passed. Contradictory board selectors now fail before posting. |
+| 5 — Memory | Real concurrent writers, private/shared separation, overlapping namespaces, deletion, expiry, revocation and reconnect. Terminal tombstone review and both consoles' memory pagination fixed. |
+| 6 — Existing sessions | Two real external PTYs using transparent compiled echo fixtures named Claude/Codex. Stable discovery IDs, explicit helper setup, reconnect, stale process rejection and native input after removal passed without injected keystrokes. |
+| 7 — Research | Three small isolated studies: completion/observation/archive/cache, paused stale-version rejection/one-phase step/resume, and stop/classification/explicit fresh attempt. Original trial evidence retained. |
+| 8 — Dynamic teams | Real Bubblewrap delegated spawn, consent, history, scope denial, lifecycle, inherited permissions and cascade stop. Team displays now explain retained membership with blocked inherited access. |
+| 9 — Failures | Native EOF with peer survival, broker loss, fail-closed operations and explicit restart preserving prior history. Inventory now separates coordination status from worker liveness. |
+| 10 — Scale | 225 configured session definitions, 205 teams, 105 memory entries and 105 queued tasks. Fixed registry pagination in inventory, owner snapshots and bridge reconnect lookup; the exact tail ID remains present and selected. |
+
+The native sessions above ran command participants. External-discovery fixtures
+were clearly identified echo programs, not authenticated provider sessions. The
+large registry consisted of synthetic metadata, with no agent processes. No
+provider/model requests or new remote-machine validation were made.
+
+Fixes preserve the reviewed identity and explicit action boundaries:
+
+- Missing attach and stopped inventory output now provide the exact quoted
+  workspace recovery command. Native-only activity says there is no automatic
+  deadline; an unknown deadline remains unknown and real deadlines remain visible.
+- A message specifying both `--group` and `--board` is rejected without a write;
+  successful board posts identify their actual namespace.
+- The terminal editor moves vertically through display rows and retains its
+  preferred column across short rows. Home/End select logical line edges;
+  Ctrl-A/Ctrl-E retain whole-buffer navigation. Rejected oversized input keeps
+  the draft and explains the limit. The final PTY replay handles partial
+  nonblocking writes, so a large paste and its closing marker are fully delivered;
+  the initial oversized-paste observation alone was not sufficient evidence.
+- Memory review uses the exact head version for missing/deleted/expired keys,
+  checks the version again when retrieving live values, and keeps version
+  adoption separate from saving. Memory lists follow every returned cursor and
+  discard late pages from a previous namespace.
+- Team access explanations come from the broker's recursive authorization rules
+  and stable ancestor IDs, rather than inferring access from consent or titles.
+  Registry pagination also fails explicitly instead of presenting partial data
+  as a complete inventory.
+
+Final validation passed the full uncached race suite with managed, experiment,
+research and sandbox integrations enabled, plus all 58 frontend scenarios. The
+coordinator's final browser pass rendered the joined-emoji title correctly and
+loaded all 126 memory records, then opened the exact `pagination-125` entry and
+verified its saved value and version. The earlier web reviewer's browser surface
+became unavailable for this follow-up; the coordinator used its independently
+available browser connection. Team access presentation has backend, terminal and
+DOM regression coverage with real broker metadata; it was not manually retested
+in a browser after the fix. All final observer processes and tabs were closed.
+
+Dense selected-session snapshots in the 225-definition/205-team fixture took
+1.72–2.23 seconds and contained about 444 KB on this host. They completed, but
+this is a profiling target rather than a large-team responsiveness guarantee.
+The research reviewer also suggested printing a direct analysis command after
+an owner stop; existing analysis commands remain available. Neither observation
+is evidence of model collaboration quality or multi-day provider reliability.
+
 ## Extended usability acceptance pass
 
 A further pass on the same day followed everyday terminal users, people with

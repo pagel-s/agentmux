@@ -229,6 +229,30 @@ func (m console) teamsPanel(width, height int) string {
 			membership = "team owner"
 		}
 		fmt.Fprintf(&out, "Target status: %s · %s\n", target.State, membership)
+		if teamContains(t.Members, target.ID) {
+			if access, ok := t.MemberAccess[target.ID]; ok {
+				if !access.Allowed {
+					out.WriteString(consoleAccent.Render("Membership retained · effective access blocked") + "\n")
+					fmt.Fprintf(&out, "Reason: %s\n", consoleClip(consoleContent(access.Reason, 160), width-8, 1))
+					if access.BlockedBy != "" {
+						fmt.Fprintf(&out, "Blocked by ID: %s\n", consoleContent(access.BlockedBy, 100))
+					}
+				} else {
+					out.WriteString(consoleMuted.Render("Current board + memory access allowed") + "\n")
+				}
+			} else {
+				out.WriteString(consoleMuted.Render("Effective access unavailable; membership alone does not grant access.") + "\n")
+			}
+		}
+	}
+	blocked := []string{}
+	for _, id := range t.Members {
+		if access, ok := t.MemberAccess[id]; ok && !access.Allowed {
+			blocked = append(blocked, id)
+		}
+	}
+	if len(blocked) > 0 {
+		fmt.Fprintf(&out, "Blocked members (%d): %s\n", len(blocked), consoleClip(consoleContent(strings.Join(blocked, ", "), 500), max(1, width-22), 1))
 	}
 	fmt.Fprintf(&out, "%s\n%s\n%s\nBoard: %s\nMemory: %s\n", consoleClip("Owner: "+consoleContent(m.agentLabel(t.Owner), 160), width, 1), consoleClip(fmt.Sprintf("Members (%d): %s", len(t.Members), consoleContent(m.teamAgentLabels(t.Members), 500)), width, 1), consoleClip(fmt.Sprintf("Awaiting consent: %d · %s", len(t.Invited), consoleContent(m.teamAgentLabels(t.Invited), 500)), width, 1), consoleContent(t.Board, 100), consoleContent(t.Memory, 100))
 	out.WriteString(consoleMuted.Render("Owner controls membership; invitation acceptance stays with the agent.\nRemoving/dissolving a team does not close native terminals."))

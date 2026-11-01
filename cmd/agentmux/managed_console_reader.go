@@ -32,21 +32,48 @@ func (m console) readerHelp() string {
 type consoleMemoryVersionReview struct {
 	namespace, key, draft string
 	oldVersion, version   int
-	value                 string
+	value, state          string
 	err                   error
 }
 
 func (m console) reviewMemoryVersion() tea.Cmd {
 	review := consoleMemoryVersionReview{namespace: m.memoryNamespace, key: m.memoryKey, draft: string(m.text), oldVersion: m.memoryVersion}
 	return func() tea.Msg {
-		raw, err := workCall(context.Background(), m.client, "memory.get", map[string]string{"namespace": review.namespace, "key": review.key})
+		args := map[string]string{"namespace": review.namespace, "key": review.key}
+		raw, err := workCall(context.Background(), m.client, "memory.head", args)
 		review.err = err
-		if err == nil {
-			var result struct {
-				Entry managed.Memory `json:"entry"`
+		if err != nil {
+			return review
+		}
+		var head struct {
+			Version int    `json:"version"`
+			State   string `json:"state"`
+		}
+		if review.err = json.Unmarshal(raw, &head); review.err != nil {
+			return review
+		}
+		review.version, review.state = head.Version, head.State
+		if head.State != "live" {
+			switch head.State {
+			case "missing", "deleted", "expired":
+			default:
+				review.err = fmt.Errorf("unknown memory state; review latest again")
 			}
-			review.err = json.Unmarshal(raw, &result)
-			review.version, review.value = result.Entry.Version, result.Entry.Value
+			return review
+		}
+		raw, review.err = workCall(context.Background(), m.client, "memory.get", args)
+		if review.err != nil {
+			return review
+		}
+		var result struct {
+			Entry managed.Memory `json:"entry"`
+		}
+		if review.err = json.Unmarshal(raw, &result); review.err == nil {
+			if result.Entry.Version != head.Version {
+				review.err = fmt.Errorf("memory changed during review; review latest again")
+			} else {
+				review.value = result.Entry.Value
+			}
 		}
 		return review
 	}
@@ -62,7 +89,11 @@ func (m *console) receiveMemoryReview(review consoleMemoryVersionReview) {
 		m.message = "Memory review unavailable; draft kept: " + activityText(review.err.Error(), 150)
 		return
 	}
-	m.reader = &consoleReader{title: consoleContent("Review memory "+review.namespace+" / "+review.key, 300), body: consoleContent(fmt.Sprintf("Latest saved value · version %d\n%s\n\nYour retained draft · original version %d\n%s\n\nEnter adopts only the displayed version for this draft. No save occurs until you submit from the editor; a newer concurrent write still conflicts.", review.version, review.value, review.oldVersion, review.draft), 1<<20), memoryReview: &review}
+	latest := review.value
+	if review.state != "" && review.state != "live" {
+		latest = "No live value (" + review.state + ")."
+	}
+	m.reader = &consoleReader{title: consoleContent("Review memory "+review.namespace+" / "+review.key, 300), body: consoleContent(fmt.Sprintf("Latest saved value · version %d\n%s\n\nYour retained draft · original version %d\n%s\n\nEnter adopts only the displayed version for this draft. No save occurs until you submit from the editor; a newer concurrent write still conflicts.", review.version, latest, review.oldVersion, review.draft), 1<<20), memoryReview: &review}
 }
 
 func (m console) readerPageRows() int {

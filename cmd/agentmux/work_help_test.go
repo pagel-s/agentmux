@@ -81,6 +81,17 @@ func TestInventorySeparatesMissingWorkspaceFromEmptyObservations(t *testing.T) {
 	}
 }
 
+func TestAttachMissingWorkspaceGivesExactRecoveryCommand(t *testing.T) {
+	state := filepath.Join(t.TempDir(), "work with spaces")
+	var out, diagnostics bytes.Buffer
+	code := runWorkSession("attach", []string{"claude", "--session", "newcomer", "--state", state}, strings.NewReader(""), &out, &diagnostics)
+	for _, want := range []string{"work session not found", "'agentmux' 'start'", "'--session' 'newcomer'", "'--state' '" + state + "'"} {
+		if code == exitSuccess || !strings.Contains(diagnostics.String(), want) {
+			t.Fatalf("missing recovery %q: code=%d %s", want, code, &diagnostics)
+		}
+	}
+}
+
 func TestInventoryBrokerOutageDoesNotClaimNoRegisteredSessions(t *testing.T) {
 	previous := discoverWorkSessions
 	discoverWorkSessions = func(context.Context, string) []sessioninventory.Session { return nil }
@@ -113,6 +124,24 @@ func TestWorkBoardLiteralHelpAfterSeparatorIsDelivered(t *testing.T) {
 	var activity managedActivitySnapshot
 	if err := json.Unmarshal(raw, &activity); err != nil || len(activity.Messages) != 1 || activity.Messages[0].Text != "--help" {
 		t.Fatalf("literal message became a CLI option: %s (%v)", raw, err)
+	}
+}
+
+func TestWorkBoardRejectsContradictoryDestinationsWithoutPosting(t *testing.T) {
+	state, client, _ := inventoryBroker(t)
+	before, err := workCall(context.Background(), client, "activity", map[string]any{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out, diagnostics bytes.Buffer
+	code := runWorkSession("board", []string{"hello", "--state", state, "--group", "pair-ab", "--board", "team"}, strings.NewReader(""), &out, &diagnostics)
+	after, err := workCall(context.Background(), client, "activity", map[string]any{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var a, b managedActivitySnapshot
+	if json.Unmarshal(before, &a) != nil || json.Unmarshal(after, &b) != nil || code == exitSuccess || !strings.Contains(diagnostics.String(), "either --group or --board") || len(a.Messages) != len(b.Messages) {
+		t.Fatalf("contradictory selectors wrote a message: code=%d %s before=%s after=%s", code, &diagnostics, before, after)
 	}
 }
 

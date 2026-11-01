@@ -104,6 +104,16 @@ func TestWhitespaceSessionTitleRestoresReadableFallback(t *testing.T) {
 }
 
 func TestSessionTitlesRejectControlsAndBoundUnicode(t *testing.T) {
+	for _, title := range []string{"\u200d", "\u200c", "\u200dhidden", "hidden\u200d", "space \u200d word"} {
+		if err := ValidateSessionTitle(title); err == nil {
+			t.Fatalf("standalone/invisible joiner accepted: %q", title)
+		}
+	}
+	for _, title := range []string{"Engineer 👩🏽‍💻", "Family 👨‍👩‍👧‍👦", "می\u200cروم"} {
+		if err := ValidateSessionTitle(title); err != nil {
+			t.Fatalf("visible joined title rejected: %q %v", title, err)
+		}
+	}
 	for _, title := range []string{"line\nbreak", "tab\tstop", "escape\x1b[31m", "bidi\u202e", "isolate\u2066", "mark\u061c", string([]byte{0xff}), strings.Repeat("a", 121), strings.Repeat("é", 121)} {
 		if err := ValidateSessionTitle(title); err == nil {
 			t.Fatalf("unsafe/unbounded title accepted: %q", title)

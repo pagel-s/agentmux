@@ -22,7 +22,7 @@ func consoleContent(value string, limit int) string {
 			out.WriteRune(r)
 		} else if r == '\t' {
 			out.WriteString("  ")
-		} else if !unicode.IsPrint(r) || r == 0x061c || r == 0x200e || r == 0x200f || (r >= 0x202a && r <= 0x202e) || (r >= 0x2066 && r <= 0x2069) {
+		} else if (!unicode.IsPrint(r) && r != 0x200c && r != 0x200d) || r == 0x061c || r == 0x200e || r == 0x200f || (r >= 0x202a && r <= 0x202e) || (r >= 0x2066 && r <= 0x2069) {
 			quoted := strconv.QuoteRuneToASCII(r)
 			out.WriteString(quoted[1 : len(quoted)-1])
 		} else {

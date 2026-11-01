@@ -8,16 +8,25 @@ import (
 )
 
 type Team struct {
-	ID        string   `json:"id"`
-	Name      string   `json:"name"`
-	Owner     string   `json:"owner"`
-	Members   []string `json:"members"`
-	Invited   []string `json:"invited"`
-	State     string   `json:"state"`
-	Version   int      `json:"version"`
-	Board     string   `json:"board"`
-	Memory    string   `json:"memory"`
-	CreatedAt string   `json:"created_at"`
+	ID           string                      `json:"id"`
+	Name         string                      `json:"name"`
+	Owner        string                      `json:"owner"`
+	Members      []string                    `json:"members"`
+	Invited      []string                    `json:"invited"`
+	State        string                      `json:"state"`
+	Version      int                         `json:"version"`
+	Board        string                      `json:"board"`
+	Memory       string                      `json:"memory"`
+	CreatedAt    string                      `json:"created_at"`
+	MemberAccess map[string]TeamMemberAccess `json:"member_access,omitempty"`
+}
+
+// TeamMemberAccess describes current authorization separately from recorded
+// membership. It is computed only for owner inspection and is never persisted.
+type TeamMemberAccess struct {
+	Allowed   bool   `json:"allowed"`
+	Reason    string `json:"reason,omitempty"`
+	BlockedBy string `json:"blocked_by,omitempty"`
 }
 type teamRecord struct {
 	Team
@@ -38,6 +47,48 @@ func (s *Store) canJoinTeams(ctx context.Context, q queryer, id string) bool {
 	return a.Capabilities.JoinTeams && (a.Parent == ownerID || s.canJoinTeams(ctx, q, a.Parent))
 }
 
+// teamMemberAccess applies the same recursive lineage rules used by namespace
+// authorization. The caller checks independence for the original requester;
+// parent membership and creator authority are checked here, as in teamAccess.
+func (s *Store) teamMemberAccess(ctx context.Context, q queryer, t Team, id string) TeamMemberAccess {
+	if t.State != "active" {
+		return TeamMemberAccess{Reason: "team dissolved"}
+	}
+	seen := map[string]bool{}
+	for current := id; ; {
+		if seen[current] {
+			return TeamMemberAccess{Reason: "lineage unavailable", BlockedBy: current}
+		}
+		seen[current] = true
+		if !contains(t.Members, current) {
+			return TeamMemberAccess{Reason: "ancestor is not a team member", BlockedBy: current}
+		}
+		a, err := s.agent(ctx, q, current)
+		if err != nil {
+			return TeamMemberAccess{Reason: "agent unavailable", BlockedBy: current}
+		}
+		if a.State != "active" {
+			return TeamMemberAccess{Reason: "agent " + a.State, BlockedBy: current}
+		}
+		if a.Parent == "" {
+			return TeamMemberAccess{Allowed: true}
+		}
+		if t.Owner == current {
+			if s.canCreateTeams(ctx, q, current) {
+				return TeamMemberAccess{Allowed: true}
+			}
+			return TeamMemberAccess{Reason: "team creation authority unavailable", BlockedBy: current}
+		}
+		if !a.Capabilities.JoinTeams {
+			return TeamMemberAccess{Reason: "team joining not delegated", BlockedBy: current}
+		}
+		if a.Parent == ownerID {
+			return TeamMemberAccess{Allowed: true}
+		}
+		current = a.Parent
+	}
+}
+
 func (s *Store) teamAccess(ctx context.Context, q queryer, id, name string, memory bool) bool {
 	teams, err := list[Team](ctx, q, "team", "AND json_extract(data,'$.state')='active'")
 	if err != nil {
@@ -45,17 +96,7 @@ func (s *Store) teamAccess(ctx context.Context, q queryer, id, name string, memo
 	}
 	for _, t := range teams {
 		if contains(t.Members, id) && ((memory && t.Memory == name) || (!memory && t.Board == name)) {
-			a, err := s.agent(ctx, q, id)
-			if err != nil || a.State != "active" {
-				return false
-			}
-			if a.Parent == "" {
-				return true
-			}
-			if t.Owner == id {
-				return s.canCreateTeams(ctx, q, id)
-			}
-			return a.Capabilities.JoinTeams && (a.Parent == ownerID || s.teamAccess(ctx, q, a.Parent, name, memory))
+			return s.teamMemberAccess(ctx, q, t, id).Allowed
 		}
 	}
 	return false
@@ -103,6 +144,16 @@ func (s *Store) teams(ctx context.Context, q queryer, a actor, r Request) (any, 
 		size := 0
 		for _, t := range all {
 			if a.owner() || t.Owner == a.ID || contains(t.Members, a.ID) || contains(t.Invited, a.ID) {
+				if a.owner() {
+					t.MemberAccess = make(map[string]TeamMemberAccess, len(t.Members))
+					for _, id := range t.Members {
+						access := s.teamMemberAccess(ctx, q, t, id)
+						if access.Allowed && independent(ctx, q, id) {
+							access = TeamMemberAccess{Reason: "agent is independent", BlockedBy: id}
+						}
+						t.MemberAccess[id] = access
+					}
+				}
 				raw, _ := json.Marshal(t)
 				if size+len(raw) > maxWireBytes/2 {
 					break
