@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Install an explicit Agentmux release after checking its published SHA256.
 
-Downloads artifacts only; never executes downloaded installer scripts. Existing
-destinations require --replace. Stop managed workers before replacing binaries.
+Downloads artifacts only; never executes downloaded installer scripts. Installs
+agentmux and its sibling amx shortcut. Existing binaries require --replace and
+are retained as backups; unrelated shortcuts are never replaced.
 """
 import argparse
 import hashlib
@@ -13,7 +14,9 @@ from pathlib import Path
 import platform
 import re
 import selectors
+import secrets
 import signal
+import stat
 import subprocess
 import sys
 import tarfile
@@ -90,10 +93,33 @@ def install(archive,manifest,name,destination,replace,expected_version=None):
         if len(entries)!=1 or not entries[0].isfile() or not 0<entries[0].size<=128*1024*1024:raise ValueError('archive must contain one regular agentmux executable')
         stream=tar.extractfile(entries[0]);binary=stream.read(128*1024*1024+1)
         if len(binary)!=entries[0].size:raise ValueError('truncated executable')
+    return install_binary(binary,destination,replace,expected_version)
+
+def validate_alias(alias,target):
+    if not alias.is_symlink() or os.readlink(alias) not in (target.name,str(target)):
+        raise ValueError('amx already exists and does not point directly to this destination; move it explicitly or choose another directory')
+
+def install_binary(binary,destination,replace=False,expected_version=None):
+    """Install a verified executable and relative alias without truncating files.
+
+    Both installation paths use this transaction. A sibling amx collision is
+    checked before any executable is run or destination changed. A fresh alias
+    is created without overwrite before the binary commit, then removed on a
+    failed commit. Upgrades preserve the old inode at a unique backup path.
+    """
+    if not 0<len(binary)<=128*1024*1024:raise ValueError('executable exceeds bound')
     target=Path(destination).absolute();parent=target.parent.resolve(strict=True);target=parent/target.name
-    if target.is_symlink():raise ValueError('refusing a symlink destination')
-    if target.exists() and not replace:raise ValueError('destination exists; stop workers and use --replace explicitly')
+    original=None
+    try:original=target.lstat()
+    except FileNotFoundError:pass
+    if original is not None:
+        if stat.S_ISLNK(original.st_mode):raise ValueError('refusing a symlink destination')
+        if not stat.S_ISREG(original.st_mode):raise ValueError('destination must be a regular executable')
+        if not replace:raise ValueError('destination exists; use --replace explicitly')
+    alias=parent/'amx' if target.name!='amx' else None
+    if alias is not None and os.path.lexists(alias):validate_alias(alias,target)
     fd,path=tempfile.mkstemp(prefix='.agentmux-install-',dir=parent)
+    alias_identity=None;backup=None;committed=False
     try:
         with os.fdopen(fd,'wb') as out:out.write(binary);out.flush();os.fsync(out.fileno())
         os.chmod(path,0o755)
@@ -102,11 +128,49 @@ def install(archive,manifest,name,destination,replace,expected_version=None):
         if expected_version:
             release_version=expected_version[1:] if expected_version.startswith('v') else expected_version
             if not re.match(r'^agentmux\s+v?'+re.escape(release_version)+r'(?:\s|$)',version):raise ValueError('executable version does not match selected release')
-        if replace:os.replace(path,target)
-        else:os.link(path,target);os.unlink(path)
+        # No overwrite: another installation or unrelated command wins a race.
+        if alias is not None and not os.path.lexists(alias):
+            # Publish a known symlink inode, so rollback cannot mistake a
+            # concurrently replaced command for the alias we created.
+            staged_alias=path+'-amx'
+            try:
+                os.symlink(target.name,staged_alias)
+                staged_identity=os.lstat(staged_alias)
+                os.link(staged_alias,alias,follow_symlinks=False)
+                alias_identity=staged_identity
+            finally:
+                if os.path.lexists(staged_alias):os.unlink(staged_alias)
+        if alias is not None:validate_alias(alias,target)
+        if original is not None:
+            current=target.lstat()
+            if (current.st_dev,current.st_ino)!=(original.st_dev,original.st_ino):
+                raise ValueError('destination changed during installation; retry after inspecting it')
+            backup=parent/(target.name+'.backup-'+secrets.token_hex(6))
+            os.link(target,backup,follow_symlinks=False)
+            saved=backup.lstat();current=target.lstat()
+            if (saved.st_dev,saved.st_ino)!=(original.st_dev,original.st_ino) or (current.st_dev,current.st_ino)!=(original.st_dev,original.st_ino):
+                raise ValueError('destination changed while retaining its backup; no executable was replaced')
+            if alias is not None:validate_alias(alias,target)
+            os.replace(path,target)
+        else:
+            os.link(path,target);os.unlink(path)
+        committed=True
         return version.strip()
     finally:
         if os.path.exists(path):os.unlink(path)
+        if not committed:
+            if alias_identity is not None:
+                try:
+                    current=alias.lstat()
+                    if (current.st_dev,current.st_ino)==(alias_identity.st_dev,alias_identity.st_ino):alias.unlink()
+                except FileNotFoundError:pass
+            # Only remove our redundant backup if the old destination remains.
+            # A concurrently changed destination must retain that recovery copy.
+            if backup is not None:
+                try:
+                    current=target.lstat();saved=backup.lstat()
+                    if (current.st_dev,current.st_ino)==(original.st_dev,original.st_ino)==(saved.st_dev,saved.st_ino):backup.unlink()
+                except FileNotFoundError:pass
 
 def download(url,limit):
     request=urllib.request.Request(url,headers={'User-Agent':'agentmux-release-installer'})

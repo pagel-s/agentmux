@@ -159,6 +159,15 @@ func parseWorkOptionsWithStorage(args []string, allowNamedState bool) (workOptio
 		return o, errors.New("choose either --session or --state to select a workspace, not both; no action was taken")
 	}
 	var err error
+	if !allowNamedState && !seen["session"] && !seen["state"] {
+		current, found, problem := ownedWorkContext(os.Getenv("TMUX"), contextTMux)
+		if problem != nil {
+			return o, problem
+		}
+		if found {
+			o.state, o.session = current.state, current.session
+		}
+	}
 	if o.state == "" {
 		o.state, err = defaultWorkState(o.session)
 	} else {

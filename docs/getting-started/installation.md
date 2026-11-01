@@ -3,8 +3,8 @@
 ## Prerequisites
 
 Agentmux requires **tmux 3.2 or newer**. Building the current source also needs
-Git, Make and **Go 1.24 or newer**. Python 3 runs the acceptance scripts and
-optional release installer. Native model sessions require their respective
+Git, Make and **Go 1.24 or newer**. Python 3 runs `make install`, the acceptance
+scripts and the optional release installer. Native model sessions require their respective
 CLIs to be installed and logged in separately.
 
 If you are building Agentmux from source, use **Go 1.24 or newer**. The repo `Makefile` will prefer a compatible toolchain under `.tools/` when present, then fall back to `go` from your `PATH`.
@@ -45,18 +45,34 @@ export PATH="$PWD/bin:$PATH"
 For a user-local installation that also works outside the checkout:
 
 ```bash
-mkdir -p "$HOME/.local/bin"
-install -m 755 bin/agentmux "$HOME/.local/bin/agentmux"
+make install
 export PATH="$HOME/.local/bin:$PATH"
-command -v agentmux
-agentmux version
+command -v agentmux amx
+amx version
+amx doctor
 ```
 
 Add that last `export PATH=...` line to your shell's startup file if the directory
 is not already on PATH in new terminals (usually `~/.bashrc` for interactive
-Bash). Check `command -v agentmux` in each new terminal to avoid using a different
-installed version. After later source updates, rebuild and repeat the `install`
-command to update this copy.
+Bash). The installer does not edit your shell configuration. Check
+`command -v agentmux amx` in each new terminal to avoid using a different installed
+version. After later source updates, run `make install` again.
+
+`make install` builds and installs `agentmux` plus a relative `amx → agentmux`
+symlink in `~/.local/bin`. Both commands expose the same features; `amx` alone
+opens the terminal dashboard, while `agentmux` alone shows help. See the
+[everyday command reference](everyday-commands.md) for shorter commands.
+Choose another prefix with `make install PREFIX=/your/prefix`, or set `BINDIR`
+and optional `DESTDIR` for packaging.
+
+Upgrades replace the executable atomically and retain its previous inode in a
+uniquely named `agentmux.backup-*` file beside it. An unrelated existing `amx`
+command is never replaced: move it explicitly or select a different installation
+directory. Existing shortcuts directly naming `agentmux` or its exact absolute
+destination are reused, including during upgrades.
+Installing a new binary does not restart your native sessions or replace a
+running workspace's pinned controller. Upgrade a live workspace deliberately
+using the [recovery guide](../traces-and-recovery.md).
 
 Remote `go install github.com/pagel-s/agentmux/cmd/agentmux@latest` is currently
 unsupported: `go.mod` declares the module path as `agentmux`, so Go rejects the
@@ -76,9 +92,13 @@ python3 scripts/install-release.py --version v0.10.0-rc.1 \
 This example installs the tagged v0.10.0-rc.1 preview; it does not include later
 changes on `main`. Use the source build above for the current hardening changes.
 
-The destination parent must exist. Replacing an existing executable requires
-`--replace`; stop managed workers first and follow the [upgrade/recovery
-guide](../traces-and-recovery.md). The installer supports published Linux/macOS
+The destination parent must exist. The installer creates the sibling
+`amx → agentmux` shortcut; release archives themselves contain the canonical
+`agentmux` executable. Replacing an existing executable requires `--replace`
+and retains an `agentmux.backup-*` recovery copy. An unrelated `amx` shortcut
+blocks installation even with `--replace`. Installing does not restart live
+workspaces; follow the [upgrade/recovery guide](../traces-and-recovery.md)
+when ready to update those separately. The installer supports published Linux/macOS
 amd64/arm64 archives. Strict Bubblewrap isolation requires Linux; macOS retains
 the existing tmux workflow and explicitly trusted local execution. A checksum
 checks consistency with the release manifest, not an independent signature.

@@ -31,8 +31,10 @@ creation/start times and tmux/TTY locations when available. Untitled sessions us
 a project/provider fallback. No task description is inferred from prompts or
 transcripts. Two sessions with the same title remain separate identities.
 
-In the terminal press `/` to find a session by task, project, provider, ID or
-terminal location; Enter selects the exact result. `L` edits the selected task
+In the terminal press Ctrl+P (or `/`) to find a session by task, project,
+provider, ID or terminal location. Enter opens the exact native terminal; Tab
+selects it in the workbench; Esc cancels. Discovered terminals open details
+for their original terminal instead. `L` edits the selected task
 title. `N` asks what you are working on and generates an ID automatically. In the
 web app use **Find a session**, **Rename**, and **Sessions**. Titles are labels,
 not role instructions; editing one never restarts the native conversation.
@@ -343,7 +345,7 @@ use **Ctrl-G** for help and **Esc** to cancel before using navigation shortcuts.
 | --- | --- |
 | ↑/↓ or j/k | Select agent |
 | Enter | Focus its tracked terminal; an exited native CLI opens a same-ID relaunch review. Outside tmux, open an independent attachment |
-| / | Find by task, project, provider, ID or external terminal location |
+| Ctrl+P or / | Find by task, project, provider, ID or terminal location; Enter opens native, Tab selects here, Esc cancels |
 | Shift+L | Edit the selected session's human task title; empty clears |
 | Shift+V | Edit its coordinated role with CAS; prompt-free native sessions reject injected roles |
 | Shift+W / Shift+U | Choose another workspace observer / deliberately relaunch the selected exited owned native session |

@@ -27,6 +27,11 @@ compatible repo-local Go toolchain when available. See
 [installation](docs/getting-started/installation.md) for binary releases and PATH
 setup. Remote `go install …@latest` is currently unsupported by this module.
 
+`make install` installs both `agentmux` and the shorter `amx` command. Use
+`amx` to open the current workspace or choose a running one, `amx a claude -s work`
+to attach, and `amx link claude codex -s work` to connect a pair. See the
+[everyday command reference](docs/getting-started/everyday-commands.md).
+
 For the complete first-run test, follow the [fresh-install
 walkthrough](docs/getting-started/quickstart.md). It uses a separate workspace
 and covers direct native interaction, opt-in collaboration, shared memory,
@@ -49,13 +54,16 @@ until you close it; managed automation retains explicit runtime budgets.
 
 The workspace name (`work`) selects the running team; a session ID (`claude`,
 `codex`, or an ID printed by `add`) selects one conversation inside it. Commands
-default to workspace `work`, including when run from another project directory.
-Use the same `--session NAME` on later commands when you start a named workspace.
+default to workspace `work` outside Agentmux. Inside an owned tmux attachment,
+omitting the selector uses that attachment's workspace after checking its identity.
+Use `-s NAME` (or `--session NAME`) to select another workspace explicitly.
+`start` / `up` creates or starts `work` by default, even inside another workspace.
 
 Give sessions task titles such as “Fix login redirect”; the title can change
 while its ID and native conversation stay the same. The overview shows project,
 provider and ID, with creation/start time and terminal location in session details.
-Press **/** to find a session and **Shift+L** to edit its title. The web app has the same
+Press **Ctrl+P** (or **/**) to find a session: **Enter** opens its native terminal,
+**Tab** selects it in the workbench, and **Esc** returns. **Shift+L** edits its title. The web app has the same
 search and title controls. New sessions can generate their IDs automatically:
 
 ```sh

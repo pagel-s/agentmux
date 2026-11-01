@@ -97,6 +97,7 @@ type console struct {
 	details                                string
 	newNative                              consoleNativeDraft
 	findIndex                              int
+	findIdentity                           string
 	labelVersion                           int
 	roleVersion                            int
 	labelDrafts                            map[string]string
@@ -403,7 +404,7 @@ func (m console) attach() tea.Cmd {
 		if err = launcher.Focus(context.Background(), runtime, id); err != nil {
 			return consoleAction{err: err}
 		}
-		return consoleAction{message: "Native terminal selected. F1 returns to the workbench.", exit: popup}
+		return consoleAction{message: "Session " + id + " selected. Enter opens its native terminal.", exit: popup}
 	}
 }
 
@@ -484,6 +485,11 @@ func (m console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			observedID = observations[m.observedSelected%len(observations)].ID
 		}
 		oldID := m.selectedID()
+		if m.composer == "find" && m.findIdentity == "" {
+			if match, ok := m.findMatch(); ok {
+				m.findIdentity = m.findMatchIdentity(match)
+			}
+		}
 		m.agents = msg.agents
 		m.teamMemberIndex = 0
 		m.target = 0

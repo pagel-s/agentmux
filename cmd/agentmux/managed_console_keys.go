@@ -162,10 +162,15 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.nativeDeliveryKey(msg)
 	}
 	if m.composer != "" {
+		queryBefore := string(m.text)
 		if key != "up" && key != "down" {
 			m.textColumnValid = false
 		}
 		switch key {
+		case "tab":
+			if m.composer == "find" {
+				return m.chooseSession(false)
+			}
 		case "ctrl+t":
 			if m.composer == "send" || m.composer == "reply" || m.composer == "message" {
 				if m.composeMode == "note" {
@@ -185,12 +190,18 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.findIndex = 0
 		case "up", "down":
 			if m.composer == "find" {
-				if n := len(m.sessionMatches()); n > 0 {
+				matches := m.sessionMatches()
+				if n := len(matches); n > 0 {
+					index := m.findMatchIndex(matches)
+					if index < 0 {
+						index = min(m.findIndex, n-1)
+					}
 					step := 1
 					if key == "up" {
 						step = n - 1
 					}
-					m.findIndex = (m.findIndex + step) % n
+					m.findIndex = (index + step) % n
+					m.findIdentity = m.findMatchIdentity(matches[m.findIndex])
 				}
 			} else {
 				width := m.width
@@ -268,21 +279,7 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, m.fetch
 			}
 			if m.composer == "find" {
-				matches := m.sessionMatches()
-				if len(matches) == 0 {
-					return m, nil
-				}
-				match := matches[m.findIndex%len(matches)]
-				m.composer, m.details = "", ""
-				m.text = nil
-				if match.agent >= 0 {
-					m.selected, m.tab = match.agent, 1
-					m.scope = 0
-					m.closeMemory()
-					return m, m.fetch
-				}
-				m.observedSelected, m.tab = match.observation, 5
-				return m, nil
+				return m.chooseSession(true)
 			}
 			if m.busy || strings.TrimSpace(string(m.text)) == "" && m.composer != "new-role" && m.composer != "new-title" && m.composer != "label" && m.composer != "role" {
 				return m, nil
@@ -345,6 +342,12 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.message = fmt.Sprintf("Input limit: 16,384 characters (draft has %d). Paste was not inserted; your draft is kept. Shorten it before adding more text.", len(m.text))
 			}
 		}
+		if m.composer == "find" && string(m.text) != queryBefore {
+			m.findIndex, m.findIdentity = 0, ""
+			if matches := m.sessionMatches(); len(matches) > 0 {
+				m.findIdentity = m.findMatchIdentity(matches[0])
+			}
+		}
 		return m, nil
 	}
 	switch key {
@@ -386,9 +389,8 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.reviewResearchAction(action)
 			return m, nil
 		}
-	case "/":
-		m.findIndex = 0
-		m.compose("find", "task / project / provider / ID", "", "")
+	case "/", "ctrl+p":
+		m.openSessionSwitcher()
 	case "L":
 		if !m.busy && m.selectedID() != "" && m.tab != 5 {
 			a := m.agents[m.selected%len(m.agents)]
@@ -430,6 +432,7 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		if m.selected > 0 {
 			m.selected--
+			m.message = ""
 			m.scope = 0
 			m.closeMemory()
 			return m, m.fetch
@@ -444,6 +447,7 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		if m.selected+1 < len(m.agents) {
 			m.selected++
+			m.message = ""
 			m.scope = 0
 			m.closeMemory()
 			return m, m.fetch

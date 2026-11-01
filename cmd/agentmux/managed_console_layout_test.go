@@ -31,7 +31,7 @@ func TestConsoleDividerKeepsItsColumnAcrossRowsAndResizes(t *testing.T) {
 		{ID: "claude", Title: "探究 the project 👩‍💻 e\u0301", State: "active", Config: managedconfig.Agent{Harness: "claude", Interaction: "interactive", Workdir: "/home/owner/探索/project"}},
 		{ID: "codex", Title: "Review the approach", State: "active", Config: managedconfig.Agent{Harness: "codex", Interaction: "interactive", Workdir: "/home/owner/project"}},
 	}
-	for _, size := range [][2]int{{80, 24}, {85, 12}, {100, 18}, {105, 24}, {231, 62}} {
+	for _, size := range [][2]int{{60, 16}, {64, 22}, {80, 24}, {85, 12}, {100, 18}, {105, 24}, {231, 62}} {
 		for tab := range 8 {
 			for selected := range agents {
 				t.Run(fmt.Sprintf("%dx%d/view%d/agent%d", size[0], size[1], tab+1, selected), func(t *testing.T) {
@@ -58,14 +58,17 @@ func TestConsoleDividerKeepsItsColumnAcrossRowsAndResizes(t *testing.T) {
 						if size[0] < 105 {
 							wantColumn = 25
 						}
+						if size[0] < 85 {
+							wantColumn = 23
+						}
 						if got := ansi.StringWidth(before); got != wantColumn {
 							t.Fatalf("divider on row %d is at cell %d, want %d: %q", row, got, wantColumn, line)
 						}
 					}
-					if size[0] >= 85 && dividerRows < 2 {
+					if size[0] >= 64 && dividerRows < 2 {
 						t.Fatalf("expected multiline divider, found %d rows", dividerRows)
 					}
-					if size[0] < 85 && dividerRows != 0 {
+					if size[0] < 64 && dividerRows != 0 {
 						t.Fatal("compact layout unexpectedly includes a sidebar divider")
 					}
 				})

@@ -4,6 +4,9 @@
 
 Changes on `main` after the tagged `v0.10.0-rc.1` preview:
 
+- An installed `amx` shortcut, shorter everyday commands and workspace flags,
+  directional `allow`/`deny`, and attachment-local workspace selection. A visible
+  terminal session list and Ctrl+P switcher make selecting native sessions clear.
 - Opt-in native collaboration for Claude, Codex and Pi: independent
   Manual/Review/Auto receiver modes, exact approvals, scoped observations and
   correlated results, with terminal/web controls and bounded broker recovery.

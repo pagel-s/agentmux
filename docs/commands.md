@@ -7,6 +7,13 @@ For original YAML pane-layout examples, see [recipes](recipes.md).
 
 ## Everyday work sessions
 
+Use `make install` for both `agentmux` and `amx`. The [short command reference](getting-started/everyday-commands.md)
+covers `amx a`, `ui`, `ls`, `link`, `mode`, and directional `allow`/`deny`.
+Everyday commands accept `-s NAME` for the workspace, before or after the command.
+Inside an owned tmux attachment the workspace is inferred from that exact
+attachment; explicit selectors take precedence. Outside, it defaults to `work`.
+`start` / `up` is the creation exception: its default is always `work`.
+
 After building, put `bin/` on your PATH as shown in the [installation
 guide](getting-started/installation.md). With Claude Code and Codex installed and
 logged in, run `agentmux start` from your project directory. It creates the
