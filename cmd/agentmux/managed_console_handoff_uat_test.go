@@ -96,6 +96,9 @@ try:
  key(states[0],dash_a,'s');text(states[0],dash_a,'DRAFT-LEFT-UNSENT')
  until(lambda:'DRAFT-LEFT-UNSENT' in screen(states[0],dash_a),'unsent draft')
  key(states[0],dash_a,'C-w');until(lambda:'Workspaces' in screen(states[0],dash_a),'workspace chooser above retained draft')
+ # The loading modal intentionally appears before inventory is ready and
+ # consumes Enter. Wait for the destination row before choosing it.
+ until(lambda:'handoff-b' in screen(states[0],dash_a),'destination workspace inventory loaded')
  key(states[0],dash_a,'Down','Enter')
  view_b=until(lambda:(v[0] if (v:=views(states[1])) else ''),'interactive target workspace')
  dash_b=until(lambda:pane(states[1],view_b),'target dashboard initialized')
@@ -103,6 +106,7 @@ try:
  assert view_a in views(states[0]),'old private dashboard was destroyed'
  assert tmux(states[0],'display-message','-p','-t',peer_view,'#{pane_id}')==peer_before,'handoff moved another client'
  key(states[1],dash_b,'C-w');until(lambda:'Workspaces' in screen(states[1],dash_b),'return workspace chooser')
+ until(lambda:'handoff-a' in screen(states[1],dash_b),'return workspace inventory loaded')
  key(states[1],dash_b,'Enter')
  until(lambda:view_a in tmux(states[0],'list-clients','-F','#{client_session}').splitlines(),'reattach cached previous view')
  until(lambda:'DRAFT-LEFT-UNSENT' in screen(states[0],dash_a),'draft survived interactive handoff and return')
