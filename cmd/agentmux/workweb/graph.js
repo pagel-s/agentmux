@@ -8,6 +8,7 @@ let graphMode = "agents",
   graphDrag = null,
   graphLayoutSession = "",
   graphDrawSignature = "";
+let graphViewport = null, graphFit = true;
 let graphWidth = 960,
   graphHeight = 580;
 const svgNS = "http://www.w3.org/2000/svg";
@@ -44,12 +45,25 @@ function graphDefaultPosition(index, count, mode) {
   const angle = (2 * Math.PI * index) / Math.max(count, 1) - Math.PI / 2;
   return { x: 480 + 300 * Math.cos(angle), y: 290 + 200 * Math.sin(angle) };
 }
-function graphPoint(event) {
+function graphPoint(event, matrix) {
   const point = $("interaction-graph").createSVGPoint();
   point.x = event.clientX;
   point.y = event.clientY;
-  return point.matrixTransform($("interaction-graph").getScreenCTM().inverse());
+  return point.matrixTransform(matrix || $("interaction-graph").getScreenCTM().inverse());
 }
+function applyGraphViewport() {
+  if (graphFit || !graphViewport) graphViewport = {x:0,y:0,width:graphWidth,height:graphHeight};
+  $("interaction-graph").setAttribute("viewBox", `${graphViewport.x} ${graphViewport.y} ${graphViewport.width} ${graphViewport.height}`);
+  $("graph-zoom").textContent = Math.round(graphWidth / graphViewport.width * 100) + "%";
+}
+function zoomGraph(factor) {
+  if (!graphViewport) applyGraphViewport();
+  const current = graphWidth / graphViewport.width, scale = Math.max(.25,Math.min(4,current*factor)), ratio = current/scale;
+  const width = graphViewport.width*ratio, height=graphViewport.height*ratio;
+  graphViewport = {x:graphViewport.x+(graphViewport.width-width)/2,y:graphViewport.y+(graphViewport.height-height)/2,width,height};
+  graphFit = false; applyGraphViewport();
+}
+function fitGraph() { graphFit = true; applyGraphViewport(); }
 function graphPick(source, target, kind = "edge", namespace = "") {
   selectAgent(source);
   graphSelection = { source, target, kind, namespace };
@@ -94,6 +108,7 @@ async function renderGraph() {
   if (graphLayoutSession !== snapshot.runtime.session) {
     graphLayoutSession = snapshot.runtime.session;
     graphPositions = {};
+    graphFit = true;
     try {
       const saved = JSON.parse(
         localStorage.getItem("agentmux-layout-" + graphLayoutSession) || "{}",
@@ -175,10 +190,10 @@ function drawGraph() {
         );
   for (const position of Object.values(graphPositions))
     graphHeight = Math.max(graphHeight, position.y + 60);
-  svg.setAttribute("viewBox", `0 0 ${graphWidth} ${graphHeight}`);
-  svg.setAttribute("preserveAspectRatio", "xMidYMin meet");
-  svg.style.height = graphHeight > 580 ? graphHeight + "px" : "100%";
-  svg.style.minWidth = agents.length > 12 ? "960px" : "";
+  applyGraphViewport();
+  svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+  svg.style.height = "100%";
+  svg.style.minWidth = "0";
   const defs = svgNode("defs"),
     pattern = svgNode("pattern", {
       id: "grid",
@@ -426,7 +441,7 @@ function drawGraph() {
   $("graph-limit").textContent =
     (snapshot.agents || []).filter((a) => a.state === "active").length > 40
       ? "40 active sessions shown, including selected session and recipient"
-      : "Drag nodes · select a connection to edit";
+      : "Drag nodes · drag background to pan · +/− zoom · 0 fits";
   $("graph-agents").classList.toggle("active", graphMode === "agents");
   $("graph-scopes").classList.toggle("active", graphMode === "scopes");
   restoreViewState(svg, viewState);
@@ -442,7 +457,13 @@ function saveGraphLayout() {
 const graph = $("interaction-graph");
 graph.addEventListener("pointerdown", (event) => {
   const node = event.target.closest("[data-node]");
-  if (!node) return;
+  if (!node) {
+    if (event.target.closest(".edge-hit,.edge-label")) return;
+    const matrix = graph.getScreenCTM().inverse();
+    graphDrag = {pan:true,matrix,start:graphPoint(event,matrix),origin:{x:graphViewport?.x||0,y:graphViewport?.y||0},moved:false};
+    graph.setPointerCapture(event.pointerId);
+    return;
+  }
   const key = node.getAttribute("data-node"),
     transform = node.transform.baseVal.consolidate().matrix;
   graphDrag = {
@@ -455,11 +476,18 @@ graph.addEventListener("pointerdown", (event) => {
 });
 graph.addEventListener("pointermove", (event) => {
   if (!graphDrag) return;
-  const p = graphPoint(event),
+  const p = graphPoint(event,graphDrag.matrix),
     dx = p.x - graphDrag.start.x,
     dy = p.y - graphDrag.start.y;
   if (Math.hypot(dx, dy) > 3) graphDrag.moved = true;
   if (!graphDrag.moved) return;
+  if (graphDrag.pan) {
+    graphFit = false;
+    graphViewport.x = graphDrag.origin.x-dx;
+    graphViewport.y = graphDrag.origin.y-dy;
+    applyGraphViewport();
+    return;
+  }
   graphPositions[graphDrag.key] = {
     x: Math.max(80, Math.min(graphWidth - 80, graphDrag.origin.x + dx)),
     y: Math.max(50, Math.min(graphHeight - 50, graphDrag.origin.y + dy)),
@@ -472,9 +500,10 @@ graph.addEventListener("pointerup", (event) => {
   graphDrag = null;
   graph.releasePointerCapture(event.pointerId);
   if (drag.moved) {
-    saveGraphLayout();
+    if (!drag.pan) saveGraphLayout();
     return;
   }
+  if (drag.pan) return;
   if (drag.key.startsWith("agent:")) {
     graphSelection = null;
     selectAgent(drag.key.slice(6));
@@ -515,7 +544,24 @@ $("graph-reset").onclick = () => {
   graphPositions = {};
   saveGraphLayout();
   drawGraph();
+  fitGraph();
 };
+$("graph-fit").onclick = fitGraph;
+$("graph-zoom-in").onclick = () => zoomGraph(1.25);
+$("graph-zoom-out").onclick = () => zoomGraph(.8);
+graph.addEventListener("keydown", event => {
+  if (event.target !== graph) return;
+  if (event.key === "+" || event.key === "=") { event.preventDefault(); zoomGraph(1.25); }
+  else if (event.key === "-") { event.preventDefault(); zoomGraph(.8); }
+  else if (event.key === "0" || event.key === "Home") { event.preventDefault(); fitGraph(); }
+  else if (["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(event.key)) {
+    event.preventDefault(); if (!graphViewport) applyGraphViewport(); graphFit = false;
+    const step = graphViewport.width*.08;
+    graphViewport.x += event.key === "ArrowRight" ? step : event.key === "ArrowLeft" ? -step : 0;
+    graphViewport.y += event.key === "ArrowDown" ? step : event.key === "ArrowUp" ? -step : 0;
+    applyGraphViewport();
+  }
+});
 
 $("graph-edit").onclick = () => {
   const other = (snapshot?.agents || []).find(

@@ -29,14 +29,25 @@ let teamReview = null;
 let researchReview = null;
 let researchSavedOffline = false;
 const teamInviteDrafts = new Map();
+const teamEditDrafts = new Map();
+const legacyGroupChoices = new Map();
+let legacyGroupReview = null;
 const messageDrafts = new Map();
+const roleDrafts = new Map();
+let roleEditingID = "";
 const titleDrafts = new Map(),
   observedDrafts = new Map();
 let sessionQuery = "",
   titleEditor = null,
   titleEditorEpoch = 0;
 let pendingDraftKind = "";
+let taskHistory = { tasks: null, cursor: "", hasMore: false, query: "", to: "", state: "", loading: false, epoch: 0, updatedAt: 0, error: "" };
+let workspaceListings = [], workspaceLoading = false, workspaceLoadedAt = 0;
+let relaunchReview = null, capacityView = null, capacityRequest = 0;
+let resourceSnapshot = null, resourceReview = null;
+const resourceDrafts = new Map();
 let memoryEditorNamespace = "",
+  memoryMetadataSelection = "",
   memoryEditorEpoch = 0,
   memoryRequest = 0,
   memoryBaseline = { namespace: "", key: "", value: "" },
@@ -728,15 +739,18 @@ function selectAgent(id) {
     messageDrafts.set(selected, {
       text: $("message").value,
       kind: pendingDraftKind || $("message-kind").value,
+      mode: $("message-mode").value || "auto",
       reply: replyTo,
     });
   closeTitleEditor(true);
+  if (relaunchReview && relaunchReview.target !== id) { relaunchReview = null; $("relaunch-review").hidden = true; }
   selected = id;
   clearReply();
   boundarySignature = "";
   const draft = messageDrafts.get(id);
   $("message").value = draft?.text || "";
   pendingDraftKind = draft?.kind || "direct";
+  $("message-mode").value = draft?.mode || "auto";
   if (draft?.reply) {
     replyTo = draft.reply;
     $("reply-context").textContent = "↳ " + draft.reply;
@@ -822,6 +836,9 @@ async function refresh() {
     $("connection").textContent = "Connected";
     $("connection").classList.remove("offline");
     render();
+    if (tab === "tasks" && Date.now() - taskHistory.updatedAt > 10000) loadTaskHistory("refresh");
+    if (tab === "sessions" && Date.now() - workspaceLoadedAt > 10000) loadWorkspaces();
+    if (tab === "agent" && capacityView?.agent !== selected) loadCapacity();
     if (
       initial &&
       tab === "activity" &&
@@ -950,6 +967,10 @@ function render() {
   $("agent-lineage").textContent = sessionLineage(a);
   renderWorkerRuntime(a);
   $("agent-role").textContent = a.config.role || "No role configured";
+  renderRoleEditor();
+  const relaunchable = a.state === "active" && !a.external && a.config.interaction === "interactive" && snapshot.runtime.relaunch_version === 1 && snapshot.runtime.state === "running" && !!snapshot.runtime.agents?.[a.id] && snapshot.runtime.agents[a.id].state !== "running";
+  $("relaunch-agent").hidden = !relaunchable;
+  $("relaunch-agent").disabled = !selectionReady() || !relaunchable;
   $("agent-harness").textContent =
     a.config.harness.toUpperCase() +
     " / " +
@@ -1127,7 +1148,8 @@ function renderFeed() {
       el("time", "", stamp(m.created_at)),
     );
     content.append(heading, el("p", "", m.text));
-    if (!m.board && (m.from !== "$owner" || m.to?.length === 1)) {
+    appendThreadMetadata(content,m);
+    if (m.board || m.from !== "$owner" || m.to?.length === 1) {
       const reply = el("button", "quiet reply-button", "Reply");
       reply.type = "button";
       reply.dataset.focusKey = "reply:" + m.id;
@@ -1140,9 +1162,24 @@ function renderFeed() {
   restoreViewState(feed, state);
 }
 function renderTasks() {
-  const tasks = snapshot.activity.tasks || [],
+  const tasks = taskHistory.tasks || snapshot.activity.tasks || [],
     list = $("tasks");
-  $("task-count").textContent = tasks.length;
+  $("task-count").textContent = tasks.length + (taskHistory.hasMore ? "+" : "");
+  $("task-history-status").textContent = taskHistory.loading
+    ? "Loading task history… Current results and drafts stay here."
+    : taskHistory.error
+      ? "History could not refresh: " + taskHistory.error + ". Last results retained."
+      : taskHistory.tasks === null
+        ? "Recent snapshot shown. Open Tasks to load complete searchable history."
+        : tasks.length + " matching task(s) loaded · newest first" + (taskHistory.hasMore ? " · older tasks available" : " · end of history") + (taskHistory.query || taskHistory.to || taskHistory.state ? " · filters applied" : "");
+  $("load-more-tasks").hidden = !taskHistory.hasMore;
+  $("load-more-tasks").disabled = taskHistory.loading || !connected;
+  const recipients = $("task-agent-filter"), priorRecipient = recipients.value;
+  const recipientOptions = [["", "All recipients"], ...(snapshot.agents || []).map(a => [a.id, sessionReference(a.id)])];
+  if (JSON.stringify([...recipients.options].map(o => [o.value,o.textContent])) !== JSON.stringify(recipientOptions)) {
+    recipients.replaceChildren(...recipientOptions.map(([id,label]) => { const option = el("option","",label); option.value=id; return option; }));
+    recipients.value = priorRecipient || taskHistory.to;
+  }
   const nextTasks = JSON.stringify([
     tasks,
     (snapshot.agents || []).map((a) => [a.id, a.title]),
@@ -1156,7 +1193,7 @@ function renderTasks() {
       el(
         "p",
         "empty",
-        "No recent tasks. Human input in native sessions is handled by the CLI itself.",
+        taskHistory.tasks === null ? "No tasks in the recent snapshot. Open Tasks to search complete history." : "No tasks match these filters. Human input in native sessions is handled by the CLI itself.",
       ),
     );
     restoreViewState(list, state);
@@ -1176,6 +1213,7 @@ function renderTasks() {
       el("code", "", t.id),
     );
     item.append(title, el("p", "", t.text));
+    appendThreadMetadata(item,t);
     if (t.result) item.append(el("pre", "", t.result));
     if (t.usage) {
       const details = el("details", "reported-usage"),
@@ -1228,7 +1266,7 @@ function renderTasks() {
       cancel.disabled = !selectionReady();
       cancel.onclick = () =>
         action(
-          () => call("task.cancel", { id: t.id, version: t.version }),
+          async () => { await call("task.cancel", { id: t.id, version: t.version }); taskHistory.updatedAt = 0; },
           "Cancellation requested. Check the process-stop acknowledgement.",
         );
       buttons.append(cancel);
@@ -1238,6 +1276,59 @@ function renderTasks() {
   }
   restoreViewState(list, state);
 }
+async function loadTaskHistory(mode = "refresh") {
+  if (!connected || researchSavedOffline || (taskHistory.loading && mode !== "reset")) return;
+  const epoch = ++taskHistory.epoch, query = taskHistory.query, to = taskHistory.to, state = taskHistory.state;
+  const append = mode === "more", target = append ? 50 : Math.max(50, taskHistory.tasks?.length || 0);
+  let cursor = append ? taskHistory.cursor : "", rows = [], hasMore = false;
+  taskHistory.loading = true;
+  taskHistory.error = "";
+  renderTasks();
+  try {
+    do {
+      const page = await call("task.list", { limit:50, order:"desc", after:cursor, query, to, state });
+      if (epoch !== taskHistory.epoch) return;
+      const incoming = page.tasks || [], nextCursor = page.cursor || cursor;
+      rows.push(...incoming);
+      hasMore = page.has_more === true;
+      if (!incoming.length || nextCursor === cursor) { hasMore = false; break; }
+      cursor = nextCursor;
+    } while (hasMore && rows.length < target);
+    if (epoch !== taskHistory.epoch) return;
+    const merged = append ? [...(taskHistory.tasks || []), ...rows] : rows;
+    taskHistory.tasks = [...new Map(merged.map(task => [task.id,task])).values()];
+    taskHistory.cursor = cursor;
+    taskHistory.hasMore = hasMore;
+    taskHistory.updatedAt = Date.now();
+    taskSignature = "";
+  } catch (error) {
+    if (epoch === taskHistory.epoch) { taskHistory.error = error.message; taskHistory.updatedAt = Date.now(); }
+  } finally {
+    if (epoch === taskHistory.epoch) { taskHistory.loading = false; renderTasks(); }
+  }
+}
+function appendThreadMetadata(node,item) {
+  if (!item.reply_to && !item.thread_id) return;
+  const details=el("details","thread-context"),summary=el("summary","",item.reply_to ? "Reply details" : "Conversation details"),key="thread:"+(item.id || item.thread_id || item.reply_to);
+  details.dataset.disclosureKey=key;summary.dataset.focusKey=key;
+  details.append(summary);
+  if(item.reply_to) details.append(el("p","","Reply to: "),el("code","",item.reply_to));
+  if(item.thread_id) details.append(el("p","","Conversation root: "),el("code","",item.thread_id));
+  node.append(details);
+}
+$("task-history-filter").onsubmit = event => {
+  event.preventDefault();
+  taskHistory.query = $("task-query").value.trim();
+  taskHistory.to = $("task-agent-filter").value;
+  taskHistory.state = $("task-state-filter").value;
+  taskHistory.tasks = []; taskHistory.cursor = ""; taskHistory.hasMore = false;
+  loadTaskHistory("reset");
+};
+$("load-more-tasks").onclick = () => loadTaskHistory("more");
+$("reset-task-filter").onclick = () => {
+  $("task-query").value = $("task-agent-filter").value = $("task-state-filter").value = "";
+  $("task-history-filter").requestSubmit();
+};
 function toggle(value, label, onchange) {
   const button = el("button", "toggle");
   button.type = "button";
@@ -1284,7 +1375,7 @@ function renderBoundaries() {
   const controlsState = captureViewState(controls),
     scopesState = captureViewState($("scope-controls"));
   controls.replaceChildren();
-  const actions = b.targets?.find((t) => t.to === peer)?.actions || [];
+  const targetBoundary = b.targets?.find((t) => t.to === peer), actions = targetBoundary?.actions || [];
   const source = selected,
     recipient = peer;
   for (const [key, label, description] of [
@@ -1295,6 +1386,8 @@ function renderBoundaries() {
     const row = el("div", "control-row"),
       name = el("div", "control-name");
     name.append(el("strong", "", label), el("small", "", description));
+    const reason = targetBoundary?.sources?.[key] || targetBoundary?.denied_reasons?.[key];
+    if (reason) name.append(el("small", "permission-source", reason));
     const enabled = actions.includes(key);
     const control = toggle(
       enabled,
@@ -1331,6 +1424,12 @@ function renderBoundaries() {
     if (control.disabled)
       control.title = "Spawned agents use their inherited delegation limits.";
     row.append(name, control);
+    if (reason?.startsWith("explicit owner")) {
+      const reset=el("button","quiet","Use underlying policy");
+      reset.type="button"; reset.dataset.ownerWrite="true"; reset.dataset.focusKey=JSON.stringify([source,recipient,key,"reset"]); reset.disabled=control.disabled;
+      reset.onclick=()=>action(()=>call("control.update",{version:b.version,kind:"edge",from:source,to:recipient,action:key,reset:true}),"Removed this explicit override. Current configuration, delegation and active groups now determine access.");
+      name.append(reset);
+    }
     controls.append(row);
   }
   const scopes = $("scope-controls");
@@ -1347,6 +1446,8 @@ function renderBoundaries() {
         el("strong", "", scopeLabel(scope.name)),
         el("small", "", kind),
       );
+      if (scope.reason) name.append(el("small",scope.suspended?"action-error":"permission-source",scope.reason));
+      if (scope.stored_read !== undefined || scope.stored_write !== undefined) name.append(el("small","permission-source","Stored owner intent: read " + !!scope.stored_read + " · write " + !!scope.stored_write + ". Switches show effective access."));
       row.append(name);
       for (const field of ["read", "write"]) {
         const control = toggle(
@@ -1379,6 +1480,8 @@ function renderBoundaries() {
         row.dataset.itemKey = JSON.stringify([source, kind, scope.name]);
         control.disabled =
           scope.source === "team" ||
+          scope.suspended ||
+          (scope.source === "group" && !scope.read && !scope.write && (scope.reason?.includes("member") || scope.reason?.includes("inactive"))) ||
           (!!agents.find((a) => a.id === source)?.parent &&
             !agents.find((a) => a.id === source)?.owner_managed) ||
           agents.find((a) => a.id === source)?.state !== "active";
@@ -1386,8 +1489,15 @@ function renderBoundaries() {
           control.title =
             scope.source === "team"
               ? "Consented team membership controls this scope. Manage invitations and membership in Teams."
+              : scope.suspended || scope.source === "group" && (scope.reason?.includes("member") || scope.reason?.includes("inactive"))
+                ? scope.reason + ". Reconnect explicitly in Teams before granting access."
               : "Spawned agents use their inherited delegation limits.";
         row.append(control);
+      }
+      if ((scope.stored_read !== undefined || scope.stored_write !== undefined) && scope.source !== "team") {
+        const reset = el("button","quiet","Reset owner override"); reset.type="button"; reset.dataset.ownerWrite="true"; reset.dataset.focusKey=JSON.stringify([source,kind,scope.name,"reset"]);
+        reset.onclick=()=>action(()=>call("control.update",{version:b.version,kind,agent:source,namespace:scope.name,reset:true}),"Removed this namespace override. Configuration or current group membership now determines access.");
+        name.append(reset);
       }
       scopes.append(row);
     }
@@ -1397,11 +1507,11 @@ function renderBoundaries() {
   restoreViewState(scopes, scopesState);
 }
 function replyRecipient(id) {
-  const task = (snapshot?.activity.tasks || []).find((item) => item.id === id),
+  const task = [...(taskHistory.tasks || []), ...(snapshot?.activity.tasks || [])].find((item) => item.id === id),
     message = (snapshot?.activity.messages || []).find(
       (item) => item.id === id,
     ),
-    target = task
+    target = message?.board ? "" : task
       ? task.to
       : message?.from !== "$owner"
         ? message?.from
@@ -1415,6 +1525,20 @@ function replyRecipient(id) {
     : "";
 }
 function setReply(id) {
+  const message = (snapshot?.activity.messages || []).find(item => item.id === id);
+  if (message?.board) {
+    const from = snapshot.agents.find(agent => agent.id === message.from && agent.state === "active");
+    if (from) selectAgent(from.id);
+    pendingDraftKind = "board:" + message.board;
+    activateTab("activity");
+    replyTo = id;
+    $("reply-context").textContent = "↳ #" + scopeLabel(message.board) + " · " + id;
+    $("clear-reply").classList.remove("hidden");
+    $("message-mode").value = "note";
+    renderComposer();
+    $("message").focus();
+    return;
+  }
   const recipient = replyRecipient(id);
   if (!recipient) {
     notice(
@@ -1465,6 +1589,7 @@ function stashMemoryDraft() {
   } else memoryDrafts.delete(identity);
 }
 function renderMemoryReview() {
+  renderMemoryMetadata();
   const review = memoryReview;
   $("memory-review").hidden = !review;
   if (!review) return;
@@ -1490,7 +1615,30 @@ function renderMemoryReview() {
     review.namespace !== memoryEditorNamespace ||
     review.key !== $("memory-key").value;
 }
+function renderMemoryMetadata() {
+  const panel=$("memory-metadata"),namespace=memoryEditorNamespace,key=$("memory-key").value;
+  panel.hidden=true;
+  if(!selectionReady() || memoryMetadataSelection!==selected || !namespace || namespace!==$("memory-namespace").value || memoryVersion<1) return;
+  const entry=(memoryEntries.get(namespace) || []).find(item=>item.key===key && item.version===memoryVersion);
+  if(!entry) return;
+  const signature=JSON.stringify([selected,namespace,key,entry.version,entry.author,entry.sha256,entry.updated_at,entry.sources]);
+  panel.hidden=false;
+  if(panel.dataset.signature===signature) return;
+  panel.dataset.signature=signature;
+  const view=captureViewState(panel);
+  panel.replaceChildren(el("h3","","Saved metadata · "+namespace+" / "+key+" · version "+entry.version),el("p","session-note","Metadata describes this exact saved version, not unsaved draft edits. Author is the authenticated destination writer; imported source identities are claims, not verified origin."));
+  panel.append(el("p","","Destination author: "+(entry.author || "not recorded")),el("code","","Saved value SHA-256: "+(entry.sha256 || "not recorded")));
+  if(entry.updated_at) panel.append(el("p","session-note","Saved "+entry.updated_at));
+  const sources=entry.sources || [];
+  if(sources.length) {
+    const details=el("details","memory-source-claims"),summary=el("summary","",sources.length+" source claim(s) · origin not verified");
+    details.dataset.disclosureKey=JSON.stringify([namespace,key,entry.version,"sources"]);summary.dataset.focusKey=details.dataset.disclosureKey;
+    details.append(summary,el("pre","",JSON.stringify(sources,null,2)));panel.append(details);
+  } else panel.append(el("p","session-note","No source claims recorded for this saved version."));
+  restoreViewState(panel,view);
+}
 function memoryEdit(entry, namespace) {
+  memoryMetadataSelection=selected;
   memoryEditorEpoch++;
   memoryReviewRequest++;
   memoryReview = null;
@@ -1549,12 +1697,13 @@ function renderMemoryEntries(namespace) {
   if (!list.childElementCount)
     list.append(el("p", "empty", "No entries in this shared namespace."));
   restoreViewState(list, state);
+  renderMemoryMetadata();
 }
 async function loadMemory() {
   const namespace = $("memory-namespace").value;
   resetMemoryNamespace(namespace);
   if (!namespace || !selectionReady()) return;
-  const request = ++memoryRequest;
+  const request = ++memoryRequest, requestedAgent=selected;
   try {
     const entries = new Map();
     let after = "";
@@ -1562,6 +1711,7 @@ async function loadMemory() {
       const result = await call("memory.list", { namespace, limit: 100, after });
       if (
         request !== memoryRequest ||
+        requestedAgent !== selected ||
         namespace !== $("memory-namespace").value ||
         !selectionReady()
       )
@@ -1593,12 +1743,14 @@ async function reviewMemoryLatest() {
   const namespace = memoryEditorNamespace,
     key = $("memory-key").value,
     epoch = memoryEditorEpoch,
+    requestedAgent=selected,
     request = ++memoryReviewRequest;
   if (!namespace || !key) return;
   stashMemoryDraft();
   $("memory-version").textContent = "Reviewing latest · draft kept";
   const current = () =>
     request === memoryReviewRequest &&
+    requestedAgent === selected &&
     epoch === memoryEditorEpoch &&
     namespace === memoryEditorNamespace &&
     key === $("memory-key").value &&
@@ -1606,7 +1758,8 @@ async function reviewMemoryLatest() {
   try {
     const head = await call("memory.head", { namespace, key });
     if (!current()) return;
-    let value = "";
+    memoryMetadataSelection=requestedAgent;
+    let value = "", latestEntry=null;
     if (head.state === "live") {
       const result = await call("memory.get", { namespace, key });
       if (result.entry.version !== head.version)
@@ -1614,13 +1767,14 @@ async function reviewMemoryLatest() {
           "Memory changed during review. Review latest again; your draft is kept.",
         );
       value = result.entry.value;
+      latestEntry={...result.entry};
     }
     if (!current()) return;
     const cached = (memoryEntries.get(namespace) || []).filter(
       (entry) => entry.key !== key,
     );
     if (head.state === "live")
-      cached.push({ key, value, version: head.version });
+      cached.push(latestEntry);
     memoryEntries.set(namespace, cached);
     renderMemoryEntries(namespace);
     memoryReview = {
@@ -1719,6 +1873,9 @@ function activateTab(next) {
     );
   $("composer").classList.toggle("hidden", tab !== "activity");
   if (tab === "memory") loadMemory();
+  if (tab === "tasks") loadTaskHistory();
+  if (tab === "sessions") loadWorkspaces();
+  if (tab === "agent") loadCapacity();
   if (tab === "graph" && typeof renderGraph === "function") renderGraph();
 }
 document
@@ -1737,6 +1894,7 @@ $("composer").onsubmit = (event) => {
   const recipient = snapshot.selected,
     reference = replyTo,
     destination = $("message-kind").value,
+    mode = $("message-mode").value || "auto",
     board = destination.startsWith("board:") ? destination.slice(6) : "";
   if (
     pendingDraftKind ||
@@ -1752,14 +1910,18 @@ $("composer").onsubmit = (event) => {
     );
     return;
   }
-  if (!board && reference && replyRecipient(reference) !== recipient) {
+  const referencedBoard = (snapshot.activity.messages || []).find(item=>item.id===reference)?.board;
+  if (!board && reference && !referencedBoard && replyRecipient(reference) !== recipient) {
     notice(
       "The original reply recipient is unavailable or changed. Refresh and review the reply before sending.",
       true,
     );
     return;
   }
+  if (!board && referencedBoard && !(snapshot.boundaries.boards || []).some(scope=>scope.name===referencedBoard && scope.read)) { notice("This recipient cannot read the referenced board. Keep the reply on its original board or select a permitted reader.",true); return; }
   const researchInstruction =
+    // A board-to-direct reply is an explicit audience choice; the broker also
+    // verifies that the recipient can read the referenced parent.
     !board &&
     researchHeadless(snapshot.agents.find((agent) => agent.id === recipient));
   const headlessInstruction =
@@ -1768,12 +1930,13 @@ $("composer").onsubmit = (event) => {
   let confirmation = "Posted to #" + board + ".";
   action(
     async () => {
-      if (board) await call("board.post", { board, text });
+      if (board) await api("/api/send", { board, text, mode:"note", reply_to:reference });
       else {
         const result = await api("/api/send", {
           target: recipient,
           text,
           reply_to: reference,
+          mode,
         });
         confirmation =
           result.kind +
@@ -1791,6 +1954,7 @@ $("composer").onsubmit = (event) => {
       if (
         draft?.text === text &&
         draft.reply === reference &&
+        (draft.mode || "auto") === mode &&
         draft.kind === destination
       )
         messageDrafts.delete(recipient);
@@ -1798,6 +1962,7 @@ $("composer").onsubmit = (event) => {
         selected === recipient &&
         $("message").value === text &&
         replyTo === reference &&
+        ($("message-mode").value || "auto") === mode &&
         $("message-kind").value === destination
       ) {
         $("message").value = "";
@@ -1901,7 +2066,7 @@ $("memory-form").onsubmit = (event) => {
       throw error;
     }
     memoryRequest++;
-    const saved = { key, value, version: result.entry.version },
+    const saved = { ...result.entry, key, value, version: result.entry.version },
       entries = (memoryEntries.get(namespace) || []).filter(
         (entry) => entry.key !== key,
       );
@@ -2006,6 +2171,9 @@ function renderComposer() {
         ? "Extra instruction · interrupts run"
         : "Instruction task";
   const board = select.value.startsWith("board:") ? select.value.slice(6) : "";
+  const modeSelect = $("message-mode"), mode = modeSelect.value || "auto";
+  modeSelect.disabled = !!board || !selectionReady();
+  const instruction = !board && (mode === "instruction" || (mode === "auto" && a?.config.interaction !== "interactive"));
   $("send-target").textContent = board
     ? "#" + scopeLabel(board)
     : sessionReference(selected);
@@ -2019,8 +2187,10 @@ function renderComposer() {
       ? research
         ? "Research steering note. Agents see permitted board context at their next read; this does not add an extra instruction task."
         : "Shared board. Only sessions allowed to read this namespace receive its context."
-      : a?.config.interaction === "interactive"
+      : !instruction
         ? "Inbox message. Direct conversation and native approvals remain in the agent terminal."
+        : a?.config.interaction === "interactive"
+          ? "Queues an explicit instruction task for this native session; it is not typed into the terminal. Native sessions must read and act on it explicitly."
         : research
           ? "Extra owner instructions interrupt this research attempt's phase protocol. Use a shared board or memory for steering, or review phase controls in Research."
           : headless
@@ -2116,13 +2286,15 @@ function renderObserved() {
   }
 }
 $("message-kind").onchange = renderComposer;
+$("message-mode").onchange = renderComposer;
 $("add-session").onsubmit = (event) => {
   event.preventDefault();
   const name = $("new-name").value,
     title = $("new-title").value,
     harness = $("new-harness").value,
     project = $("new-project").value,
-    role = $("new-role").value,
+    nativeOnly = $("new-native-only").checked,
+    role = nativeOnly ? "" : $("new-role").value,
     sandbox = $("new-sandbox").value,
     initialSelection = selected;
   action(async () => {
@@ -2133,11 +2305,61 @@ $("add-session").onsubmit = (event) => {
       project,
       role,
       sandbox,
+      native_only:nativeOnly,
     });
     if (selected === initialSelection) selectAgent(result.id);
     if ($("new-name").value === name) $("new-name").value = "";
     if ($("new-title").value === title) $("new-title").value = "";
   }, "Session added. Collaboration stays off until you allow it.");
+};
+function updateNewNativeProfile() {
+  const antigravity = $("new-harness").value === "antigravity";
+  if (antigravity) $("new-native-only").checked = true;
+  $("new-native-only").disabled = antigravity;
+  $("new-role").disabled = $("new-native-only").checked;
+  $("new-native-hint").textContent = antigravity
+    ? "Antigravity opens its local native interface without injected instructions. Use manual bridge setup, or the Pi bridge for coordinated managed turns."
+    : $("new-native-only").checked
+      ? "Pure native launch: no Agentmux prompt is passed. Copy bridge setup later if you want manual coordination."
+      : "Coordinated native launch preserves your tools, skills and MCPs and adds Agentmux role/inbox context.";
+}
+$("new-native-only").onchange = updateNewNativeProfile;
+$("new-harness").onchange = updateNewNativeProfile;
+function renderRoleEditor() {
+  const agent = snapshot?.agents?.find(a=>a.id===selected);
+  if (!agent) return;
+  const draft=roleDrafts.get(agent.id), version=agent.role_version || 0, conflict=!!draft && draft.version!==version;
+  if (roleEditingID!==agent.id || !draft) $("role-draft").value=draft?.role ?? agent.config.role ?? "";
+  roleEditingID=agent.id;
+  $("role-current").textContent="Saved role v"+version+" for "+sessionReference(agent.id)+": "+(agent.config.role || "No role");
+  $("role-version").textContent=agent.config.native_only ? "Pure native session: injected roles are disabled." : conflict ? "Saved role changed. Draft retained; review the saved role above before adopting its version." : "Draft based on saved role v"+(draft?.version ?? version)+". Applies to future managed turns; native sessions receive an inbox notice.";
+  $("role-draft").disabled=!selectionReady() || !!agent.config.native_only || agent.state!=="active";
+  $("save-role").disabled=$("role-draft").disabled || conflict;
+  $("rebase-role").hidden=!conflict;
+  $("rebase-role").disabled=!selectionReady();
+}
+$("role-draft").oninput=()=>{
+  const agent=snapshot?.agents?.find(a=>a.id===roleEditingID);
+  if (!agent) return;
+  const old=roleDrafts.get(agent.id);
+  roleDrafts.set(agent.id,{role:$("role-draft").value,version:old?.version ?? agent.role_version ?? 0,baseline:old?.baseline ?? agent.config.role ?? ""});
+};
+$("discard-role").onclick=()=>{roleDrafts.delete(selected);renderRoleEditor();};
+$("rebase-role").onclick=()=>{
+  const agent=snapshot?.agents?.find(a=>a.id===selected),draft=roleDrafts.get(selected);
+  if (!agent || !draft || !selectionReady()) return;
+  roleDrafts.set(selected,{...draft,version:agent.role_version || 0,baseline:agent.config.role || ""});renderRoleEditor();
+};
+$("role-form").onsubmit=event=>{
+  event.preventDefault();
+  const agent=snapshot?.agents?.find(a=>a.id===selected),draft=roleDrafts.get(selected);
+  if (!agent || !selectionReady() || agent.config.native_only || (draft && draft.version!==(agent.role_version || 0))) return;
+  const id=agent.id,role=$("role-draft").value,version=draft?.version ?? agent.role_version ?? 0;
+  action(async()=>{
+    const result=await call("agent.role",{id,role,version}), latest=roleDrafts.get(id);
+    if (latest?.role===role) roleDrafts.delete(id);
+    else if (latest?.version===version) roleDrafts.set(id,{...latest,version:result.agent.role_version,baseline:role});
+  },"Role updated for "+sessionReference(id)+". Native input is unchanged; the next managed turn captures the role and native sessions receive an inbox notice.");
 };
 $("copy-bridge").onclick = async () => {
   try {
@@ -2170,6 +2392,8 @@ $("connect-pair").onclick = () => {
   const from = selected,
     to = peer,
     version = snapshot.boundaries.version;
+  const legacy=(snapshot.groups || []).find(group=>!(group.contributions_version>=1) && group.agents?.length===2 && group.agents.includes(from) && group.agents.includes(to));
+  if(legacy) {activateTab("teams");notice("This pair has legacy direct overrides. Review the exact legacy controls and choose a policy in Teams before reconnecting; nothing was changed.",true);return;}
   action(async () => {
     const result = await call("control.update", {
       version,
@@ -2278,6 +2502,9 @@ function teamOperationReady(review) {
   if (!team || team.state !== "active" || team.version !== review.version)
     return false;
   if (review.operation === "team.dissolve") return true;
+  if (review.operation === "team.update") return !!review.name?.trim();
+  if (review.operation === "team.accept-owner") return team.pending_owner === "$owner";
+  if (review.operation === "team.transfer") return review.agent === "$owner" || (team.members || []).includes(review.agent) && snapshot.agents.some(agent => agent.id === review.agent && agent.state === "active");
   if (review.operation === "team.remove")
     return (
       review.agent !== team.owner &&
@@ -2291,8 +2518,8 @@ function teamOperationReady(review) {
     ![...(team.members || []), ...(team.invited || [])].includes(review.agent)
   );
 }
-function reviewTeamChange(operation, team, agent = "") {
-  const review = { operation, id: team.id, version: team.version, agent };
+function reviewTeamChange(operation, team, agent = "", changes = {}) {
+  const review = { operation, id: team.id, version: team.version, agent, ...changes };
   if (!teamOperationReady(review)) {
     notice(
       "Team or recipient changed. Refresh and review the current membership.",
@@ -2317,13 +2544,32 @@ async function applyTeamReview() {
     async () => {
       const args = { id: review.id, version: review.version };
       if (review.agent) args.agent = review.agent;
-      await call(review.operation, args);
+      if (review.operation === "team.update") { args.name = review.name; args.description = review.description || ""; }
+      const result = await call(review.operation, args);
+      if (review.operation === "team.update") {
+        const draft = teamEditDrafts.get(review.id);
+        if (draft?.version === review.version) {
+          const next={...draft,version:result?.team?.version ?? review.version+1,baselineName:review.name,baselineDescription:review.description || ""};
+          if (next.name===next.baselineName && next.description===next.baselineDescription && !next.transfer) teamEditDrafts.delete(review.id);
+          else teamEditDrafts.set(review.id,next);
+        }
+      }
+      if (review.operation === "team.transfer") {
+        const draft=teamEditDrafts.get(review.id);
+        if (draft?.version===review.version) {
+          const next={...draft,version:result?.team?.version ?? review.version+1,transfer:draft.transfer===review.agent ? "" : draft.transfer};
+          if (next.name===next.baselineName && next.description===next.baselineDescription && !next.transfer) teamEditDrafts.delete(review.id);
+          else teamEditDrafts.set(review.id,next);
+        }
+      }
       if (teamReview === review) teamReview = null;
       teamsSignature = "";
     },
     review.operation === "team.invite"
       ? "Invitation recorded. The agent must accept before becoming a member."
-      : "Team membership updated. Native processes and previously read context remain.",
+      : review.operation === "team.transfer"
+        ? "Ownership proposed. The recipient must accept under its own credential before authority changes."
+        : "Team updated. Native processes and previously read context remain.",
   );
 }
 function renderTeams() {
@@ -2337,6 +2583,8 @@ function renderTeams() {
     teams,
     groups,
     teamReview,
+    legacyGroupReview,
+    snapshot.legacy_group_edges,
     snapshot.teams_error,
     snapshot.agents.map((a) => [a.id, a.title, a.state]),
   ]);
@@ -2383,7 +2631,16 @@ function renderTeams() {
       el("h3", "", team.name),
       el("span", "", team.state + " · v" + team.version),
     );
+    const copyID = el("button","quiet copy-id","Copy ID");
+    copyID.type="button"; copyID.dataset.focusKey="copy:"+team.id; copyID.onclick=()=>copyReviewedText(team.id,"Team ID");
+    heading.append(copyID);
     card.append(heading, el("code", "team-id", team.id));
+    if (team.description) card.append(el("p","session-note",team.description));
+    if (team.pending_owner) card.append(el("p","session-note","Ownership offered to " + sessionReference(team.pending_owner) + ". Current owner keeps authority until acceptance."));
+    if (team.pending_owner === "$owner" && team.state === "active") {
+      const accept=el("button","quiet","Review accepting ownership"); accept.type="button"; accept.dataset.ownerWrite="true"; accept.disabled=!ready;
+      accept.onclick=()=>reviewTeamChange("team.accept-owner",team); card.append(accept);
+    }
     const owner = el("div", "team-participants");
     owner.append(
       el("span", "", "Created by"),
@@ -2439,6 +2696,35 @@ function renderTeams() {
     }
     card.append(scopes(team));
     if (team.state === "active") {
+      const editor = el("details","team-editor"), summary=el("summary","","Edit name, purpose & ownership");
+      editor.dataset.disclosureKey="edit:"+team.id; summary.dataset.focusKey="edit:"+team.id;
+      const editForm = el("form","team-actions"), name=el("input"), description=el("input"), editSubmit=el("button","","Review changes"), transfer=el("select"), transferButton=el("button","quiet","Propose owner");
+      const editDraft = teamEditDrafts.get(team.id);
+      const editConflict=!!editDraft && editDraft.version!==team.version;
+      name.value=editDraft?.name ?? team.name; name.maxLength=120; name.setAttribute("aria-label","Team name for "+team.id); name.dataset.focusKey="name:"+team.id;
+      description.value=editDraft?.description ?? team.description ?? ""; description.maxLength=512; description.placeholder="Team purpose"; description.setAttribute("aria-label","Team purpose for "+team.id); description.dataset.focusKey="description:"+team.id;
+      const stashEdit=()=>{
+        const old=teamEditDrafts.get(team.id);
+        teamEditDrafts.set(team.id,{name:name.value,description:description.value,transfer:transfer.value,version:old?.version ?? team.version,baselineName:old?.baselineName ?? team.name,baselineDescription:old?.baselineDescription ?? team.description ?? ""});
+      };
+      name.oninput=description.oninput=stashEdit;
+      for (const id of ["", "$owner", ...(team.members || []).filter(id=>id!==team.owner)]) { const option=el("option","",id ? sessionReference(id) : "Choose next owner…"); option.value=id; transfer.append(option); }
+      transfer.value=editDraft?.transfer || ""; transfer.setAttribute("aria-label","Proposed owner for "+team.id); transfer.dataset.focusKey="transfer:"+team.id; transfer.onchange=stashEdit;
+      editSubmit.type="submit"; transferButton.type="button";
+      for (const control of [name,description,editSubmit,transfer,transferButton]) { control.disabled=!ready; control.dataset.ownerWrite="true"; }
+      editSubmit.disabled=transferButton.disabled=!ready || editConflict;
+      const draftReady=()=>{const draft=teamEditDrafts.get(team.id); if (draft && draft.version!==team.version) { notice("Team changed after this draft began. Review current metadata and explicitly adopt its version before saving.",true); return false; } return true;};
+      editForm.onsubmit=event=>{event.preventDefault();if(draftReady()) reviewTeamChange("team.update",team,"",{name:name.value,description:description.value});};
+      transferButton.onclick=()=>{ if(transfer.value && draftReady()) reviewTeamChange("team.transfer",team,transfer.value); };
+      const discard=el("button","quiet","Discard team draft"); discard.type="button"; discard.dataset.focusKey="discard-edit:"+team.id;
+      discard.onclick=()=>{teamEditDrafts.delete(team.id);if(teamReview?.id===team.id) teamReview=null;teamsSignature="";renderTeams();};
+      editForm.append(name,description,editSubmit,transfer,transferButton,discard); editor.append(summary,el("p","session-note","Current saved v"+team.version+": "+team.name+" · "+(team.description || "No purpose")),editForm);
+      if (editConflict) {
+        const rebase=el("button","quiet","Use reviewed team version"); rebase.type="button"; rebase.dataset.ownerWrite="true";rebase.disabled=!ready;rebase.dataset.focusKey="rebase-edit:"+team.id;
+        rebase.onclick=()=>{const draft=teamEditDrafts.get(team.id);if(!draft || !selectionReady()) return;teamEditDrafts.set(team.id,{...draft,version:team.version,baselineName:team.name,baselineDescription:team.description || ""});if(teamReview?.id===team.id) teamReview=null;teamsSignature="";renderTeams();};
+        editor.append(el("p","action-error","Team changed while this draft was open. Draft retained; saving and ownership proposals require explicit review of the saved version above."),rebase);
+      }
+      card.append(editor);
       const form = el("form", "team-actions"),
         invite = el("select"),
         submit = el("button", "", "Review invite");
@@ -2504,7 +2790,12 @@ function renderTeams() {
             ? "Remove " +
               sessionReference(review.agent) +
               " from membership or pending invitations"
-            : "Dissolve this team and end its future shared access";
+            : review.operation === "team.update"
+              ? "Update name to “" + review.name + "” and purpose to “" + (review.description || "") + "”"
+              : review.operation === "team.accept-owner" ? "Accept ownership as the human owner"
+              : review.operation === "team.transfer"
+                ? "Offer ownership to " + sessionReference(review.agent) + "; the recipient must consent"
+                : "Dissolve this team and end its future shared access";
       panel.append(
         el("strong", "", intent + "?"),
         el(
@@ -2550,7 +2841,7 @@ function renderTeams() {
       heading = el("div", "team-heading");
     card.dataset.itemKey = group.id;
     heading.append(
-      el("h3", "", "Owner collaboration"),
+      el("h3", "", (group.agents || []).map(id => sessionTitle(snapshot.agents.find(a=>a.id===id)) + " ("+id+")").join(" + ") || "Owner collaboration"),
       el("span", "", group.state + " · v" + group.version),
     );
     card.append(heading, el("code", "team-id", group.id));
@@ -2560,6 +2851,45 @@ function renderTeams() {
       members.append(reference(id, JSON.stringify([group.id, id])));
     if (!group.members?.length) members.append(el("small", "", "None"));
     card.append(members, scopes(group));
+    const actions = el("div","team-actions"), reconnect = el("button","quiet",group.state === "active" && group.members?.length === group.agents?.length ? "Disable group" : "Reconnect original members"), commands=el("button","quiet",group.commands ? "Disable group instructions" : "Allow mutual instructions");
+    reconnect.type=commands.type="button";
+    for (const control of [reconnect,commands]) { control.dataset.ownerWrite="true"; control.disabled=!ready; }
+    const groupBoundaryVersion=snapshot.boundaries.version;
+    const fullyConnected=group.state==="active" && group.members?.length===group.agents?.length;
+    commands.disabled=!ready || !fullyConnected;
+    commands.title=fullyConnected ? "Changes mutual instruction rights in this fully connected group." : "Reconnect original members explicitly before changing group instructions.";
+    const legacy=!(group.contributions_version >= 1), legacyEdges=snapshot.legacy_group_edges?.[group.id];
+    let legacyChoice=null;
+    if (legacy) {
+      const panel=el("section","legacy-group-policy"), label=el("label","","Review legacy direct permissions"), choice=el("select");
+      choice.setAttribute("aria-label","Legacy direct permission policy for "+group.id);choice.dataset.focusKey="legacy-policy:"+group.id;
+      for(const [value,text] of [["","Choose a legacy policy…"],["preserve","Preserve all existing direct overrides"],["group","Move old direct allows to this group"]]) {const option=el("option","",text);option.value=value;option.disabled=!value;choice.append(option);}
+      choice.value=legacyGroupChoices.get(group.id) || "";legacyChoice=choice;
+      label.append(choice);panel.append(label,el("p","session-note","This group predates independent contribution tracking. Existing untagged direct overrides may be historical group grants or deliberate owner intent; Agentmux cannot infer which. Preserve keeps those direct overrides even after disabling this group. Move removes matching ALLOW overrides so the group governs them. Existing DENY overrides remain and require a separate explicit reset in Graph."));
+      const edges=el("ul","legacy-edge-list");
+      if(Array.isArray(legacyEdges)) {
+        for(const edge of legacyEdges) edges.append(el("li","",edge.from+" → "+edge.to+" · "+edge.action+" · "+(edge.allow?"ALLOW (ambiguous origin)":"DENY (retained)")));
+        if(!legacyEdges.length) edges.append(el("li","","No matching untagged direct overrides."));
+      } else edges.append(el("li","action-error","Current legacy direct controls are unavailable. Refresh before reviewing migration."));
+      panel.append(edges);card.append(panel);
+      const updateAvailability=()=>{const chosen=["preserve","group"].includes(choice.value);reconnect.disabled=!ready || !chosen || !Array.isArray(legacyEdges);commands.disabled=!ready || !fullyConnected || !chosen || !Array.isArray(legacyEdges);};
+      choice.onchange=()=>{legacyGroupChoices.set(group.id,choice.value);if(legacyGroupReview?.id===group.id) legacyGroupReview=null;teamsSignature="";renderTeams();};
+      updateAvailability();
+      reconnect.textContent="Review legacy policy & "+(fullyConnected?"disable group":"reconnect original members");
+      commands.textContent="Review legacy policy & "+(group.commands?"disable instructions":"allow mutual instructions");
+    }
+    const updateGroup = (enabled, allowCommands) => legacy
+      ? reviewLegacyGroupChange(group,enabled,allowCommands,legacyChoice.value,groupBoundaryVersion)
+      : action(()=>call("control.update",{version:groupBoundaryVersion,kind:"collaboration",agents:group.agents,enabled,commands:allowCommands}),"Updated only this group's contribution. Other groups and explicit permission overrides remain independent.");
+    reconnect.onclick=()=>updateGroup(!(group.state==="active"&&group.members?.length===group.agents?.length),group.commands);
+    commands.onclick=()=>updateGroup(true,!group.commands);
+    actions.append(reconnect,commands); card.append(actions);
+    if(legacyGroupReview?.id===group.id) {
+      const review=legacyGroupReview,panel=el("section","team-review"),confirm=el("button","","Apply reviewed legacy policy"),cancel=el("button","quiet","Cancel review"),valid=legacyGroupReviewReady(review);
+      panel.append(el("strong","","Legacy policy: "+(review.policy==="preserve"?"preserve all existing direct overrides":"move matching old ALLOW overrides to group contributions")),el("p","","Group "+review.id+" · group v"+review.groupVersion+" · permission v"+review.version+". Requested state: "+(review.enabled?"connected":"disabled")+"; mutual instructions "+(review.commands?"allowed":"disabled")+". Existing DENY controls stay unchanged."),el("p",valid?"session-note":"action-error",valid?"Confirm only after reviewing the exact direct controls above.":"Group, membership or permissions changed. Cancel and review the current state; this review never adopts a newer version."));
+      confirm.type=cancel.type="button";confirm.dataset.ownerWrite="true";confirm.disabled=!valid;confirm.dataset.focusKey="legacy-confirm:"+group.id;
+      confirm.onclick=applyLegacyGroupReview;cancel.onclick=()=>{legacyGroupReview=null;teamsSignature="";renderTeams();};panel.append(confirm,cancel);card.append(panel);
+    }
     groupList.append(card);
   }
   if (!groups.length)
@@ -2572,6 +2902,26 @@ function renderTeams() {
     );
   restoreViewState(teamList, teamState);
   restoreViewState(groupList, groupState);
+}
+
+function legacyGroupFingerprint(group) { return JSON.stringify([group.version,group.agents,group.members,group.state,group.commands,group.contributions_version || 0]); }
+function legacyGroupReviewReady(review) {
+  if(!review || !selectionReady() || snapshot.teams_error || snapshot.boundaries.version!==review.version) return false;
+  const group=(snapshot.groups || []).find(item=>item.id===review.id),edges=snapshot.legacy_group_edges?.[review.id];
+  return !!group && !(group.contributions_version>=1) && legacyGroupFingerprint(group)===review.fingerprint && Array.isArray(edges) && JSON.stringify(edges)===review.edgeFingerprint;
+}
+function reviewLegacyGroupChange(group,enabled,commands,policy,version) {
+  if(!["preserve","group"].includes(policy)) {notice("Choose how to treat legacy direct overrides before reviewing this change.",true);return;}
+  const edges=snapshot.legacy_group_edges?.[group.id];
+  if(!Array.isArray(edges)) {notice("Refresh current legacy direct controls before reviewing migration.",true);return;}
+  const review={id:group.id,groupVersion:group.version,version,agents:[...group.agents],enabled,commands,policy,fingerprint:legacyGroupFingerprint(group),edgeFingerprint:JSON.stringify(edges)};
+  if(!legacyGroupReviewReady(review)) {notice("Legacy group changed. Refresh and review current permissions.",true);return;}
+  legacyGroupReview=review;teamsSignature="";renderTeams();
+}
+async function applyLegacyGroupReview() {
+  const review=legacyGroupReview;
+  if(!legacyGroupReviewReady(review)) {notice("Legacy policy review is stale. Cancel and review current membership and permissions.",true);return;}
+  await action(async()=>{await call("control.update",{version:review.version,kind:"collaboration",agents:review.agents,enabled:review.enabled,commands:review.commands,legacy_policy:review.policy});if(legacyGroupReview===review){legacyGroupReview=null;legacyGroupChoices.delete(review.id);}teamsSignature="";},"Legacy policy migrated with your explicit choice. Existing DENY controls remain; review effective permissions in Graph.");
 }
 
 function renderWorkerRuntime(agent) {
@@ -3005,8 +3355,132 @@ for (const id of ["research-action", "research-reason"])
     renderResearchReview();
   });
 
+async function copyReviewedText(text, label = "Command") {
+  try { await navigator.clipboard.writeText(text); notice(label + " copied."); }
+  catch { notice("Clipboard unavailable. Select and copy the displayed " + label.toLowerCase() + ".", true); }
+}
+async function loadWorkspaces() {
+  if (workspaceLoading) return;
+  workspaceLoading = true;
+  $("refresh-workspaces").disabled = true;
+  try {
+    const result = await api("/api/workspaces");
+    workspaceListings = result.workspaces || [];
+    workspaceLoadedAt = Date.now();
+    const list = $("workspaces"), view = captureViewState(list);
+    list.replaceChildren();
+    for (const workspace of workspaceListings) {
+      const row = el("article","workspace-row"), details = el("div");
+      row.dataset.itemKey = workspace.state;
+      details.append(el("strong","",workspace.session || "Unnamed workspace"),el("small","",workspace.status + " · " + workspace.agents + " registered sessions" + (workspace.current ? " · current console" : "")),el("code","",workspace.state));
+      if (workspace.problem) details.append(el("small","action-error",workspace.problem));
+      const commands = el("details","workspace-commands"), summary = el("summary","","Open commands");
+      commands.dataset.disclosureKey = workspace.state;
+      summary.dataset.focusKey = "workspace:" + workspace.state;
+      commands.append(summary);
+      for (const [label,command] of [["Terminal",workspace.dashboard_command],["Web",workspace.web_command]]) {
+        const copy = el("button","quiet","Copy " + label.toLowerCase() + " command");
+        copy.type="button"; copy.dataset.focusKey = label + ":" + workspace.state;
+        copy.onclick = () => copyReviewedText(command,label + " command");
+        commands.append(el("code","",command),copy);
+      }
+      row.append(details,commands); list.append(row);
+    }
+    if (!workspaceListings.length) list.append(el("p","empty","No saved workspace inventory found. Run agentmux workspaces --register DIR for an older custom state directory."));
+    restoreViewState(list,view);
+  } catch (error) { notice("Workspace inventory: " + error.message,true); }
+  finally { workspaceLoading = false; $("refresh-workspaces").disabled = false; }
+}
+$("refresh-workspaces").onclick = loadWorkspaces;
+$("relaunch-agent").onclick = () => {
+  if (!selectionReady()) return;
+  const agent = snapshot.agents.find(a => a.id === selected), pane = snapshot.runtime.agents?.[selected];
+  if (!agent || agent.external || agent.state !== "active" || agent.config.interaction !== "interactive" || !pane || pane.state === "running") return;
+  relaunchReview = {target:agent.id,attempt:snapshot.runtime.attempt_id,pane:pane.pane_id};
+  $("relaunch-target").textContent = "Relaunch " + sessionReference(agent.id) + " · " + agent.config.workdir;
+  $("relaunch-resume").value = ""; $("relaunch-history-id").value = ""; $("relaunch-history-id").hidden = true;
+  $("relaunch-review").hidden = false; $("relaunch-resume").focus();
+};
+$("relaunch-resume").onchange = () => { $("relaunch-history-id").hidden = $("relaunch-resume").value !== "id"; };
+$("cancel-relaunch").onclick = () => { relaunchReview = null; $("relaunch-review").hidden = true; };
+$("relaunch-review").onsubmit = event => {
+  event.preventDefault();
+  const review = relaunchReview, pane = snapshot?.runtime.agents?.[review?.target];
+  if (!review || !selectionReady() || selected !== review.target || snapshot.runtime.attempt_id !== review.attempt || pane?.pane_id !== review.pane || pane?.state === "running") { notice("Session changed after review. Refresh and review its current identity before relaunching.",true); return; }
+  const mode = $("relaunch-resume").value, resume = mode === "id" ? $("relaunch-history-id").value.trim() : mode;
+  if (mode === "id" && !resume) { notice("Enter a specific native history ID or choose a fresh conversation.",true); return; }
+  action(async () => { await api("/api/relaunch",{target:review.target,resume,attempt:review.attempt,pane:review.pane}); if (relaunchReview === review) { relaunchReview = null; $("relaunch-review").hidden = true; } },"Relaunched " + sessionReference(review.target) + ". Healthy peers keep running; continue in its native terminal.");
+};
+async function loadCapacity() {
+  if (!selectionReady()) return;
+  const id = selected, request = ++capacityRequest;
+  try {
+    const [capacity,owner] = await Promise.all([call("capacity.get",{agent:id}),call("capacity.get",{})]);
+    if (request !== capacityRequest || selected !== id) return;
+    capacityView = capacity;
+    if (capacity.resource_version !== owner.resource_version) { notice("Resource limits changed during refresh. Refresh capacity before editing.",true); return; }
+    resourceSnapshot = {agent:id,version:capacity.resource_version,session_budget:owner.session_budget || {},agent_budget:capacity.agent_budget || {}};
+    renderResourceEditor();
+    const panel = $("agent-capacity");
+    panel.replaceChildren(el("p","", "Spawn slots " + capacity.spawn_remaining + " · depth remaining " + capacity.spawn_depth_remaining + " · team slots " + capacity.teams_remaining + " · per-team limit " + capacity.team_member_limit));
+    panel.append(el("p","", "Can spawn: " + (capacity.can_spawn ? "yes" : "no") + " · create teams: " + (capacity.can_create_teams ? "yes" : "no") + " · join teams: " + (capacity.can_join_teams ? "yes" : "no")));
+    if (capacity.spawn_templates?.length) panel.append(el("p","","Templates: " + capacity.spawn_templates.join(", ")));
+    if (capacity.runtime_deadline) panel.append(el("p","","Admission deadline " + new Date(capacity.runtime_deadline).toLocaleString() + " · " + capacity.runtime_remaining_seconds + " seconds remaining. Running tasks require cancellation separately."));
+    if (capacity.admission_blocked) panel.append(el("p","action-error","Admission blocked: " + capacity.admission_reason));
+    for (const reason of capacity.blocked_reasons || []) panel.append(el("p","session-note",reason));
+    const details = el("details",""), summary = el("summary","","Capacity details · resource v" + capacity.resource_version);
+    details.append(summary,el("pre","",JSON.stringify(capacity,null,2)));
+    panel.append(details);
+  } catch (error) { if (request === capacityRequest) $("agent-capacity").replaceChildren(el("p","action-error",error.message)); }
+}
+$("load-capacity").onclick = loadCapacity;
+const resourceFields = {"resource-session-tokens":"session_tokens","resource-session-cost":"session_cost","resource-turn-tokens":"turn_tokens","resource-turn-cost":"turn_cost","resource-subtree-tokens":"subtree_tokens","resource-subtree-cost":"subtree_cost","resource-admission":"admission"};
+function resourceValues() { return Object.fromEntries(Object.entries(resourceFields).map(([id,key])=>[key,$(id).value])); }
+function renderResourceEditor() {
+  if (!resourceSnapshot || resourceSnapshot.agent!==selected) { $("review-resources").disabled=true; return; }
+  const draft=resourceDrafts.get(selected), limits=resourceSnapshot;
+  const values=draft?.values || {session_tokens:limits.session_budget.max_tokens || 0,session_cost:limits.session_budget.max_cost_microusd || 0,turn_tokens:limits.agent_budget.max_turn_tokens || 0,turn_cost:limits.agent_budget.max_turn_cost_microusd || 0,subtree_tokens:limits.agent_budget.max_subtree_tokens || 0,subtree_cost:limits.agent_budget.max_subtree_cost_microusd || 0,admission:""};
+  for (const [id,key] of Object.entries(resourceFields)) $(id).value=String(values[key]);
+  const conflict=!!draft && draft.version!==limits.version;
+  $("resource-current").textContent="Current resource v"+limits.version+" · "+sessionReference(selected)+(conflict ? ". Limits changed; draft retained. Discard and review current limits before editing." : ". Changes apply to future admission only.");
+  $("review-resources").disabled=!selectionReady() || conflict;
+  if (resourceReview && (resourceReview.agent!==selected || resourceReview.version!==limits.version)) { $("resource-review").hidden=true; resourceReview=null; }
+}
+for (const id of Object.keys(resourceFields)) $(id).oninput=()=>{
+  if (!resourceSnapshot || resourceSnapshot.agent!==selected) return;
+  const prior=resourceDrafts.get(selected);
+  resourceDrafts.set(selected,{version:prior?.version ?? resourceSnapshot.version,values:resourceValues()});
+  resourceReview=null; $("resource-review").hidden=true;
+};
+$("discard-resources").onclick=()=>{resourceDrafts.delete(selected);resourceReview=null;$("resource-review").hidden=true;renderResourceEditor();};
+$("resource-form").onsubmit=event=>{
+  event.preventDefault();
+  if (!selectionReady() || !resourceSnapshot || resourceSnapshot.agent!==selected) return;
+  const draft=resourceDrafts.get(selected);
+  if (draft && draft.version!==resourceSnapshot.version) { notice("Resource limits changed. Discard the stale draft and review current limits.",true); return; }
+  const values=resourceValues(), numeric={};
+  for (const [key,value] of Object.entries(values)) {
+    if (key==="admission" && value==="") continue;
+    const n=Number(value); if (value==="" || !Number.isSafeInteger(n) || n<0) { notice("Budget values must be nonnegative safe integers.",true); return; } numeric[key]=n;
+  }
+  const review={agent:selected,version:resourceSnapshot.version,session_budget:{max_tokens:numeric.session_tokens,max_cost_microusd:numeric.session_cost},agent_budget:{max_turn_tokens:numeric.turn_tokens,max_turn_cost_microusd:numeric.turn_cost,max_subtree_tokens:numeric.subtree_tokens,max_subtree_cost_microusd:numeric.subtree_cost,enforcement:"reservation"}};
+  if (numeric.admission!==undefined) review.admission_seconds=numeric.admission;
+  resourceReview=review;
+  const panel=$("resource-review"),confirm=el("button","","Apply reviewed budgets"),cancel=el("button","quiet","Cancel");
+  panel.replaceChildren(el("strong","","Review exact admission limits for "+sessionReference(review.agent)),el("pre","",JSON.stringify(review,null,2)),confirm,cancel); panel.hidden=false;
+  confirm.type=cancel.type="button"; confirm.dataset.ownerWrite="true";
+  confirm.onclick=()=>{
+    if (resourceReview!==review || !selectionReady() || selected!==review.agent || resourceSnapshot?.version!==review.version) { notice("Resource review is stale. Refresh and review current limits.",true); return; }
+    action(async()=>{await call("capacity.update",review);if(resourceReview===review){resourceReview=null;panel.hidden=true;resourceDrafts.delete(review.agent);}await loadCapacity();},"Admission limits updated. Existing provider calls and permanently reserved usage remain unchanged.");
+  };
+  cancel.onclick=()=>{resourceReview=null;panel.hidden=true;};
+};
+
 function hasUnsavedWork() {
-  if (mutating || teamReview || researchReview) return true;
+  if (mutating || teamReview || researchReview || relaunchReview || resourceReview || legacyGroupReview) return true;
+  if (resourceDrafts.size) return true;
+  if ([...roleDrafts.values()].some(draft=>draft.role!==draft.baseline)) return true;
+  if ([...teamEditDrafts.values()].some(draft=>draft.name!==draft.baselineName || draft.description!==draft.baselineDescription || draft.transfer)) return true;
   if ($("message").value.trim() || replyTo) return true;
   for (const [id, draft] of messageDrafts)
     if (id !== selected && (draft.text?.trim() || draft.reply)) return true;

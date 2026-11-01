@@ -28,11 +28,33 @@ import (
 //go:embed workweb/index.html workweb/app.css workweb/app.js workweb/graph.js
 var workWebAssets embed.FS
 
+// Legacy untagged direct controls cannot be attributed to a historical group
+// versus a deliberate owner override. Expose the exact ambiguous set for review.
+func workLegacyGroupEdges(control managed.ControlState) map[string][]managed.EdgeControl {
+	out := map[string][]managed.EdgeControl{}
+	for _, group := range control.Groups {
+		if group.ContributionsVersion != 0 {
+			continue
+		}
+		out[group.ID] = []managed.EdgeControl{}
+		members := map[string]bool{}
+		for _, id := range group.Agents {
+			members[id] = true
+		}
+		for _, edge := range control.Edges {
+			if edge.Source == "" && edge.From != edge.To && members[edge.From] && members[edge.To] {
+				out[group.ID] = append(out[group.ID], edge)
+			}
+		}
+	}
+	return out
+}
+
 // This is an owner console. It binds numeric loopback only, requires a random
 // bearer capability for every API call, validates Host/Origin, and serves no
 // cross-origin API. Native output is data, never HTML or terminal input.
 func workWebHandler(state string, client *managed.Client, token, host string) http.Handler {
-	allowed := map[string]bool{"activity": true, "agent.list": true, "agent.label": true, "boundaries.get": true, "control.get": true, "control.update": true, "task.get": true, "task.list": true, "task.cancel": true, "agent.stop": true, "autonomy.status": true, "autonomy.control": true, "memory.list": true, "memory.get": true, "memory.head": true, "memory.put": true, "board.post": true, "team.invite": true, "team.remove": true, "team.dissolve": true, "research.control": true}
+	allowed := map[string]bool{"activity": true, "agent.list": true, "agent.label": true, "agent.role": true, "boundaries.get": true, "control.get": true, "control.update": true, "capacity.get": true, "capacity.update": true, "task.get": true, "task.list": true, "task.cancel": true, "agent.stop": true, "autonomy.status": true, "autonomy.control": true, "memory.list": true, "memory.get": true, "memory.head": true, "memory.put": true, "board.post": true, "team.invite": true, "team.remove": true, "team.update": true, "team.transfer": true, "team.accept-owner": true, "team.dissolve": true, "research.control": true}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -66,6 +88,24 @@ func workWebHandler(state string, client *managed.Client, token, host string) ht
 					result["code"] = problem.Code
 				}
 				reply(result)
+			}
+			if r.URL.Path == "/api/workspaces" && r.Method == http.MethodGet {
+				rows, err := workspaceInventory("")
+				if err != nil {
+					failure(err)
+					return
+				}
+				exe, err := os.Executable()
+				if err != nil {
+					failure(err)
+					return
+				}
+				workspaces := make([]map[string]any, 0, len(rows))
+				for _, row := range rows {
+					workspaces = append(workspaces, map[string]any{"session": row.Session, "state": row.State, "status": row.Status, "agents": row.Agents, "problem": row.Problem, "current": row.State == state, "dashboard_command": managedlaunch.ShellCommand([]string{exe, "dashboard", "--state", row.State}), "web_command": managedlaunch.ShellCommand([]string{exe, "web", "--state", row.State})})
+				}
+				reply(map[string]any{"ok": true, "current_state": state, "workspaces": workspaces})
+				return
 			}
 			if r.URL.Path == "/api/research-status" && r.Method == http.MethodGet {
 				status, problem := client.LocalResearchStatus(r.Context(), state)
@@ -117,7 +157,7 @@ func workWebHandler(state string, client *managed.Client, token, host string) ht
 					}
 					return err.Error()
 				}
-				reply(map[string]any{"ok": true, "headless": d.headless, "groups": d.controls.Groups, "teams": d.teams, "autonomy": d.autonomy, "conversation": d.conversation, "research": d.research, "runtime_error": errorText(d.runtimeErr), "teams_error": errorText(d.teamsErr), "research_error": errorText(d.researchErr), "observed": d.observed, "bridge_setup": func() string {
+				reply(map[string]any{"ok": true, "headless": d.headless, "groups": d.controls.Groups, "legacy_group_edges": workLegacyGroupEdges(d.controls), "teams": d.teams, "autonomy": d.autonomy, "conversation": d.conversation, "research": d.research, "runtime_error": errorText(d.runtimeErr), "teams_error": errorText(d.teamsErr), "research_error": errorText(d.researchErr), "observed": d.observed, "bridge_setup": func() string {
 					for _, a := range d.agents {
 						if a.ID == d.selected && a.External {
 							return bridgeInstructions(state, a.ID)
@@ -146,6 +186,11 @@ func workWebHandler(state string, client *managed.Client, token, host string) ht
 				Target     string          `json:"target"`
 				Text       string          `json:"text"`
 				ReplyTo    string          `json:"reply_to"`
+				Board      string          `json:"board"`
+				Mode       string          `json:"mode"`
+				Resume     string          `json:"resume"`
+				Attempt    string          `json:"attempt"`
+				Pane       string          `json:"pane"`
 				Name       string          `json:"name"`
 				Title      string          `json:"title"`
 				Harness    string          `json:"harness"`
@@ -154,6 +199,7 @@ func workWebHandler(state string, client *managed.Client, token, host string) ht
 				Sandbox    string          `json:"sandbox"`
 				Model      string          `json:"model"`
 				ObservedID string          `json:"observed_id"`
+				NativeOnly bool            `json:"native_only"`
 			}
 			decoder := json.NewDecoder(strings.NewReader(string(body)))
 			decoder.DisallowUnknownFields()
@@ -162,6 +208,32 @@ func workWebHandler(state string, client *managed.Client, token, host string) ht
 				return
 			}
 			switch r.URL.Path {
+			case "/api/relaunch":
+				exe, err := os.Executable()
+				if err != nil {
+					failure(err)
+					return
+				}
+				launcher, err := managedlaunch.New(managedlaunch.Options{StateDir: state, Executable: exe})
+				if err != nil {
+					failure(err)
+					return
+				}
+				current, err := launcher.Describe(r.Context())
+				if err != nil {
+					failure(err)
+					return
+				}
+				if in.Attempt == "" || in.Pane == "" || current.AttemptID != in.Attempt || current.Agents[in.Target].PaneID != in.Pane {
+					failure(&managed.Fault{Code: "conflict", Message: "session identity changed since review; refresh and review before relaunching"})
+					return
+				}
+				runtime, err := launcher.Relaunch(r.Context(), in.Target, in.Resume)
+				if err != nil {
+					failure(err)
+					return
+				}
+				reply(map[string]any{"ok": true, "target": in.Target, "runtime": runtime})
 			case "/api/connect":
 				setup, assignedID, err := connectObservedSessionWithID(r.Context(), state, in.ObservedID, in.Name, in.Title)
 				if err != nil {
@@ -180,6 +252,9 @@ func workWebHandler(state string, client *managed.Client, token, host string) ht
 				}
 				if in.Model != "" {
 					args = append(args, "--model", in.Model)
+				}
+				if in.NativeOnly {
+					args = append(args, "--native-only")
 				}
 				var output, diagnostics bytes.Buffer
 				code, id := runWorkAddWithID(args, &output, &diagnostics)
@@ -209,19 +284,20 @@ func workWebHandler(state string, client *managed.Client, token, host string) ht
 					failure(errors.New("message text must not be empty; no message or instruction was queued"))
 					return
 				}
-				if in.ReplyTo != "" {
-					target, err = workReplyTarget(r.Context(), client, in.ReplyTo)
+				if in.ReplyTo != "" && in.Board == "" && (target == "" || in.Mode == "") {
+					inferred, replyErr := workReplyTarget(r.Context(), client, in.ReplyTo)
+					err = replyErr
 					if err != nil {
 						failure(err)
 						return
 					}
-					if target != in.Target {
+					if target != "" && target != inferred {
 						failure(&managed.Fault{Code: "conflict", Message: "reply recipient differs from the reviewed target; refresh and review before sending"})
 						return
 					}
-					text = "Follow-up to " + in.ReplyTo + ":\n" + text
+					target = inferred
 				}
-				id, kind, err := workSend(r.Context(), client, state, target, text)
+				id, kind, err := workSendToAudience(r.Context(), client, state, target, in.Board, text, in.Mode, in.ReplyTo)
 				if err != nil {
 					failure(err)
 					return

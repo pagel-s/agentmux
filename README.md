@@ -1,6 +1,6 @@
 # Agentmux
 
-Run Claude Code, Codex and Pi in tmux with a shared communication board,
+Run Claude Code, Codex, Pi and native Antigravity in tmux with a shared communication board,
 private/shared memory, and explicit permissions between agents.
 
 Use native interactive terminals for a human-led workday, managed workers for
@@ -39,8 +39,8 @@ agentmux start
 This creates workspace `work` with native Claude and Codex sessions in your
 project. Your local tools, skills, MCPs, login and native history remain available.
 Each session has a stable Agentmux ID. Collaboration and autonomous wakeups start
-off; you decide which sessions can work together. The native-only preset runs until you close it; managed automation retains
-explicit runtime budgets.
+off; you decide which sessions can work together. An interactive workspace runs
+until you close it; managed automation retains explicit runtime budgets.
 
 The workspace name (`work`) selects the running team; a session ID (`claude`,
 `codex`, or an ID printed by `add`) selects one conversation inside it. Commands
@@ -56,7 +56,15 @@ search and title controls. New sessions can generate their IDs automatically:
 ```sh
 agentmux add --harness claude --project ~/projects/api --title "Fix login redirect"
 agentmux label SESSION_ID "Investigate cookie expiry"
+agentmux role SESSION_ID "Review the authentication changes"
+agentmux workspaces
 ```
+
+Press **V** to edit the selected session's role with version checking and **W**
+to inspect other workspaces. Native sessions receive role changes as inbox
+notices; managed workers use the current role at their next task claim. For a
+prompt-free launch, use `add --native-only`; it appends no Agentmux context or
+role. Native Antigravity uses `--harness antigravity --native-only`.
 
 Select an agent with ↑/↓ and press **Enter** for its native CLI. **F1** returns to
 the workbench; **Ctrl-b b** opens the board as a popup; **Ctrl-b d** detaches.
@@ -69,7 +77,7 @@ agentmux add billing --harness claude --project ~/projects/billing
 agentmux add review --harness codex --project ~/projects/api --role "Review changes"
 agentmux attach billing
 agentmux collaborate claude review
-agentmux send review "Please read the proposal when we discuss it."
+agentmux send review "Please read the proposal when we discuss it." --mode note
 agentmux isolate review
 agentmux remove billing
 agentmux web --open
@@ -82,8 +90,13 @@ Accepted tasks need separate cancellation; previously read information remains.
 Keep the printed group ID: with several groups, post using
 `agentmux board "Note for this group" --group GROUP_ID`. The web app's Teams view
 lists owner collaboration groups and their boards/memory.
-`send` queues an inbox note for native sessions and an instruction task for managed
-workers. Messages never become unsolicited terminal keystrokes.
+`send` defaults to an inbox note for native sessions and an instruction task for
+managed workers. Choose `--mode note` or `--mode instruction` explicitly; the
+terminal editor uses **Ctrl-T** and the web composer shows the same intent.
+Replies retain broker-checked ancestry and an explicit shared or private
+audience. Messages never become unsolicited terminal keystrokes. An exited owned
+native session can be relaunched under its existing ID without restarting peers:
+`agentmux relaunch review --resume last` selects native history deliberately.
 
 Existing sessions can join without restarting their conversation:
 
@@ -110,7 +123,9 @@ native history and current limits.
 ## Observe and control
 
 The terminal dashboard provides agent selection, terminal previews, recent
-coordination, task results, follow-ups, cancellation and live permissions.
+coordination, searchable complete task history, follow-ups, cancellation and live
+permissions. In Tasks, **f** searches and **PgUp/PgDn** pages; **?** opens context
+help, including **Ctrl-G** while editing without consuming printable text.
 Teams and Events expose consented membership, pending invitations, spawn lineage,
 worker admission state and recent lifecycle changes. Team boards and memory appear
 in the same namespace controls as configured shared knowledge.
@@ -118,6 +133,13 @@ in the same namespace controls as configured shared knowledge.
 controls, shared-memory inspection/editing, session setup/discovery, a relationship
 graph and read-only terminal previews. Native
 terminal input stays in tmux.
+
+Collaboration groups contribute permissions independently, including overlapping
+groups. The controls distinguish stored owner overrides, effective access and
+isolation; historical groups require an explicit migration review. Consented
+teams support live name/mission changes, ownership proposals and participant-
+accepted moves. Capacity views explain remaining lifetime allocations and
+inherited denials; owner budget edits govern future admissions.
 
 Messages, pings and commands are separate directional permissions. Board and
 shared-memory read/write permissions are also separate. Changes are versioned,
@@ -136,6 +158,12 @@ private persistent conversations and explicitly configured observation wakeups.
 Owner-approved templates enable bounded spawning; dynamic teams use consent-based
 membership and scoped boards/memory.
 
+`managed setup --preset reviewer-pair` and `--preset research-team` create idle
+managed role presets. They queue no tasks or autonomous goal. The research runner
+also supports declared role/personality prompt treatments, counterbalanced
+condition orders, supported behavioral primary outcomes and small/scripted-
+evidence warnings. Prompt treatments do not establish intrinsic agent traits.
+
 Research runs remain observable and steerable: start with `research run …
 --start-paused`, open the printed terminal/web console, and inspect or advance one
 phase at a time. Pause/resume/step/stop apply at phase barriers; task cancellation
@@ -143,10 +171,12 @@ is separate. Owner steering is recorded and assisted runs are excluded from
 default research estimates. Research turns are headless; native terminal typing
 belongs to the interactive work-session workflow.
 
-Claude, Codex and Pi have managed adapters. Pi connects to configured compatible
-endpoints, including Ollama/vLLM. The Antigravity bridge combines native local
-inference with isolated Pi tools/history. Provider and tool coverage vary:
-consult the [validation matrix](docs/provider-validation.md).
+Claude, Codex, Pi and Antigravity have managed adapters. Codex supports explicit
+Responses endpoints; Pi connects to compatible Chat Completions endpoints,
+including Ollama/vLLM. The Antigravity bridge combines native local inference
+with isolated Pi tools/history. Provider and tool coverage vary: consult the
+[validation matrix](docs/provider-validation.md) and the [dated live provider
+acceptance](docs/provider-acceptance.md).
 
 Try communication and terminal controls without any model calls:
 
@@ -161,6 +191,12 @@ Guides: [setup](docs/managed-setup.md), [managed runtime](docs/managed-runtime.m
 [hardening](docs/hardening.md), [traces/recovery](docs/traces-and-recovery.md),
 [remote workers](docs/remote-workers.md), [research](docs/research.md) and
 [controlled studies](docs/research-study.md).
+
+The [UAT gap closure record](docs/uat-gap-closure.md) maps the previous open points
+to implementation, regression coverage and explicit limits. Memory imports retain
+structured source claims; portable trace bundles verify an explicitly trusted
+owner exporter's signature. Neither establishes provider attestation or the
+truth of an agent's output.
 
 The [trust model](docs/security-model.md) and
 [validation record](docs/release-validation.md) describe enforced boundaries,

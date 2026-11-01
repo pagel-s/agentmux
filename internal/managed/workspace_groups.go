@@ -12,14 +12,31 @@ import (
 // agent-created teams and their invitation/consent protocol. Agents identifies
 // the stable original member set; Members identifies current participants.
 type WorkspaceGroup struct {
-	ID        string   `json:"id"`
-	Agents    []string `json:"agents"`
-	Members   []string `json:"members"`
-	Board     string   `json:"board"`
-	Memory    string   `json:"memory"`
-	State     string   `json:"state"`
-	Version   int      `json:"version"`
-	CreatedAt string   `json:"created_at"`
+	ID                   string   `json:"id"`
+	Agents               []string `json:"agents"`
+	Members              []string `json:"members"`
+	Board                string   `json:"board"`
+	Memory               string   `json:"memory"`
+	State                string   `json:"state"`
+	Version              int      `json:"version"`
+	CreatedAt            string   `json:"created_at"`
+	Commands             bool     `json:"commands"`
+	ContributionsVersion int      `json:"contributions_version,omitempty"`
+}
+
+// Groups contribute grants independently. Explicit owner edge overrides are
+// evaluated first; removing one group never changes a different group's grants.
+func workspaceGroupCan(ctx context.Context, q queryer, from, action, to string) bool {
+	groups, err := workspaceGroups(ctx, q)
+	if err != nil {
+		return false
+	}
+	for _, group := range groups {
+		if group.ContributionsVersion >= 1 && group.State == "active" && contains(group.Members, from) && contains(group.Members, to) && (action != "instruct" || group.Commands) {
+			return true
+		}
+	}
+	return false
 }
 
 func workspaceGroups(ctx context.Context, q queryer) ([]WorkspaceGroup, error) {
@@ -40,7 +57,7 @@ func workspaceGroupKey(ids []string) string {
 	return "workspace_group_" + hash(string(encoded))
 }
 
-func (s *Store) setWorkspaceGroup(ctx context.Context, q queryer, a actor, ids []string, enabled bool) (WorkspaceGroup, *Fault) {
+func (s *Store) setWorkspaceGroup(ctx context.Context, q queryer, a actor, ids []string, enabled, commands bool) (WorkspaceGroup, *Fault) {
 	key := workspaceGroupKey(ids)
 	var group WorkspaceGroup
 	err := get(ctx, q, "workspace_group", key, &group)
@@ -57,7 +74,7 @@ func (s *Store) setWorkspaceGroup(ctx context.Context, q queryer, a actor, ids [
 		}
 		ordered := append([]string(nil), ids...)
 		sort.Strings(ordered)
-		group = WorkspaceGroup{ID: randomID("group"), Agents: ordered, CreatedAt: now()}
+		group = WorkspaceGroup{ID: randomID("group"), Agents: ordered, CreatedAt: now(), ContributionsVersion: 1}
 		group.Board, group.Memory = "board_"+group.ID, "memory_"+group.ID
 		if s.namespaceExists(ctx, q, group.Board, false) || s.namespaceExists(ctx, q, group.Memory, true) {
 			return group, fault("conflict", "workspace namespace collision; retry with a new request")
@@ -66,6 +83,8 @@ func (s *Store) setWorkspaceGroup(ctx context.Context, q queryer, a actor, ids [
 		return group, internal(err)
 	}
 	group.Members = []string{}
+	group.ContributionsVersion = 1
+	group.Commands = commands
 	group.State = "inactive"
 	if enabled {
 		group.Members = append(group.Members, group.Agents...)
@@ -75,7 +94,7 @@ func (s *Store) setWorkspaceGroup(ctx context.Context, q queryer, a actor, ids [
 	if err := save(ctx, q, "workspace_group", key, ownerID, "", "owner", group); err != nil {
 		return group, internal(err)
 	}
-	if err := event(ctx, q, a, "workspace_group.changed", group.ID, map[string]any{"version": group.Version, "state": group.State, "members": group.Members}); err != nil {
+	if err := event(ctx, q, a, "workspace_group.changed", group.ID, map[string]any{"version": group.Version, "state": group.State, "members": group.Members, "commands": group.Commands, "contributions_version": group.ContributionsVersion}); err != nil {
 		return group, internal(err)
 	}
 	return group, nil

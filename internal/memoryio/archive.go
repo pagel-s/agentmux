@@ -59,7 +59,7 @@ func validateArchive(a Archive) error {
 	}
 	seen := map[string]bool{}
 	for _, m := range a.Entries {
-		if m.Deleted || len(m.Key) < 1 || len(m.Key) > 128 || strings.IndexFunc(m.Key, unicode.IsControl) >= 0 || seen[m.Key] || m.SHA256 != "" && m.SHA256 != digestText(m.Value) {
+		if m.Deleted || m.Version < 1 || len(m.Author) < 1 || len(m.Author) > 64 || strings.IndexFunc(m.Author, unicode.IsControl) >= 0 || len(m.Key) < 1 || len(m.Key) > 128 || strings.IndexFunc(m.Key, unicode.IsControl) >= 0 || seen[m.Key] || m.SHA256 != "" && m.SHA256 != digestText(m.Value) {
 			return errors.New("archive contains duplicate, deleted or mismatched memory")
 		}
 		seen[m.Key] = true
@@ -249,7 +249,7 @@ func Import(ctx context.Context, c Caller, a Archive, namespace string, replace 
 			json.Unmarshal(current, &out)
 			matching := false
 			for _, source := range out.Entry.Sources {
-				if source.Kind == "import" && source.ID == marker && source.SHA256 == digestText(m.Value) {
+				if source.Kind == "import" && source.ID == marker && source.SHA256 == digestText(m.Value) && source.ArchiveSHA256 == a.SHA256 && source.SourceSession == a.SourceSession && source.SourceAgent == a.SourceAgent && source.SourceNamespace == a.Namespace && source.SourceAuthor == m.Author && source.SourceKey == m.Key && source.SourceVersion == m.Version {
 					matching = true
 				}
 			}
@@ -264,7 +264,7 @@ func Import(ctx context.Context, c Caller, a Archive, namespace string, replace 
 		plan = append(plan, planned{m, head.Version, ttl})
 	}
 	for _, p := range plan {
-		sources := []managed.MemorySource{{Kind: "import", ID: marker, SHA256: digestText(p.entry.Value)}}
+		sources := []managed.MemorySource{{Kind: "import", ID: marker, SHA256: digestText(p.entry.Value), SourceSession: a.SourceSession, SourceAgent: a.SourceAgent, SourceNamespace: a.Namespace, SourceAuthor: p.entry.Author, SourceKey: p.entry.Key, SourceVersion: p.entry.Version, ArchiveSHA256: a.SHA256}}
 		args := map[string]any{"namespace": namespace, "key": p.entry.Key, "value": p.entry.Value, "version": p.version, "ttl_seconds": p.ttl, "tags": p.entry.Tags, "sources": sources}
 		id := "memory_import_" + digest([]string{a.SHA256, namespace, p.entry.Key, fmt.Sprint(p.version)})
 		if _, err := Call(ctx, c, "memory.put", args, id); err != nil {

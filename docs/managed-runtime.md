@@ -186,7 +186,7 @@ Use the returned team ID and version for `team.invite` (`id`, `agent`, `version`
 | Harness | Managed transport | Endpoint support |
 | --- | --- | --- |
 | Claude Code | Streaming JSON print mode | Existing login, or an Anthropic-compatible base URL and credential environment variable |
-| Codex | `exec --json` | Existing Codex configuration/authentication; arbitrary endpoint overrides are rejected by this adapter |
+| Codex | `exec --json` | Existing Codex authentication, or an explicitly configured custom Responses endpoint and selected API-key environment |
 | Antigravity | Streaming JSON input/output | Existing local `agy` authentication; arbitrary endpoint overrides are rejected |
 | Pi | JSONL RPC | Existing Pi configuration, or a private OpenAI-compatible chat-completions connection |
 | Command | Literal owner-configured argv; prompt on stdin | Defined by the command |
@@ -201,6 +201,16 @@ The examples include:
 - [Pi with vLLM](../examples/managed/pi-vllm.yaml), using exactly `http://127.0.0.1:8000/v1`.
 
 Replace each model placeholder with a model already served by that endpoint. For an unauthenticated vLLM server, remove the example's `api_key_env` line. For an authenticated server, export the named variable in the worker's environment. Keep actual credentials out of YAML, argv, role text, and task messages.
+
+Codex custom connections select `protocol: openai-responses` and the owner's
+explicit `base_url`. The adapter supplies a per-process native model-provider
+definition with `wire_api: responses`, disables implicit OpenAI login for that
+provider, and uses only the selected API-key environment when configured. It
+does not edit the owner's Codex files. This follows the [official custom-provider
+configuration](https://learn.chatgpt.com/docs/config-file/config-advanced#custom-model-providers).
+Chat Completions endpoints, including many Ollama/vLLM deployments, use Pi's
+`openai-compatible`/`ollama` connection instead. A successful metadata probe or
+protocol fixture is distinct from a successful real model turn.
 
 Claude managed turns retain `--safe-mode` and `--permission-mode dontAsk`. Configure an explicit owner-approved `--allowedTools` prefix for coding tools, as shown in the Claude/Codex example; a role description does not grant native permissions. Tool denials fail the task rather than count as successful submission. Codex `exec` requires its working directory to be a Git repository with the current adapter. Default managed workspaces start empty, so initialize the example's state and run `git init` in its workspaces before `managed up`. Startup queues no tasks and makes no model-generation call; submit a bounded instruction explicitly when ready.
 

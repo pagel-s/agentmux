@@ -40,6 +40,24 @@ When adding a session, `--harness` selects Claude Code, Codex or Pi;
 `--title` labels the human task, while `--role` supplies optional instructions
 to the agent at launch.
 
+For a pristine native launch, use `agentmux add --harness claude --native-only`.
+This appends no Agentmux prompt or role and preserves the native CLI's local
+configuration. Broker credentials remain available for coordination you request
+manually; listing/attaching works normally. It cannot be combined with `--role`.
+Native Antigravity is available with `--harness antigravity --native-only`; its
+direct CLI does not expose a verified appended-system-role interface. Use the
+Pi bridge when you want injected Agentmux context with that provider.
+
+Change a coordinated session's role with `agentmux role SESSION_ID "New role"`,
+or press **V** in the terminal workbench. The role editor uses version checking
+and preserves a failed draft. **Ctrl-R** reviews the latest role; Enter adopts
+only the reviewed version before a separate save. Managed workers capture the
+current role when claiming the next task. Native conversations stay running and
+receive an informational inbox notice; `managed call identity` returns the
+current role and `role_version`. No user turn is injected and in-flight inputs
+are unchanged. Roles grant no broker permissions. **N** includes an explicit
+coordinated/native-only profile choice before the optional role step.
+
 | Name or ID | Where to use it |
 | --- | --- |
 | Workspace name, such as `work` | `--session work` selects the team and saved state |
@@ -74,7 +92,24 @@ Running the same `start` command again, including `--config FILE`, attaches to
 the running workspace only if the configuration still matches its saved definition.
 An explicit `--sandbox` must also match the running broker's mode; reopening never
 changes that mode. A mismatch is rejected without restarting the workspace.
-Use `managed restart --state DIRECTORY` for explicit restart.
+Use `managed restart --state DIRECTORY` for explicit whole-workspace restart.
+
+Use `agentmux relaunch AGENT_ID` to restart one exited workspace-owned native
+session under the same ID while its healthy peers keep their processes. It starts
+a fresh native conversation by default. `--resume picker`, `--resume last` or
+`--resume NATIVE_ID` makes the native history choice explicit; it does not renew
+deadlines or revive revoked identities. The dashboard offers the same flow with
+`U`. A controller started before this feature needs one explicit workspace restart
+after upgrading; it is never silently replaced.
+
+`agentmux workspaces` lists named workspaces and remembered custom state paths.
+Use `--json` for structured inventory or `--register DIR` to add an older custom
+location. `W` opens the terminal chooser: Enter opens another observer; closing it
+returns to the previous workspace without losing that observer's drafts. The web
+Sessions view lists workspace commands. Identical names remain distinct by state
+path. A failed or exhausted live check reports unknown instead of inventing a
+stopped process; opening an unknown workspace attempts observation without starting
+agents.
 
 The current directory does not select a workspace for later commands. If you
 used `start --session api`, keep using `--session api`, including on `add`,
@@ -94,6 +129,12 @@ detached, attach again; no restart is needed. After `down`, running the original
 through each provider's native history controls; relaunching does not promise
 automatic conversation resumption. See [recovery](traces-and-recovery.md) for
 broker/task uncertainty and upgrades.
+
+Tasks in both consoles browse the complete broker history. In the terminal,
+`PgDn` loads older records, `PgUp` returns toward newer records and `f` searches
+instructions, results or IDs; an empty search clears the filter. Web Tasks offers
+search, recipient/state filters and Load older. These pages do not include human
+turns typed only into a native provider's own conversation UI.
 
 The coding preset preserves the normal local Claude/Codex environment, tools,
 skills, MCP configuration, native approval prompts, login and history. It does
@@ -139,8 +180,9 @@ launch instead of exposing host paths to the broker.
 
 `collaborate A B` enables notes/pings and creates a dedicated owner-managed group
 with its own board and memory. The exact member set reuses its stable group and
-history after reconnect/restart. Other groups do not gain access. Commands remain
-disabled until explicitly granted in Connections. `board` selects the only active
+history after reconnect/restart. Other groups do not gain access. A notes-only
+group contributes no command authority; pre-existing configuration or explicit
+owner command grants still apply. Inspect effective Connections permissions. `board` selects the only active
 group automatically; with multiple groups use `--group ID` or `--board NAMESPACE`.
 `isolate A` revokes both directions of peer coordination, shared scopes and group
 membership, and fences future delegated spawning/team formation. It leaves native
@@ -162,19 +204,35 @@ agentmux board "API proposal ready for review" --group GROUP_ID
 ```
 
 Repeating `collaborate` with the same complete member set reuses its group and
-restores those members' access to its retained history. A different member set
+restores current membership in its retained history; explicit owner scope denies
+remain effective until reset. A different member set
 creates another group. A session in two groups can read both authorized contexts;
 it can carry that information between them. `isolate api-review` removes that
 session from **all** its groups and revokes peer coordination in both directions,
 not just the board currently displayed. It leaves other members running.
 
-Direct note/ping permissions are directed edges between sessions, rather than
-separate edges for each group. Disabling a group can therefore deny that pair's
-direct messages even if the pair also belongs to another active group. That other
-group's board and memory remain governed by its own membership and scope rules.
-Inspect effective boundaries in Connections before relying on an overlapping group;
-stored control overrides alone do not describe effective access. Reconnecting a
-group does not automatically clear separate denies on a static shared namespace.
+Collaboration groups contribute permissions independently. Disabling one group
+removes its note/ping/optional command contribution and its own scoped access;
+another active overlapping group keeps its grants. Explicit owner edge/scope
+overrides take precedence, including denies. Notes-only does not revoke a
+configured command relationship. Connections shows each effective grant's source;
+Memory distinguishes stored owner intent from effective read/write permission.
+
+Isolation adds labeled suspension overlays without overwriting existing owner
+intent. Reconnecting selected sessions removes their pair's isolation overlays,
+restores their configured static scope intent, and rejoins the selected group.
+Unrelated isolated relationships remain blocked. Explicit denies survive reconnect.
+Use Connections **M/P/I** or Memory **R** to reset an exact override to underlying
+policy. Already-read knowledge and accepted tasks are never erased.
+
+Older saved groups have no contribution version and require an explicit migration
+choice before a group edit; no changes are made by default. Review the historical
+pair grants, then choose `--legacy-policy preserve` to keep them as direct owner
+intent, or `--legacy-policy group` to remove untagged pair allows while retaining
+all denies and unrelated controls. Connections **c** provides an explicit **1/2**
+review for a legacy pair; larger groups can use the CLI or web. A reviewed/new
+group contributes permissions independently. See [live permissions and resource
+controls](live-permissions.md) for exact migration and reset semantics.
 
 Each `attach` opens an independent tmux client view. You can keep Claude in one
 terminal window and Codex in another; switching one does not move the other.
@@ -187,6 +245,13 @@ To review/edit a configured team before launch:
 agentmux managed setup --preset coding --output team.yaml
 agentmux start --config team.yaml --session my-team
 ```
+
+For an idle managed review team, select `--preset reviewer-pair`; for coordinator,
+analyst and critic roles select `--preset research-team`. These preserve explicit
+authentication and sandbox choices, provide a shared board/memory, and queue no
+initial tasks. They do not enable automatic wakeups, spawning or dynamic-team
+authority. Use the research runner for a bounded experimental study and its
+preregistration/analysis rather than treating a role preset as a research design.
 
 ## Existing sessions
 
@@ -313,16 +378,29 @@ agentmux send codex "Please read the proposed API on the team board."
 agentmux board "Proposal: keep parsing and persistence separate."
 agentmux inbox
 agentmux reply TASK_OR_MESSAGE_ID "Please also check error handling."
+agentmux reply MESSAGE_ID "A note, no task." --mode note
+agentmux reply BOARD_MESSAGE_ID "For this board." --board BOARD_NAMESPACE
+agentmux reply BOARD_MESSAGE_ID "Private follow-up." --to codex --mode note
 ```
 
-`send`/`reply` choose a note for interactive agents and an instruction task for
-managed workers, printing the record ID. They never automatically retry writes;
+`send`/`reply` default to `--mode auto`: a note for interactive agents and an
+instruction task for managed workers. Choose `--mode note` for information or
+`--mode instruction` for a task explicitly. An instruction to a native terminal
+is broker work the agent must read; it never injects a native user turn. Both
+forms print the record ID. They never automatically retry writes;
 a transport failure can leave delivery uncertain. The lower-level `managed call`
 API exposes explicit request IDs for durable retries.
 
-`reply` accepts direct messages and tasks. A shared board post has several possible
-audiences, so reply to it with an explicit `board "Follow-up" --board NAMESPACE`
-in the same workspace, or use `send AGENT_ID "Follow-up"` for a private note.
+`reply` accepts direct messages and tasks. Messages and instruction tasks retain
+broker-validated `reply_to` and a stable `thread_id` instead of changing the text
+to simulate ancestry. A shared board post has several possible audiences, so
+choose `reply ID "Follow-up" --board NAMESPACE` to retain the same board, or
+`reply ID "Follow-up" --to AGENT_ID` for a private follow-up to an existing reader.
+Reply references cannot widen a private conversation or move a thread to a
+different board. Every direct recipient must already be able to read the
+referenced message; replies grant no history access. To share something with a
+new audience, compose a new message explicitly rather than attaching a private
+reference. Board replies are informational notes, never instruction tasks.
 Empty replies are rejected before creating any message or task.
 
 ## Web app

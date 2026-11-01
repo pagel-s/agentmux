@@ -386,7 +386,7 @@ func TestReportRejectsDuplicateCellsAndTasksButKeepsLegacyReads(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(loaded, report) {
 		t.Fatal("legacy read changed historical evidence")
 	}
-	if a := Analyze(loaded); len(a.Conditions) != 1 || a.Conditions[0].SocialWelfare.Mean != 3 || len(a.EvidenceWarnings) != 1 {
+	if a := Analyze(loaded); len(a.Conditions) != 1 || a.Conditions[0].SocialWelfare.Mean != 3 || !strings.Contains(strings.Join(a.EvidenceWarnings, " "), "Legacy evidence coverage") {
 		t.Fatal("legacy scores changed or lower coverage not disclosed")
 	}
 	report.Results = append(report.Results, report.Results[0])

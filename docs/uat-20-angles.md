@@ -125,10 +125,12 @@ observations, not deployment guarantees. The original CLI's sixth request hit
 the reviewer's four-second timeout; its final outcome was unknown, was never
 retried and cannot be inferred from a later fresh reproduction.
 
-## Capability proposals and remaining design limits
+## Historical capability proposals and design limits
 
-These are not implemented by the fixes above and should not be presented as
-completed features:
+The list below records what remained immediately after the original 20-angle
+pass. It is preserved as review history. The subsequent [gap closure
+record](uat-gap-closure.md) maps each category to its implementation, tests and
+current limits; this historical list is not the current feature status.
 
 - **Everyday session continuity:** deliberately relaunch an exited native
   definition under the same stable ID without restarting healthy peers, with

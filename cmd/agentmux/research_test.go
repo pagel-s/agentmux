@@ -134,3 +134,23 @@ func TestResearchCSVRetainsInterpretationAndExclusionsWithoutEstimates(t *testin
 		t.Fatalf("analysis metadata lost: %+v %v", decoded, err)
 	}
 }
+
+func TestResearchCSVExportsSelectedPrimaryOutcomeAndMetricSpecificN(t *testing.T) {
+	a := research.Analysis{Research: "selected", ManifestHash: "hash", PrimaryOutcome: "teams_with_multiple_members", Conditions: []research.ConditionSummary{{Condition: "c", CompletedRuns: 4, SocialWelfare: research.Estimate{N: 4, Mean: -20}, PrimaryEstimate: research.Estimate{N: 3, Mean: 2}}}, PairedContrasts: []research.Contrast{{From: "a", To: "c", PrimaryOutcome: "teams_with_multiple_members", PrimaryDifference: research.Estimate{N: 2, Mean: 1}}}}
+	path := filepath.Join(t.TempDir(), "selected.csv")
+	if err := writeResearchCSV(path, a); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := csv.NewReader(bytes.NewReader(data)).ReadAll()
+	if err != nil || len(rows) != 2 || len(rows[0]) != 17 || rows[0][14] != "primary_outcome" || rows[1][2] != "-20" || rows[1][14] != a.PrimaryOutcome || rows[1][15] != "2" || rows[1][16] != "3" {
+		t.Fatalf("selected metric lost or confused with legacy welfare: %v %v", rows, err)
+	}
+	var portable research.Analysis
+	if err := json.Unmarshal([]byte(rows[1][13]), &portable); err != nil || portable.PairedContrasts[0].PrimaryDifference.N != 2 || portable.PairedContrasts[0].PrimaryOutcome != a.PrimaryOutcome {
+		t.Fatal("primary contrasts lost in portable metadata")
+	}
+}

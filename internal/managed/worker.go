@@ -27,6 +27,7 @@ type WorkerOptions struct {
 	Executable     string
 	Once           bool
 	DefinitionFile string
+	NativeResume   string
 }
 
 type workerCaller interface {
@@ -47,6 +48,9 @@ func RunWorker(ctx context.Context, opts WorkerOptions) error {
 	}
 	if agent.Interaction == "interactive" {
 		return runInteractiveAgent(ctx, opts, cfg, agent, dir, deadline)
+	}
+	if opts.NativeResume != "" {
+		return errors.New("native resume is only available for interactive sessions")
 	}
 	unlock, err := acquireLock(filepath.Join(dir, "worker-"+opts.AgentID+".lock"))
 	if err != nil {
@@ -257,8 +261,9 @@ func RunWorker(ctx context.Context, opts WorkerOptions) error {
 			return workerProblem(claimOperation, problem)
 		}
 		var claimed struct {
-			Task  *Task  `json:"task"`
-			Lease string `json:"lease"`
+			Task  *Task   `json:"task"`
+			Lease string  `json:"lease"`
+			Role  *string `json:"role"`
 		}
 		if err := json.Unmarshal(raw, &claimed); err != nil {
 			return errors.New("invalid task claim response; execution was not started")
@@ -300,7 +305,11 @@ func RunWorker(ctx context.Context, opts WorkerOptions) error {
 				return err
 			}
 		}
-		req.Prompt = workerPrompt(opts.AgentID, agent.Role, cfg, *claimed.Task)
+		role := agent.Role
+		if claimed.Role != nil {
+			role = *claimed.Role
+		}
+		req.Prompt = workerPrompt(opts.AgentID, role, cfg, *claimed.Task)
 		boundaries, boundaryProblem := client.Call(ctx, Request{Operation: "boundaries.get", Args: json.RawMessage(`{}`)})
 		if boundaryProblem != nil {
 			closeCapsule()
@@ -726,12 +735,12 @@ func workerPrompt(agentID, role string, cfg managedconfig.Config, task Task) str
 	prompt.WriteString("Use the authenticated CLI bridge for coordination. Its executable is in AGENTMUX_CLI; credentials and socket are already set in your environment. Never print credentials.\n")
 	prompt.WriteString("Send operation JSON on stdin, for example:\n\"$AGENTMUX_CLI\" managed call message.list --stdin <<'JSON'\n{}\nJSON\n")
 	prompt.WriteString("Other operations include board.post, message.send, ping.send, instruct, memory.get, memory.list, and memory.put, subject to your grants. Your personal memory namespace is private.\n")
-	prompt.WriteString("Use identity to discover your current accessible boards, spawn templates and team-creation permission.\n")
+	prompt.WriteString("Use identity and boundaries.get {} to discover your current effective grants; stored roles or old context do not override current membership, isolation or ancestry. capacity.get {} reports remaining lifetime spawn/team/depth slots, your current admission limits and inherited denial reasons; budget.status {} shows permanently reserved usage. Read these before planning recruitment or another turn; snapshots do not reserve capacity.\n")
 	if cfg.Spawn.Enabled {
 		prompt.WriteString("If identity grants a spawn template, agent.spawn accepts {template, capabilities:{boards_read,boards_write,memory_read,memory_write,targets:[{to,actions}],spawn_templates,create_teams}}. Select only approved template names. Children start with no ambient permissions; requested capabilities must be a subset of yours. The returned agent.id can receive instruct from you. agent.stop {id} revokes your descendants. All workers share the session deadline, concurrency and storage budgets.\n")
 	}
 	if cfg.Teams.Enabled {
-		prompt.WriteString("Team operations: team.create {name}; team.list {}; team.invite {id,agent,version}; team.join {id,version}; team.leave {id,version}; team.dissolve {id,version}. Invitation requires a message.send relationship and joining requires consent. Every mutation needs the latest team version. Active members can use the returned board and memory names; membership adds no instruction authority.\n")
+		prompt.WriteString("Team operations: team.create {name,description}; team.list {}; team.invite {id,agent,version}; team.join {id,version}; team.leave {id,version}; team.remove {id,agent,version}; team.update {id,version,name,description}; team.transfer {id,agent,version}; team.accept-owner {id,version}; team.move {id,version,to_id,to_version}; team.dissolve {id,version}. Invitation requires a message.send relationship and joining requires your consent. Ownership transfer is a proposal: only the proposed owner can accept, subject to current delegated authority. A move is your own non-owner membership decision, requires a pending destination invitation and both current versions, and atomically leaves the source. Every mutation needs the latest team version; never silently retry a conflict. team.list self_access explains your own current denial, including a blocking ancestor. Active members can use the returned board and memory names; membership adds no instruction authority.\n")
 	}
 	var boards []string
 	for id := range cfg.Boards {

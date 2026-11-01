@@ -215,8 +215,8 @@ func TestWorkspaceCollaborationValidationIsAtomicAndCommandsAreExplicit(t *testi
 	}
 	args := map[string]any{"version": 1, "kind": "collaboration", "agents": []string{"alice", "bob"}, "enabled": true, "commands": false}
 	call(t, s, "", "control.update", args)
-	// Even a pre-existing command grant is removed by the notes-only preset.
-	expectFault(t, s, "alice", "instruct", "forbidden", map[string]any{"to": []string{"bob"}, "text": "notes only"})
+	// Group presets contribute grants without overwriting configured grants.
+	call(t, s, "alice", "instruct", map[string]any{"to": []string{"bob"}, "text": "configured authority remains"})
 	expectFault(t, s, "bob", "instruct", "forbidden", map[string]any{"to": []string{"alice"}, "text": "notes only"})
 	args["version"], args["commands"] = 2, true
 	call(t, s, "", "control.update", args)
@@ -225,10 +225,11 @@ func TestWorkspaceCollaborationValidationIsAtomicAndCommandsAreExplicit(t *testi
 	}
 	args["version"], args["enabled"] = 3, false
 	call(t, s, "", "control.update", args)
-	for from, to := range map[string]string{"alice": "bob", "bob": "alice"} {
-		for _, op := range []string{"message.send", "ping.send", "instruct"} {
-			expectFault(t, s, from, op, "forbidden", map[string]any{"to": []string{to}, "text": "collaboration disabled"})
-		}
+	for _, op := range []string{"message.send", "ping.send", "instruct"} {
+		call(t, s, "alice", op, map[string]any{"to": []string{"bob"}, "text": "configured authority remains"})
+	}
+	for _, op := range []string{"message.send", "ping.send", "instruct"} {
+		expectFault(t, s, "bob", op, "forbidden", map[string]any{"to": []string{"alice"}, "text": "group contribution disabled"})
 	}
 }
 

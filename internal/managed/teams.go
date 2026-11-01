@@ -10,7 +10,9 @@ import (
 type Team struct {
 	ID           string                      `json:"id"`
 	Name         string                      `json:"name"`
+	Description  string                      `json:"description,omitempty"`
 	Owner        string                      `json:"owner"`
+	PendingOwner string                      `json:"pending_owner,omitempty"`
 	Members      []string                    `json:"members"`
 	Invited      []string                    `json:"invited"`
 	State        string                      `json:"state"`
@@ -19,6 +21,7 @@ type Team struct {
 	Memory       string                      `json:"memory"`
 	CreatedAt    string                      `json:"created_at"`
 	MemberAccess map[string]TeamMemberAccess `json:"member_access,omitempty"`
+	SelfAccess   *TeamMemberAccess           `json:"self_access,omitempty"`
 }
 
 // TeamMemberAccess describes current authorization separately from recorded
@@ -103,12 +106,15 @@ func (s *Store) teamAccess(ctx context.Context, q queryer, id, name string, memo
 }
 func (s *Store) teams(ctx context.Context, q queryer, a actor, r Request) (any, *Fault) {
 	var in struct {
-		ID      string `json:"id"`
-		Name    string `json:"name"`
-		Agent   string `json:"agent"`
-		Version int    `json:"version"`
-		After   string `json:"after"`
-		Limit   int    `json:"limit"`
+		ID          string `json:"id"`
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		Agent       string `json:"agent"`
+		ToID        string `json:"to_id"`
+		ToVersion   int    `json:"to_version"`
+		Version     int    `json:"version"`
+		After       string `json:"after"`
+		Limit       int    `json:"limit"`
 	}
 	if err := strictJSON(r.Args, &in); err != nil {
 		return nil, invalid(err)
@@ -153,6 +159,15 @@ func (s *Store) teams(ctx context.Context, q queryer, a actor, r Request) (any, 
 						}
 						t.MemberAccess[id] = access
 					}
+				} else {
+					access := s.teamMemberAccess(ctx, q, t, a.ID)
+					if access.Allowed && independent(ctx, q, a.ID) {
+						access = TeamMemberAccess{Reason: "agent is independent", BlockedBy: a.ID}
+					}
+					if contains(t.Invited, a.ID) {
+						access = TeamMemberAccess{Reason: "invitation awaiting your consent", BlockedBy: a.ID}
+					}
+					t.SelfAccess = &access
 				}
 				raw, _ := json.Marshal(t)
 				if size+len(raw) > maxWireBytes/2 {
@@ -172,8 +187,8 @@ func (s *Store) teams(ctx context.Context, q queryer, a actor, r Request) (any, 
 		if !a.owner() && !s.canCreateTeams(ctx, q, a.ID) {
 			return nil, forbidden()
 		}
-		if strings.TrimSpace(in.Name) == "" || len(in.Name) > 128 {
-			return nil, fault("invalid", "team name must contain 1–128 bytes")
+		if strings.TrimSpace(in.Name) == "" || len(in.Name) > 128 || len(in.Description) > 4096 {
+			return nil, fault("invalid", "team name must contain 1–128 bytes and description at most 4096 bytes")
 		}
 		n, err := count(ctx, q, "team")
 		if err != nil {
@@ -182,7 +197,7 @@ func (s *Store) teams(ctx context.Context, q queryer, a actor, r Request) (any, 
 		if n >= s.cfg.Limits.MaxTeams {
 			return nil, fault("limit", "lifetime team limit reached")
 		}
-		t := teamRecord{Team: Team{ID: randomID("team"), Name: in.Name, Owner: a.ID, Members: []string{}, Invited: []string{}, State: "active", Version: 1, CreatedAt: now()}, JoinedAfter: map[string]int64{}}
+		t := teamRecord{Team: Team{ID: randomID("team"), Name: in.Name, Description: in.Description, Owner: a.ID, Members: []string{}, Invited: []string{}, State: "active", Version: 1, CreatedAt: now()}, JoinedAfter: map[string]int64{}}
 		t.Board = "board_" + t.ID
 		t.Memory = "memory_" + t.ID
 		if !a.owner() {
@@ -220,7 +235,41 @@ func (s *Store) teams(ctx context.Context, q queryer, a actor, r Request) (any, 
 	}
 	priorMembers := append([]string{}, t.Members...)
 	priorInvited := append([]string{}, t.Invited...)
+	priorOwner := t.Owner
 	switch r.Operation {
+	case "team.update":
+		if !manager {
+			return nil, forbidden()
+		}
+		if strings.TrimSpace(in.Name) == "" || len(in.Name) > 128 || len(in.Description) > 4096 {
+			return nil, fault("invalid", "team name must contain 1–128 bytes and description at most 4096 bytes")
+		}
+		t.Name, t.Description = in.Name, in.Description
+	case "team.transfer":
+		if !manager {
+			return nil, forbidden()
+		}
+		if in.Agent == t.Owner {
+			return nil, fault("invalid", "agent already owns this team")
+		}
+		if in.Agent != ownerID && (!contains(t.Members, in.Agent) || !s.knownAgent(ctx, q, in.Agent) || !s.teamMemberAccess(ctx, q, t.Team, in.Agent).Allowed || independent(ctx, q, in.Agent)) {
+			return nil, fault("forbidden", "new owner must be an active member with current access")
+		}
+		t.PendingOwner = in.Agent
+	case "team.accept-owner":
+		if t.PendingOwner == "" || t.PendingOwner != a.ID {
+			return nil, forbidden()
+		}
+		if !a.owner() && (!contains(t.Members, a.ID) || !s.canJoinTeams(ctx, q, a.ID) || !s.teamMemberAccess(ctx, q, t.Team, a.ID).Allowed) {
+			return nil, forbidden()
+		}
+		t.Owner = a.ID
+		if !a.owner() && !s.teamMemberAccess(ctx, q, t.Team, a.ID).Allowed {
+			return nil, fault("forbidden", "ownership would exceed delegated team authority")
+		}
+		t.PendingOwner = ""
+	case "team.move":
+		return s.moveTeamMembership(ctx, q, a, t, in.Version, in.ToID, in.ToVersion)
 	case "team.invite":
 		if !manager {
 			return nil, forbidden()
@@ -276,6 +325,9 @@ func (s *Store) teams(ctx context.Context, q queryer, a actor, r Request) (any, 
 		}
 		t.Members = without(t.Members, in.Agent)
 		t.Invited = without(t.Invited, in.Agent)
+		if t.PendingOwner == in.Agent {
+			t.PendingOwner = ""
+		}
 	case "team.leave":
 		if a.owner() || t.Owner == a.ID {
 			return nil, fault("invalid", "team owner must dissolve the team instead")
@@ -285,12 +337,16 @@ func (s *Store) teams(ctx context.Context, q queryer, a actor, r Request) (any, 
 		}
 		t.Members = without(t.Members, a.ID)
 		t.Invited = without(t.Invited, a.ID)
+		if t.PendingOwner == a.ID {
+			t.PendingOwner = ""
+		}
 	case "team.dissolve":
 		if !manager {
 			return nil, forbidden()
 		}
 		t.State = "dissolved"
 		t.Invited = []string{}
+		t.PendingOwner = ""
 	default:
 		return nil, fault("unsupported", "unsupported team operation")
 	}
@@ -305,7 +361,7 @@ func (s *Store) teams(ctx context.Context, q queryer, a actor, r Request) (any, 
 	if r.Operation == "team.join" || r.Operation == "team.leave" {
 		subject = a.ID
 	}
-	if err := event(ctx, q, a, r.Operation, t.ID, map[string]any{"version": t.Version, "name": t.Name, "subject": subject, "before_members": priorMembers, "before_invited": priorInvited, "members": t.Members, "invited": t.Invited, "state": t.State}); err != nil {
+	if err := event(ctx, q, a, r.Operation, t.ID, map[string]any{"version": t.Version, "name": t.Name, "description": t.Description, "before_owner": priorOwner, "owner": t.Owner, "pending_owner": t.PendingOwner, "subject": subject, "before_members": priorMembers, "before_invited": priorInvited, "members": t.Members, "invited": t.Invited, "state": t.State}); err != nil {
 		return nil, internal(err)
 	}
 	return map[string]any{"team": t.Team}, nil

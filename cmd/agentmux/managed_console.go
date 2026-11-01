@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"agentmux/internal/managed"
+	"agentmux/internal/managedconfig"
 	"agentmux/internal/managedlaunch"
 	"agentmux/internal/sessioninventory"
 	tea "github.com/charmbracelet/bubbletea"
@@ -22,6 +23,7 @@ import (
 
 type consoleTick time.Time
 type consoleData struct {
+	taskPage     *consoleTaskPage
 	observed     []sessioninventory.Session
 	agents       []managed.AgentInfo
 	boundaries   managed.Boundaries
@@ -32,6 +34,9 @@ type consoleData struct {
 	research     *managed.ResearchStatus
 	runtimeErr   error
 	teamsErr     error
+	capacity     managed.Capacity
+	budget       managedconfig.AgentBudget
+	capacityErr  error
 	researchErr  error
 	headless     bool
 	activity     managedActivitySnapshot
@@ -49,6 +54,11 @@ type consoleAction struct {
 	draft              *consoleDraft
 }
 type console struct {
+	workspaceRequest                       uint64
+	workspacePicker                        *consoleWorkspacePicker
+	taskQuery, taskAfter, taskCursor       string
+	taskBack                               []string
+	taskMore                               bool
 	state                                  string
 	client                                 *managed.Client
 	agents                                 []managed.AgentInfo
@@ -67,6 +77,7 @@ type console struct {
 	messageIndex                           int
 	boardFilter                            int
 	composeTarget, replyID                 string
+	composeMode                            string
 	textCursor                             int
 	textColumn                             int
 	textColumnValid                        bool
@@ -84,6 +95,7 @@ type console struct {
 	newNative                              consoleNativeDraft
 	findIndex                              int
 	labelVersion                           int
+	roleVersion                            int
 	labelDrafts                            map[string]string
 	teamIndex, eventIndex, teamMemberIndex int
 	teamAction                             *consoleTeamAction
@@ -91,7 +103,10 @@ type console struct {
 	failedDraft                            *consoleDraft
 	offline                                bool
 }
-type consoleNativeDraft struct{ id, title, provider, project, role string }
+type consoleNativeDraft struct {
+	id, title, provider, project, role string
+	nativeOnly                         bool
+}
 type consoleMemory struct {
 	agent     string
 	request   uint64
@@ -141,10 +156,13 @@ func (m console) selectedID() string {
 func (m console) Init() tea.Cmd { return tea.Batch(m.fetch, consoleTimer()) }
 
 func (m console) fetch() tea.Msg {
+	if m.tab == 4 {
+		return fetchWorkSnapshot(m.state, m.client, m.selectedID(), &consoleTaskPage{Query: m.taskQuery, After: m.taskAfter})
+	}
 	return fetchWorkSnapshot(m.state, m.client, m.selectedID())
 }
 
-func fetchWorkSnapshot(state string, client *managed.Client, selected string) consoleData {
+func fetchWorkSnapshot(state string, client *managed.Client, selected string, tasks ...*consoleTaskPage) consoleData {
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
 	d := consoleData{selected: selected}
@@ -212,6 +230,23 @@ func fetchWorkSnapshot(state string, client *managed.Client, selected string) co
 		}
 	}
 	if d.selected != "" && active {
+		if raw, err = workCall(ctx, client, "capacity.get", map[string]string{"agent": d.selected}); err != nil {
+			d.capacityErr = err
+		} else if err = json.Unmarshal(raw, &d.capacity); err != nil {
+			d.capacityErr = err
+		}
+		if raw, err = workCall(ctx, client, "budget.status", map[string]string{"agent": d.selected}); err != nil {
+			d.capacityErr = err
+		} else {
+			var budget struct {
+				Limit managedconfig.AgentBudget `json:"limit"`
+			}
+			if err = json.Unmarshal(raw, &budget); err != nil {
+				d.capacityErr = err
+			} else {
+				d.budget = budget.Limit
+			}
+		}
 		raw, err = workCall(ctx, client, "boundaries.get", map[string]string{"agent": d.selected})
 		if err != nil {
 			d.err = err
@@ -261,6 +296,28 @@ func fetchWorkSnapshot(state string, client *managed.Client, selected string) co
 	if err = json.Unmarshal(raw, &d.activity); err != nil {
 		d.err = err
 		return d
+	}
+	if len(tasks) > 0 && tasks[0] != nil {
+		page := *tasks[0]
+		raw, err = workCall(ctx, client, "task.list", map[string]any{"limit": 40, "order": "desc", "query": page.Query, "after": page.After})
+		if err == nil {
+			var result struct {
+				Tasks  []managed.Task `json:"tasks"`
+				Cursor string         `json:"cursor"`
+				More   bool           `json:"has_more"`
+			}
+			err = json.Unmarshal(raw, &result)
+			if err == nil {
+				d.activity.Tasks = result.Tasks
+				page.Cursor = result.Cursor
+				page.More = result.More
+				d.taskPage = &page
+			}
+		}
+		if err != nil {
+			d.err = err
+			return d
+		}
 	}
 	d.runtime, _ = managedlaunch.Snapshot(state)
 	for _, info := range d.agents {
@@ -333,8 +390,19 @@ type consoleAttach struct{ state, agent, controller string }
 
 func (m console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case consoleWorkspaceList:
+		if msg.request != m.workspaceRequest || m.composer != "" || m.reader != nil || m.teamAction != nil {
+			return m, nil
+		}
+		if msg.err != nil {
+			m.message = "Workspace inventory unavailable: " + activityText(msg.err.Error(), 160)
+		} else {
+			m.workspacePicker = &consoleWorkspacePicker{rows: msg.rows}
+		}
 	case consoleMemoryVersionReview:
 		m.receiveMemoryReview(msg)
+	case consoleRoleReview:
+		m.receiveRoleReview(msg)
 	case consoleMemory:
 		if msg.request != m.memoryRequest || msg.agent != m.selectedID() || m.tab != 3 || !m.memoryLoading {
 			return m, nil
@@ -427,6 +495,14 @@ func (m console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if m.task < len(m.data.activity.Tasks) {
 				taskID = m.data.activity.Tasks[m.task].ID
+			}
+			if m.tab == 4 {
+				if msg.taskPage == nil || msg.taskPage.Query != m.taskQuery || msg.taskPage.After != m.taskAfter {
+					msg.activity.Tasks = m.data.activity.Tasks
+				} else {
+					m.taskCursor = msg.taskPage.Cursor
+					m.taskMore = msg.taskPage.More
+				}
 			}
 			m.data = msg
 			m.teamIndex = 0
@@ -608,6 +684,9 @@ func (m console) addNative(draft consoleNativeDraft) tea.Cmd {
 	return func() tea.Msg {
 		var output, diagnostics bytes.Buffer
 		args := []string{"--title", draft.title, "--harness", draft.provider, "--project", draft.project, "--role", draft.role, "--sandbox", "local", "--state", state}
+		if draft.nativeOnly {
+			args = append(args, "--native-only")
+		}
 		if draft.id != "" {
 			args = append([]string{draft.id}, args...)
 		}

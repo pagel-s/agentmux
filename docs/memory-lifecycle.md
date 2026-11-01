@@ -47,6 +47,17 @@ authorized namespace. Existing keys require `--replace`; conflict resolution is
 never implicit. Imports preserve remaining TTL, skip expired values, record an
 import source, and can resume safely after partial completion. They retain the
 destination writer's identity rather than impersonating the source author.
+Each imported entry now carries structured `sources` claims: `source_session`,
+`source_agent` (the exporter), `source_namespace`, `source_author` (the original
+entry's writer), `source_key`, `source_version`, the complete `archive_sha256`
+and the imported value's `sha256`. These remain available on the destination
+entry without the original archive. They are asserted source metadata, not an
+authenticated source identity or a grant of source-namespace access. Re-exporting
+the entry retains its source claims inside the archive; a subsequent import
+records that immediate archive's identities.
+An entry imported by an older version can be enriched by reimporting its original
+archive with `--replace`; enrichment still uses the destination's current CAS
+version rather than silently changing an existing entry.
 An archive checksum detects accidental content changes; it is not a signature
 establishing a trusted source. Protect archive files as private data.
 

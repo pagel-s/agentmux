@@ -20,6 +20,15 @@ type MemorySource struct {
 	ID     string `json:"id,omitempty"`
 	URI    string `json:"uri,omitempty"`
 	SHA256 string `json:"sha256,omitempty"`
+	// Imported identities are archive claims. Author on Memory remains the
+	// authenticated destination writer; these fields never authorize access.
+	SourceSession   string `json:"source_session,omitempty"`
+	SourceAgent     string `json:"source_agent,omitempty"`
+	SourceNamespace string `json:"source_namespace,omitempty"`
+	SourceAuthor    string `json:"source_author,omitempty"`
+	SourceKey       string `json:"source_key,omitempty"`
+	SourceVersion   int    `json:"source_version,omitempty"`
+	ArchiveSHA256   string `json:"archive_sha256,omitempty"`
 }
 type memoryInput struct {
 	Namespace      string         `json:"namespace"`
@@ -267,6 +276,9 @@ func (s *Store) validateMemoryMetadata(ctx context.Context, q queryer, a actor, 
 	for _, source := range in.Sources {
 		if len(source.SHA256) != 0 && (len(source.SHA256) != 64 || strings.Trim(source.SHA256, "0123456789abcdef") != "") {
 			return fault("invalid", "source sha256 must be lowercase hex")
+		}
+		if problem := validateImportedClaims(source); problem != nil {
+			return problem
 		}
 		switch source.Kind {
 		case "message":

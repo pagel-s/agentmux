@@ -51,7 +51,8 @@ func runWorkAddParsed(args []string, out, diagnostics io.Writer, resolvedID *str
 	id, flagArgs := workAddName(args)
 	flags := flag.NewFlagSet("add", flag.ContinueOnError)
 	flags.SetOutput(diagnostics)
-	provider := flags.String("harness", "claude", "native agent interface: claude, codex or pi")
+	provider := flags.String("harness", "claude", "native agent interface: claude, codex, pi or antigravity")
+	nativeOnly := flags.Bool("native-only", false, "launch without Agentmux prompts; native configuration and manual coordination remain available")
 	project := flags.String("project", ".", "project directory (may differ from other sessions)")
 	role := flags.String("role", "", "optional role context; native tools and customizations remain available")
 	title := flags.String("title", "", "optional display title; does not change agent instructions or stable ID")
@@ -83,8 +84,14 @@ func runWorkAddParsed(args []string, out, diagnostics io.Writer, resolvedID *str
 	if err != nil {
 		return fail(err)
 	}
-	if *provider != "claude" && *provider != "codex" && *provider != "pi" {
-		return fail(errors.New("choose claude, codex or pi; use managed configurations for other harnesses"))
+	if *provider != "claude" && *provider != "codex" && *provider != "pi" && *provider != "antigravity" {
+		return fail(errors.New("choose claude, codex, pi or antigravity"))
+	}
+	if *nativeOnly && *role != "" {
+		return fail(errors.New("--native-only cannot be combined with a role; no session was added"))
+	}
+	if *provider == "antigravity" && !*nativeOnly {
+		return fail(errors.New("native Antigravity currently requires --native-only; use the Pi bridge for injected coordination context"))
 	}
 	if id == "" {
 		id = newWorkAgentID(*provider)
@@ -113,6 +120,7 @@ func runWorkAddParsed(args []string, out, diagnostics io.Writer, resolvedID *str
 		return fail(err)
 	}
 	agent := managedsetup.Agent{ID: id, Harness: *provider, Role: *role, Interaction: "interactive", Workdir: directory, Model: *model, Auth: "native-local"}
+	agent.NativeOnly = *nativeOnly
 	if *isolation == "bubblewrap" {
 		agent.Auth = "file"
 		switch *provider {
@@ -153,6 +161,9 @@ func runWorkAddParsed(args []string, out, diagnostics io.Writer, resolvedID *str
 }
 
 func workCollaboration(ctx context.Context, client *managed.Client, ids []string, independent bool) (json.RawMessage, error) {
+	return workCollaborationWithPolicy(ctx, client, ids, independent, "")
+}
+func workCollaborationWithPolicy(ctx context.Context, client *managed.Client, ids []string, independent bool, legacyPolicy string) (json.RawMessage, error) {
 	raw, err := workCall(ctx, client, "control.get", map[string]any{})
 	if err != nil {
 		return nil, err
@@ -165,7 +176,7 @@ func workCollaboration(ctx context.Context, client *managed.Client, ids []string
 	if independent {
 		kind = "independent"
 	}
-	return workCall(ctx, client, "control.update", map[string]any{"version": control.Version, "kind": kind, "agents": ids, "enabled": !independent})
+	return workCall(ctx, client, "control.update", map[string]any{"version": control.Version, "kind": kind, "agents": ids, "enabled": !independent, "legacy_policy": legacyPolicy})
 }
 
 func workAgentOperation(operation string, o workOptions, client *managed.Client, out io.Writer) error {
@@ -210,7 +221,7 @@ func workAgentOperation(operation string, o workOptions, client *managed.Client,
 		if len(o.args) == 0 {
 			return errors.New("select agent names")
 		}
-		raw, err := workCollaboration(ctx, client, o.args, operation == "isolate")
+		raw, err := workCollaborationWithPolicy(ctx, client, o.args, operation == "isolate", o.legacyPolicy)
 		if err != nil {
 			return err
 		}
@@ -221,7 +232,7 @@ func workAgentOperation(operation string, o workOptions, client *managed.Client,
 		if operation == "isolate" {
 			fmt.Fprintf(out, "Disconnected %s from peer coordination and shared memory. Native terminals keep running; accepted tasks and previously read information remain.\n", strings.Join(o.args, ", "))
 		} else {
-			fmt.Fprintf(out, "Connected %s: notes/pings; commands remain disabled.\n", strings.Join(o.args, ", "))
+			fmt.Fprintf(out, "Connected %s: this group contributes notes and pings. Inspect effective instruction permissions in Connections; other explicit or configured grants may already allow them.\n", strings.Join(o.args, ", "))
 			if control.Group != nil {
 				fmt.Fprintf(out, "Group %s\nBoard %s\nMemory %s\n", control.Group.ID, control.Group.Board, control.Group.Memory)
 			}

@@ -155,7 +155,7 @@ func writeResearchCSV(path string, a research.Analysis) error {
 	}
 	defer file.Close()
 	w := csv.NewWriter(file)
-	if err := w.Write([]string{"condition", "completed_runs", "mean_total_social_welfare", "mean_funding_rate", "mean_credits_spent", "mean_invalid_actions", "mean_consented_teams", "research", "manifest_sha256", "intervened_runs", "interrupted_runs", "interpretation", "power_warning", "analysis_json"}); err != nil {
+	if err := w.Write([]string{"condition", "completed_runs", "mean_total_social_welfare", "mean_funding_rate", "mean_credits_spent", "mean_invalid_actions", "mean_consented_teams", "research", "manifest_sha256", "intervened_runs", "interrupted_runs", "interpretation", "power_warning", "analysis_json", "primary_outcome", "mean_primary_outcome", "n_primary_outcome"}); err != nil {
 		return err
 	}
 	// Keep all descriptive estimates, warnings and preregistration portable,
@@ -166,13 +166,20 @@ func writeResearchCSV(path string, a research.Analysis) error {
 	}
 	provenance := []string{a.Research, a.ManifestHash, strconv.Itoa(a.IntervenedRuns), strconv.Itoa(a.InterruptedRuns), a.Interpretation, a.PowerWarning, string(metadata)}
 	if len(a.Conditions) == 0 {
-		if err := w.Write(append(make([]string, 7), provenance...)); err != nil {
+		row := append(make([]string, 7), provenance...)
+		row = append(row, a.PrimaryOutcome, "", "")
+		if err := w.Write(row); err != nil {
 			return err
 		}
 	}
 	for _, c := range a.Conditions {
 		row := []string{c.Condition, strconv.Itoa(c.CompletedRuns), strconv.FormatFloat(c.SocialWelfare.Mean, 'g', -1, 64), strconv.FormatFloat(c.FundingRate.Mean, 'g', -1, 64), strconv.FormatFloat(c.Cost.Mean, 'g', -1, 64), strconv.FormatFloat(c.InvalidActions.Mean, 'g', -1, 64), strconv.FormatFloat(c.ConsentedTeams.Mean, 'g', -1, 64)}
 		row = append(row, provenance...)
+		primaryMean := ""
+		if c.PrimaryEstimate.N > 0 {
+			primaryMean = strconv.FormatFloat(c.PrimaryEstimate.Mean, 'g', -1, 64)
+		}
+		row = append(row, a.PrimaryOutcome, primaryMean, strconv.Itoa(c.PrimaryEstimate.N))
 		if err := w.Write(row); err != nil {
 			return err
 		}

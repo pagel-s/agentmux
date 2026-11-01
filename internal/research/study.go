@@ -52,8 +52,8 @@ type Preregistration struct {
 }
 
 func (p Preregistration) validate(m Manifest) error {
-	if strings.TrimSpace(p.Question) == "" || len(p.Question) > 4096 || len(p.Hypotheses) < 1 || len(p.Hypotheses) > 32 || len(p.FixedControls) < 1 || len(p.FixedControls) > 64 || p.MinimumBlocks < 2 || p.MinimumBlocks > 10000 || p.PrimaryOutcome != "total_social_welfare" || strings.TrimSpace(p.Analysis) == "" {
-		return errors.New("preregistration requires question, hypotheses, fixed_controls, primary_outcome:total_social_welfare, minimum_blocks>=2, and analysis")
+	if strings.TrimSpace(p.Question) == "" || len(p.Question) > 4096 || len(p.Hypotheses) < 1 || len(p.Hypotheses) > 32 || len(p.FixedControls) < 1 || len(p.FixedControls) > 64 || p.MinimumBlocks < 2 || p.MinimumBlocks > 10000 || !primaryOutcomes[p.PrimaryOutcome] || strings.TrimSpace(p.Analysis) == "" {
+		return errors.New("preregistration requires question, hypotheses, fixed_controls, a supported primary_outcome, minimum_blocks>=2, and analysis")
 	}
 	for _, list := range [][]string{p.Hypotheses, p.FixedControls} {
 		for _, text := range list {
@@ -62,14 +62,14 @@ func (p Preregistration) validate(m Manifest) error {
 			}
 		}
 	}
-	if len(p.Factors) < 1 || len(p.Factors) > 2 {
-		return errors.New("preregister one or two binary treatment factors")
+	if len(p.Factors) < 1 || len(p.Factors) > 6 {
+		return errors.New("preregister one to six binary treatment factors (at most 64 complete cells)")
 	}
 	product := 1
 	keys := []string{}
 	for name, levels := range p.Factors {
-		if name != "reward_mode" && name != "visibility" && name != "teams" && name != "team_rewards" {
-			return errors.New("supported factors: reward_mode, visibility, teams, team_rewards")
+		if name != "reward_mode" && name != "visibility" && name != "teams" && name != "team_rewards" && name != "role_assignment" && name != "personality" {
+			return errors.New("supported factors: reward_mode, visibility, teams, team_rewards, role_assignment, personality")
 		}
 		if len(levels) != 2 || levels[0] == levels[1] || levels[0] == "" || levels[1] == "" {
 			return errors.New("each preregistered factor requires two distinct ordered levels")
@@ -100,7 +100,7 @@ func (p Preregistration) validate(m Manifest) error {
 	}
 	first := m.Conditions[0]
 	for _, c := range m.Conditions[1:] {
-		for _, name := range []string{"reward_mode", "visibility", "teams", "team_rewards"} {
+		for _, name := range []string{"reward_mode", "visibility", "teams", "team_rewards", "role_assignment", "personality"} {
 			if _, declared := p.Factors[name]; !declared && factor(c, name) != factor(first, name) {
 				return errors.New("preregistered study changes an undeclared treatment factor")
 			}
@@ -121,6 +121,10 @@ func factor(c Condition, name string) string {
 		return strconv.FormatBool(c.Teams)
 	case "team_rewards":
 		return c.TeamRewards
+	case "role_assignment":
+		return c.RoleAssignment
+	case "personality":
+		return c.Personality
 	}
 	return ""
 }

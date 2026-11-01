@@ -82,6 +82,19 @@ func TestCrossRunTransferCASAndIdempotentResume(t *testing.T) {
 	if err != nil || !strings.Contains(string(raw), `"kind":"import"`) {
 		t.Fatal("import provenance missing")
 	}
+	var imported struct {
+		Entry managed.Memory `json:"entry"`
+	}
+	if err := json.Unmarshal(raw, &imported); err != nil {
+		t.Fatal(err)
+	}
+	if len(imported.Entry.Sources) != 1 {
+		t.Fatalf("source claims: %+v", imported.Entry.Sources)
+	}
+	claims := imported.Entry.Sources[0]
+	if claims.SourceSession != loaded.SourceSession || claims.SourceAgent != loaded.SourceAgent || claims.SourceNamespace != loaded.Namespace || claims.SourceAuthor != loaded.Entries[0].Author || claims.SourceKey != "design" || claims.SourceVersion != loaded.Entries[0].Version || claims.ArchiveSHA256 != loaded.SHA256 || imported.Entry.Author != "alice" {
+		t.Fatalf("imported claims incomplete or destination author changed: %+v", imported.Entry)
+	}
 }
 
 func TestArchiveTamperingAndUnsafePermissionsRejected(t *testing.T) {

@@ -1073,15 +1073,67 @@ h1 {
     font-size: 8px;
     padding: 4px;
   }
-  #interaction-graph {
-    min-width: 600px;
-  }
+  #interaction-graph { min-width: 0; }
   .inspector {
     right: 10px;
     width: calc(100% - 20px);
     top: 65px;
     max-height: calc(100% - 75px);
   }
+}
+
+.history-filters { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+.history-filters input { flex:1; min-width:180px; }
+.history-filters select { max-width:260px; }
+.thread-context { color:var(--muted); font:11px var(--mono); overflow-wrap:anywhere; }
+.graph-toolbar { flex-wrap:wrap; gap:8px; }
+.graph-viewport-controls { display:flex; align-items:center; gap:4px; margin-left:auto; }
+.graph-viewport-controls span { min-width:40px; text-align:center; color:var(--muted); font:11px var(--mono); }
+.graph-viewport-controls button { min-width:32px; min-height:30px; }
+.graph-canvas { overflow:hidden; min-height:240px; }
+#interaction-graph { min-height:240px; outline-offset:-3px; }
+.workspace-row { display:grid; grid-template-columns:minmax(0,1fr) minmax(200px,1fr); gap:14px; border-bottom:1px solid var(--line); padding:14px 0; }
+.workspace-row strong,.workspace-row small,.workspace-row code { display:block; overflow-wrap:anywhere; }
+.workspace-row small { font-size:11px; color:var(--muted); margin:5px 0; }
+.workspace-row code { font:11px var(--mono); color:var(--muted); }
+.workspace-commands code { margin:8px 0; }
+.capacity-panel { font-size:12px; line-height:1.6; margin-bottom:22px; }
+#relaunch-review label { display:flex; gap:10px; align-items:center; }
+#relaunch-review button { margin-right:8px; }
+.team-heading h3 { overflow-wrap:anywhere; }
+.copy-id { font:11px var(--mono); color:var(--muted); }
+.team-id { font-size:11px; }
+.permission-source { overflow-wrap:anywhere; }
+.role-editor,.resource-editor { border-top:1px solid var(--line); padding:12px 0; margin-bottom:18px; }
+.role-editor summary,.resource-editor summary,.team-editor summary { color:var(--accent); cursor:pointer; font-size:12px; }
+#role-form label,#role-form textarea { display:block; width:100%; margin:8px 0; }
+#role-current { white-space:pre-wrap; max-height:200px; overflow:auto; }
+.resource-form { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.resource-form label { font-size:11px; color:var(--muted); }
+.resource-form input { display:block; width:100%; margin-top:4px; }
+.resource-form label:last-of-type { grid-column:1/-1; }
+.native-only-option { display:flex; align-items:center; gap:7px; width:100%; font-size:12px; }
+.session-form .native-only-option input { flex:none; width:auto; min-width:0; }
+.team-editor .team-actions { flex-wrap:wrap; margin-top:10px; }
+.team-editor input { min-width:140px; flex:1; }
+.legacy-group-policy { border:1px solid var(--line); padding:12px; margin:12px 0; }
+.legacy-group-policy label { display:flex; flex-wrap:wrap; gap:8px; align-items:center; color:var(--accent); }
+.legacy-group-policy select { width:100%; max-width:440px; }
+.legacy-edge-list { max-height:190px; overflow:auto; padding-left:20px; font:11px/1.8 var(--mono); overflow-wrap:anywhere; }
+.memory-metadata { border-top:1px solid var(--line); padding:12px 0; margin-top:12px; font-size:12px; overflow-wrap:anywhere; }
+.memory-metadata h3 { font-size:12px; font-weight:550; }
+.memory-metadata code { display:block; color:var(--muted); font-size:11px; }
+.memory-source-claims summary { color:var(--accent); cursor:pointer; }
+.memory-source-claims pre { white-space:pre-wrap; font-size:11px; max-height:320px; overflow:auto; }
+@media(max-width:650px) {
+  .workspace-row { grid-template-columns:1fr; }
+  .history-filters input,.history-filters select { width:100%; max-width:none; }
+  .graph-toolbar { padding:8px; }
+  .graph-viewport-controls { margin-left:0; }
+  .graph-toolbar > span { display:none; }
+  .composer-top { flex-wrap:wrap; }
+  .composer-top select { margin-left:0; max-width:100%; font-size:11px; }
+  .resource-form { grid-template-columns:1fr; }
 }
 
 .session-form {

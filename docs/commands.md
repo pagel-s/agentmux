@@ -20,19 +20,22 @@ default workspace `work` and opens its workbench.
 | `agentmux web --open` | Open the local owner app |
 | `agentmux add --harness claude --project DIR --title "Task"` | Start another native session; copy its printed stable ID |
 | `agentmux sessions` | List registered sessions and separately observed external terminals |
+| `agentmux workspaces [--register DIR]` | Find named and remembered custom workspaces; register an older custom location |
+| `agentmux relaunch AGENT_ID [--resume ID\|last\|picker]` | Relaunch one exited native session, retaining its stable ID and healthy peers |
 | `agentmux connect OBSERVED_ID --title "Task"` | Prepare a helper for an existing external session; paste the printed setup into its original terminal |
 | `agentmux label AGENT_ID "Task"` | Rename its display title while keeping its ID and conversation |
+| `agentmux role AGENT_ID "Role"` | Change the owner role with CAS; managed workers use it at their next claim, native agents receive an inbox notice |
 | `agentmux collaborate AGENT_ID OTHER_ID` | Give those sessions a dedicated board/memory group and allow notes/pings |
-| `agentmux send AGENT_ID "Message"` | Queue a native inbox note, or a managed worker instruction task |
+| `agentmux send AGENT_ID "Message" [--mode note\|instruction\|auto]` | Choose an informational inbox note or an instruction task; auto follows the agent's interaction mode |
 | `agentmux inbox` | Inspect recent coordination and task activity as the owner |
 | `agentmux board "Note" --group GROUP_ID` | Post to a particular collaboration group's board |
-| `agentmux reply TASK_OR_MESSAGE_ID "Follow-up"` | Follow up to the task recipient or direct-message sender; shared board posts require an explicit destination |
+| `agentmux reply TASK_OR_MESSAGE_ID "Follow-up" [--mode note\|instruction]` | Follow up with broker-validated structured ancestry; shared board posts require `--board NAMESPACE` or `--to AGENT_ID` |
 | `agentmux isolate AGENT_ID` | Revoke its peer coordination and memberships across groups; native input stays open |
 | `agentmux remove AGENT_ID` | Close an owned terminal or disconnect an external bridge; retain saved history |
 | `agentmux down` | Stop the workspace's owned processes while keeping saved data |
 
 Replace uppercase placeholders with actual paths or IDs. `DIR` must already
-exist. `--harness` chooses the native CLI (`claude`, `codex`, or `pi`);
+exist. `--harness` chooses the native CLI (`claude`, `codex`, `pi`, or native-only `antigravity`);
 `--title` is a display label and `--role` supplies optional agent instructions.
 Session titles can repeat; commands address the stable ID shown under the title.
 An observed terminal must be connected before its registered ID can be used for

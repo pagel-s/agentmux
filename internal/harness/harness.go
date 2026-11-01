@@ -50,15 +50,18 @@ type SessionDir struct{ Source, Target string }
 // credentials must be explicitly selected. Wrap applies the caller's sandbox
 // after private endpoint files have been prepared, immediately before exec.
 type Request struct {
-	Harness   string
-	Model     string
-	Prompt    string
-	Workdir   string
-	BaseURL   string
-	APIKeyEnv string
-	Command   []string
-	Env       map[string]string
-	Wrap      func(Spec) (Spec, error)
+	// NativeResume is an explicit owner-selected native conversation ID, last,
+	// or picker. It is only used by BuildInteractive; no history is guessed.
+	NativeResume string
+	Harness      string
+	Model        string
+	Prompt       string
+	Workdir      string
+	BaseURL      string
+	APIKeyEnv    string
+	Command      []string
+	Env          map[string]string
+	Wrap         func(Spec) (Spec, error)
 	// ExternalSandbox is an explicit owner choice for Codex commands to rely
 	// on the caller's outer isolation boundary. It requires Wrap and is never
 	// automatically selected after a native sandbox failure.
@@ -171,9 +174,6 @@ func Build(req Request) (Spec, error) {
 			overrides["ANTHROPIC_API_KEY"] = credential
 		}
 	case "codex":
-		if req.BaseURL != "" {
-			return Spec{}, errors.New("codex base_url override is not supported by this adapter; use Pi for an OpenAI-compatible endpoint")
-		}
 		spec.Binary = "codex"
 		spec.Args = []string{"exec", "--json", "--color", "never", "--sandbox", "workspace-write"}
 		if req.ExternalSandbox {
@@ -182,8 +182,13 @@ func Build(req Request) (Spec, error) {
 			spec.Args[len(spec.Args)-1] = "danger-full-access"
 		}
 		if req.APIKeyEnv != "" {
-			overrides["OPENAI_API_KEY"] = credential
+			if req.BaseURL == "" {
+				overrides["OPENAI_API_KEY"] = credential
+			} else {
+				overrides["AGENTMUX_CODEX_API_KEY"] = credential
+			}
 		}
+		spec.Args = codexEndpointArgs(req, spec.Args)
 	case "antigravity":
 		if req.BaseURL != "" || req.APIKeyEnv != "" {
 			return Spec{}, errors.New("antigravity endpoint and api_key_env overrides are not supported; use its configured local authentication or Pi for a custom endpoint")

@@ -101,9 +101,18 @@ func (s *Store) turnBudgetAllowance(ctx context.Context, q queryer, id string) (
 	if err != nil {
 		return BudgetCharge{}, internal(err)
 	}
+	sessionBudget, overrides, _, err := s.effectiveBudgets(ctx, q)
+	if err != nil {
+		return BudgetCharge{}, internal(err)
+	}
+	for i := range lineage {
+		if value, ok := overrides[lineage[i].ID]; ok {
+			lineage[i].Config.Budget = value
+		}
+	}
 	b := lineage[0].Config.Budget
 	extra := BudgetCharge{Tokens: b.MaxTurnTokens, CostMicrousd: b.MaxTurnCostMicrousd, Turns: 1}
-	needsTokens, needsCost := s.cfg.Budget.MaxTokens > 0, s.cfg.Budget.MaxCostMicrousd > 0
+	needsTokens, needsCost := sessionBudget.MaxTokens > 0, sessionBudget.MaxCostMicrousd > 0
 	for _, a := range lineage {
 		needsTokens = needsTokens || a.Config.Budget.MaxSubtreeTokens > 0
 		needsCost = needsCost || a.Config.Budget.MaxSubtreeCostMicrousd > 0
@@ -118,7 +127,7 @@ func (s *Store) turnBudgetAllowance(ctx context.Context, q queryer, id string) (
 	if err != nil {
 		return BudgetCharge{}, internal(err)
 	}
-	if !withinBudget(session.Tokens, extra.Tokens, s.cfg.Budget.MaxTokens) || !withinBudget(session.CostMicrousd, extra.CostMicrousd, s.cfg.Budget.MaxCostMicrousd) {
+	if !withinBudget(session.Tokens, extra.Tokens, sessionBudget.MaxTokens) || !withinBudget(session.CostMicrousd, extra.CostMicrousd, sessionBudget.MaxCostMicrousd) {
 		return BudgetCharge{}, fault("limit", "session admission budget exhausted")
 	}
 	for _, a := range lineage {
@@ -174,10 +183,14 @@ func (s *Store) budgetStatus(ctx context.Context, q queryer, a actor, raw json.R
 	if err != nil {
 		return nil, internal(err)
 	}
-	result := map[string]any{"enforcement": "reservation", "provider_hard_cap": false, "note": "Every attempt permanently charges its full declared allowance; provider usage observations do not establish a hard token or billing cap."}
+	sessionBudget, overrides, version, err := s.effectiveBudgets(ctx, q)
+	if err != nil {
+		return nil, internal(err)
+	}
+	result := map[string]any{"enforcement": "reservation", "provider_hard_cap": false, "resource_version": version, "note": "Every attempt permanently charges its full declared allowance; provider usage observations do not establish a hard token or billing cap."}
 	if in.Agent == "" {
 		result["used"] = session
-		result["limit"] = s.cfg.Budget
+		result["limit"] = sessionBudget
 		return result, nil
 	}
 	info, err := s.agent(ctx, q, in.Agent)
@@ -190,6 +203,10 @@ func (s *Store) budgetStatus(ctx context.Context, q queryer, a actor, raw json.R
 	}
 	result["agent"] = in.Agent
 	result["used"] = used
-	result["limit"] = info.Config.Budget
+	limit := info.Config.Budget
+	if value, ok := overrides[in.Agent]; ok {
+		limit = value
+	}
+	result["limit"] = limit
 	return result, nil
 }

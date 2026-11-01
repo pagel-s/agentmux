@@ -33,6 +33,7 @@ type Spec struct {
 // (one private native credential file), or api-env (named environment only).
 type Agent struct {
 	Interaction   string               `json:"interaction,omitempty"`
+	NativeOnly    bool                 `json:"native_only,omitempty"`
 	Workdir       string               `json:"workdir,omitempty"`
 	ID            string               `json:"id"`
 	Role          string               `json:"role"`
@@ -131,6 +132,7 @@ func Build(spec Spec) (Plan, error) {
 		}
 		agent := managedconfig.Agent{Harness: a.Harness, Role: a.Role, Model: a.Model, Sandbox: spec.Sandbox, Network: "host", Command: command, ReadOnlyPaths: deps, Workdir: filepath.Join(root, a.ID), Conversation: a.Conversation, CodexSandbox: a.CodexSandbox}
 		agent.Interaction = a.Interaction
+		agent.NativeOnly = a.NativeOnly
 		if a.Workdir != "" {
 			agent.Workdir, err = filepath.Abs(a.Workdir)
 			if err != nil {

@@ -150,6 +150,11 @@ func runManagedLifecycle(operation string, options managedCLIOptions, state stri
 			return managedCLIError(stdout, operation, "", exitRuntime, err)
 		}
 	}
+	if operation == "up" || operation == "restart" {
+		if err := rememberWorkState(state); err != nil {
+			fmt.Fprintln(stderr, "Workspace started, but could not update workspace inventory:", err)
+		}
+	}
 	if code := writeManagedEnvelope(stdout, managedEnvelope{Operation: operation, OK: true, Result: runtime}); code != exitSuccess {
 		return code
 	}

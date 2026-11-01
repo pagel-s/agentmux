@@ -87,6 +87,9 @@ func (m console) roster(width, height int) string {
 	return consoleClip(out.String(), width, height)
 }
 func (m console) panel(width, height int) string {
+	if m.workspacePicker != nil {
+		return m.workspacePanel(width, height)
+	}
 	if m.teamAction != nil {
 		return m.teamReviewPanel(width, height)
 	}
@@ -181,9 +184,19 @@ func (m console) panel(width, height int) string {
 				if enabled {
 					value = consoleAccent.Render("●  allowed")
 				}
-				fmt.Fprintf(&out, "  [%s]  %-13s %s\n", row.key, row.label, value)
+				reason := ""
+				for _, grant := range m.data.boundaries.Targets {
+					if grant.To == target {
+						if enabled {
+							reason = grant.Sources[row.action]
+						} else {
+							reason = grant.DeniedReasons[row.action]
+						}
+					}
+				}
+				fmt.Fprintf(&out, "  [%s]  %-13s %s %s\n", row.key, row.label, value, consoleMuted.Render(consoleClip(consoleContent(reason, 250), max(1, width-35), 1)))
 			}
-			out.WriteString("\n" + consoleMuted.Render("c connect these two with scoped board/memory · d disconnect sender\nKeys toggle live permissions. Commands create tasks.\nExisting tasks stay accepted; cancel them in Tasks.\nAgent context: managed call boundaries.get"))
+			out.WriteString("\n" + consoleMuted.Render("c connect scoped group · d isolate sender · M/P/I reset overrides\nGroups add grants; explicit owner overrides take precedence.\nExisting tasks stay accepted; cancel them in Tasks.\no reads full effective boundaries and stored controls"))
 			out.WriteString("\n\n" + consoleAccent.Render("Workspace groups") + "\n")
 			found := false
 			for _, g := range m.data.controls.Groups {
@@ -230,11 +243,16 @@ func (m console) panel(width, height int) string {
 				out.WriteString("\n" + consoleContent(v.Value, 4000))
 			}
 		} else {
-			out.WriteString(consoleAccent.Render("Shared boundaries") + consoleMuted.Render("  [/] select · r/w access · v memory · o details") + "\n\n")
+			out.WriteString(consoleAccent.Render("Shared boundaries") + consoleMuted.Render("  [/] select · r/w access · R reset · v memory · o details") + "\n\n")
 			scopes := append(append([]managed.BoundaryScope{}, m.data.boundaries.Boards...), m.data.boundaries.Memory...)
 			selected := 0
 			if len(scopes) > 0 {
 				selected = m.scope % len(scopes)
+				v := scopes[selected]
+				fmt.Fprintf(&out, "Effective: read %s · write %s · %s\n", accessLabel(v.Read), accessLabel(v.Write), consoleContent(v.Reason, 250))
+				if v.StoredRead != nil && v.StoredWrite != nil {
+					fmt.Fprintf(&out, "Stored owner intent: read %s · write %s (membership still required)\n", accessLabel(*v.StoredRead), accessLabel(*v.StoredWrite))
+				}
 			}
 			rows := max(1, height-lipgloss.Height(out.String())-3)
 			first := max(0, selected-rows+1)
@@ -257,6 +275,11 @@ func (m console) panel(width, height int) string {
 		}
 	case 4:
 		out.WriteString(consoleAccent.Render("Tasks & results") + consoleMuted.Render("  [/] select · o read all · r follow up · c cancel") + "\n\n")
+		out.WriteString(consoleMuted.Render(fmt.Sprintf("History page %d · newest first · PgDn older / PgUp newer · f search", len(m.taskBack)+1)) + "\n")
+		if m.taskQuery != "" {
+			out.WriteString("Search: " + consoleContent(m.taskQuery, 200) + "\n")
+		}
+		out.WriteString("\n")
 		selected := 0
 		if len(m.data.activity.Tasks) > 0 {
 			selected = m.task % len(m.data.activity.Tasks)
@@ -366,6 +389,13 @@ func (m console) View() string {
 	var footer strings.Builder
 	if m.composer != "" && m.reader == nil {
 		label := m.composer + " → " + m.composeTarget
+		if m.composer == "send" || m.composer == "reply" || m.composer == "message" {
+			mode := m.composeMode
+			if mode == "" {
+				mode = "auto"
+			}
+			label = mode + " → " + m.composeTarget
+		}
 		if m.replyID != "" {
 			label += " · reply " + m.replyID
 		}
@@ -381,7 +411,7 @@ func (m console) View() string {
 	} else if m.message != "" {
 		footer.WriteString(consoleClip(consoleContent(m.message, 500), width, 2) + "\n")
 	}
-	help := "↑/↓ select · Enter native CLI · / find · L title · Tab views · F1 workbench\nN new · x revoke + descendants · s send · b board · +/- board · q detach/close"
+	help := "↑/↓ select · Enter native CLI · / find · L title · V role · Tab views\nN new · s send · b board · x revoke + descendants · q detach/close\nW workspaces · U relaunch · ? help · F1 workbench"
 	if m.data.headless {
 		help = "↑/↓ agent · / find · L title · Tab views · 7 Teams · 8 Events\nTasks: output/cancel · Events: lifecycle · x revoke tree · q close observer"
 		if m.data.research != nil {
@@ -448,8 +478,14 @@ func (m console) scopeLabel(name string) string {
 }
 
 func (m console) editorHelp() string {
-	if m.composer == "memory-value" {
-		return "Enter saves · Ctrl-R review latest version · Alt-Enter newline · Esc back"
+	if m.composer == "role" {
+		return "Enter saves · Ctrl-R review latest role · Ctrl-G help · Esc back"
 	}
-	return "Enter submits · Alt-Enter newline · Esc cancels · Ctrl-U clears"
+	if m.composer == "memory-value" {
+		return "Enter saves · Ctrl-R review latest · Ctrl-G help · Alt-Enter newline · Esc back"
+	}
+	if m.composer == "send" || m.composer == "reply" || m.composer == "message" {
+		return "Enter queues · Ctrl-T note/task · Ctrl-G help · Alt-Enter newline · Esc cancels"
+	}
+	return "Enter submits · Ctrl-G help · Alt-Enter newline · Esc cancels · Ctrl-U clears"
 }

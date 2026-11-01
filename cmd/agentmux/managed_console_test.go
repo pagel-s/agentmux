@@ -18,7 +18,7 @@ func TestConsoleComposerAndHelpRemainVisibleInSmallTerminal(t *testing.T) {
 		m.agents = append(m.agents, managed.AgentInfo{ID: "agent", Config: managedconfig.Agent{Harness: "command"}})
 	}
 	view := m.View()
-	for _, text := range []string{"human message", "Enter submits", "q detach/close"} {
+	for _, text := range []string{"human message", "Enter queues", "q detach/close"} {
 		if !strings.Contains(view, text) {
 			t.Fatalf("critical UI hidden at 80x24: %q", text)
 		}
@@ -54,7 +54,7 @@ func TestConsoleBoardDraftFreezesNamespaceAndReplyPreservesSource(t *testing.T) 
 
 func TestConsoleNativeWizardAcceptsEmptyRoleAndKeepsSelectedProject(t *testing.T) {
 	m := console{agents: []managed.AgentInfo{{ID: "alice", Config: managedconfig.Agent{Workdir: "/my/project"}}}}
-	for _, key := range []tea.KeyMsg{{Type: tea.KeyRunes, Runes: []rune{'N'}}, {Type: tea.KeyRunes, Runes: []rune("daily")}, {Type: tea.KeyEnter}, {Type: tea.KeyEnter}, {Type: tea.KeyEnter}} {
+	for _, key := range []tea.KeyMsg{{Type: tea.KeyRunes, Runes: []rune{'N'}}, {Type: tea.KeyRunes, Runes: []rune("daily")}, {Type: tea.KeyEnter}, {Type: tea.KeyEnter}, {Type: tea.KeyEnter}, {Type: tea.KeyEnter}} {
 		next, _ := m.Update(key)
 		m = next.(console)
 	}

@@ -118,6 +118,9 @@ func (l *Launcher) Supervise(ctx context.Context, attempt string) error {
 		if err != nil {
 			return finish(err)
 		}
+		if err := l.processRelaunches(ctx, &runtime, client); err != nil {
+			return finish(err)
+		}
 		for _, agent := range agents {
 			if agent.External {
 				continue
@@ -376,7 +379,12 @@ func (l *Launcher) Describe(ctx context.Context) (Runtime, error) {
 	if err != nil {
 		return runtime, err
 	}
-	if l.ownsSession(ctx, runtime) {
+	owned, absent, ownershipErr := l.inspectOwnership(ctx, runtime)
+	if ownershipErr != nil {
+		runtime.State = "unknown"
+		return runtime, ownershipErr
+	}
+	if owned {
 		panes, err := l.panes(ctx, runtime)
 		if err != nil {
 			return runtime, err
@@ -389,7 +397,7 @@ func (l *Launcher) Describe(ctx context.Context) (Runtime, error) {
 			}
 		}
 		observeAgentPaneStates(&runtime, panes)
-	} else if runtime.State == "running" || runtime.State == "starting" {
+	} else if absent && (runtime.State == "running" || runtime.State == "starting") {
 		runtime.State = "unavailable"
 	}
 	return runtime, nil

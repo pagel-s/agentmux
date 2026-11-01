@@ -65,12 +65,20 @@
             <span id="agent-harness"></span>
           </div>
           <div class="agent-actions">
+            <button id="relaunch-agent" class="quiet" hidden disabled>Relaunch…</button>
             <button id="focus-terminal" disabled>Focus in tmux ↗</button
             ><button id="close-agent" class="quiet" disabled>
               Close session</button
             ><button id="pause-agent" class="quiet" disabled>Autonomy</button>
           </div>
           <p id="agent-role"></p>
+          <form id="relaunch-review" class="team-review" hidden>
+            <strong id="relaunch-target"></strong>
+            <label>Conversation <select id="relaunch-resume"><option value="">Fresh conversation</option><option value="picker">Choose native history in terminal</option><option value="last">Resume latest native conversation</option><option value="id">Specific native conversation ID</option></select></label>
+            <input id="relaunch-history-id" aria-label="Native conversation ID" placeholder="Native conversation ID" maxlength="512" hidden />
+            <p class="session-note">Restarts only this exited session with its stable ID. Healthy peers keep running. Review the project and conversation choice; history is never inferred from the task title.</p>
+            <button id="confirm-relaunch" type="submit" data-owner-write>Relaunch this session</button><button id="cancel-relaunch" type="button" class="quiet">Cancel</button>
+          </form>
           <form id="title-editor" class="title-editor" hidden>
             <label for="task-title" id="title-editor-target">Task title</label>
             <input
@@ -102,7 +110,7 @@
         <nav class="tabs" aria-label="Workspace views">
           <button data-tab="activity" class="active" aria-pressed="true" aria-controls="view-activity">Board</button
           ><button data-tab="agent" aria-pressed="false" aria-controls="view-agent">Agent</button
-          ><button data-tab="tasks" aria-pressed="false" aria-controls="view-tasks">Recent tasks <span id="task-count">0</span></button
+          ><button data-tab="tasks" aria-pressed="false" aria-controls="view-tasks">Tasks <span id="task-count">0</span></button
           ><button data-tab="memory" aria-pressed="false" aria-controls="view-memory">Memory</button
           ><button data-tab="graph" aria-pressed="false" aria-controls="view-graph">Graph</button
           ><button data-tab="teams" aria-pressed="false" aria-controls="view-teams">Teams</button
@@ -185,6 +193,9 @@
             <div id="lifecycle-events" class="lifecycle-events"></div>
           </section>
           <section id="view-sessions" class="view">
+            <div class="section-label"><h2>Workspaces</h2><button id="refresh-workspaces" class="quiet">Refresh workspaces</button></div>
+            <p class="session-note">This private console controls one workspace. Open another with its own command and owner link; unsaved drafts stay here.</p>
+            <div id="workspaces" class="workspace-list"></div>
             <div class="section-label">
               <h2>New session</h2>
               <span>NATIVE TERMINAL · COLLABORATION OFF</span>
@@ -198,7 +209,7 @@
               /><select id="new-harness" aria-label="Native interface">
                 <option>claude</option>
                 <option>codex</option>
-                <option>pi</option></select
+                <option>pi</option><option>antigravity</option></select
               ><input
                 id="new-project"
                 aria-label="Project directory"
@@ -217,7 +228,7 @@
                   id="new-role"
                   aria-label="Session role"
                   placeholder="Optional role; otherwise your normal native session"
-                /><select id="new-sandbox" aria-label="Session isolation">
+                /><label class="native-only-option"><input id="new-native-only" type="checkbox" />Pure native session · no Agentmux prompt injection</label><p id="new-native-hint" class="session-note">Tools, skills and MCPs use your normal native configuration. A coordinated session receives Agentmux context; pure native sessions use manual setup.</p><select id="new-sandbox" aria-label="Session isolation">
                   <option value="local">
                     Native configuration · trusted local
                   </option>
@@ -263,6 +274,24 @@
           </section>
           <section id="view-agent" class="view">
             <div id="worker-runtime" class="worker-runtime"></div>
+            <details id="role-editor" class="role-editor"><summary>Role & instructions</summary>
+              <p id="role-current" class="session-note"></p>
+              <form id="role-form"><label for="role-draft">Role for this stable session ID</label><textarea id="role-draft" rows="4" maxlength="8192"></textarea><p id="role-version" class="session-note"></p><button id="save-role" type="submit" data-owner-write disabled>Save role</button><button id="rebase-role" type="button" class="quiet" hidden>Use reviewed current version</button><button id="discard-role" type="button" class="quiet">Discard draft</button></form>
+              <p class="session-note">Managed workers use this on their next turn. Native sessions receive an inbox notice and read the role explicitly; ongoing terminal input and native history are not rewritten. Role text grants no permissions.</p>
+            </details>
+            <div class="section-label"><h2>Delegation capacity</h2><button id="load-capacity" class="quiet">Refresh capacity</button></div>
+            <div id="agent-capacity" class="capacity-panel"></div>
+            <details id="resource-editor" class="resource-editor"><summary>Adjust admission budgets & deadline</summary>
+              <p class="session-note">These are permanently reserved admission allowances, not provider billing caps. Zero removes a configured cap. Existing reservations cannot be refunded. Shortening admission does not stop running tasks.</p>
+              <p id="resource-current" class="session-note"></p>
+              <form id="resource-form" class="resource-form">
+                <label>Session token cap<input id="resource-session-tokens" type="number" min="0" step="1" required /></label><label>Session cost cap (micro-USD)<input id="resource-session-cost" type="number" min="0" step="1" required /></label>
+                <label>Turn token reservation<input id="resource-turn-tokens" type="number" min="0" step="1" required /></label><label>Turn cost reservation (micro-USD)<input id="resource-turn-cost" type="number" min="0" step="1" required /></label>
+                <label>Agent subtree token cap<input id="resource-subtree-tokens" type="number" min="0" step="1" required /></label><label>Agent subtree cost cap (micro-USD)<input id="resource-subtree-cost" type="number" min="0" step="1" required /></label>
+                <label>Shorten admission to seconds from now (optional)<input id="resource-admission" type="number" min="0" step="1" /></label>
+                <button id="review-resources" type="submit" data-owner-write disabled>Review budget change</button><button id="discard-resources" type="button" class="quiet">Discard draft</button>
+              </form><div id="resource-review" class="team-review" hidden></div>
+            </details>
             <div class="section-label">
               <h2 id="native-observation-title">Native terminal</h2>
               <span id="native-observation-label"
@@ -273,11 +302,18 @@
           </section>
           <section id="view-tasks" class="view">
             <div class="section-label">
-              <h2>Recent tasks & results</h2>
+              <h2>Task history & results</h2>
               <span>OWNER VIEW</span>
             </div>
-            <p class="session-note">Showing up to the latest 40 tasks. The count describes this recent window; older tasks may exist.</p>
+            <form id="task-history-filter" class="history-filters" role="search" aria-label="Search task history">
+              <input id="task-query" type="search" maxlength="512" placeholder="Search task ID, instruction or result…" aria-label="Search all task history" />
+              <select id="task-agent-filter" aria-label="Filter task recipient"><option value="">All recipients</option></select>
+              <select id="task-state-filter" aria-label="Filter task state"><option value="">All states</option><option>proposed</option><option>running</option><option>submitted</option><option>verified</option><option>failed</option><option>rejected</option><option>cancelled</option></select>
+              <button type="submit">Search</button><button id="reset-task-filter" type="button" class="quiet">Clear</button>
+            </form>
+            <p id="task-history-status" class="session-note" role="status" aria-live="polite">Load complete task history, newest first.</p>
             <div id="tasks" class="task-list"></div>
+            <button id="load-more-tasks" class="quiet" type="button" hidden>Load older tasks</button>
           </section>
           <section id="view-memory" class="view">
             <div class="section-label">
@@ -329,6 +365,7 @@
                 ><button type="submit" disabled>Save entry</button>
               </div>
             </form>
+            <section id="memory-metadata" class="memory-metadata" aria-label="Saved memory metadata and source claims" hidden></section>
             <section
               id="memory-review"
               class="memory-review"
@@ -370,6 +407,7 @@
               <span id="graph-limit">Drag nodes · select a connection</span
               ><button id="graph-edit" disabled>Connect…</button
               ><button id="graph-reset" class="quiet">Reset layout</button>
+              <div class="graph-viewport-controls" role="group" aria-label="Graph viewport"><button id="graph-fit" class="quiet">Fit</button><button id="graph-zoom-out" class="quiet" aria-label="Zoom graph out">−</button><span id="graph-zoom" aria-live="polite">100%</span><button id="graph-zoom-in" class="quiet" aria-label="Zoom graph in">+</button></div>
             </div>
             <div class="graph-canvas">
               <svg
@@ -377,6 +415,7 @@
                 viewBox="0 0 960 580"
                 aria-label="Agent interaction graph"
                 role="group"
+                tabindex="0"
               ></svg>
               <div id="graph-empty" class="hidden">Loading permissions…</div>
             </div>
@@ -427,6 +466,7 @@
             >
               <option value="direct">Direct inbox</option>
               <option value="board">Team board</option></select
+            ><select id="message-mode" aria-label="Direct delivery mode"><option value="auto">Automatic delivery</option><option value="note">Inbox note</option><option value="instruction">Instruction task</option></select
             ><span id="reply-context"></span
             ><button type="button" id="clear-reply" class="quiet hidden">
               Clear reply

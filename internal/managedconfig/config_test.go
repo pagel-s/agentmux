@@ -235,7 +235,7 @@ func TestHarnessConnectionCompatibility(t *testing.T) {
 		{"claude wrong protocol", "claude", "openai-compatible", "https://example.com/v1", "model", true},
 		{"codex native", "codex", "", "", "model", false},
 		{"codex openai", "codex", "openai-responses", "", "model", false},
-		{"codex custom endpoint", "codex", "openai-responses", "https://example.com/v1", "model", true},
+		{"codex custom endpoint", "codex", "openai-responses", "https://example.com/v1", "model", false},
 		{"codex wrong protocol", "codex", "anthropic", "", "model", true},
 		{"antigravity native", "antigravity", "", "", "model", false},
 		{"antigravity connection", "antigravity", "openai-responses", "", "", true},

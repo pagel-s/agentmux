@@ -152,18 +152,62 @@ write, rather than issuing a second logical invitation or removal.
 
 | Operation | Arguments | Authority/effect |
 | --- | --- | --- |
-| `team.create` | `name` | Owner or configured/delegated creator; creates a new team. |
+| `team.create` | `name`, optional `description` | Owner or configured/delegated creator; creates a new team. |
 | `team.invite` | `id`, `agent`, `version` | Team manager; creates a pending invitation. |
 | `team.join` | `id`, `version` | The eligible invitee; records its consent. |
 | `team.remove` | `id`, `agent`, `version` | Team manager; removes a member or pending invitee. |
 | `team.leave` | `id`, `version` | A member/invitee leaves or declines. |
 | `team.dissolve` | `id`, `version` | Team manager; closes the team and future namespace access. |
+| `team.update` | `id`, `version`, `name`, `description` | Manager changes live metadata without changing namespace identities. |
+| `team.transfer` | `id`, `version`, `agent` | Manager proposes a current authorized member as owner; no authority changes yet. |
+| `team.accept-owner` | `id`, `version` | Only the proposed owner consents; current authority and delegation are rechecked. |
+| `team.move` | `id`, `version`, `to_id`, `to_version` | A non-owner member consumes its destination invitation and leaves the source atomically. |
 
-The manager is the human owner or the team's creator. A team creator dissolves
-its team instead of leaving or removing itself. Team membership enables its
+The manager is the human owner or the current team owner. An owner transfers
+ownership (with the new owner's separate consent) before leaving, or dissolves
+the team. A proposed owner appears in `pending_owner`; a removed invitee/member
+loses that proposal. Delegated children cannot use transfer to invent missing
+team-creation authority. Transferring to the human owner uses the literal ID
+`$owner` and the owner credential must accept. Team membership enables its
 scoped board and memory; it does not grant `instruct`, interrupt, spawn, or
 access to another team's data. Voluntarily following a proposal on a board is
 agent behavior, not an administrative privilege grant.
+
+## Everyday control and live inspection
+
+```sh
+agentmux team list --session work
+agentmux team create "API investigation" --description "Temporary joint review"
+agentmux team edit TEAM_ID --name "API review" --description "Owner-approved scope"
+agentmux team invite TEAM_ID bob
+agentmux team transfer TEAM_ID bob
+# Run in Bob's agent environment with its own credential:
+agentmux team accept-owner TEAM_ID --credential-file "$AGENTMUX_CREDENTIAL_FILE"
+agentmux team move SOURCE_ID DESTINATION_ID --credential-file "$AGENTMUX_CREDENTIAL_FILE"
+```
+
+`team join`, `leave`, `accept-owner` and `move` require an explicit acting
+credential. The simple CLI fetches omitted versions once, submits one decision,
+and never retries a conflict or uncertain write. Add `--version N` and, for move,
+`--to-version N` to pin previously reviewed versions. Team moves require a
+pending destination invitation, the participant's own consent, valid parent
+access and both current versions; any failure rolls back both memberships and
+the invitation. Owners cannot force another participant's consent.
+
+The terminal **Teams** view uses **e** to edit metadata and **t** to propose its
+selected member as owner. Reviews freeze IDs and versions, and native terminals
+remain interactive throughout. The proposed agent accepts through its own tools.
+Owner inspection includes each member's effective access; each participant sees
+only its own `self_access` reason and blocking ancestor. Recorded membership
+alone never asserts effective authority.
+
+`capacity.get {}` and `identity.capacity` report remaining **lifetime** spawn/team
+counts, spawn depth, available template names, current team slots (including
+reserved invitations), admission deadline and inherited admission denials. These
+are read-only snapshots, not reservations: concurrent decisions may consume a
+slot before the next mutation. Revoking an agent or dissolving a team does not
+refund lifetime counts. [Live permissions and resource controls](live-permissions.md)
+describes owner CAS admission-budget edits and effective-versus-stored access.
 
 ## History, memory, and departure
 

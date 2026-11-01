@@ -45,6 +45,7 @@ type Connection struct {
 
 type Agent struct {
 	Interaction   string            `yaml:"interaction,omitempty" json:"interaction,omitempty"`
+	NativeOnly    bool              `yaml:"native_only,omitempty" json:"native_only,omitempty"`
 	Role          string            `yaml:"role" json:"role,omitempty"`
 	Harness       string            `yaml:"harness" json:"harness"`
 	Model         string            `yaml:"model" json:"model,omitempty"`
@@ -344,6 +345,9 @@ func (c Config) Validate() error {
 			return invalidID("agent", id)
 		}
 		agent := c.Agents[id]
+		if agent.NativeOnly && (agent.Interaction != "interactive" || agent.Role != "") {
+			return fmt.Errorf("agent %q: native_only requires interaction: interactive and an empty role", id)
+		}
 		if c.InteractiveWorkspace && agent.Interaction != "interactive" {
 			return fmt.Errorf("agent %q: interactive_workspace requires every agent to use interaction: interactive", id)
 		}
@@ -354,7 +358,7 @@ func (c Config) Validate() error {
 			if agent.Autonomy.Enabled || agent.Conversation == "persistent" || agent.Trace.Enabled || agent.Disk.Enabled() || agent.Network == "allowlist" {
 				return fmt.Errorf("agent %q: interactive sessions use native history and require autonomy, managed conversation/trace, disk capsules and allowlist egress to be disabled", id)
 			}
-			if agent.Harness == "antigravity" {
+			if agent.Harness == "antigravity" && !agent.NativeOnly {
 				return fmt.Errorf("agent %q: interactive Antigravity requires the Pi bridge; direct native role injection is unverified", id)
 			}
 		}
@@ -487,8 +491,8 @@ func validateCompatibility(id string, agent Agent, connection Connection) error 
 			return fmt.Errorf("agent %q: claude requires an anthropic connection", id)
 		}
 	case "codex":
-		if agent.Connection != "" && (connection.Protocol != "openai-responses" || connection.BaseURL != "") {
-			return fmt.Errorf("agent %q: codex supports only an openai-responses connection without base_url; use Pi for a custom endpoint", id)
+		if agent.Connection != "" && connection.Protocol != "openai-responses" {
+			return fmt.Errorf("agent %q: codex requires an openai-responses connection; use Pi for Chat Completions endpoints", id)
 		}
 	case "pi":
 		if agent.Connection != "" && ((connection.Protocol != "openai-compatible" && connection.Protocol != "ollama") || connection.BaseURL == "" || agent.Model == "") {

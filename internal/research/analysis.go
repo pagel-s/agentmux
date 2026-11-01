@@ -28,11 +28,14 @@ type ConditionSummary struct {
 	TaskFailures    Estimate            `json:"failed_task_count"`
 	BaselineWelfare map[string]Estimate `json:"baseline_total_social_welfare"`
 	ReturnFraction  Estimate            `json:"escrow_return_fraction"`
+	PrimaryEstimate Estimate            `json:"primary_outcome_estimate"`
 }
 type Contrast struct {
-	From       string   `json:"from"`
-	To         string   `json:"to"`
-	Difference Estimate `json:"paired_social_welfare_difference_to_minus_from"`
+	From              string   `json:"from"`
+	To                string   `json:"to"`
+	Difference        Estimate `json:"paired_social_welfare_difference_to_minus_from"`
+	PrimaryOutcome    string   `json:"primary_outcome"`
+	PrimaryDifference Estimate `json:"paired_primary_outcome_difference_to_minus_from"`
 }
 type Analysis struct {
 	Research         string             `json:"research"`
@@ -47,6 +50,8 @@ type Analysis struct {
 	PerAgent         []AgentSummary     `json:"per_agent,omitempty"`
 	PowerWarning     string             `json:"power_warning,omitempty"`
 	EvidenceWarnings []string           `json:"evidence_warnings,omitempty"`
+	PrimaryOutcome   string             `json:"primary_outcome"`
+	Counterbalancing string             `json:"counterbalancing,omitempty"`
 }
 
 func estimate(values []float64) Estimate {
@@ -77,6 +82,22 @@ func Analyze(report Report) Analysis {
 		a.Interpretation = "Invalid research evidence; estimates withheld."
 		a.EvidenceWarnings = []string{err.Error()}
 		return a
+	}
+	a.PrimaryOutcome = selectedOutcome(report)
+	a.Counterbalancing = report.Counterbalancing
+	if report.Preregistration == nil {
+		a.EvidenceWarnings = append(a.EvidenceWarnings, "Unregistered exploratory evidence: hypotheses, outcome choice and analysis were not frozen by a preregistration; do not interpret observed differences as confirmatory findings.")
+	}
+	scripted := false
+	for _, result := range report.Results {
+		for _, actor := range result.ActorMetadata {
+			if actor.Harness == "command" {
+				scripted = true
+			}
+		}
+	}
+	if scripted {
+		a.EvidenceWarnings = append(a.EvidenceWarnings, "Includes scripted command participants: these runs validate protocol and programmed strategies; they do not establish model cooperation, competition, personalities or traits.")
 	}
 	if report.Execution == nil {
 		a.EvidenceWarnings = append(a.EvidenceWarnings, "Legacy evidence coverage: no frozen executable/protocol evidence or mandatory authenticated native-trace verification; historical scores are unchanged.")
@@ -112,12 +133,15 @@ func Analyze(report Report) Analysis {
 	}
 	sort.Strings(ids)
 	paired := map[string]map[string]float64{}
+	pairedPrimary := map[string]map[string]float64{}
 	for _, id := range ids {
 		s := ConditionSummary{Condition: id, CompletedRuns: len(groups[id]), BaselineWelfare: map[string]Estimate{}}
 		var welfare, funding, cost, invalid, freeRiders, teams, failed []float64
 		var returnFractions []float64
 		baselines := map[string][]float64{}
 		paired[id] = map[string]float64{}
+		pairedPrimary[id] = map[string]float64{}
+		var primaryValues []float64
 		for _, r := range groups[id] {
 			w, f, c, i, z := roundMetrics(r.Rounds)
 			welfare = append(welfare, w)
@@ -152,6 +176,10 @@ func Analyze(report Report) Analysis {
 				returnFractions = append(returnFractions, float64(returned)/float64(escrow))
 			}
 			paired[id][fmt.Sprintf("%d/%d", r.Trial.Seed, r.Trial.Repetition)] = w
+			if value, available := outcomeValue(r, a.PrimaryOutcome); available {
+				primaryValues = append(primaryValues, value)
+				pairedPrimary[id][fmt.Sprintf("%d/%d", r.Trial.Seed, r.Trial.Repetition)] = value
+			}
 			for name, rounds := range r.Baselines {
 				w, _, _, _, _ := roundMetrics(rounds)
 				baselines[name] = append(baselines[name], w)
@@ -165,6 +193,7 @@ func Analyze(report Report) Analysis {
 		s.ConsentedTeams = estimate(teams)
 		s.TaskFailures = estimate(failed)
 		s.ReturnFraction = estimate(returnFractions)
+		s.PrimaryEstimate = estimate(primaryValues)
 		for name, values := range baselines {
 			s.BaselineWelfare[name] = estimate(values)
 		}
@@ -173,6 +202,7 @@ func Analyze(report Report) Analysis {
 	for i, from := range ids {
 		for _, to := range ids[i+1:] {
 			var differences []float64
+			var primaryDifferences []float64
 			keys := make([]string, 0, len(paired[from]))
 			for key := range paired[from] {
 				keys = append(keys, key)
@@ -182,8 +212,13 @@ func Analyze(report Report) Analysis {
 				if value, ok := paired[to][key]; ok {
 					differences = append(differences, value-paired[from][key])
 				}
+				if fromValue, ok := pairedPrimary[from][key]; ok {
+					if toValue, ok := pairedPrimary[to][key]; ok {
+						primaryDifferences = append(primaryDifferences, toValue-fromValue)
+					}
+				}
 			}
-			a.PairedContrasts = append(a.PairedContrasts, Contrast{From: from, To: to, Difference: estimate(differences)})
+			a.PairedContrasts = append(a.PairedContrasts, Contrast{From: from, To: to, Difference: estimate(differences), PrimaryOutcome: a.PrimaryOutcome, PrimaryDifference: estimate(primaryDifferences)})
 		}
 	}
 	a.Preregistration = report.Preregistration
@@ -191,27 +226,57 @@ func Analyze(report Report) Analysis {
 	a.PerAgent = agentSummaries(report)
 	if report.Preregistration != nil {
 		minimum := report.Preregistration.MinimumBlocks
-		blocks := map[string]map[string]bool{}
-		for _, r := range report.Results {
-			if r.Status == "completed" {
-				key := fmt.Sprintf("%d/%d", r.Trial.Seed, r.Trial.Repetition)
-				if blocks[key] == nil {
-					blocks[key] = map[string]bool{}
-				}
-				blocks[key][r.Trial.Condition] = true
-			}
-		}
-		complete := 0
-		for _, cells := range blocks {
-			if len(cells) == len(report.Conditions) {
-				complete++
-			}
-		}
+		complete := completeBlocks(report)
 		if complete < minimum {
 			a.PowerWarning = fmt.Sprintf("Underpowered exploratory pilot: %d complete paired blocks; preregistered minimum %d. Intervals are assumption-dependent and cannot establish traits or reliable population effects.", complete, minimum)
 		}
 	}
+	// A minimum-block declaration is not a power calculation. Also disclose
+	// tiny exploratory collections, including reports without preregistration.
+	blocks := completeBlocks(report)
+	if blocks < 8 {
+		a.EvidenceWarnings = append(a.EvidenceWarnings, fmt.Sprintf("Small evidence set: %d complete seed/repetition blocks (fewer than 8). This descriptive threshold is not a power calculation; repeated worlds/provider dependence can reduce effective independence further.", blocks))
+		if a.PowerWarning == "" {
+			a.PowerWarning = fmt.Sprintf("Tiny exploratory evidence: %d complete paired blocks; no reliable population effect or stable trait can be established.", blocks)
+		}
+	}
+	if a.PrimaryOutcome == "escrow_return_fraction" {
+		a.EvidenceWarnings = append(a.EvidenceWarnings, "Escrow return fractions exclude runs with zero received escrow. The denominator and paired-block counts may differ between conditions; selection is treatment-dependent and must be interpreted alongside investment/escrow activity.")
+	}
 	return a
+}
+
+func completeBlocks(report Report) int {
+	conditions := map[string]bool{}
+	for _, c := range report.Conditions {
+		conditions[c.ID] = true
+	}
+	if len(conditions) == 0 {
+		for _, r := range report.Results {
+			conditions[r.Trial.Condition] = true
+		}
+	}
+	blocks := map[string]map[string]bool{}
+	for _, r := range report.Results {
+		if r.Status != "completed" {
+			continue
+		}
+		if _, available := outcomeValue(r, selectedOutcome(report)); !available {
+			continue
+		}
+		key := fmt.Sprintf("%d/%d", r.Trial.Seed, r.Trial.Repetition)
+		if blocks[key] == nil {
+			blocks[key] = map[string]bool{}
+		}
+		blocks[key][r.Trial.Condition] = true
+	}
+	complete := 0
+	for _, cells := range blocks {
+		if len(cells) == len(conditions) && len(conditions) > 0 {
+			complete++
+		}
+	}
+	return complete
 }
 func roundMetrics(rounds []Outcome) (welfare, funding, cost, invalid, freeRiders float64) {
 	for _, r := range rounds {

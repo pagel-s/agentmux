@@ -21,6 +21,7 @@ import (
 type workOptions struct {
 	state, session, config, project, sandbox string
 	group, board                             string
+	mode, to, resume, legacyPolicy           string
 	detach                                   bool
 	sandboxExplicit                          bool
 	args                                     []string
@@ -33,7 +34,7 @@ func hasWorkSessionFlag(args []string) bool {
 		if arg == "--" {
 			break
 		}
-		if arg == "--state" || arg == "--session" || arg == "--view" || arg == "--popup" || strings.HasPrefix(arg, "--view=") || strings.HasPrefix(arg, "--state=") || strings.HasPrefix(arg, "--session=") {
+		if arg == "--state" || arg == "--session" || arg == "--view" || arg == "--popup" || arg == "--mode" || strings.HasPrefix(arg, "--mode=") || strings.HasPrefix(arg, "--view=") || strings.HasPrefix(arg, "--state=") || strings.HasPrefix(arg, "--session=") {
 			return true
 		}
 	}
@@ -101,7 +102,7 @@ func parseWorkOptionsWithStorage(args []string, allowNamedState bool) (workOptio
 			o.popup = true
 			continue
 		}
-		if name != "state" && name != "session" && name != "config" && name != "project" && name != "sandbox" && name != "view" && name != "group" && name != "board" {
+		if name != "state" && name != "session" && name != "config" && name != "project" && name != "sandbox" && name != "view" && name != "group" && name != "board" && name != "mode" && name != "to" && name != "resume" && name != "legacy-policy" {
 			return o, fmt.Errorf("unknown flag --%s", name)
 		}
 		if !inline {
@@ -115,6 +116,17 @@ func parseWorkOptionsWithStorage(args []string, allowNamedState bool) (workOptio
 			return o, fmt.Errorf("--%s needs a nonempty value", name)
 		}
 		switch name {
+		case "legacy-policy":
+			if value != "preserve" && value != "group" {
+				return o, errors.New("--legacy-policy must be preserve or group")
+			}
+			o.legacyPolicy = value
+		case "mode":
+			o.mode = value
+		case "to":
+			o.to = value
+		case "resume":
+			o.resume = value
 		case "group":
 			o.group = value
 		case "board":
@@ -169,6 +181,18 @@ func requestIDForWork() string {
 }
 
 func runWorkSession(operation string, args []string, in io.Reader, out, diagnostics io.Writer) int {
+	code := runWorkSessionInner(operation, args, in, out, diagnostics)
+	if code == exitSuccess && (operation == "start" || operation == "attach") && !workHelpRequested(args) {
+		if o, err := parseWorkOptionsWithStorage(args, operation == "start"); err == nil {
+			if err := rememberWorkState(o.state); err != nil {
+				fmt.Fprintln(diagnostics, "Workspace remains available, but could not update workspace inventory:", err)
+			}
+		}
+	}
+	return code
+}
+
+func runWorkSessionInner(operation string, args []string, in io.Reader, out, diagnostics io.Writer) int {
 	if workHelpRequested(args) {
 		fmt.Fprintln(out, `Human work sessions:
   agentmux start [--project DIR] [--session work] [--detach]
@@ -185,7 +209,7 @@ func runWorkSession(operation string, args []string, in io.Reader, out, diagnost
   agentmux remove NAME
   agentmux sessions
   agentmux connect OBSERVED_ID --name NAME
-  agentmux collaborate NAME NAME [...]
+  agentmux collaborate NAME NAME [...] [--legacy-policy preserve|group]
   agentmux isolate NAME [...]
   agentmux down [--session work | --state DIR]
 
@@ -199,6 +223,9 @@ Legacy raw pane input remains: agentmux send SESSION PANE -- COMMAND.`)
 		return exitSuccess
 	}
 	o, err := parseWorkOptionsWithStorage(args, operation == "start")
+	if err == nil && o.legacyPolicy != "" && operation != "collaborate" {
+		err = errors.New("--legacy-policy applies only to collaborate")
+	}
 	if err != nil {
 		fmt.Fprintln(diagnostics, "error:", err)
 		return exitValidation
@@ -271,6 +298,9 @@ Legacy raw pane input remains: agentmux send SESSION PANE -- COMMAND.`)
 					return fail(e)
 				}
 				fmt.Fprintf(out, "Team %s is already running.\n", live.Session)
+				if err := rememberWorkState(o.state); err != nil {
+					fmt.Fprintln(diagnostics, "Could not update workspace inventory:", err)
+				}
 				if o.detach {
 					return exitSuccess
 				}
@@ -410,21 +440,32 @@ Legacy raw pane input remains: agentmux send SESSION PANE -- COMMAND.`)
 			return fail(errors.New(operation + " requires a recipient/reference and one quoted message"))
 		}
 		target, text := o.args[0], o.args[1]
+		replyTo := ""
 		if strings.TrimSpace(text) == "" {
 			return fail(errors.New("message text must not be empty; no message or instruction was queued"))
 		}
 		if operation == "reply" {
-			target, err = workReplyTarget(ctx, client, target)
-			if err != nil {
-				return fail(err)
+			replyTo = target
+			if o.to != "" || o.board != "" {
+				target = o.to
+			} else {
+				target, err = workReplyTarget(ctx, client, target)
+				if err != nil {
+					return fail(err)
+				}
 			}
-			text = "Follow-up to " + o.args[0] + ":\n" + text
+		} else if o.to != "" || o.board != "" {
+			return fail(errors.New("send uses its positional recipient; --to/--board select an explicit reply audience"))
 		}
-		id, kind, e := workSend(ctx, client, o.state, target, text)
+		id, kind, e := workSendToAudience(ctx, client, o.state, target, o.board, text, o.mode, replyTo)
 		if e != nil {
 			return fail(e)
 		}
-		fmt.Fprintf(out, "%s queued for %s: %s\n", kind, target, id)
+		audience := target
+		if o.board != "" {
+			audience = "board " + o.board
+		}
+		fmt.Fprintf(out, "%s queued for %s: %s\n", kind, audience, id)
 		if kind == "Message" {
 			fmt.Fprintln(out, "Interactive agent: read its broker inbox, or talk directly with:", managedlaunch.ShellCommand([]string{"agentmux", "attach", target, "--state", o.state}))
 		}
@@ -469,6 +510,41 @@ func workReplyTarget(ctx context.Context, client *managed.Client, id string) (st
 	return "", errors.New("board/group messages need an explicit recipient; use send")
 }
 func workSend(ctx context.Context, client *managed.Client, state, target, text string) (string, string, error) {
+	return workSendIntent(ctx, client, state, target, text, "auto", "")
+}
+
+// workSendIntent preserves the native-inbox default while allowing an owner to
+// choose whether a new message is informational or an executable task.
+func workSendIntent(ctx context.Context, client *managed.Client, state, target, text, mode, replyTo string) (string, string, error) {
+	return workSendToAudience(ctx, client, state, target, "", text, mode, replyTo)
+}
+
+func workSendToAudience(ctx context.Context, client *managed.Client, state, target, board, text, mode, replyTo string) (string, string, error) {
+	if strings.TrimSpace(text) == "" {
+		return "", "", errors.New("message text must not be empty")
+	}
+	if mode == "" {
+		mode = "auto"
+	}
+	if mode != "auto" && mode != "note" && mode != "instruction" {
+		return "", "", errors.New("--mode must be auto, note, or instruction")
+	}
+	if board != "" {
+		if target != "" || mode == "instruction" {
+			return "", "", errors.New("board replies require no direct recipient and cannot be instructions")
+		}
+		raw, err := workCall(ctx, client, "board.post", map[string]any{"board": board, "text": text, "reply_to": replyTo})
+		if err != nil {
+			return "", "", err
+		}
+		var result struct {
+			Message managed.Message `json:"message"`
+		}
+		if err := json.Unmarshal(raw, &result); err != nil {
+			return "", "", err
+		}
+		return result.Message.ID, "Board note", nil
+	}
 	store, err := managed.Open(state)
 	if err != nil {
 		return "", "", err
@@ -479,10 +555,10 @@ func workSend(ctx context.Context, client *managed.Client, state, target, text s
 		return "", "", err
 	}
 	op, kind := "instruct", "Instruction"
-	if agent.Interaction == "interactive" {
+	if mode == "note" || mode == "auto" && agent.Interaction == "interactive" {
 		op, kind = "message.send", "Message"
 	}
-	raw, err := workCall(ctx, client, op, map[string]any{"to": []string{target}, "text": text})
+	raw, err := workCall(ctx, client, op, map[string]any{"to": []string{target}, "text": text, "reply_to": replyTo})
 	if err != nil {
 		return "", "", err
 	}

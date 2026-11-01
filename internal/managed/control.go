@@ -18,6 +18,7 @@ type EdgeControl struct {
 	To     string `json:"to"`
 	Action string `json:"action"`
 	Allow  bool   `json:"allow"`
+	Source string `json:"source,omitempty"`
 }
 type ScopeControl struct {
 	Agent     string `json:"agent"`
@@ -25,6 +26,7 @@ type ScopeControl struct {
 	Namespace string `json:"namespace"`
 	Read      bool   `json:"read"`
 	Write     bool   `json:"write"`
+	Source    string `json:"source,omitempty"`
 }
 type ControlState struct {
 	Version     int              `json:"version"`
@@ -35,20 +37,30 @@ type ControlState struct {
 	Groups      []WorkspaceGroup `json:"groups,omitempty"`
 }
 type BoundaryScope struct {
-	Name   string `json:"name"`
-	Read   bool   `json:"read"`
-	Write  bool   `json:"write"`
-	Source string `json:"source,omitempty"`
-	TeamID string `json:"team_id,omitempty"`
-	Label  string `json:"label,omitempty"`
+	Name        string `json:"name"`
+	Read        bool   `json:"read"`
+	Write       bool   `json:"write"`
+	Source      string `json:"source,omitempty"`
+	TeamID      string `json:"team_id,omitempty"`
+	Label       string `json:"label,omitempty"`
+	StoredRead  *bool  `json:"stored_read,omitempty"`
+	StoredWrite *bool  `json:"stored_write,omitempty"`
+	Suspended   bool   `json:"suspended,omitempty"`
+	Reason      string `json:"reason,omitempty"`
 }
 type Boundaries struct {
-	Version       int             `json:"version"`
-	Agent         string          `json:"agent"`
-	Targets       []TargetGrant   `json:"targets"`
-	Boards        []BoundaryScope `json:"boards"`
-	Memory        []BoundaryScope `json:"memory"`
-	PrivateMemory string          `json:"private_memory"`
+	Version       int              `json:"version"`
+	Agent         string           `json:"agent"`
+	Targets       []BoundaryTarget `json:"targets"`
+	Boards        []BoundaryScope  `json:"boards"`
+	Memory        []BoundaryScope  `json:"memory"`
+	PrivateMemory string           `json:"private_memory"`
+}
+type BoundaryTarget struct {
+	To            string            `json:"to"`
+	Actions       []string          `json:"actions"`
+	Sources       map[string]string `json:"sources,omitempty"`
+	DeniedReasons map[string]string `json:"denied_reasons,omitempty"`
 }
 
 func readControls(ctx context.Context, q queryer) (ControlState, error) {
@@ -88,6 +100,11 @@ func edgeControl(ctx context.Context, q queryer, from, action, to string) (bool,
 		return false, true
 	}
 	for _, e := range c.Edges {
+		if e.From == from && e.To == to && e.Action == action && e.Source == "isolation" {
+			return false, true
+		}
+	}
+	for _, e := range c.Edges {
 		if e.From == from && e.To == to && e.Action == action {
 			return e.Allow, true
 		}
@@ -102,6 +119,11 @@ func scopeControl(ctx context.Context, q queryer, agent, namespace string, memor
 	kind := "board"
 	if memory {
 		kind = "memory"
+	}
+	for _, v := range c.Scopes {
+		if v.Agent == agent && v.Namespace == namespace && v.Kind == kind && v.Source == "isolation" {
+			return false, true
+		}
 	}
 	for _, v := range c.Scopes {
 		if v.Agent == agent && v.Namespace == namespace && v.Kind == kind {
@@ -158,16 +180,19 @@ func (s *Store) control(ctx context.Context, q queryer, a actor, r Request) (any
 		if err != nil {
 			return nil, internal(err)
 		}
-		b := Boundaries{Version: c.Version, Agent: in.Agent, Targets: []TargetGrant{}, Boards: []BoundaryScope{}, Memory: []BoundaryScope{}, PrivateMemory: "private"}
+		b := Boundaries{Version: c.Version, Agent: in.Agent, Targets: []BoundaryTarget{}, Boards: []BoundaryScope{}, Memory: []BoundaryScope{}, PrivateMemory: "private"}
 		ids, err := s.controlAgentIDs(ctx, q)
 		if err != nil {
 			return nil, internal(err)
 		}
 		for _, id := range ids {
-			t := TargetGrant{To: id, Actions: []string{}}
+			t := BoundaryTarget{To: id, Actions: []string{}, Sources: map[string]string{}, DeniedReasons: map[string]string{}}
 			for _, action := range []string{"message.send", "ping.send", "instruct"} {
 				if s.can(ctx, q, in.Agent, action, id) {
 					t.Actions = append(t.Actions, action)
+					t.Sources[action] = s.boundaryEdgeReason(ctx, q, in.Agent, action, id)
+				} else {
+					t.DeniedReasons[action] = s.boundaryEdgeReason(ctx, q, in.Agent, action, id)
 				}
 			}
 			if len(t.Actions) > 0 || a.owner() {
@@ -184,7 +209,7 @@ func (s *Store) control(ctx context.Context, q queryer, a actor, r Request) (any
 			}
 			sort.Strings(names)
 			for _, name := range names {
-				v := BoundaryScope{Name: name, Read: s.namespace(ctx, q, in.Agent, name, entry.memory, false), Write: s.namespace(ctx, q, in.Agent, name, entry.memory, true)}
+				v := s.boundaryScope(ctx, q, in.Agent, name, entry.memory, "configuration")
 				if !a.owner() && !v.Read && !v.Write {
 					continue
 				}
@@ -200,17 +225,15 @@ func (s *Store) control(ctx context.Context, q queryer, a actor, r Request) (any
 			return nil, internal(err)
 		}
 		for _, group := range groups {
-			if group.State != "active" || !contains(group.Members, in.Agent) {
+			if !contains(group.Agents, in.Agent) {
 				continue
 			}
 			for _, entry := range []struct {
 				name   string
 				memory bool
 			}{{group.Board, false}, {group.Memory, true}} {
-				scope := BoundaryScope{Name: entry.name, Read: s.namespace(ctx, q, in.Agent, entry.name, entry.memory, false), Write: s.namespace(ctx, q, in.Agent, entry.name, entry.memory, true)}
-				if !a.owner() && !scope.Read && !scope.Write {
-					continue
-				}
+				scope := s.boundaryScope(ctx, q, in.Agent, entry.name, entry.memory, "group")
+				scope.TeamID, scope.Label = group.ID, "Workspace collaboration"
 				if entry.memory {
 					b.Memory = append(b.Memory, scope)
 				} else {
@@ -227,7 +250,8 @@ func (s *Store) control(ctx context.Context, q queryer, a actor, r Request) (any
 				name   string
 				memory bool
 			}{{team.Board, false}, {team.Memory, true}} {
-				scope := BoundaryScope{Name: entry.name, Read: s.namespace(ctx, q, in.Agent, entry.name, entry.memory, false), Write: s.namespace(ctx, q, in.Agent, entry.name, entry.memory, true), Source: "team", TeamID: team.ID, Label: team.Name}
+				scope := s.boundaryScope(ctx, q, in.Agent, entry.name, entry.memory, "team")
+				scope.TeamID, scope.Label = team.ID, team.Name
 				if !a.owner() && !scope.Read && !scope.Write {
 					continue
 				}
@@ -259,21 +283,23 @@ func (s *Store) control(ctx context.Context, q queryer, a actor, r Request) (any
 		return c, nil
 	}
 	var in struct {
-		Version   int      `json:"version"`
-		Kind      string   `json:"kind"`
-		From      string   `json:"from"`
-		To        string   `json:"to"`
-		Action    string   `json:"action"`
-		Allow     bool     `json:"allow"`
-		Agent     string   `json:"agent"`
-		Namespace string   `json:"namespace"`
-		Read      bool     `json:"read"`
-		Write     bool     `json:"write"`
-		Agents    []string `json:"agents"`
-		Enabled   bool     `json:"enabled"`
-		Commands  bool     `json:"commands"`
-		Board     string   `json:"board"`
-		Memory    string   `json:"memory"`
+		Version      int      `json:"version"`
+		Kind         string   `json:"kind"`
+		From         string   `json:"from"`
+		To           string   `json:"to"`
+		Action       string   `json:"action"`
+		Allow        bool     `json:"allow"`
+		Agent        string   `json:"agent"`
+		Namespace    string   `json:"namespace"`
+		Read         bool     `json:"read"`
+		Write        bool     `json:"write"`
+		Agents       []string `json:"agents"`
+		Enabled      bool     `json:"enabled"`
+		Commands     bool     `json:"commands"`
+		Board        string   `json:"board"`
+		Memory       string   `json:"memory"`
+		Reset        bool     `json:"reset"`
+		LegacyPolicy string   `json:"legacy_policy"`
 	}
 	if err := strictJSON(r.Args, &in); err != nil {
 		return nil, invalid(err)
@@ -281,7 +307,20 @@ func (s *Store) control(ctx context.Context, q queryer, a actor, r Request) (any
 	if in.Version != c.Version {
 		return nil, fault("conflict", "permissions changed; refresh before editing")
 	}
+	if in.LegacyPolicy != "" && in.LegacyPolicy != "preserve" && in.LegacyPolicy != "group" {
+		return nil, fault("invalid", "legacy_policy must be preserve or group")
+	}
+	if in.LegacyPolicy != "" && (in.Kind != "collaboration" || in.Board != "" || in.Memory != "") {
+		return nil, fault("invalid", "legacy_policy applies only to owner collaboration groups")
+	}
 	static := func(id string) bool { return s.ownerControllable(ctx, q, id) }
+	resettable := func(id string) bool {
+		if !in.Reset {
+			return static(id)
+		}
+		_, err := s.agent(ctx, q, id)
+		return err == nil
+	}
 	var responseGroup *WorkspaceGroup
 	if in.Kind == "collaboration" || in.Kind == "independent" {
 		if len(in.Agents) == 0 || len(in.Agents) > 32 {
@@ -308,20 +347,22 @@ func (s *Store) control(ctx context.Context, q queryer, a actor, r Request) (any
 			}
 		}
 		if in.Kind == "collaboration" && in.Board == "" && in.Memory == "" {
-			group, problem := s.setWorkspaceGroup(ctx, q, a, in.Agents, in.Enabled)
+			if problem := reviewLegacyWorkspaceGroup(ctx, q, &c, in.Agents, in.LegacyPolicy); problem != nil {
+				return nil, problem
+			}
+			group, problem := s.setWorkspaceGroup(ctx, q, a, in.Agents, in.Enabled, in.Commands)
 			if problem != nil {
 				return nil, problem
 			}
 			responseGroup = &group
-			in.Board, in.Memory = group.Board, group.Memory
 		}
-		// Only these ordered-pair checks are read-only: the group mutation above
-		// has completed, and persisted controls/agents cannot change until this
-		// phase ends. Do not pass this context to scope or membership mutations.
+		// Generated isolation overlays have their own source. They suspend rather
+		// than overwrite explicit owner grants, and reconnection removes only
+		// these overlays. Group contributions live on the group itself.
 		edgeReadCtx := boundaryReadContext(ctx)
 		putEdge := func(from, to, action string, allow bool) {
 			for i, v := range c.Edges {
-				if v.From == from && v.To == to && v.Action == action {
+				if v.From == from && v.To == to && v.Action == action && v.Source == "isolation" {
 					c.Edges[i].Allow = allow
 					return
 				}
@@ -329,40 +370,73 @@ func (s *Store) control(ctx context.Context, q queryer, a actor, r Request) (any
 			if !allow && !s.can(edgeReadCtx, q, from, action, to) {
 				return
 			}
-			c.Edges = append(c.Edges, EdgeControl{From: from, To: to, Action: action, Allow: allow})
+			c.Edges = append(c.Edges, EdgeControl{From: from, To: to, Action: action, Allow: allow, Source: "isolation"})
 		}
 		putScope := func(id, kind, name string, allow bool) {
+			source := ""
+			if in.Kind == "independent" {
+				source = "isolation"
+			}
 			for i, v := range c.Scopes {
-				if v.Agent == id && v.Kind == kind && v.Namespace == name {
+				if v.Agent == id && v.Kind == kind && v.Namespace == name && v.Source == source {
 					c.Scopes[i].Read = allow
 					c.Scopes[i].Write = allow
 					return
 				}
 			}
-			if !allow && !s.namespace(ctx, q, id, name, kind == "memory", false) && !s.namespace(ctx, q, id, name, kind == "memory", true) {
-				return
-			}
-			c.Scopes = append(c.Scopes, ScopeControl{Agent: id, Kind: kind, Namespace: name, Read: allow, Write: allow})
+			c.Scopes = append(c.Scopes, ScopeControl{Agent: id, Kind: kind, Namespace: name, Read: allow, Write: allow, Source: source})
 		}
 		ids, err := s.controlAgentIDs(ctx, q)
 		if err != nil {
 			return nil, internal(err)
 		}
-		for _, from := range ids {
-			for _, to := range ids {
-				if from == to {
+		if in.Kind == "independent" {
+			for _, from := range ids {
+				for _, to := range ids {
+					if from != to && (chosen[from] || chosen[to]) {
+						for _, action := range []string{"message.send", "ping.send", "instruct"} {
+							putEdge(from, to, action, false)
+						}
+					}
+				}
+			}
+		} else if in.Enabled {
+			edges := []EdgeControl{}
+			for _, edge := range c.Edges {
+				if edge.Source == "isolation" && chosen[edge.From] && chosen[edge.To] {
 					continue
 				}
-				affected := chosen[from] && chosen[to]
-				if in.Kind == "independent" {
-					affected = chosen[from] || chosen[to]
-				}
-				if !affected {
+				edges = append(edges, edge)
+			}
+			c.Edges = edges
+			scopes := []ScopeControl{}
+			for _, scope := range c.Scopes {
+				if scope.Source == "isolation" && chosen[scope.Agent] {
 					continue
 				}
-				for _, action := range []string{"message.send", "ping.send", "instruct"} {
-					allow := in.Kind == "collaboration" && in.Enabled && (action != "instruct" || in.Commands)
-					putEdge(from, to, action, allow)
+				scopes = append(scopes, scope)
+			}
+			c.Scopes = scopes
+		}
+		if in.Kind == "collaboration" && responseGroup == nil {
+			// Named static scopes are an explicit global owner edit, unlike a
+			// named collaboration group's independently removable contribution.
+			for from := range chosen {
+				for to := range chosen {
+					if from == to {
+						continue
+					}
+					for _, action := range []string{"message.send", "ping.send", "instruct"} {
+						allow := in.Enabled && (action != "instruct" || in.Commands)
+						next := []EdgeControl{}
+						for _, edge := range c.Edges {
+							if edge.From == from && edge.To == to && edge.Action == action {
+								continue
+							}
+							next = append(next, edge)
+						}
+						c.Edges = append(next, EdgeControl{From: from, To: to, Action: action, Allow: allow})
+					}
 				}
 			}
 		}
@@ -420,21 +494,21 @@ func (s *Store) control(ctx context.Context, q queryer, a actor, r Request) (any
 	} else {
 		switch in.Kind {
 		case "edge":
-			if !static(in.From) || !static(in.To) || (in.Action != "message.send" && in.Action != "ping.send" && in.Action != "instruct") || in.Agent != "" || in.Namespace != "" || in.Read || in.Write {
+			if !resettable(in.From) || !resettable(in.To) || (in.Action != "message.send" && in.Action != "ping.send" && in.Action != "instruct") || in.Agent != "" || in.Namespace != "" || in.Read || in.Write {
 				return nil, fault("invalid", "edge control requires configured active from/to agents and an exact messaging action")
 			}
 			next := EdgeControl{From: in.From, To: in.To, Action: in.Action, Allow: in.Allow}
-			found := false
-			for i, v := range c.Edges {
+			edges := []EdgeControl{}
+			for _, v := range c.Edges {
 				if v.From == next.From && v.To == next.To && v.Action == next.Action {
-					c.Edges[i] = next
-					found = true
-					break
+					continue
 				}
+				edges = append(edges, v)
 			}
-			if !found {
-				c.Edges = append(c.Edges, next)
+			if !in.Reset {
+				edges = append(edges, next)
 			}
+			c.Edges = edges
 		case "board", "memory":
 			_, ok := s.cfg.Boards[in.Namespace]
 			if in.Kind == "memory" {
@@ -445,23 +519,31 @@ func (s *Store) control(ctx context.Context, q queryer, a actor, r Request) (any
 				if err != nil {
 					return nil, internal(err)
 				}
-				ok = group != nil && group.State == "active" && contains(group.Members, in.Agent)
+				ok = group != nil && (in.Reset || group.State == "active" && contains(group.Members, in.Agent))
 			}
-			if !ok || !static(in.Agent) || in.From != "" || in.To != "" || in.Action != "" || in.Allow {
+			if in.Reset && !ok {
+				for _, scope := range c.Scopes {
+					if scope.Agent == in.Agent && scope.Kind == in.Kind && scope.Namespace == in.Namespace {
+						ok = true
+						break
+					}
+				}
+			}
+			if !ok || !resettable(in.Agent) || in.From != "" || in.To != "" || in.Action != "" || in.Allow {
 				return nil, fault("invalid", "scope control requires a configured shared namespace and active agent; team membership uses consent operations")
 			}
 			next := ScopeControl{Agent: in.Agent, Kind: in.Kind, Namespace: in.Namespace, Read: in.Read, Write: in.Write}
-			found := false
-			for i, v := range c.Scopes {
+			scopes := []ScopeControl{}
+			for _, v := range c.Scopes {
 				if v.Agent == next.Agent && v.Kind == next.Kind && v.Namespace == next.Namespace {
-					c.Scopes[i] = next
-					found = true
-					break
+					continue
 				}
+				scopes = append(scopes, v)
 			}
-			if !found {
-				c.Scopes = append(c.Scopes, next)
+			if !in.Reset {
+				scopes = append(scopes, next)
 			}
+			c.Scopes = scopes
 		default:
 			return nil, fault("invalid", "control kind must be edge, board or memory")
 		}
@@ -483,7 +565,7 @@ func (s *Store) control(ctx context.Context, q queryer, a actor, r Request) (any
 	if err := saveControls(ctx, q, c); err != nil {
 		return nil, internal(err)
 	}
-	if err := event(ctx, q, a, "boundaries.changed", "live_access", map[string]any{"version": c.Version, "kind": in.Kind, "agent": in.Agent, "from": in.From, "to": in.To, "action": in.Action, "namespace": in.Namespace}); err != nil {
+	if err := event(ctx, q, a, "boundaries.changed", "live_access", map[string]any{"version": c.Version, "kind": in.Kind, "agent": in.Agent, "from": in.From, "to": in.To, "action": in.Action, "namespace": in.Namespace, "legacy_policy": in.LegacyPolicy}); err != nil {
 		return nil, internal(err)
 	}
 	c.Group = responseGroup
