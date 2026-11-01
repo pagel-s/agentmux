@@ -437,12 +437,9 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.closeMemory()
 			return m, m.fetch
 		}
-	case "tab":
-		m.closeMemory()
-		m.tab = (m.tab + 1) % 8
-		if m.tab == 4 {
-			return m, m.fetch
-		}
+	case "tab", "ctrl+right":
+		cmd := m.selectView(m.tab + 1)
+		return m, cmd
 	case "pgdown":
 		if m.tab == 4 && m.taskMore && m.taskCursor != "" && m.data.taskPage != nil && m.data.taskPage.After == m.taskAfter && m.data.taskPage.Query == m.taskQuery {
 			m.taskBack = append(m.taskBack, m.taskAfter)
@@ -457,17 +454,12 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.task = 0
 			return m, m.fetch
 		}
-	case "shift+tab":
-		m.closeMemory()
-		m.tab = (m.tab + 7) % 8
+	case "shift+tab", "ctrl+left":
+		cmd := m.selectView(m.tab - 1)
+		return m, cmd
 	case "1", "2", "3", "4", "5", "6", "7", "8":
-		if m.tab != int(key[0]-'1') {
-			m.closeMemory()
-		}
-		m.tab = int(key[0] - '1')
-		if m.tab == 4 {
-			return m, m.fetch
-		}
+		cmd := m.selectView(int(key[0] - '1'))
+		return m, cmd
 	case "enter":
 		if m.tab == 6 {
 			if m.selectedTeam() == nil || m.data.teamsErr != nil {
@@ -580,6 +572,10 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "[":
 		m.stepContent(-1)
 	case "right", "l":
+		if key == "right" && !m.arrowsSelectTarget() {
+			cmd := m.selectView(m.tab + 1)
+			return m, cmd
+		}
 		if m.tab == 6 && len(m.agents) > 0 {
 			m.teamMemberIndex = (m.teamMemberIndex + 1) % len(m.agents)
 			return m, nil
@@ -588,6 +584,10 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.target = (m.target + 1) % len(m.agents)
 		}
 	case "left", "h":
+		if key == "left" && !m.arrowsSelectTarget() {
+			cmd := m.selectView(m.tab - 1)
+			return m, cmd
+		}
 		if m.tab == 6 && len(m.agents) > 0 {
 			m.teamMemberIndex = (m.teamMemberIndex + len(m.agents) - 1) % len(m.agents)
 			return m, nil

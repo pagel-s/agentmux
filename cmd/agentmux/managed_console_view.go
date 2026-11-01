@@ -493,9 +493,11 @@ func (m console) View() string {
 			sideWidth = 24
 		}
 		separator := consoleMuted.Render("│")
-		bar := strings.TrimSuffix(strings.Repeat(separator+"\n", bodyHeight), "\n")
+		// Each divider row needs its own left gutter. Prefixing the complete
+		// multiline block would indent only its first row.
+		bar := strings.TrimSuffix(strings.Repeat(" "+separator+"\n", bodyHeight), "\n")
 		right := lipgloss.NewStyle().PaddingLeft(2).Render(m.panel(width-sideWidth-4, bodyHeight))
-		body = lipgloss.JoinHorizontal(lipgloss.Top, m.roster(sideWidth, bodyHeight), " "+bar, right)
+		body = lipgloss.JoinHorizontal(lipgloss.Top, m.roster(sideWidth, bodyHeight), bar, right)
 	} else {
 		body = m.panel(width, bodyHeight)
 	}

@@ -160,7 +160,10 @@ func (m console) teamKeyHints() string {
 // Keep the footer's vocabulary identical to the keys it documents. Uppercase
 // shortcuts are spelled Shift+... so they cannot look like lowercase no-ops.
 func (m console) contextualKeys() string {
-	common := "Tab views · / find · Shift+W workspaces · ? help · q detach/close"
+	common := "←/→ views · Tab/1–8 · / find · Shift+W workspaces · ? help · q detach/close"
+	if m.arrowsSelectTarget() {
+		common = "Ctrl+←/→ views · Tab/1–8 · / find · Shift+W workspaces · ? help · q detach/close"
+	}
 	if m.workspacePicker != nil {
 		return "↑/↓ workspace · Enter opens observer · Esc/q back"
 	}

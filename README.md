@@ -78,7 +78,7 @@ Open another terminal window with `attach`: each attachment switches agents
 independently and has its own dashboard and drafts, while sharing the same
 underlying agent terminals. **Ctrl-b**, release, then **Shift+D** opens read-only
 runtime service logs.
-In the workbench itself, use **1–8** to switch views; popup shortcuts show the
+In the workbench itself, use **Ctrl+←/→** or **1–8** to switch views; popup shortcuts show the
 corresponding view key instead of opening a second dashboard over it.
 
 ```sh
