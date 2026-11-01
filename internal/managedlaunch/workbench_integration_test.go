@@ -12,6 +12,9 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"agentmux/internal/managed"
+	"agentmux/internal/managedconfig"
 )
 
 type workbenchTerminalOutput struct {
@@ -255,5 +258,204 @@ func TestWorkbenchServiceNavigationAndPopupBindingsUseInvokingClient(t *testing.
 	})
 	if after, err := os.ReadFile(popupRecord); err != nil || !bytes.Equal(after, popupData) {
 		t.Fatalf("dashboard layered another popup: %s %v", after, err)
+	}
+}
+
+func TestNewAttachmentPreservesLegacyGroupedDashboardShortcuts(t *testing.T) {
+	if os.Getenv("AGENTMUX_MANAGED_INTEGRATION") != "1" {
+		t.Skip("set AGENTMUX_MANAGED_INTEGRATION=1 for legacy tmux view compatibility")
+	}
+	realTMux, err := exec.LookPath("tmux")
+	if err != nil {
+		t.Fatal(err)
+	}
+	python, err := exec.LookPath("python3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := os.MkdirTemp("", "amx-legacy-view-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	defer cancel()
+	store, err := managed.Init(state, managedconfig.Config{Version: 2, Mode: "managed", Session: "core", Agents: map[string]managedconfig.Agent{"alice": {Harness: "command", Command: []string{"/bin/true"}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	observer := filepath.Join(state, "observer")
+	if err := os.WriteFile(observer, []byte("#!/bin/sh\nexec /bin/sleep 60\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	l, err := New(Options{StateDir: state, Executable: observer})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixtureEnv := []string{"PATH=/usr/bin:/bin", "HOME=" + state, "SHELL=/bin/sh", "TERM=xterm-256color", "LC_ALL=C"}
+	l.run = func(ctx context.Context, args ...string) (string, error) {
+		command := exec.CommandContext(ctx, realTMux, append([]string{"-u"}, args...)...)
+		command.Env = fixtureEnv
+		output, err := command.CombinedOutput()
+		if err != nil {
+			err = fmt.Errorf("tmux %q: %w: %s", args, err, output)
+		}
+		return string(output), err
+	}
+	var clientDone []<-chan error
+	t.Cleanup(func() {
+		_, _ = l.tmux(context.Background(), "kill-server")
+		for _, done := range clientDone {
+			select {
+			case <-done:
+			case <-time.After(3 * time.Second):
+				t.Error("fixture client did not stop with its server")
+			}
+		}
+		_ = os.RemoveAll(state)
+		_ = os.RemoveAll(state + ".bin")
+	})
+	tmux := func(args ...string) string {
+		t.Helper()
+		out, err := l.tmux(ctx, args...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return strings.TrimSpace(out)
+	}
+	wait := func(description string, predicate func() bool) {
+		t.Helper()
+		for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
+			if predicate() {
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		t.Fatal("timed out: " + description)
+	}
+	runtime := Runtime{Session: "core", AttemptID: "run_legacy_view", Agents: map[string]AgentPane{}}
+	runtime.DashboardPane = tmux("new-session", "-d", "-s", runtime.Session, "-n", "dashboard", "-P", "-F", "#{pane_id}", "exec /bin/sleep 60")
+	tmux("set-option", "-t", runtime.Session, "@agentmux_runtime", runtime.AttemptID)
+	if err := l.tagPane(ctx, runtime.DashboardPane, runtime.AttemptID, "dashboard", ""); err != nil {
+		t.Fatal(err)
+	}
+	worker := tmux("new-window", "-d", "-t", runtime.Session, "-n", "agent-alice", "-P", "-F", "#{pane_id}", "exec /bin/sleep 60")
+	if err := l.tagPane(ctx, worker, runtime.AttemptID, "worker", "alice"); err != nil {
+		t.Fatal(err)
+	}
+	runtime.Agents["alice"] = AgentPane{PaneID: worker, State: "running"}
+	tmux("new-session", "-d", "-t", runtime.Session, "-s", "legacy")
+	tmux("set-option", "-t", "legacy", "@agentmux_view", runtime.AttemptID)
+	for _, session := range []string{runtime.Session, "legacy"} {
+		if got := tmux("display-message", "-p", "-t", session+":", "#{@agentmux_dashboard}"); got != "" {
+			t.Fatalf("legacy fixture unexpectedly had a dashboard option: %q", got)
+		}
+	}
+	tmux("bind-key", "-n", "F1", "select-window", "-t", runtime.DashboardPane)
+	tmux("select-window", "-t", "legacy:1")
+	oldCommand := exec.CommandContext(ctx, python, "-c", clientViewsPTYDriver, realTMux, "-u", "-S", SocketPath(state), "attach-session", "-t", "legacy")
+	oldCommand.Env = fixtureEnv
+	oldInput, err := oldCommand.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = oldInput.Close() })
+	oldCommand.Stdout, oldCommand.Stderr = io.Discard, io.Discard
+	if err := oldCommand.Start(); err != nil {
+		t.Fatal(err)
+	}
+	oldDone := make(chan error, 1)
+	go func() { oldDone <- oldCommand.Wait() }()
+	clientDone = append(clientDone, oldDone)
+	wait("legacy terminal attaches", func() bool { return tmux("list-clients", "-F", "#{client_session}") == "legacy" })
+	// Foreground AttachAgent gets a real PTY, while owner operations retain the
+	// real tmux path and the server sees only the fixture environment above.
+	bin := t.TempDir()
+	command := append([]string{"/usr/bin/env", "-i"}, fixtureEnv...)
+	command = append(command, python, "-c", clientViewsPTYDriver, realTMux, "-u")
+	if err := os.WriteFile(filepath.Join(bin, "tmux"), []byte("#!/bin/sh\nexec "+ShellCommand(command)+" \"$@\"\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+":/usr/bin:/bin")
+	t.Setenv("TMUX", "")
+	newInput, newWriter := io.Pipe()
+	t.Cleanup(func() { _ = newWriter.Close(); _ = newInput.Close() })
+	newDone := make(chan error, 1)
+	go func() { newDone <- l.AttachAgent(ctx, runtime, "alice", newInput, io.Discard, io.Discard) }()
+	clientDone = append(clientDone, newDone)
+	view := ""
+	wait("new private attachment joins legacy terminal", func() bool {
+		for _, session := range strings.Fields(tmux("list-clients", "-F", "#{client_session}")) {
+			if session != "legacy" {
+				view = session
+			}
+		}
+		return view != ""
+	})
+	private := tmux("show-options", "-v", "-t", view, "@agentmux_dashboard")
+	if private == runtime.DashboardPane || !validPane(private) {
+		t.Fatalf("new view did not retain its private dashboard: %q", private)
+	}
+	for _, session := range []string{runtime.Session, "legacy"} {
+		if got := tmux("display-message", "-p", "-t", session+":", "#{@agentmux_dashboard}"); got != runtime.DashboardPane {
+			t.Fatalf("legacy session %s lost its core dashboard fallback: %q", session, got)
+		}
+	}
+	current := func(session string) string { return tmux("display-message", "-p", "-t", session+":", "#{pane_id}") }
+	for _, keys := range []string{"\x1bOP", "\x02g"} {
+		tmux("select-window", "-t", "legacy:1")
+		if _, err := io.WriteString(oldInput, keys); err != nil {
+			t.Fatal(err)
+		}
+		wait("legacy shortcut returns to core dashboard", func() bool { return current("legacy") == runtime.DashboardPane })
+		if current(view) != worker {
+			t.Fatal("legacy shortcut moved the new private client")
+		}
+	}
+	if _, err := io.WriteString(newWriter, "\x1bOP"); err != nil {
+		t.Fatal(err)
+	}
+	wait("new shortcut returns to private dashboard", func() bool { return current(view) == private })
+	if current("legacy") != runtime.DashboardPane {
+		t.Fatal("new shortcut moved the legacy client")
+	}
+	// A known pane with changed ownership must not become an inherited target.
+	tmux("set-option", "-p", "-t", runtime.DashboardPane, "@agentmux_role", "worker")
+	if err := l.ensureDashboardFallback(ctx, runtime); err == nil {
+		t.Fatal("retagged core dashboard was accepted as an owner UI")
+	}
+	tmux("set-option", "-p", "-t", runtime.DashboardPane, "@agentmux_role", "dashboard")
+	workerPID := tmux("display-message", "-p", "-t", worker, "#{pane_pid}")
+	tmux("kill-window", "-t", runtime.DashboardPane)
+	// Optional compatibility fallback must not make the old core UI a new
+	// lifecycle dependency: a replacement attachment has its own dashboard.
+	replacementInput, replacementWriter := io.Pipe()
+	t.Cleanup(func() { _ = replacementWriter.Close(); _ = replacementInput.Close() })
+	replacementDone := make(chan error, 1)
+	go func() {
+		replacementDone <- l.AttachAgent(ctx, runtime, "alice", replacementInput, io.Discard, io.Discard)
+	}()
+	clientDone = append(clientDone, replacementDone)
+	replacement := ""
+	wait("new attachment survives a removed core dashboard", func() bool {
+		for _, session := range strings.Fields(tmux("list-clients", "-F", "#{client_session}")) {
+			if session != "legacy" && session != view {
+				replacement = session
+			}
+		}
+		return replacement != ""
+	})
+	replacementDashboard := tmux("show-options", "-v", "-t", replacement, "@agentmux_dashboard")
+	if !validPane(replacementDashboard) || replacementDashboard == runtime.DashboardPane || replacementDashboard == private {
+		t.Fatalf("missing core UI prevented a new private dashboard: %q", replacementDashboard)
+	}
+	if _, err := io.WriteString(replacementWriter, "\x1bOP"); err != nil {
+		t.Fatal(err)
+	}
+	wait("replacement F1 selects its private dashboard", func() bool { return current(replacement) == replacementDashboard })
+	if current(view) != private || tmux("display-message", "-p", "-t", worker, "#{pane_pid}") != workerPID {
+		t.Fatal("replacing a removed core UI changed an existing attachment or worker")
 	}
 }

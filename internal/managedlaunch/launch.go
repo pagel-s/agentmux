@@ -350,6 +350,9 @@ func (l *Launcher) AttachAgent(ctx context.Context, runtime Runtime, agent strin
 		return err
 	}
 	l = &observer
+	if err := l.ensureDashboardFallback(ctx, runtime); err != nil {
+		return err
+	}
 	id, err := newID()
 	if err != nil {
 		return err

@@ -38,6 +38,37 @@ printf '\nPress Enter to close. Agent terminals keep running.\n'
 IFS= read -r _
 `
 
+// Older grouped attachments have no session dashboard option. Keep their
+// original core dashboard as the inherited default when a new attachment
+// installs the dynamic server-wide shortcuts; new views override it locally.
+func (l *Launcher) ensureDashboardFallback(ctx context.Context, runtime Runtime) error {
+	if !l.ownsSession(ctx, runtime) {
+		return errors.New("managed dashboard ownership changed")
+	}
+	if runtime.DashboardPane == "" {
+		return nil
+	}
+	if !validPane(runtime.DashboardPane) {
+		return errors.New("invalid managed dashboard identity")
+	}
+	panes, err := l.panes(ctx, runtime)
+	if err != nil {
+		return err
+	}
+	for _, pane := range panes {
+		if pane.ID == runtime.DashboardPane {
+			if pane.Attempt != runtime.AttemptID || pane.Role != "dashboard" {
+				return errors.New("managed dashboard ownership changed")
+			}
+			_, err := l.tmux(ctx, "set-option", "-g", "@agentmux_dashboard", runtime.DashboardPane)
+			return err
+		}
+	}
+	// A removed core dashboard cannot serve old views, but it must not prevent
+	// creating a healthy new private UI for the still-owned worker lifecycle.
+	return nil
+}
+
 // Bind only the dedicated managed server. User tmux servers and configuration
 // are never modified. Popups run owner controls outside agent sandboxes.
 func (l *Launcher) configureWorkbench(ctx context.Context, runtime Runtime) error {
