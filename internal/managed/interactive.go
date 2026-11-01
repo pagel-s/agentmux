@@ -157,7 +157,14 @@ func runInteractiveAgent(ctx context.Context, opts WorkerOptions, cfg managedcon
 		for _, file := range auth.Files {
 			files = append(files, sandbox.HomeFile{Source: file.Source, Target: file.Target})
 		}
-		paths := append(append([]string{}, agent.ReadOnlyPaths...), executable, binary)
+		paths := append(append([]string{}, agent.ReadOnlyPaths...), executable)
+		// Wrapping a provider hides its executable from sandbox.Wrap's normal
+		// dependency discovery. Add it only when needed: system executables are
+		// already exposed, and rebinding aliases such as /bin/sh is rejected by
+		// supported Bubblewrap versions that prohibit symlink destinations.
+		if spec.Binary != binary && !sandbox.RuntimeExposes(binary) {
+			paths = append(paths, binary)
+		}
 		return sandbox.Wrap(spec, sandbox.Options{Mode: agent.Sandbox, Network: agent.Network, Workspace: agent.Workdir,
 			StateDir: dir, CredentialFile: credentialPath, SocketPath: bridgeSocket, ReadOnlyPaths: paths, HomeFiles: files,
 			Limits: sandbox.Limits{MemoryBytes: agent.Resources.MemoryBytes, CPUPercent: agent.Resources.CPUPercent, Processes: agent.Resources.Processes, OpenFiles: agent.Resources.OpenFiles, CPUSeconds: agent.Resources.CPUSeconds, AddressSpaceBytes: agent.Resources.AddressSpaceBytes}})
