@@ -5,7 +5,8 @@ conversations when useful, and grow into bounded automation or controlled
 multiagent studies. The terminal is the place to work directly with agents;
 the web app provides a larger view of relationships, shared context and evidence.
 
-This guide follows the current source build. [Install Agentmux](getting-started/installation.md)
+The managed runtime and workbench are experimental. This guide follows the
+current source build. [Install Agentmux](getting-started/installation.md)
 to get both `agentmux` and its shorter name, `amx`. Native providers must be
 installed and authenticated separately. A new installation does not replace
 an existing workspace's pinned controller; use a fresh workspace for all current
@@ -454,6 +455,9 @@ trial, phase and runtime limits; use a new output path. Pausing does not extend
 any of those deadlines.
 
 [![Live research console shows one completed coordination phase a paused decision boundary and reasoned intervention controls](assets/guide/web-research.jpg)](assets/guide/web-research.jpg)
+
+The research screenshots show a one-condition demo. The bundled public-goods
+smoke plans six trials across its conditions and seeds.
 
 The console shows trial/condition, phase, admitted population, task outcomes,
 deadlines, runner heartbeat and requested versus acknowledged controls. Web
