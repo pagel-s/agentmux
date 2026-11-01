@@ -528,6 +528,7 @@ type Task struct {
 	Trace     *TraceSummary   `json:"trace,omitempty"`
 	Origin    *TaskOrigin     `json:"origin,omitempty"`
 	Native    *NativeReceipt  `json:"native,omitempty"`
+	Recovery  *TaskRecovery   `json:"recovery,omitempty"`
 }
 
 // Persist lease fields separately from public task JSON. They are never part
@@ -546,6 +547,8 @@ func loadTask(ctx context.Context, q queryer, id string) (taskRecord, error) {
 	return t, err
 }
 func saveTask(ctx context.Context, q queryer, t taskRecord) error {
+	// Recovery is current owner-only read evidence, never durable authority.
+	t.Recovery = nil
 	return save(ctx, q, "task", t.ID, t.From, t.To, "", t)
 }
 

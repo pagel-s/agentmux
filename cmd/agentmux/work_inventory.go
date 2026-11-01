@@ -130,6 +130,9 @@ func runWorkInventory(args []string, out, diagnostics io.Writer) int {
 	unconnected := unconnectedObservations(registered, observations)
 	for _, s := range unconnected {
 		fmt.Fprintf(out, "%s\n  ID %s · %s · observed · %s · started %s\n  %s · %s\n", consoleContent(observedTitle(s), 160), s.ID, s.Harness, consoleContent(s.TTY, 60), sessionAdded(s.StartedAt), consoleContent(s.Project, 300), consoleContent(s.TmuxSession, 100))
+		if note := observationWorkspaceNote(s); note != "" {
+			fmt.Fprintln(out, consoleContent(note, 4000))
+		}
 	}
 	if registryErr != nil {
 		fmt.Fprintln(out, "Registered sessions unavailable; workspace session and bridge counts are unknown.")
@@ -332,7 +335,11 @@ func connectObservedSessionWithID(ctx context.Context, state, reference, id stri
 		}
 		return "", id, err
 	}
-	return bridgeInstructions(state, id), id, nil
+	setup := bridgeInstructions(state, id)
+	if note := observationWorkspaceNote(*found); note != "" {
+		setup = consoleContent(note, 4000) + "\n\n" + setup
+	}
+	return setup, id, nil
 }
 
 // readBridgeFile reads only a bounded private regular file and rejects symlinks

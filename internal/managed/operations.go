@@ -361,7 +361,7 @@ func (s *Store) dispatch(ctx context.Context, q queryer, a actor, r Request) (an
 		if err != nil {
 			return nil, internal(err)
 		}
-		tasks, err := list[Task](ctx, q, "task", "ORDER BY seq DESC LIMIT ?", in.Limit)
+		tasks, err := list[taskRecord](ctx, q, "task", "ORDER BY seq DESC LIMIT ?", in.Limit)
 		if err != nil {
 			return nil, internal(err)
 		}
@@ -382,7 +382,12 @@ func (s *Store) dispatch(ctx context.Context, q queryer, a actor, r Request) (an
 		}
 		size = 0
 		tp := []Task{}
-		for _, t := range tasks {
+		viewTask, p := s.taskViews(ctx, q, a)
+		if p != nil {
+			return nil, p
+		}
+		for _, record := range tasks {
+			t := viewTask(record)
 			raw, _ := json.Marshal(t)
 			if size+len(raw) > maxWireBytes/3 {
 				break
@@ -699,6 +704,10 @@ func (s *Store) messages(ctx context.Context, q queryer, a actor, raw json.RawMe
 }
 
 func (s *Store) tasks(ctx context.Context, q queryer, a actor, r Request) (any, *Fault) {
+	viewTask, p := s.taskViews(ctx, q, a)
+	if p != nil {
+		return nil, p
+	}
 	if r.Operation == "task.list" {
 		var in struct {
 			State string `json:"state"`
@@ -770,12 +779,13 @@ func (s *Store) tasks(ctx context.Context, q queryer, a actor, r Request) (any, 
 			if len(visible) >= in.Limit {
 				break
 			}
-			raw, _ := json.Marshal(t.Task)
+			view := viewTask(t)
+			raw, _ := json.Marshal(view)
 			if size+len(raw) > maxWireBytes/2 {
 				break
 			}
 			size += len(raw)
-			visible = append(visible, t.Task)
+			visible = append(visible, view)
 			cursor = t.ID
 		}
 		if len(visible) == 0 && len(all) > 0 {
@@ -897,7 +907,7 @@ func (s *Store) tasks(ctx context.Context, q queryer, a actor, r Request) (any, 
 				return nil, fault("conflict", "task lease is no longer valid")
 			}
 		}
-		return map[string]any{"task": t.Task}, nil
+		return map[string]any{"task": viewTask(t)}, nil
 	}
 	if in.Version != t.Version {
 		return nil, fault("conflict", "task version changed; read it again")
@@ -996,12 +1006,7 @@ func (s *Store) tasks(ctx context.Context, q queryer, a actor, r Request) (any, 
 		}
 		// Expired leases can be fenced without restarting the broker. The owner
 		// must stop the old process before requesting a retry.
-		if t.Delivery == "dispatching" && t.Expires < time.Now().Unix() {
-			t.Delivery = "uncertain"
-		}
-		if t.Delivery == "cancel_requested" && t.Expires < time.Now().Unix() {
-			t.Delivery = "cancel_uncertain"
-		}
+		t.Delivery = effectiveTaskDelivery(t, time.Now().Unix())
 		if t.Delivery == "cancel_uncertain" && in.Resolution == "fail" {
 			t.Delivery = "stopped"
 			break
@@ -1037,7 +1042,7 @@ func (s *Store) tasks(ctx context.Context, q queryer, a actor, r Request) (any, 
 	if err = event(ctx, q, a, r.Operation, t.ID, map[string]any{"state": t.State, "delivery": t.Delivery, "version": t.Version, "from": t.From, "to": t.To}); err != nil {
 		return nil, internal(err)
 	}
-	return map[string]any{"task": t.Task}, nil
+	return map[string]any{"task": viewTask(t)}, nil
 }
 
 func (s *Store) memory(ctx context.Context, q queryer, a actor, r Request) (any, *Fault) {

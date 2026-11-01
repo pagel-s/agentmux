@@ -25,6 +25,8 @@ import (
 type consoleTick time.Time
 type consoleData struct {
 	focusRevision          uint64
+	focusSequence          uint64
+	historyErr             error
 	taskSummary            map[string]managed.TaskSummary
 	taskSummaryErr         error
 	study                  *research.StudyView
@@ -66,6 +68,7 @@ type consoleAction struct {
 }
 type console struct {
 	selectionRevision                                     uint64
+	focusSequence                                         uint64
 	messageHistoryScope, eventHistoryScope, eventPinScope *consoleHistoryPage
 	studyFollow                                           bool
 	messageQuery, messageAfter, messageCursor             string
@@ -115,6 +118,7 @@ type console struct {
 	memoryOpen                                            bool
 	memoryKey                                             string
 	memoryVersion                                         int
+	memoryReplace                                         bool
 	memoryRequest                                         uint64
 	memoryLoading                                         bool
 	observedSelected                                      int
@@ -187,12 +191,14 @@ func (m console) selectedID() string {
 func (m console) Init() tea.Cmd { return tea.Batch(m.fetch, consoleTimer()) }
 
 func (m console) fetch() tea.Msg {
+	focusID, focusRevision, focusSequence := consumeConsoleFocusOrdered(m.state)
 	var d consoleData
 	if m.tab == 4 {
 		d = fetchWorkSnapshot(m.state, m.client, m.selectedID(), &consoleTaskPage{Query: m.taskQuery, After: m.taskAfter, Recipient: m.taskRecipient, State: m.taskState})
 	} else {
 		d = fetchWorkSnapshot(m.state, m.client, m.selectedID())
 	}
+	d.focusID, d.focusRevision, d.focusSequence = focusID, focusRevision, focusSequence
 	m.fetchHistory(&d)
 	m.fetchTaskSummary(&d)
 	m.fetchStudy(&d)
@@ -203,7 +209,6 @@ func fetchWorkSnapshot(state string, client *managed.Client, selected string, ta
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
 	d := consoleData{selected: selected}
-	d.focusID, d.focusRevision = consumeConsoleFocus(state)
 	agents, err := workRegistry(ctx, client)
 	if err != nil {
 		status, problem := client.LocalResearchStatus(ctx, state)
@@ -475,10 +480,12 @@ func (m console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.reader = &consoleReader{title: "Knowledge exposure · " + msg.agent, body: msg.body}
 		}
 	case consoleWorkspaceList:
-		if msg.request != m.workspaceRequest {
+		if msg.request != m.workspaceRequest || m.workspacePicker == nil {
 			return m, nil
 		}
 		if msg.err != nil {
+			m.workspacePicker.loading = false
+			m.workspacePicker.err = msg.err
 			m.message = "Workspace inventory unavailable: " + activityText(msg.err.Error(), 160)
 		} else {
 			m.workspacePicker = &consoleWorkspacePicker{rows: msg.rows}
@@ -522,11 +529,12 @@ func (m console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case consoleTick:
 		return m, tea.Batch(m.fetch, consoleTimer())
 	case consoleData:
-		if msg.focusID != "" && msg.focusRevision == m.selectionRevision {
+		if msg.focusID != "" && msg.focusRevision == m.selectionRevision && (msg.focusSequence == 0 || msg.focusSequence > m.focusSequence) {
 			m.pendingFocus = msg.focusID
+			m.focusSequence = max(m.focusSequence, msg.focusSequence)
 		}
 		m.syncHistoryScopes()
-		if msg.err != nil && ((msg.messagePage != nil && !sameHistoryRequest(*msg.messagePage, m.messagePageRequest())) || (msg.eventPage != nil && !sameHistoryRequest(*msg.eventPage, m.eventPageRequest()))) {
+		if (msg.err != nil || msg.historyErr != nil) && ((msg.messagePage != nil && !sameHistoryRequest(*msg.messagePage, m.messagePageRequest())) || (msg.eventPage != nil && !sameHistoryRequest(*msg.eventPage, m.eventPageRequest()))) {
 			return m, nil
 		}
 		if msg.study != nil {

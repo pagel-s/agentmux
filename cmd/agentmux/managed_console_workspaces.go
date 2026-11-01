@@ -20,11 +20,14 @@ type consoleWorkspaceList struct {
 type consoleWorkspacePicker struct {
 	rows     []workspaceListing
 	selected int
+	loading  bool
+	err      error
 }
 
 func (m console) workspaceKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "q":
+		m.workspaceRequest++
 		m.workspacePicker = nil
 	case "ctrl+c":
 		return m, m.close()
@@ -33,6 +36,9 @@ func (m console) workspaceKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "up", "k":
 		m.workspacePicker.selected = max(0, m.workspacePicker.selected-1)
 	case "enter":
+		if m.workspacePicker.loading || m.workspacePicker.err != nil {
+			return m, nil
+		}
 		if len(m.workspacePicker.rows) == 0 {
 			return m, nil
 		}
@@ -53,6 +59,12 @@ func (m console) workspacePanel(width, height int) string {
 	var out strings.Builder
 	out.WriteString(consoleAccent.Render("Workspaces") + "\n" + consoleMuted.Render("↑/↓ choose · Enter opens workspace · Esc cancels") + "\n\n")
 	rows := m.workspacePicker.rows
+	if m.workspacePicker.loading {
+		return consoleClip(out.String()+"Loading saved workspaces…\nYour previous draft or review remains open. Esc cancels.", width, height)
+	}
+	if m.workspacePicker.err != nil {
+		return consoleClip(out.String()+"Workspace inventory unavailable: "+consoleContent(m.workspacePicker.err.Error(), 300)+"\nEsc returns to your previous draft or review.", width, height)
+	}
 	if len(rows) == 0 {
 		out.WriteString("No saved workspaces found. agentmux start creates one.\nOlder custom paths: agentmux workspaces --register DIR")
 	}
@@ -113,6 +125,7 @@ func (m console) openWorkspace(state string) (tea.Model, tea.Cmd) {
 
 func (m *console) requestWorkspacePicker() tea.Cmd {
 	m.workspaceRequest++
+	m.workspacePicker = &consoleWorkspacePicker{loading: true}
 	request := m.workspaceRequest
 	return func() tea.Msg {
 		rows, err := workspaceInventory("")

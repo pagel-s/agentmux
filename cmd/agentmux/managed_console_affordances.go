@@ -162,6 +162,12 @@ func (m console) teamKeyHints() string {
 func (m console) contextualKeys() string {
 	common := "←/→ views · Ctrl+P sessions · Ctrl+K Actions\nShift+W workspaces · ? help · q detach/close"
 	if m.workspacePicker != nil {
+		if m.workspacePicker.loading {
+			return "Loading workspaces · Esc/q returns to your previous draft or review"
+		}
+		if m.workspacePicker.err != nil {
+			return "Workspace inventory unavailable · Esc/q back"
+		}
 		return "↑/↓ workspace · Enter opens observer · Esc/q back"
 	}
 	if m.ownerReview != nil {

@@ -4,6 +4,12 @@
 
 Changes on `main` after the tagged `v0.10.0-rc.1` preview:
 
+- A further usability sweep fixes loading-modal input capture, stale native
+  focus, old-controller history compatibility, large-list navigation, exact
+  permanent-team impact reviews, recovery of expired deliveries, memory
+  replacement/import races, and Pi transport receipt truth. Final-phase research
+  controls now govern trial transitions; study observation verifies frozen plans.
+
 - Reviewed, target-bound control center actions, quick native additions,
   cross-workspace handoff, attention and scoped history; exact group disconnect,
   safe uncertainty recovery, session retirement and metadata-preserving memory

@@ -169,15 +169,15 @@ export function createBridge(pi, call, options = {}) {
     if (ready.state !== "idle") { show(`Agentmux: ${ready.reason}`); return; }
     // Claim/report round trips can race with human typing. Recheck immediately
     // before injection, after every awaited operation, and never touch the draft.
-    if (!item.submitted) {
-      try { await call("native.event", { session, id: item.delivery.id, phase: "submitted" }); }
+    if (!item.submitting) {
+      try { await call("native.event", { session, id: item.delivery.id, phase: "submitting" }); }
       catch (error) {
         if (error.definite && ["conflict", "forbidden", "not_found"].includes(error.code)) fence(item.delivery.id);
         throw error;
       }
       if (closed || active !== item) return;
-      item.submitted = true;
-      save({ id: item.delivery.id, phase: "submitted", reported: true });
+      item.submitting = true;
+      save({ id: item.delivery.id, phase: "submitting", reported: true });
     }
     if (readiness().state !== "idle") return;
     item.injected = true;
@@ -186,6 +186,14 @@ export function createBridge(pi, call, options = {}) {
     pi.sendMessage({ customType: MESSAGE, content: prompt(item.delivery), display: true,
       details: { delivery_id: item.delivery.id, task_id: item.delivery.task_id, from: item.delivery.from } },
     { triggerTurn: true, deliverAs: "followUp" });
+    // A draft may have delayed injection after the pre-submit broker barrier.
+    // Only a successful native call proves submission. Retain this receipt for
+    // retry without repeating sendMessage, and preserve any synchronous start
+    // or settlement evidence emitted by the native call itself.
+    if (seen.get(item.delivery.id)?.phase === "submitting") {
+      queueEvent({ id: item.delivery.id, phase: "submitted" });
+    }
+    await flushEvents();
   };
   async function tick() {
     if (closed || ticking || !ctx) return;
@@ -260,7 +268,7 @@ export function createBridge(pi, call, options = {}) {
         return;
       }
       save({ id: delivery.id, phase: "claimed" });
-      active = { delivery, submitted: false, injected: false, started: false, humanIntervened: false, result: "", outcome: "" };
+      active = { delivery, submitting: false, injected: false, started: false, humanIntervened: false, result: "", outcome: "" };
       await begin();
     } catch {
       if (!closed) show(fenced ? "Agentmux: delivery fenced; resolve the uncertain task" : "Agentmux: broker unavailable; delivery paused");

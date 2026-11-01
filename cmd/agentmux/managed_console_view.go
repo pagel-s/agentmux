@@ -116,6 +116,7 @@ func (m console) panel(width, height int) string {
 	}
 	switch m.tab {
 	case 0:
+		out.WriteString(consoleMuted.Render(m.historyAvailability()))
 		board := m.selectedBoard()
 		boardLabel := "No shared board"
 		if board != "" {

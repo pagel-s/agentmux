@@ -1701,3 +1701,8 @@ h1 {
 #study-trials { max-height:180px; overflow:auto; font:11px var(--mono); }
 .study-trial { margin:5px 0; color:var(--muted); }
 #research-history pre { white-space:pre-wrap; overflow-wrap:anywhere; max-height:45vh; overflow:auto; }
+
+.connection-list-paging { display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px; border-top:1px solid var(--line); padding:12px; }
+#connection-list-status { padding:0 12px; margin:4px 0 10px; overflow-wrap:anywhere; }
+.isolation-impact { margin:10px 0; font-size:11px; overflow-wrap:anywhere; }
+.isolation-impact ul { margin:6px 0; padding-left:20px; max-height:140px; overflow:auto; }

@@ -135,6 +135,49 @@ func (l *liveRunner) barrier(ctx context.Context, round int, phase string, popul
 	}
 }
 
+// complete freezes terminal progress and the next attempt's admission intent
+// in one broker transaction. There is no extra phase to release here: a used
+// step carries a pause, while an unused step still grants exactly one phase.
+// A final study trial can finish without waiting at a nonexistent barrier.
+func (l *liveRunner) complete(ctx context.Context) (*managed.ResearchStatus, string, error) {
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, "", err
+		}
+		raw, err := l.call(ctx, "research.status", map[string]any{})
+		if err != nil {
+			return nil, "", liveContextError(ctx, err)
+		}
+		var response struct {
+			Research *managed.ResearchStatus `json:"research"`
+		}
+		if json.Unmarshal(raw, &response) != nil || response.Research == nil {
+			return nil, "", errors.New("research control state missing at completion")
+		}
+		control := response.Research.Control
+		next := control.Mode
+		if next == "step" && l.stepVersion == control.Version {
+			next = "paused"
+		}
+		l.progress.AckVersion = control.Version
+		l.progress.State = "completed"
+		if control.Mode == "stopped" {
+			l.progress.State = "stopped"
+		}
+		status, err := l.publish(ctx)
+		if researchAdmissionConflict(err) {
+			continue
+		}
+		if err != nil {
+			return nil, "", err
+		}
+		if control.Mode == "stopped" {
+			return status, "", ErrResearchStopped
+		}
+		return status, next, nil
+	}
+}
+
 // Broker cancellation faults lose Go's context error identity across RPC. Only
 // an actually ended caller context takes precedence over a transport fault;
 // live-context broker errors still retain their code and are never retried here.

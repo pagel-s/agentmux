@@ -222,9 +222,10 @@ agentmux web --session try-agentmux --open
 ```
 
 If your desktop does not open it, use the full private URL printed by the
-command. Try **Graph** for directional relationships and shared access, **Teams**
-for the owner group's scope, **Memory** to inspect `demo-greeting`, and **Tasks**
-for instruction history. Select a session before changing its controls; review
+command. Try **Connections** for directional relationships and shared access,
+**Groups & teams** for the owner group's scope, **Memory** to inspect
+`demo-greeting`, and **Tasks** for instruction history. Select a session before
+changing its controls; review
 the exact sender, recipient and effective permission. Note, ping and instruction
 authority, and namespace read/write access, are separate controls.
 

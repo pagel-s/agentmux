@@ -243,7 +243,15 @@ func Import(ctx context.Context, c Caller, a Archive, namespace string, replace 
 			var out struct {
 				Entry managed.Memory `json:"entry"`
 			}
-			json.Unmarshal(current, &out)
+			if json.Unmarshal(current, &out) != nil {
+				return result, errors.New("invalid memory entry")
+			}
+			// memory.head and memory.get are separate authenticated snapshots.
+			// A value-only patch retains import claims, so claims alone cannot
+			// establish that the destination still holds this archived value.
+			if out.Entry.Namespace != namespace || out.Entry.Key != m.Key || out.Entry.Deleted || out.Entry.Version != head.Version || out.Entry.SHA256 != head.SHA256 || digestText(out.Entry.Value) != digestText(m.Value) {
+				return result, fmt.Errorf("destination key %q changed during import preflight; retry after reviewing the current version", m.Key)
+			}
 			matching := false
 			for _, source := range out.Entry.Sources {
 				if source.Kind == "import" && source.ID == marker && source.SHA256 == digestText(m.Value) && source.ArchiveSHA256 == a.SHA256 && source.SourceSession == a.SourceSession && source.SourceAgent == a.SourceAgent && source.SourceNamespace == a.Namespace && source.SourceAuthor == m.Author && source.SourceKey == m.Key && source.SourceVersion == m.Version {

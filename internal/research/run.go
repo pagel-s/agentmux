@@ -226,6 +226,7 @@ func Run(ctx context.Context, m Manifest, opts RunOptions) (Report, error) {
 			return report, err
 		}
 	}
+	admission := "running"
 	for _, trial := range plan.Trials {
 		if err := ctx.Err(); err != nil {
 			return report, err
@@ -238,7 +239,7 @@ func Run(ctx context.Context, m Manifest, opts RunOptions) (Report, error) {
 		if err := budget.execution.check(); err != nil {
 			return report, err
 		}
-		result, runErr := runTrial(ctx, m, trial, condition(m, trial.Condition), attempt.number, filepath.Join(dir, trial.ID, fmt.Sprintf("attempt-%03d", attempt.number)), opts.Executable, budget, opts.StartPaused, opts.OnLive)
+		result, runErr := runTrial(ctx, m, trial, condition(m, trial.Condition), attempt.number, filepath.Join(dir, trial.ID, fmt.Sprintf("attempt-%03d", attempt.number)), opts.Executable, budget, opts.StartPaused, &admission, opts.OnLive)
 		report.Results = append(report.Results, result)
 		if err := writeJSON(filepath.Join(dir, "results.json"), report); err != nil {
 			return report, err
@@ -257,7 +258,7 @@ func Run(ctx context.Context, m Manifest, opts RunOptions) (Report, error) {
 	return report, nil
 }
 
-func runTrial(parent context.Context, m Manifest, trial Trial, c Condition, attempt int, dir, binary string, budget *modelBudget, startPaused bool, onLive func(string)) (result Result, returned error) {
+func runTrial(parent context.Context, m Manifest, trial Trial, c Condition, attempt int, dir, binary string, budget *modelBudget, startPaused bool, admission *string, onLive func(string)) (result Result, returned error) {
 	result = Result{InterventionProtocol: interventionProtocol, Protocol: decisionProtocol, Trial: trial, Attempt: attempt, Status: "interrupted", StartedAt: time.Now().UTC().Format(time.RFC3339Nano), Baselines: map[string][]Outcome{}, ActorMetadata: map[string]AgentLabel{}}
 	if err := os.Mkdir(dir, 0700); err != nil {
 		return result, err
@@ -412,7 +413,15 @@ func runTrial(parent context.Context, m Manifest, trial Trial, c Condition, atte
 		}
 		var status *managed.ResearchStatus
 		var err error
-		if alreadyStopped {
+		if returned == nil {
+			var next string
+			status, next, err = live.complete(finishCtx)
+			if errors.Is(err, ErrResearchStopped) {
+				returned, err = err, nil
+			} else if err == nil {
+				*admission = next
+			}
+		} else if alreadyStopped {
 			raw, e := call(finishCtx, "research.status", map[string]any{})
 			err = e
 			var response struct {
@@ -442,8 +451,18 @@ func runTrial(parent context.Context, m Manifest, trial Trial, c Condition, atte
 			returned = err
 		}
 	}()
+	initialAction, initialReason := "", ""
 	if startPaused {
-		if _, err := call(ctx, "research.control", map[string]any{"version": 1, "action": "pause", "reason": "explicit --start-paused exploratory run"}); err != nil {
+		initialAction, initialReason = "pause", "explicit --start-paused exploratory run"
+	} else if *admission == "paused" || *admission == "step" {
+		initialAction = "pause"
+		if *admission == "step" {
+			initialAction = "step"
+		}
+		initialReason = "carry " + *admission + " admission from the previous trial's terminal phase boundary"
+	}
+	if initialAction != "" {
+		if _, err := call(ctx, "research.control", map[string]any{"version": 1, "action": initialAction, "reason": initialReason}); err != nil {
 			return result, err
 		}
 	}

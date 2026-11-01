@@ -67,7 +67,17 @@ func (m console) fetchHistory(d *consoleData) {
 	}
 	raw, err := workCall(context.Background(), m.client, op, args)
 	if err != nil {
-		d.err = err
+		d.historyErr = err
+		// An unsupported history API must not discard the healthy roster or
+		// disable owner controls. Only the unqueried first page can use the
+		// bounded activity snapshot; never present it as a search/older page.
+		if p.After != "" || p.Query != "" || m.tab == 7 && p.Agent != "" {
+			if m.tab == 0 {
+				d.activity.Messages = nil
+			} else {
+				d.activity.Events = nil
+			}
+		}
 		return
 	}
 	var result struct {
@@ -77,7 +87,12 @@ func (m console) fetchHistory(d *consoleData) {
 		More     bool              `json:"has_more"`
 	}
 	if err = json.Unmarshal(raw, &result); err != nil {
-		d.err = err
+		d.historyErr = err
+		if m.tab == 0 {
+			d.activity.Messages = nil
+		} else {
+			d.activity.Events = nil
+		}
 		return
 	}
 	p.Cursor, p.More = result.Cursor, result.More
@@ -88,6 +103,13 @@ func (m console) fetchHistory(d *consoleData) {
 		d.activity.Events = result.Events
 		d.eventPage = &p
 	}
+}
+
+func (m console) historyAvailability() string {
+	if m.data.historyErr == nil {
+		return ""
+	}
+	return "Complete history unavailable; recent snapshot only when no search or older page is selected.\nThe running controller may be older. Use an updated controller/new workspace for scoped history.\n" + activityText(m.data.historyErr.Error(), 180) + "\n\n"
 }
 func (m console) historyPageKey(key string) (console, tea.Cmd, bool) {
 	if m.tab != 0 && m.tab != 7 {
