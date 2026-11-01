@@ -1,10 +1,6 @@
-# Mental Model
+# Layout compiler mental model
 
-Agentmux sits exactly between two extremes:
-1.  **Manual Multiplexing:** Hand-typing `tmux split-window` commands.
-2.  **Black-Box Daemons:** Complex background services that manage agent memory and execution opaquely.
-
-This page describes the legacy v1 workspace compiler (`apply`, `plan`, and raw
+This page describes the legacy v1 workspace compiler (`load`, `render`, and raw
 tmux pane commands). Its declarative launch layer is stateless.
 
 The v2 [managed runtime](../managed-runtime.md) is stateful: it keeps authenticated
@@ -14,13 +10,16 @@ store. For the terminal-first daily workflow, start with
 
 ## The Core Concept
 
-At its heart, Agentmux is a compiler. It takes a declarative `yaml` file and translates it into a deterministic series of standard `tmux` CLI commands.
+In this mode, Agentmux compiles declarative YAML into standard `tmux` CLI commands.
 
 *   It does **not** run a background daemon.
 *   It does **not** intercept your keys.
 *   It does **not** have its own database.
 
-If Agentmux crashes, your session is fine. If you uninstall Agentmux, your session keeps running.
+Once the launch command exits, tmux owns the pane processes. Removing that
+launcher does not by itself stop them. This description does not apply to the
+managed broker/supervisor, which has persistent state and explicit lifecycle
+controls.
 
 ## The Hierarchy
 

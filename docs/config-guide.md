@@ -46,8 +46,7 @@ env:
 
 agents:
   reviewer:
-    provider: command
-    command: "openai api chat.completions.create -m gpt-5"
+    provider: codex
     cwd: "{{project_dir}}"
     title: "Reviewer"
 
@@ -144,7 +143,7 @@ Each pane must specify exactly one of:
 
 - `command`: raw shell command
 - `agent`: reference to a named agent
-- `provider`: native LLM provider (e.g., `claude`, `gemini`, `codex`)
+- `provider`: native CLI harness (e.g., `claude`, `antigravity`, `pi`, `codex`)
 
 Useful pane fields:
 
@@ -178,7 +177,8 @@ If two panes reference the same agent, you still get two separate pane processes
 
 ### Native LLM Providers
 
-When you use a native provider like `claude`, `gemini`, or `codex`, Agentmux acts as a **JIT Shell Compiler**. It automatically constructs the shell command for that CLI, injecting:
+When you select a native pane provider such as `claude`, `antigravity`, `pi`, or
+`codex`, the v1 launcher constructs that CLI's shell command, supplying:
 1. Your `persona` file content through the strongest provider-native surface that CLI actually supports.
 2. The `agentmux prompt` runtime contract, which carries the operational coordination instructions separately from the persona.
 3. Provider-specific launch wiring so persona lands in the strongest available instruction channel for that CLI without pretending every provider has the same system-prompt model.
@@ -210,7 +210,10 @@ Antigravity and Pi remain ordinary interactive pane processes in this launch mod
 Codex-specific runtime notes:
 
 - Agentmux launches Codex with `--no-alt-screen` to behave better inside tmux panes and preserve scrollback.
-- Agentmux launches Codex with `--sandbox workspace-write --ask-for-approval never` so Agentmux-orchestrated panes can use MCP tools and shell commands without interactive approval popups while still staying sandboxed.
+- The v1 launcher uses `--sandbox workspace-write --ask-for-approval never`.
+  This is specific to the original pane mode. Everyday v2 local interactive
+  work sessions preserve native approval/sandbox configuration; see
+  [work sessions](work-sessions.md).
 
 Direct pane `provider:` usage is intended for native providers. Command-style providers like `ssh` should be defined on an agent alongside `command:`.
 
@@ -287,8 +290,8 @@ Then iterate:
 
 See:
 
-- [`testdata/examples/minimal.yaml`](../testdata/examples/minimal.yaml)
-- [`testdata/examples/ai-dev.yaml`](../testdata/examples/ai-dev.yaml)
-- [`testdata/examples/on-exit.yaml`](../testdata/examples/on-exit.yaml)
-- [`testdata/examples/review-loop.yaml`](../testdata/examples/review-loop.yaml)
-- [`testdata/examples/ssh-ops.yaml`](../testdata/examples/ssh-ops.yaml)
+- [`testdata/examples/minimal.yaml`](https://github.com/pagel-s/agentmux/blob/main/testdata/examples/minimal.yaml)
+- [`testdata/examples/ai-dev.yaml`](https://github.com/pagel-s/agentmux/blob/main/testdata/examples/ai-dev.yaml)
+- [`testdata/examples/on-exit.yaml`](https://github.com/pagel-s/agentmux/blob/main/testdata/examples/on-exit.yaml)
+- [`testdata/examples/review-loop.yaml`](https://github.com/pagel-s/agentmux/blob/main/testdata/examples/review-loop.yaml)
+- [`testdata/examples/ssh-ops.yaml`](https://github.com/pagel-s/agentmux/blob/main/testdata/examples/ssh-ops.yaml)

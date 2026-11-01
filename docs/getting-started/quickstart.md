@@ -1,23 +1,306 @@
-# Quickstart
+# Fresh-install walkthrough
 
-For a human-led session with Claude and Codex installed and logged in:
+This journey tests the everyday workflow: two normal native conversations,
+readable session identities, opt-in communication and memory, then ending the
+collaboration while keeping both terminals usable. It uses a separate workspace
+named `try-agentmux`. Every owner command below selects that same workspace,
+regardless of the current directory.
+
+## 1. Build and check the installation
+
+Install Git, Make, tmux 3.2+ and Go 1.24+. On a new checkout:
 
 ```sh
-agentmux start
+git clone https://github.com/pagel-s/agentmux.git
+cd agentmux
+make build
+./bin/agentmux version
+./bin/agentmux doctor
 ```
 
-Select an agent and press Enter to use its native terminal. F1 returns to
-the workbench; Ctrl-b b opens its board popup. In another terminal, try `agentmux attach codex`,
-`agentmux inbox`, or `agentmux web --open`. See [work sessions](../work-sessions.md)
-for setup, live permissions, control keys and current limits.
+For a user-local executable:
 
-Use `agentmux add NAME --harness claude --project DIR` for another project,
-`agentmux sessions` to discover existing terminals, `collaborate A B` to connect
-sessions, and `isolate A` to end collaboration without closing native input.
+```sh
+mkdir -p "$HOME/.local/bin"
+install -m 755 bin/agentmux "$HOME/.local/bin/agentmux"
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+Make that PATH setting available in each new terminal; see
+[installation](installation.md). Check `command -v agentmux` and
+`agentmux version` if another installed copy might be selected.
+
+The default team needs both Claude Code and Codex installed and logged in:
+
+```sh
+claude --version
+codex --version
+```
+
+Open each directly once and complete its normal login/startup prompts. If a CLI
+does not work outside Agentmux, resolve that before testing its Agentmux session.
+Other harnesses or a single-provider team can use the
+[setup wizard](../managed-setup.md) with a custom configuration.
+
+## 2. Create a disposable project and workspace
+
+In a regular shell outside an existing tmux attachment:
+
+```sh
+amx_demo_project="$(mktemp -d "$HOME/agentmux-playground.XXXXXX")"
+git -C "$amx_demo_project" init
+printf '# Agentmux playground\n' > "$amx_demo_project/README.md"
+printf 'Project: %s\n' "$amx_demo_project"
+
+agentmux start --session try-agentmux --project "$amx_demo_project" --detach
+agentmux sessions --session try-agentmux
+```
+
+Expected: two registered native sessions with stable IDs `claude` and `codex`.
+The native CLIs can still need their usual project-trust approval. This first
+workspace uses trusted local execution to preserve normal configuration, tools,
+skills, MCPs, native approval behavior and history. It does not isolate host
+files. Peer collaboration and autonomous wakeups start disabled.
+
+This journey requires a fresh, unused workspace name. If `try-agentmux` already
+belongs to an earlier test, choose another name consistently in every command.
+Reopening an old workspace retains its permissions and memory, so it cannot
+establish the initial deny-by-default results below. A saved workspace is not
+silently repointed at a different project.
+
+## 3. Use the terminal workbench
+
+```sh
+agentmux label claude "Explore the project" --session try-agentmux
+agentmux label codex "Review the approach" --session try-agentmux
+agentmux dashboard --session try-agentmux
+```
+
+Select a session with the arrow keys and press Enter. Ask it to describe the
+playground without changing files. Handle native trust/tool prompts normally.
+Press **F1** (or **Ctrl-b**, release, then **g**) to return to the workbench.
+
+Try **/** to search, **L** to edit its title, **V** to edit its role, **?** for
+context help, and **Tab** or **1–8** to change views. Titles can change or repeat;
+commands still use the stable IDs. A role update changes future managed turns
+and sends a native inbox notice; it does not inject a new user turn.
+
+Detach with **Ctrl-b**, release, then **d**. The sessions keep running.
+
+## 4. Keep both native sessions open
+
+In one terminal window:
+
+```sh
+agentmux attach claude --session try-agentmux
+```
+
+In another:
+
+```sh
+agentmux attach codex --session try-agentmux
+```
+
+Expected: both are normal native CLI conversations. Switching sessions in one
+attachment does not switch the other attachment. Keep a separate regular shell
+for owner commands in the following steps.
+
+## 5. Verify the initial communication boundary
+
+Paste this into Claude's **native conversation**, not the owner shell:
+
+```text
+Use "$AGENTMUX_CLI" managed call boundaries.get to inspect your current
+permissions. Then attempt message.send with JSON
+{"to":["codex"],"text":"Initial boundary probe"}.
+Report the broker result. Do not change policy or use files to communicate.
+```
+
+Expected: Claude's agent credential receives `forbidden` for the peer message.
+Use its normal shell tool and approve that specific call if the native CLI asks.
+The owner CLI has broader authority: running `agentmux send` as the owner does
+not test a peer's permission boundary.
+
+## 6. Connect only this pair
+
+In the owner shell:
+
+```sh
+agentmux collaborate claude codex --session try-agentmux
+agentmux board "Test proposal: keep parsing separate from persistence." --session try-agentmux
+```
+
+Keep the printed **Group**, **Board** and **Memory** values. This creates a
+dedicated scope for this member set and enables peer notes/pings. It contributes
+no peer command authority. The original `team` and `project` namespaces do not
+become shared merely because this group exists.
+
+Ask Claude:
+
+```text
+Re-read your effective Agentmux boundaries using the authenticated CLI bridge.
+Read the newly allowed group board. In its shared-memory namespace, save a new
+key demo-greeting with value HELLO_FROM_CLAUDE using memory.put and version 0.
+Send Codex a direct informational note telling it which namespace/key to read.
+Use only the broker; do not edit files or change permissions.
+```
+
+Then ask Codex:
+
+```text
+Read your current Agentmux boundaries and broker inbox. Read the group board
+and the shared-memory key demo-greeting. Report the exact saved value and send
+Claude a short informational acknowledgment through the broker.
+```
+
+Expected: Codex reports `HELLO_FROM_CLAUDE`; the board and acknowledgments appear
+in the workbench. Native sessions read coordination when asked; a note does not
+automatically type into or wake a native conversation.
+
+## 7. Compare notes with queued instructions
+
+In the owner shell:
+
+```sh
+agentmux send codex "Informational test note; no task requested." --mode note --session try-agentmux
+agentmux send codex "Test task: summarize the board proposal." --mode instruction --session try-agentmux
+agentmux inbox --session try-agentmux
+```
+
+Expected: the first creates a message; the second creates a task visible in
+**Tasks**. Neither injects native input or automatically claims/executes work.
+Open the task with **o**, search with **f**, and use **PgUp/PgDn** for history.
+Return from the reader and cancel this demonstration task with **c** after
+inspection, so it does not remain pending across reopening. In a managed worker
+workflow, eligible queued tasks are claimed and executed instead.
+
+## 8. Use the web control center
+
+Open an additional regular shell for the web server and keep that process open.
+Leave the original owner shell available for steps 9–10:
+
+```sh
+agentmux web --session try-agentmux --open
+```
+
+If your desktop does not open it, use the full private URL printed by the
+command. Try **Graph** for directional relationships and shared access, **Teams**
+for the owner group's scope, **Memory** to inspect `demo-greeting`, and **Tasks**
+for instruction history. Select a session before changing its controls; review
+the exact sender, recipient and effective permission. Note, ping and instruction
+authority, and namespace read/write access, are separate controls.
+
+Expected: a black/purple observation and control app. Native typing stays in
+tmux. Closing the browser does not stop the workspace; Ctrl-C stops this web
+server only.
+
+## 9. End collaboration without ending the conversations
+
+```sh
+agentmux isolate codex --session try-agentmux
+```
+
+Ask Codex to retry `memory.get` using the **same shared-memory namespace/key**
+from step 6 and `message.list` explicitly filtered to that old board, then try
+a direct note to Claude. A generic inbox can still contain authored/direct
+receipts and is not the revoked-board test. Expected: the
+revoked operations are denied, while direct native conversation still works.
+Previously read information remains in its conversation; isolation cannot make
+it forget. Accepted tasks need separate cancellation.
+
+Reconnect when wanted:
+
+```sh
+agentmux collaborate claude codex --session try-agentmux
+```
+
+The same member set reuses its group and saved history. Separate explicit owner
+denies survive reconnect; review/reset those in Connections/Memory if you added
+them during step 8. See [live permissions](../live-permissions.md).
+
+## 10. Add a session and test individual recovery
+
+In the original owner shell, which still has `amx_demo_project` set:
+
+```sh
+agentmux add review --harness claude --project "$amx_demo_project" \
+  --title "Independent second review" --session try-agentmux
+agentmux sessions --session try-agentmux
+```
+
+The new ID `review` starts independently. Repeat `collaborate` only for the IDs
+you want connected. Use `--native-only` on an addition for a prompt-free native
+launch; coordination then needs explicit manual setup/instructions.
+
+Attach to the new `review` session with `agentmux attach review --session
+try-agentmux`, exit that native CLI normally, then detach with **Ctrl-b**, release,
+then **d** to return to the owner shell. The exited pane can retain its final
+output. Then test a deliberate same-ID relaunch:
+
+```sh
+agentmux relaunch review --session try-agentmux
+agentmux attach review --session try-agentmux
+```
+
+The first command requires `review` to have exited; it refuses a live session.
+Expected: a fresh native conversation under the same Agentmux ID, with peers
+untouched. To choose native history deliberately use `--resume picker` or an
+exact native conversation ID instead. `--resume last` means the provider's
+latest applicable conversation, not an Agentmux title match.
+
+## 11. Test discovery or another workspace
+
+To observe a native CLI started outside Agentmux:
+
+```sh
+agentmux sessions --session try-agentmux
+agentmux connect OBSERVED_ID --title "Existing conversation" --session try-agentmux
+```
+
+Replace `OBSERVED_ID` with a currently observed entry. Paste its printed setup
+into that original native conversation; connecting does not inject it or move
+the external terminal. Some generic interpreter/non-TTY processes cannot be
+identified. Existing external conversations remain under your direct control.
+
+`agentmux workspaces` lists named and remembered custom locations. **W** in the
+terminal opens another running workspace's observer and **q** returns. For an
+older custom state location, use `agentmux workspaces --register DIRECTORY`.
+
+## 12. Stop the test and try isolated/managed workflows
+
+Stop the web process with Ctrl-C in its shell, then:
+
+```sh
+agentmux down --session try-agentmux
+```
+
+Expected: only the workspace's owned processes stop. Saved state/history and
+the playground directory are retained. External bridged terminals stay alive.
+You can reopen the original definition with the same `start` command/project;
+choose previous conversations explicitly through native history controls.
+
+For model-free isolation checks, return to the repository checkout and run:
+
+```sh
+python3 scripts/smoke-managed.py
+python3 scripts/smoke-managed-interactive.py
+```
+
+These require Linux, a supported Bubblewrap (including `--size`) and working
+user namespaces. They make no model calls and clean up their temporary runtimes.
+For a real isolated native workspace, use a fresh workspace name with
+`start --sandbox bubblewrap`; isolated credential snapshots and private homes
+have different customization boundaries from the local workflow above.
+
+Continue with [managed setup](../managed-setup.md) for role presets and selected
+providers, [persistent/autonomous workflows](../autonomous-workflows.md) for
+managed task execution, and [research](../research.md) for observable,
+preregistered studies. The [work-session guide](../work-sessions.md) and
+[command reference](../commands.md#everyday-work-sessions) cover the full controls.
 
 ## Existing workspace mode
 
-The following flow uses the original layout compiler. It creates tmux panes
+The following flow is a separate, optional tutorial for the original layout compiler. It creates tmux panes
 without the managed broker's authenticated board, memory or permissions.
 
 ## 1. Create a Configuration
@@ -64,4 +347,6 @@ If you realize you want to change the layout or add a new pane, you don't need t
 agentmux reload my-workflow.yaml
 ```
 
-Agentmux will surgically apply your changes, respawning only the panes whose configuration was altered.
+For supported changes, reload reconciles the layout and updates affected panes.
+Structural changes that cannot be reconciled in place can recreate the session
+and interrupt its processes; inspect the rendered configuration before reloading.

@@ -1,5 +1,10 @@
 # Twenty-angle usability acceptance pass — 1 November 2026
 
+**Historical pass.** For the current implementation status of findings below,
+read the [subsequent gap-closure record](uat-gap-closure.md). Its added lifecycle,
+history, permission, messaging, memory, team and research controls were not part
+of the baseline evaluated here. The original measurements remain unchanged.
+
 Twenty reviewers examined distinct operator journeys from baseline `33f6016`.
 The priorities were terminal-first native interactive work; a clear overview of
 about ten everyday sessions with optional groups; observable, optionally
@@ -32,7 +37,7 @@ limits are recorded below without publishing private owner URLs or raw prompts.
 | 1 | Newcomer mental model | Two independent named workspaces, each with two real interactive `/bin/cat` sessions and repeated IDs/titles: start, inventory, label, group board, inbox, direct message, isolate and stop. Found legacy `list/status` recovery confusion and missing workspace context in confirmations; no cross-workspace delivery observed. |
 | 2 | Web visual design | Actual browser at 1280×720 and 390×844, with ten command-agent definitions and no workers: rename, search/clear, exact selection, directional connection controls, graph and owner pair scopes. Pure black/purple presentation confirmed; identity density and the narrow graph canvas were design concerns. This was not a ten-process test. |
 | 3 | Terminal design | Two real native command sessions; dashboard at 110×32 and 60×16, plus an 80×24 native attachment with a 74-column popup. Checked frozen reader, composer target, modal escape and return to the unchanged native terminal. Confirmed active Teams/Events tabs could disappear from narrow navigation. |
-| 4 | Daily lifecycle | Two separate two-agent native fixtures, then a fresh fixed-candidate retest. Checked configured repeat-start, duplicate titles, generated IDs, one session exiting, removal and whole-workspace restart. Repeat-start failed initially; candidate reuse preserved the attempt and both pane PIDs and rejected a changed role. Isolated same-ID relaunch remains unavailable. |
+| 4 | Daily lifecycle | Two separate two-agent native fixtures, then a fresh fixed-candidate retest. Checked configured repeat-start, duplicate titles, generated IDs, one session exiting, removal and whole-workspace restart. Repeat-start failed initially; candidate reuse preserved the attempt and both pane PIDs and rejected a changed role. Isolated same-ID relaunch was unavailable in this pass and was implemented subsequently. |
 | 5 | Multiple projects/workspaces | Two launch-to-stop journeys with the same local ID/title, separate projects, a path containing spaces, symlink aliases and cross-directory selection. Wrong-project reopen was rejected and stopping one left the other live. Conflicting `--session`/`--state` silently selected the latter before the fix. |
 | 6 | Temporary topologies | Ten broker identities with assigned credentials, five disjoint pairs, an overlap and a triple. Verified nontransitive communication, scoped board/memory, isolation and selected reconnection. Disabling one overlapping group also denied a relationship supplied by another active group; this is a scope-semantics limitation, not an observed permission bypass. No native typing was exercised. |
 | 7 | Messaging intent | Two broker-only journeys plus replies, using managed and interactive identities. Verified Unicode/multiple recipients, note/ping versus instruction, atomic invalid-recipient rejection and future permission revocation. Found shared-board replies becoming private instructions and blank replies becoming work through their reference prefix. |
@@ -162,12 +167,12 @@ current limits; this historical list is not the current feature status.
   submission and retain structured reply ancestry. The existing native-inbox
   versus managed-instruction distinction remains; blocking ambiguous board
   replies does not implement a general conversation threading model.
-- **Research design:** preregistration still requires
+- **Research design:** at review time, preregistration required
   `primary_outcome: total_social_welfare` and one or two binary factors drawn
   from `reward_mode`, `visibility`, `teams` and `team_rewards`. Team-formation
   primary outcomes, role/personality treatments, condition-specific role
-  assignment and counterbalancing need an explicit design/estimator extension.
-  Tiny unregistered deterministic studies can still have degenerate intervals
+  assignment and counterbalancing needed an explicit design/estimator extension.
+  Tiny unregistered deterministic studies could have degenerate intervals
   without a dedicated scripted-evidence/tiny-sample warning. Carrying all
   existing analysis into CSV does not create new inferential safeguards.
 - **Dynamic team planning:** richer remaining-capacity summaries, participant

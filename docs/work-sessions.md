@@ -36,7 +36,8 @@ terminal location; Enter selects the exact result. `L` edits the selected task
 title. `N` asks what you are working on and generates an ID automatically. In the
 web app use **Find a session**, **Rename**, and **Sessions**. Titles are labels,
 not role instructions; editing one never restarts the native conversation.
-When adding a session, `--harness` selects Claude Code, Codex or Pi;
+When adding a session, `--harness` selects Claude Code, Codex, Pi or prompt-free
+native Antigravity;
 `--title` labels the human task, while `--role` supplies optional instructions
 to the agent at launch.
 
@@ -61,7 +62,7 @@ coordinated/native-only profile choice before the optional role step.
 | Name or ID | Where to use it |
 | --- | --- |
 | Workspace name, such as `work` | `--session work` selects the team and saved state |
-| Registered session ID, such as `claude` or an ID printed by `add`/`connect` | `attach`, `send`, `label`, `collaborate`, `isolate`, `remove` |
+| Registered session ID, such as `claude` or an ID printed by `add`/`connect` | `attach`, `send`, `label`, `role`, `relaunch`, `collaborate`, `isolate`, `remove` |
 | Observed terminal ID from `sessions` | `connect` registers that live external terminal |
 | Group ID printed by `collaborate` | `board --group ID` selects its shared board |
 
@@ -101,6 +102,9 @@ a fresh native conversation by default. `--resume picker`, `--resume last` or
 deadlines or revive revoked identities. The dashboard offers the same flow with
 `U`. A controller started before this feature needs one explicit workspace restart
 after upgrading; it is never silently replaced.
+Antigravity accepts `--resume last` or an explicit conversation ID; it has no
+picker mapping. External bridges, revoked agents and still-running native CLIs
+cannot be relaunched through this command.
 
 `agentmux workspaces` lists named workspaces and remembered custom state paths.
 Use `--json` for structured inventory or `--register DIR` to add an older custom
@@ -292,12 +296,14 @@ session instead of guessing an ID.
 
 Without `--project`, preset setup creates separate workspaces. JSON setup specs
 accept `interaction` and optional `workdir` per agent. Pi interactive sessions
-support configured compatible endpoints and selected authentication. Direct
-interactive Antigravity role injection is unverified; use its Pi bridge.
+support configured compatible endpoints and selected authentication. Native
+Antigravity is available with `--native-only`; use its Pi bridge for injected
+coordination context. See the [provider acceptance matrix](provider-acceptance.md)
+for the distinction between native startup, actual inference and tool coverage.
 
 ## Terminal dashboard
 
-Keys are case-sensitive: `N`, `L`, and `P` mean Shift plus that letter. For
+Keys are case-sensitive: `N`, `L`, `V`, and `P` mean Shift plus that letter. For
 `Ctrl-b b`, press Ctrl-b, release both keys, then press b. The same two-step
 prefix applies to the other Ctrl-b bindings. Shortcuts below depend on the
 active view; use Tab or a view number first.
@@ -308,18 +314,23 @@ active view; use Tab or a view number first.
 | Enter | Focus its tracked terminal; attach when outside that tmux server |
 | / | Find by task, project, provider, ID or external terminal location |
 | L | Edit the selected session's human task title; empty clears |
+| V | Edit its coordinated role with CAS; prompt-free native sessions reject injected roles |
+| W / U | Choose another workspace observer / deliberately relaunch the selected exited owned native session |
+| ? / Ctrl-G | Open context help outside an editor / while editing or reviewing |
 | F1 / Ctrl-b g in a native session | Return to the workbench |
 | Ctrl-b b / Ctrl-b P / Ctrl-b m / Ctrl-b t in a native session | Open Board / Connections / Memory / Tasks in a popup |
 | Tab / Shift-Tab or 1–8 | Switch Board, Agents, Connections, Memory, Tasks, Sessions, Teams, Events |
 | [ / ] in Teams; ← / → | Choose a team; choose an exact agent for a membership action |
 | i / r / d in Teams | Review invite / remove or revoke invitation / dissolve with the current version |
+| e / t in Teams | Edit team name/mission / propose the selected member as owner; acceptance is separate |
 | b / v in Teams | Compose to its board / inspect its shared memory as owner |
 | [ / ] in Events; Home | Inspect an event; return to following the newest event |
 | P / R / S / T in Events | Research pause / resume / one phase / stop, each with a reason and separate review |
-| N / x | Add a native session / close the selected registered session |
+| N / x | Add a native session with an explicit profile / revoke the selected session and descendants; owned shutdown is requested |
 | s / b | Compose a direct message/instruction or selected shared-board note |
 | + / − in Board | Select an allowed board namespace |
 | Enter / Esc in composer | Submit / cancel; Alt-Enter inserts a newline |
+| Ctrl-T in a direct-message/reply composer | Switch the frozen draft's note/instruction intent without changing its text or recipient |
 | ←/→ / Home / End in composer | Edit the draft without changing its recipient |
 | f in Board | Filter all coordination, team board, or selected agent inbox |
 | [ / ] then r in Board | Select a message and reply |
@@ -327,18 +338,22 @@ active view; use Tab or a view number first.
 | c / d in Connections | Connect selected sender/recipient in a group / make sender independent |
 | c in Sessions | Prepare a bridge for the selected observed terminal; paste setup manually |
 | m / p / i in Connections | Toggle messages / pings / commands |
+| M / P / I in Connections | Reset the selected explicit override to the underlying effective policy |
 | [ / ] in Memory | Select a board or memory namespace |
 | r / w in Memory | Toggle read / write |
+| R in Memory | Reset the selected explicit scope override; membership remains authoritative |
 | v in Memory | Inspect shared entries; [ / ] selects an entry |
 | e / n in memory entries | Edit an existing entry / create a key and value |
-| [ / ] in Tasks | Select a recent task |
+| [ / ] in Tasks | Select a task in the loaded history page |
+| PgDn / PgUp / f in Tasks | Load older / newer history pages / search all task instructions, results or IDs |
 | r / c in Tasks | Follow up / cancel |
 | o in Board, Agents, Memory, Tasks, Sessions, Teams or Events | Open the selected loaded content in a frozen, read-only reader |
 | ↑/↓ or j/k in the reader | Scroll one line |
 | PgUp / PgDn; Home / End in the reader | Scroll a page; jump to the start / end |
 | Esc / q / o in the reader | Return to the previous view while keeping the observer open |
-| Ctrl-R outside a composer | Restore the last failed message, board, memory or new-session draft for review |
-| Ctrl-R inside a memory editor | Review the latest saved value/version alongside the retained draft |
+| Ctrl-R outside a composer | Restore the last failed message, board, memory, role or new-session draft for review |
+| Ctrl-R inside a memory/role editor | Review the latest saved value/version alongside the retained draft; adopting a version does not save |
+| B in Board or Agents | Review four agent admission-budget fields, then confirm with the current resource version |
 | a | Pause/resume configured autonomy; does not stop in-flight work |
 | q | Detach from the persistent workbench, or close a popup/standalone view; team stays running |
 
@@ -346,21 +361,22 @@ Use `o` when a preview is too short. The reader keeps the selected record and
 its loaded text fixed while activity refreshes, so scrolling cannot switch to a
 different result. Tasks show the result first, followed by the instruction and
 provenance/reported trace. Agents shows session details and a loaded terminal
-preview or unconfirmed external-bridge setup. Memory shows the selected entry or boundary details;
+preview or unconfirmed external-bridge setup. Memory shows the selected entry,
+destination author and asserted source claims, or full boundary details;
 Sessions can show loaded bridge setup, and Teams/Events show full record details.
 Previously loaded content remains readable offline. The reader does not fetch
 older history; close and reopen it to read a refreshed record. Control and
 mutation keys are inactive while reading.
 
-After a failed send/reply, board post, memory save or new-session setup, inspect
+After a failed send/reply, board post, memory/role save or new-session setup, inspect
 current delivery/state before retrying: a lost response may follow a successful
 write. Close any newer composer with Esc, then press Ctrl-R to review the retained
-draft. It restores the original recipient, reply reference or namespace/key;
-memory edits retain their original version check, and new-session drafts retain
-provider, project and role. Nothing is sent automatically. Failed title edits
+draft. It restores the original recipient, intent, reply reference or namespace/key;
+memory/role edits retain their original version check, and new-session drafts retain
+provider, project, prompt-free/coordinated profile and role. Nothing is sent automatically. Failed title edits
 are restored separately with `L` on their original session.
 
-For a memory version conflict, press Ctrl-R **inside the memory editor**. This
+For a memory or role version conflict, press Ctrl-R **inside that editor**. This
 loads a frozen comparison of the current saved value/version and your retained
 draft. Enter in that reader adopts only the displayed version and returns to
 the editor; it does not save. Esc/q/o returns with the original version and
@@ -371,7 +387,8 @@ Offline or failed reviews retain the draft without adopting a new version.
 Human input goes directly to the native CLI, including its normal approval
 prompts. Broker messages do not inject keystrokes or impersonate user input.
 Ask an interactive agent to read its inbox when you want it to process notes or
-queued peer instructions.
+queued peer instructions. It does not automatically claim or execute a managed
+task; managed workers provide that task-execution lifecycle.
 
 ```sh
 agentmux send codex "Please read the proposed API on the team board."
@@ -411,14 +428,20 @@ Ctrl-C stops the web process independently of the team. Never give its private
 owner link to agents.
 
 The app offers agent selection, read-only terminal previews, recent messages,
-follow-ups, task results/cancellation, shared-memory inspection and versioned
-editing, autonomy controls, and the same live permission switches as the terminal
+follow-ups with explicit intent, complete searchable task history, cancellation,
+shared-memory inspection and versioned editing, role/profile setup, autonomy and
+admission controls, and the same live permission switches as the terminal
 dashboard. Board is the main focus pane. Graph shows directional message/ping/command
 connections and shared board/memory access; select a connection to adjust it. Nodes
 can be moved with dragging or arrow keys, and layouts persist in the browser.
+Fit and zoom controls work by keyboard and on narrow screens; native terminal
+input remains in tmux.
 Spawned agents retain inherited delegation limits; live overlay edits currently
-apply to configured agents and owner-added native/bridged sessions. The graph displays at most 40 active agents, while
-the roster loads up to 200. Recent activity is bounded to 40 records per category. Copy the attach command or focus an existing tmux window for native
+apply to configured agents and owner-added native/bridged sessions. The graph
+displays at most 40 active agents, keeping selected identities visible; the roster
+reads every broker registry page. Recent activity is bounded to 40 records per
+category, while Tasks separately pages the complete broker task history. Copy
+the attach command or focus an existing tmux window for native
 input. Terminal emulation remains in tmux.
 
 No external scripts, fonts, services or analytics are loaded. APIs require a
@@ -431,9 +454,10 @@ This is not a remote collaboration server.
 Owner-only `control.update` overlays immutable launch configuration, with version
 checks, durable request receipts and audited events. Agents cannot edit controls
 or inspect another agent's permissions. Shared namespace edits cannot expose
-private memory or bypass team consent. Initial native system context includes
-role, broker usage and effective boundaries; managed workers fetch a fresh
-snapshot before each turn.
+private memory or bypass team consent. Coordinated native sessions initially
+receive role, broker usage and effective-boundary context; `--native-only`
+appends none of that prompt. Managed workers fetch a fresh boundary snapshot and
+capture the current owner role at each task claim.
 
 Agents query `managed call boundaries.get`; `identity` and inbox listings also
 report `boundaries_version`. Interactive models receive no automatic model turn
@@ -446,12 +470,55 @@ separately. Removing read access stops future board/shared-memory reads but
 cannot remove information already present in history. Provider networking and
 project filesystem sharing are separate process boundaries.
 
+From a workspace-native agent's shell, the authenticated bridge is:
+
+```sh
+"$AGENTMUX_CLI" managed call identity --json '{}'
+"$AGENTMUX_CLI" managed call boundaries.get --json '{}'
+"$AGENTMUX_CLI" managed call message.list --json '{}'
+"$AGENTMUX_CLI" managed call task.list --json '{}'
+```
+
+The native process receives its own credential/socket through its environment;
+the agent should not print or locate credential contents. If the owner's native
+shell policy filters out the bridge variables, report that rather than searching
+owner state. These are agent-credential checks. The human's `send`, `board` and
+dashboard use owner authority, so a successful owner send does not prove a peer
+is permitted to send. Check the exact shared namespaces returned by
+`boundaries.get` or printed by `collaborate`; the coding preset's configured
+`team` and `project` names remain unshared until explicitly granted. After
+isolation, test future reads of the old explicit board/memory namespace: an
+unfiltered inbox may still contain the agent's own authored/direct receipts.
+
+## Consented teams and capacity
+
+Owner collaboration groups and consented dynamic teams have separate lifecycles.
+The coding preset leaves dynamic teams and spawning disabled. A configured
+managed team can enable and delegate them; `agentmux team --help` documents
+create/list, metadata edits, invitations, removal/dissolution, ownership proposals,
+participant acceptance and atomic invited moves. Team name/mission edits retain
+the same namespace identities. An ownership proposal changes no authority until
+the proposed owner accepts with its own credential. A participant move requires
+its pending destination invitation and both current team versions.
+
+`capacity.get {}` and `identity.capacity` report the caller's remaining lifetime
+spawns/teams, depth, team slots, templates and admission reasons; the owner can
+inspect a selected agent. A snapshot reserves no capacity. **B** in Board/Agents
+reviews the selected agent's four admission-budget fields; the web uses the same
+CAS broker rules. Lower-level owner `capacity.update` can edit complete agent or
+session admission-budget objects and shorten the admission deadline. It cannot
+refund permanently charged attempts, extend the original process deadline or
+change enforced launch resource caps. These are conservative broker admissions,
+not hard external provider billing limits. See [live permissions and
+resources](live-permissions.md) and [dynamic teams](dynamic-teams.md).
+
 ## Limits and verification
 
 Isolated native history is stored per agent. After restart, choose an exact
 prior conversation through the native UI; uncertain managed turns are never
-silently resumed. Credential snapshots are read-only: refresh externally and
-restart a terminal if its login needs renewal.
+silently resumed. Credential snapshots are read-only: refresh externally, exit
+and deliberately relaunch the affected native session if its login needs renewal.
+Managed workers reload selected authentication between turns.
 
 Interactive mode currently rejects managed conversation leases, automatic
 wakeups, structured turn traces, disk capsules and allowlist egress rather than
@@ -459,8 +526,9 @@ skipping their guarantees. Bubblewrap host/none networking and process resource
 limits remain available. Managed workers retain existing hardening features.
 Native tool output in terminal/history is not a complete immutable broker trace.
 
-Dashboards show up to 200 agents and bounded recent activity. The underlying API
-supports pagination; these consoles do not browse arbitrary-size histories.
+Dashboards page the agent registry, task history and memory entries. Board/Event
+activity remains a bounded recent window; these are not complete native-provider
+transcripts or an unlimited activity archive.
 The owner-added registry is limited to 200 definitions, and owner collaboration
 groups to 128 lifetime groups. Permission overlays are limited to 4,096 explicit
 edge/scope overrides. Switches

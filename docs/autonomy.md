@@ -2,6 +2,12 @@
 
 Autonomy is opt-in per agent. It lets an idle worker react to selected observations while keeping `instruct` as a separately authorized command. Subscriptions grant no board access, team membership, or instruction authority.
 
+These controls dispatch managed task workers. Interactive native sessions keep
+their ordinary terminal workflow and read coordination explicitly; an inbox
+note or role update never becomes unsolicited terminal input. Use
+[work sessions](work-sessions.md) for that daily interactive setup and
+[autonomous workflows](autonomous-workflows.md) for persistent managed turns.
+
 ```yaml
 agents:
   reviewer:
@@ -25,6 +31,12 @@ Board names are exact; an explicit `"*"` subscribes to currently readable boards
 Defaults are disabled triggers, 100 turns, zero cooldown seconds, a backlog of 100 references, batches of at most 20 references, eight causal hops, and one inflight turn. Workers serialize turns, so `max_inflight` currently accepts only one. An explicit smaller backlog also reduces an omitted batch-size default.
 
 The turn budget applies to every dispatch attempt when autonomy is enabled, including explicit instructions, observation wakeups, retries, and skipped/failed attempts. Instructions take priority over queued observations. Resume does not replenish the lifetime turn budget or session deadline. Start a new owner-approved run for a new budget.
+
+That lifetime `max_turns` limit is distinct from token/cost admission allowances.
+The owner may explicitly update future token/cost reservations using versioned
+`capacity.update`, or shorten admission runtime; it cannot reset consumed turns,
+refund past reservations or extend the original process deadline. See
+[live resource controls](live-permissions.md).
 
 ## Durable queue and processing receipts
 
@@ -53,6 +65,19 @@ The broker derives causal roots, the parent task, and hop counts from an author'
 Source permissions are checked again before delivery and while an observation runs. Revoking access can stop subsequent autonomous execution and deny future reads. It cannot erase context already delivered to a native model or history already written by that model.
 
 ## Owner controls
+
+For a running workspace, inspect the selected agent using its exact state path:
+
+```sh
+agentmux managed call autonomy.status --credential-file STATE/owner.json \
+  --json '{"agent":"reviewer"}'
+agentmux managed call capacity.get --credential-file STATE/owner.json \
+  --json '{"agent":"reviewer"}'
+```
+
+Replace `STATE` and `reviewer` with the actual workspace directory and stable
+agent ID. The terminal workbench and web **Agent** view expose the same status;
+web also reviews effective token/cost admission edits separately from pause.
 
 Read the latest `autonomy.status {"agent":"reviewer"}` and pass its version to `autonomy.control`:
 

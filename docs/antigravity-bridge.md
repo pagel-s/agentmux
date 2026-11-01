@@ -1,5 +1,20 @@
 # Antigravity inference with isolated Pi agents
 
+For an ordinary local Antigravity terminal in an already-running workspace:
+
+```sh
+agentmux add --session work --harness antigravity --native-only \
+  --project . --title "Antigravity investigation"
+```
+
+This uses its normal native configuration with no Agentmux prompt injection.
+Use its stable ID to attach or configure manual coordination; native tools and
+history stay in that terminal. There is no verified native appended-system-role
+flag. The bridge below is the separate option for injected Agentmux context,
+isolated Pi tools and managed persistent turns. See [work sessions](work-sessions.md)
+and the [dated provider acceptance](provider-acceptance.md) for the precise
+native-startup and inference evidence.
+
 Antigravity's native CLI supports trusted-local fresh managed turns. Its native
 keyring and private history layout are not a verified independent sandbox
 contract. The optional inference bridge keeps that native login in an

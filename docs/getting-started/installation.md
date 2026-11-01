@@ -2,7 +2,10 @@
 
 ## Prerequisites
 
-Agentmux requires **tmux** to be installed on your system. We recommend version `3.2` or higher for the best experience with pane titles.
+Agentmux requires **tmux 3.2 or newer**. Building the current source also needs
+Git, Make and **Go 1.24 or newer**. Python 3 runs the acceptance scripts and
+optional release installer. Native model sessions require their respective
+CLIs to be installed and logged in separately.
 
 If you are building Agentmux from source, use **Go 1.24 or newer**. The repo `Makefile` will prefer a compatible toolchain under `.tools/` when present, then fall back to `go` from your `PATH`.
 
@@ -10,8 +13,8 @@ If you are building Agentmux from source, use **Go 1.24 or newer**. The repo `Ma
 # macOS
 brew install tmux
 
-# Ubuntu/Debian
-sudo apt install tmux
+# Ubuntu/Debian: install Go 1.24+ separately if your distribution ships an older Go
+sudo apt install git make tmux python3
 ```
 
 ## Installing Agentmux
@@ -29,7 +32,8 @@ make build
 ./bin/agentmux doctor
 ```
 
-If you already have a checkout, run `make build` from its root. The build creates
+If you already have a clean checkout on `main`, run `git pull --ff-only` and
+`make build` from its root. The build creates
 `bin/agentmux` with the current Git version, commit and build date embedded.
 
 To use `agentmux` without the `./bin/` prefix in your current shell:
@@ -38,10 +42,26 @@ To use `agentmux` without the `./bin/` prefix in your current shell:
 export PATH="$PWD/bin:$PATH"
 ```
 
+For a user-local installation that also works outside the checkout:
+
+```bash
+mkdir -p "$HOME/.local/bin"
+install -m 755 bin/agentmux "$HOME/.local/bin/agentmux"
+export PATH="$HOME/.local/bin:$PATH"
+command -v agentmux
+agentmux version
+```
+
+Add that last `export PATH=...` line to your shell's startup file if the directory
+is not already on PATH in new terminals (usually `~/.bashrc` for interactive
+Bash). Check `command -v agentmux` in each new terminal to avoid using a different
+installed version. After later source updates, rebuild and repeat the `install`
+command to update this copy.
+
 Remote `go install github.com/pagel-s/agentmux/cmd/agentmux@latest` is currently
 unsupported: `go.mod` declares the module path as `agentmux`, so Go rejects the
-GitHub module path. It also selects the stable v0.9.0 release rather than the
-current managed-preview source.
+GitHub module path. An `@latest` release selection also does not mean the latest
+commit on `main`. Use the source build for the workbench described in these docs.
 
 ### Install a specific published binary
 
@@ -75,14 +95,26 @@ For a binary installed on your `PATH`, use `agentmux doctor` instead. The diagno
 reports tmux availability; passing a config path also checks provider CLI
 compatibility for configured native models.
 
-On Linux with working Bubblewrap namespaces, try the sandbox smoke test from
-the checkout:
+Check the native CLIs you will use, for example `claude --version` and
+`codex --version`, then open each once directly to finish its normal login and
+startup prompts. Agentmux reuses those native logins in trusted local mode; it
+does not install a provider or sign you in.
+
+For the step-by-step native-terminal acceptance journey, continue with the
+[quickstart](quickstart.md). It covers two interactive sessions, opt-in
+collaboration, shared memory, isolation and the web control center.
+
+On Linux with a supported Bubblewrap and working user namespaces, run the
+model-free sandbox smoke tests from the checkout:
 
 ```bash
 python3 scripts/smoke-managed.py
+python3 scripts/smoke-managed-interactive.py
 ```
 
 It checks communication between isolated agents and an isolated broker, shared
 memory, and instruction permissions. It makes no model calls and cleans up its
-temporary runtime. For a live team, continue with the
-[managed setup wizard](../managed-setup.md).
+temporary runtime. Bubblewrap must support the flags used by the sandbox,
+including `--size`; an older distribution package or disabled user namespaces
+can fail this check. That failure does not silently select local execution.
+For a configured live team, use the [managed setup wizard](../managed-setup.md).

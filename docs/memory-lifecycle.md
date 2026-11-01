@@ -30,6 +30,9 @@ SQLite file or every copy of content elsewhere.
 
 Use the agent's own credential for private memory. The owner's `private`
 namespace is separate; owner credentials do not impersonate an agent.
+The export/import/search/index/prune commands below use the live broker.
+Selecting `--state STATE --agent coder` loads that agent's credential from the
+owner-controlled state directory; it does not change its API permissions.
 
 ```bash
 agentmux managed memory export --state STATE --agent coder \
@@ -47,7 +50,7 @@ authorized namespace. Existing keys require `--replace`; conflict resolution is
 never implicit. Imports preserve remaining TTL, skip expired values, record an
 import source, and can resume safely after partial completion. They retain the
 destination writer's identity rather than impersonating the source author.
-Each imported entry now carries structured `sources` claims: `source_session`,
+Each imported entry carries structured `sources` claims: `source_session`,
 `source_agent` (the exporter), `source_namespace`, `source_author` (the original
 entry's writer), `source_key`, `source_version`, the complete `archive_sha256`
 and the imported value's `sha256`. These remain available on the destination
@@ -55,6 +58,7 @@ entry without the original archive. They are asserted source metadata, not an
 authenticated source identity or a grant of source-namespace access. Re-exporting
 the entry retains its source claims inside the archive; a subsequent import
 records that immediate archive's identities.
+Existing v1 import sources without the newer identity fields remain readable.
 An entry imported by an older version can be enriched by reimporting its original
 archive with `--replace`; enrichment still uses the destination's current CAS
 version rather than silently changing an existing entry.

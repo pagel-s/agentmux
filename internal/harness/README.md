@@ -1,11 +1,14 @@
 # Harness adapters
 
-`BuildInteractive` / `RunInteractive` start native Claude, Codex, Pi, or command
+`BuildInteractive` / `RunInteractive` start native Claude, Codex, Pi, Antigravity, or command
 interfaces on an inherited tmux PTY. They preserve native prompts and approvals,
 append role/boundary context through supported native flags, and keep broker
 messages in the inbox. They do not emulate terminal input or run the headless
-turn protocol described below. Direct interactive Antigravity role injection
-is unverified; use its Pi bridge. See [work sessions](../../docs/work-sessions.md).
+turn protocol described below. Empty prompt / `native_only` launches append no
+Agentmux context. Direct interactive Antigravity requires that prompt-free
+route; use its Pi bridge for injected coordination context. Explicit
+`NativeResume` selects supported provider-native history without guessing from
+an Agentmux title. See [work sessions](../../docs/work-sessions.md).
 
 `Run` starts one serialized headless turn. It never sends keys to tmux or
 claims live steering support. By default each turn starts fresh; an explicit
@@ -49,7 +52,7 @@ hosts that disallow nested user namespaces while retaining the outer boundary.
 | Harness | Input / completion | Endpoint and authentication |
 | --- | --- | --- |
 | Claude | One JSONL user message in safe mode; structured `result` is required | `BaseURL` maps to `ANTHROPIC_BASE_URL` and requires the Anthropic messages protocol; `APIKeyEnv` maps to `ANTHROPIC_API_KEY` |
-| Codex | `exec --json` reads stdin; `turn.completed` is required | Named key maps to `OPENAI_API_KEY`; generic base URL overrides are rejected |
+| Codex | `exec --json` reads stdin; `turn.completed` is required | A custom `BaseURL` selects a per-process Responses provider; its named key maps to private `AGENTMUX_CODEX_API_KEY`. Without a custom endpoint, a named key maps to `OPENAI_API_KEY`. |
 | Antigravity | One JSONL `user` event; terminal `result.status` must be `SUCCESS` | Uses the locally configured `agy` authentication; generic endpoint/key overrides are rejected |
 | Pi | JSONL RPC state request and prompt; wait for `agent_settled`, not `agent_end` | An optional OpenAI-compatible API base uses a private `models.json`; named key stays in an environment variable |
 | Command | Literal stdin and argv; process exit | The owner supplies all command-specific configuration |

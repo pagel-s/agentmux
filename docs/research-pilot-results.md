@@ -1,5 +1,10 @@
 # Native feasibility pilot: recorded results
 
+Historical collection, not current feature status. The [research guide](research.md)
+describes today's outcome, treatment, scheduling and evidence controls; these
+original scores and their collection limitations have not been retroactively
+changed by those additions.
+
 The preregistered 64-task collection completed on 2026-10-31, from 16:30:50
 through 16:52:43 UTC. All eight fresh trials and 16 game rounds finished.
 This is feasibility and measurement-quality evidence; it does not establish
@@ -7,7 +12,7 @@ model cooperation, competitiveness, motives, or traits. The collection exposed
 an answer-extraction confound, described below. Original outcomes are retained.
 
 See the [preregistered design and reproduction commands](research-study.md),
-[manifest](../examples/research/factorial-pilot.yaml), and
+[manifest](https://github.com/pagel-s/agentmux/blob/main/examples/research/factorial-pilot.yaml), and
 [aggregate machine-readable results](research-pilot-results.json). The shared
 results contain no private prompts, clues, native output, sessions, or credentials.
 

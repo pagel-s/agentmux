@@ -1,3 +1,4 @@
+# Original v1 layout mode. For the interactive workbench, use agentmux start.
 version: 1
 name: AI Dev Workspace
 session: ai-dev
@@ -11,7 +12,7 @@ env:
 
 agents:
   coder:
-    # Use native providers for zero-config tool integration and strongest persona delivery
+    # A native provider can deliver persona and pane-coordination context
     # provider: claude
     # persona: "PERSONA.md"
     provider: command
@@ -20,14 +21,9 @@ agents:
     title: "Coder"
 
   reviewer:
-    # JIT-compiled providers handle tools and prompts automatically
-    # provider: gemini
-    # model: "gemini-2.5-pro"
-    provider: command
-    command: "openai api chat.completions.create -m gpt-5"
+    # Uses the installed Codex CLI and its selected model/authentication
+    provider: codex
     cwd: "{{project_dir}}"
-    env:
-      OPENAI_API_KEY: "${OPENAI_API_KEY}"
     title: "Reviewer"
 
 layout:

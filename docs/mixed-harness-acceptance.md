@@ -1,5 +1,12 @@
 # Mixed harness sandbox acceptance
 
+This documents one explicit three-worker integration scenario and its
+reproduction requirements. Its recorded 31 October 2026 run is summarized in
+[provider validation](provider-validation.md#what-the-developer-workflows-established).
+The later [provider acceptance](provider-acceptance.md) separates additional
+connectivity, endpoint and native-startup checks from this complete coding
+workflow. For everyday interactive sessions, start with [work sessions](work-sessions.md).
+
 `scripts/smoke-managed-models.py` runs one real Claude lead turn, one real Codex
 coding turn, and one Pi turn against an already running local model. The broker
 and all three workers use separate Bubblewrap sandboxes. The script creates a
@@ -83,7 +90,7 @@ the containing `.codex` directory is not exposed. Add an exact
 `--dependency reviewer=/absolute/package/path` (or `lead=` / `coder=`) when an
 installation needs additional read-only runtime code. Broad paths remain
 subject to managed boundary validation. The handwritten
-[sandboxed coding example](../examples/managed/sandboxed-coding.yaml) shows the
+[sandboxed coding example](https://github.com/pagel-s/agentmux/blob/main/examples/managed/sandboxed-coding.yaml) shows the
 equivalent owner-configured boundaries; its placeholder paths need replacement.
 
 `--bounded-resources` requests per-worker 2 GiB memory, one CPU, 256 processes,

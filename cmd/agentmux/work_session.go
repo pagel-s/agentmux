@@ -200,25 +200,39 @@ func runWorkSessionInner(operation string, args []string, in io.Reader, out, dia
   agentmux attach [AGENT] [--session work | --state DIR]
   agentmux dashboard [--session work | --state DIR]
   agentmux web [--session work | --state DIR]
-  agentmux send AGENT "message" [--session work | --state DIR]
-  agentmux reply TASK_OR_MESSAGE_ID "message" [--session work | --state DIR]
+  agentmux send AGENT "message" [--mode auto|note|instruction]
+  agentmux reply TASK_OR_MESSAGE_ID "message" [--mode auto|note|instruction]
+                 [--to AGENT | --board NAMESPACE]
   agentmux inbox [--session work | --state DIR]
   agentmux board "note" [--group ID | --board NAMESPACE] [--session work | --state DIR]
-  agentmux add [NAME] --harness claude|codex|pi --project DIR [--title "..."] [--role "..."]
+  agentmux add [NAME] --harness claude|codex|pi|antigravity --project DIR
+                 [--title "..."] [--role "..." | --native-only]
   agentmux label ID "Fix login redirect"
+  agentmux role ID "Current owner role"
+  agentmux workspaces [--json] [--register DIR]
+  agentmux relaunch ID [--resume ID|last|picker]
   agentmux remove NAME
   agentmux sessions
   agentmux connect OBSERVED_ID --name NAME
   agentmux collaborate NAME NAME [...] [--legacy-policy preserve|group]
   agentmux isolate NAME [...]
+  agentmux team <list|create|edit|invite|remove|transfer|dissolve|join|leave|accept-owner|move>
   agentmux down [--session work | --state DIR]
 
+Select one workspace with --session NAME or --state DIR on each command;
+the default is work. start may combine a name with custom state storage.
 start creates a coding preset with real interactive Claude and Codex terminals.
 By default both use normal local native configuration in the current project.
 Collaboration, delegation and autonomous wakeups start disabled. Use collaborate
 for a dedicated board/memory group, or --sandbox bubblewrap for isolated profiles.
-send/reply queue broker messages for interactive agents and instruction tasks for
-managed workers. Use attach to type directly into a native agent terminal.
+send/reply default to notes for native agents and instruction tasks for managed
+workers; --mode selects intent explicitly. Replies retain broker-checked ancestry
+and cannot widen a private audience. Board replies need an explicit destination.
+No broker message injects native input or automatically starts a native model turn.
+Use attach to type directly. Native Antigravity requires --native-only; use its Pi
+bridge for injected coordination context. ? opens workbench help, Ctrl-G editor
+help, Ctrl-T message intent, V role editing, B admission budgets, W workspaces,
+and U single-session relaunch. team --help describes participant consent.
 Legacy raw pane input remains: agentmux send SESSION PANE -- COMMAND.`)
 		return exitSuccess
 	}

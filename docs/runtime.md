@@ -1,4 +1,10 @@
-# Agentmux Runtime Guide
+# Legacy pane runtime guide
+
+These commands address original v1 layouts on the default tmux server. For
+current authenticated workspaces use [work sessions](work-sessions.md):
+`dashboard --session NAME`, `attach ID --session NAME`, `relaunch ID`, and
+`down --session NAME`. Native session IDs, layout pane names and provider-native
+conversation IDs are different identifiers.
 
 Agentmux runtime commands operate on live tmux sessions through stable named panes.
 
@@ -131,7 +137,8 @@ Delete a value:
 ./bin/agentmux kv-del my-workflow current_task
 ```
 
-This mechanism allows isolated terminal agents to signal progress, share file paths, or manage state without a background daemon.
+This lets tmux pane processes signal progress and share values without a
+broker. It provides neither per-agent authorization nor filesystem isolation.
 
 ## Synchronization (Wait)
 
@@ -154,7 +161,7 @@ The `scale` command allows you to dynamically adjust the number of instances of 
 
 This command will:
 - **Scale Up:** Create new panes using the agent's original configuration (command, env, cwd) from the session's config file.
-- **Scale Down:** Surigically terminate instances of the agent until the target count is reached.
+- **Scale Down:** Terminate instances of the agent until the target count is reached.
 - **Naming:** Automatically assign unique names like `researcher-2`, `researcher-3`.
 - **Layout:** Re-apply the window's defined layout (e.g., `even-horizontal`) to keep the workspace tidy.
 

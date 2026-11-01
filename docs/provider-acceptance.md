@@ -4,6 +4,13 @@ This pass distinguishes real model turns from native CLI startup, transport
 conformance and configuration-retention tests. It does not establish every
 provider/model combination or the quality of generated work.
 
+For current setup, use [interactive work sessions](work-sessions.md) for native
+Claude/Codex/Pi/Antigravity terminals and [managed setup](managed-setup.md) for
+isolated task workers, exact endpoints and credentials. The
+[Antigravity/Pi bridge](antigravity-bridge.md) is its injected-context managed
+route. This page records evidence; its installed versions and connectivity
+markers are not recommended defaults or substitutes for those setup guides.
+
 ## Real bounded generation
 
 Each cloud check requested only a fixed connectivity marker in a disposable

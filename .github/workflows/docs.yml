@@ -29,5 +29,7 @@ jobs:
           restore-keys: |
             mkdocs-material-
       - run: pip install mkdocs-material
+      - name: Build documentation and reject broken local links
+        run: mkdocs build --strict
       - run: mkdocs gh-deploy --force
         if: github.ref == 'refs/heads/main'

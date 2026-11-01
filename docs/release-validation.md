@@ -2,7 +2,7 @@
 
 This preview adds an opt-in v2 managed runtime alongside the original tmux
 workspace flow. It is intended for developer teams and bounded research runs.
-The design's eight follow-up areas have concrete implementations and recorded
+The follow-up areas have concrete implementations and recorded
 checks; limitations below are part of the supported scope.
 
 | Area | Delivered behavior | Evidence |
@@ -10,19 +10,25 @@ checks; limitations below are part of the supported scope.
 | Setup | Interactive/spec-based role, harness, endpoint, auth and sandbox setup; private config output | Setup/config tests; [guide](managed-setup.md) |
 | Providers | Claude, Codex, Pi and Antigravity adapters; local Antigravity-to-Pi bridge; explicit compatible endpoint metadata | Native provider checks and [provider matrix](provider-validation.md) |
 | Hardening | Exact destination proxy, aggregate admission accounting, capped workspace/history/tmp filesystems, safe checkpoint recovery | Actual proxy-bypass rejection, kernel ENOSPC, checkpoint and budget integration tests; [boundaries](hardening.md) |
-| Operation | Between-turn credential reload, explicit interruption handling, native history generations, owner recovery, versioned installer | Two-turn filtered credential test; 30-turn/six-restart/crash soak; [recovery](traces-and-recovery.md) |
-| Memory | TTL, provenance, tombstones, scoped lexical/vector retrieval, explicit cross-run CAS import/export | ACL/expiry/receipt/CAS/vector/archive regression tests; [guide](memory-lifecycle.md) |
+| Operation | Between-turn credential reload, explicit interruption handling, native history generations, individual native relaunch, owner recovery, versioned installer | Credential/relaunch regressions and bounded restart/crash soaks; [recovery](traces-and-recovery.md) |
+| Memory | TTL, structured archive-source claims, tombstones, scoped lexical/vector retrieval, explicit cross-run CAS import/export | ACL/expiry/receipt/CAS/vector/archive regression tests; [guide](memory-lifecycle.md) |
 | Research | Factorial preregistration, scarce resources, trust exchange, pooling, dynamic populations and consented teams | Command-only environment checks and a fixed 64-task native feasibility pilot; [methods](research-study.md) and [results](research-pilot-results.md) |
-| Observability/scale | Scoped activity/status, bounded authenticated local traces, explicit SSH workers and restart | Agent-bound trace tamper tests, actual two-machine scoped handoff/resume, 8/32/128 logical-agent broker measurements; [results](remote-workers.md) |
-| Review/release | Independent automated review with defect regressions, flagged race suite, cross-platform packaging and checksum-verified installation | Full source/tests in the review branch; four Linux/macOS architecture packages |
+| Observability/scale | Scoped activity/status, bounded local HMAC traces, owner-signed portable bundles, explicit SSH workers and restart | Agent-bound trace tamper/signer-pinning tests, actual two-machine scoped handoff/resume, 8/32/128 logical-agent broker measurements; [results](remote-workers.md) |
+| Live controls | CAS role edits, admission overlays, independently removable collaboration contributions and explicit legacy-group review | Claim/readiness parity, stale-version, ancestry, overlap, migration and rollback regressions; [guide](live-permissions.md) |
+| Review/release | Independent automated review with defect regressions, flagged race suite, cross-platform packaging and checksum-verified installation | Repository source/tests and release CI; four Linux/macOS architecture packages |
 
-The final local suite ran `go test -race ./...` with managed, experiment,
+The recorded preview local suite ran `go test -race ./...` with managed, experiment,
 Bubblewrap, disk/proxy integration and repeated-round research flags enabled.
 `go vet ./...`, formatting and installer safety checks also passed. Additional
 tests verify actual cgroup controls and escaped-descendant cleanup. Command-line
 acceptance checks cover shared boards/memory, hierarchy, revocation, spawning,
 team consent/history and restart without replay. GitHub CI runs its supported
 subset and reports unavailable kernel sandbox capabilities explicitly.
+
+The acceptance and performance results below describe their recorded builds,
+fixtures and dates. Current behavior and the later UAT closure checks are
+documented in [UAT gap closure](uat-gap-closure.md); a historical limitation in
+an acceptance run is not a statement that a later feature is absent.
 
 The independent automated review found and fixed owner-spawn budget ancestry,
 memory tombstone byte accounting, private receipt actor matching, provenance

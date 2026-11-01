@@ -43,6 +43,11 @@ cannot change the role, model, policy or broker admission limits. Dependencies
 and native credentials must be provisioned separately; selecting `auth_file`
 does not copy a local login. Default workspaces are dedicated remote paths.
 Disk capsules require their exact state-owned workspace layout.
+The broker remains authoritative after deployment: managed claims capture the
+current owner role, and live permission/admission overlays apply centrally.
+Changing a remote layout is not a way to override those controls. Filtered
+native file credentials are reloaded between managed turns from the selected
+remote source; this does not synchronize a local owner's later login refresh.
 
 To restart an identical deployment, add `--resume`. It validates private owned
 directories and exact binary/definition/credential hashes before execution,
@@ -54,6 +59,9 @@ Use owner task/conversation recovery before resuming uncertain work.
 Remote tracing is rejected when `trace.enabled` is selected: the local broker
 cannot authenticate a remote trace through a local file path. A central trace
 collector is a future extension; this command does not claim that coverage.
+Portable signed trace bundles support moving already captured local evidence
+for offline verification; they do not add remote capture or collection.
+See [traces and recovery](traces-and-recovery.md).
 Spawning remains centrally bounded, with the existing local supervisor creating
 approved child workers. This is explicit SSH placement, not an automatic
 multi-host cluster scheduler or host failure migration service.
@@ -104,8 +112,12 @@ contention at 128 API actors; they do not measure 128 simultaneous native model
 processes, remote network latency, repeated confidence intervals or maximum
 cluster capacity. Small teams remain the primary deployment target.
 
-The bounded soak passed 30 verified command turns in about 94 seconds, six clean
+An earlier bounded soak passed 30 verified command turns in about 94 seconds, six clean
 restarts with the original deadline, verification of each completed trace, and
 one forced in-flight broker crash. The interrupted native process stopped,
 delivery remained uncertain without automatic replay, and the owner resolved
 it as failed. This is recovery evidence, not a multi-day uptime guarantee.
+The later 250-turn/50-restart local soak is recorded separately in
+[release validation](release-validation.md#follow-up-hardening-checks-2026-10-31).
+The SSH and benchmark numbers above are historical measurements of those runs,
+not throughput or availability guarantees for a current deployment.

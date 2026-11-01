@@ -1,5 +1,17 @@
 # Pane harness integration
 
+This page describes the original v1 `provider:` pane launcher. Current
+`start`/`add` sessions use v2 `harness:` configuration and the
+[work-session workflow](work-sessions.md). Their local interactive mode preserves
+normal native configuration and approvals. It does not apply the v1 launcher or
+headless safe-mode flags described below to every native terminal.
+
+For v2, Claude/Codex/Pi can receive appended coordination context; `--native-only`
+appends none. Native Antigravity requires `--native-only`, while its Pi bridge
+supports coordinated isolated work. Codex custom endpoints use Responses;
+Pi compatible endpoints use Chat Completions. See [managed setup](managed-setup.md)
+and [dated provider acceptance](provider-acceptance.md) for configuration and evidence.
+
 For managed identities, native-auth snapshots, separate agent/broker sandboxes,
 and an opt-in real Claude/Codex/local-Pi workflow, see
 [mixed harness sandbox acceptance](mixed-harness-acceptance.md).
@@ -23,7 +35,7 @@ Agentmux combines the persona file and operational coordination instructions int
 
 The [official CLI reference](https://code.claude.com/docs/en/cli-reference) documents these flags. The ordinary pane launcher remains an interactive terminal process; streaming input or interruption through the Agent SDK is a separate integration surface.
 
-Managed turns use `--safe-mode`, structured print output, and `--permission-mode dontAsk`. A coding role therefore needs an owner-approved native tool allowlist; role text alone does not grant tool permissions. For example, `command: [claude, --allowedTools, 'Read,Write,Edit,Bash']` enables those tools while retaining the managed adapter's safety flags. Narrow the Bash patterns for the task where practical. A structured permission denial fails the managed task even when the CLI exits zero. This configuration passed a real bounded coding turn with Claude Code 2.1.316; see the [Claude/Codex example](../examples/managed/claude-codex.yaml) for trusted local login reuse and workspace setup. Local mode does not isolate those tools from host files.
+Managed turns use `--safe-mode`, structured print output, and `--permission-mode dontAsk`. A coding role therefore needs an owner-approved native tool allowlist; role text alone does not grant tool permissions. For example, `command: [claude, --allowedTools, 'Read,Write,Edit,Bash']` enables those tools while retaining the managed adapter's safety flags. Narrow the Bash patterns for the task where practical. A structured permission denial fails the managed task even when the CLI exits zero. This configuration passed a real bounded coding turn with Claude Code 2.1.316; see the [Claude/Codex example](https://github.com/pagel-s/agentmux/blob/main/examples/managed/claude-codex.yaml) for trusted local login reuse and workspace setup. Local mode does not isolate those tools from host files.
 
 ## Antigravity
 

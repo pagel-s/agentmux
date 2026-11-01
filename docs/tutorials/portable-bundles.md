@@ -1,4 +1,9 @@
-# Portable Bundles
+# Portable layout bundles
+
+This page covers original v1 layout `.amx` files. It does not package managed
+credentials, a live coordination store or provider-native history. For portable
+managed evidence use [trace bundles](../traces-and-recovery.md), and for reusable
+memory use [memory export/import](../memory-lifecycle.md).
 
 When you build a great agentic team, you will want to share it. However, if your agents rely on local Python scripts or text files for prompts, just sending the YAML configuration isn't enough.
 
@@ -30,10 +35,14 @@ Once you have organized your team into a folder (with the YAML and any scripts),
 
 ```bash
 # Assuming you have a folder: my-team/session.yaml, my-team/script.sh
-agentmux pack my-team/session.yaml
+agentmux pack my-team/session.yaml session.amx
 ```
 
-This will create a `session.amx` file. This is a ZIP archive containing your YAML and all sibling files/folders (ignoring `.git` and `.cache`).
+This creates `session.amx` in the current directory. Without the second path, the
+default name comes from the YAML's `session`, not its filename. The ZIP contains
+the YAML's directory tree, excluding root `.git`, `.cache`, `.tmp`, `bin`, other
+`.amx` files and the output itself. Review the directory before packing; the
+bundle contains the remaining files rather than a minimal dependency manifest.
 
 ## 3. Distributing the Bundle
 
@@ -51,4 +60,7 @@ Because `.amx` files are self-contained, they are perfect for HTTP distribution.
 agentmux load https://your-server.com/downloads/my-team.amx
 ```
 
-Agentmux will securely download the bundle to a temporary directory, unpack it, and launch the tmux session, using `{{config_dir}}` to ensure all paths stay perfectly aligned.
+Agentmux downloads/unpacks the bundle into a temporary directory and launches
+its configured commands, using `{{config_dir}}` to resolve local paths. Loading
+a bundle executes those commands; it is not a sandbox or a signature-verification
+workflow.
