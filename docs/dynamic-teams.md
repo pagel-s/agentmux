@@ -193,13 +193,13 @@ agentmux team edit TEAM_ID --name "API review" --description "Owner-approved sco
 agentmux team invite TEAM_ID lead --state /tmp/amx-teams
 agentmux team invite TEAM_ID peer --state /tmp/amx-teams
 # Each invited agent runs this with its own credential, if it consents:
-agentmux team join TEAM_ID --credential-file "$AGENTMUX_CREDENTIAL_FILE"
+"$AGENTMUX_CLI" team join TEAM_ID --credential-file "$AGENTMUX_CREDENTIAL_FILE"
 # After lead has joined, the owner proposes a transfer:
 agentmux team transfer TEAM_ID lead --state /tmp/amx-teams
 # Lead, as the proposed new owner, separately accepts:
-agentmux team accept-owner TEAM_ID --credential-file "$AGENTMUX_CREDENTIAL_FILE"
+"$AGENTMUX_CLI" team accept-owner TEAM_ID --credential-file "$AGENTMUX_CREDENTIAL_FILE"
 # A non-owner member may move only after a separate destination invitation:
-agentmux team move SOURCE_ID DESTINATION_ID --credential-file "$AGENTMUX_CREDENTIAL_FILE"
+"$AGENTMUX_CLI" team move SOURCE_ID DESTINATION_ID --credential-file "$AGENTMUX_CREDENTIAL_FILE"
 ```
 
 `team join`, `leave`, `accept-owner` and `move` require an explicit acting
