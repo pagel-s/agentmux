@@ -64,8 +64,8 @@ def current_context(session):
 def current_list(session):
  p=subprocess.run([str(alias),'ls'],env=current_context(session),text=True,capture_output=True,timeout=5)
  assert p.returncode==0,(p.stdout,p.stderr)
- listing=json.loads(p.stdout)
- assert len(listing['result'])==10 and {a['id'] for a in listing['result']}==set(agents),listing
+ assert all('ID '+actor+' · command · workspace coordination active · worker running' in p.stdout for actor in agents),p.stdout
+ assert all(str(root/('project-'+str(i))) in p.stdout for i in range(10)),p.stdout
 try:
  agents={}
  for i in range(10):
