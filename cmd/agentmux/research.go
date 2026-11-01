@@ -133,11 +133,11 @@ func writeResearchBehaviorCSV(path string, rows []research.Behavior) error {
 	}
 	defer file.Close()
 	w := csv.NewWriter(file)
-	if err := w.Write([]string{"behavior_id", "trial", "condition", "trial_status", "round", "actor", "harness", "model", "valid", "execution_failed", "contribution", "invested", "returned", "retained", "utility", "payoff", "remaining_credits", "intervened"}); err != nil {
+	if err := w.Write([]string{"behavior_id", "trial", "condition", "trial_status", "round", "actor", "harness", "model", "valid", "execution_failed", "contribution", "invested", "returned", "retained", "utility", "payoff", "remaining_credits", "intervened", "research", "manifest_sha256", "seed", "repetition", "order", "attempt", "config_sha256", "environment"}); err != nil {
 		return err
 	}
 	for _, r := range rows {
-		row := []string{r.ID, r.Trial, r.Condition, r.TrialStatus, strconv.Itoa(r.Round), r.Actor, r.Harness, r.Model, strconv.FormatBool(r.Valid), strconv.FormatBool(r.ExecutionFailed), strconv.Itoa(r.Contribution), strconv.Itoa(r.Invested), strconv.Itoa(r.Returned), strconv.Itoa(r.Retained), strconv.FormatFloat(r.Utility, 'g', -1, 64), strconv.FormatFloat(r.Payoff, 'g', -1, 64), strconv.Itoa(r.RemainingCredits), strconv.FormatBool(r.Intervened)}
+		row := []string{r.ID, r.Trial, r.Condition, r.TrialStatus, strconv.Itoa(r.Round), r.Actor, r.Harness, r.Model, strconv.FormatBool(r.Valid), strconv.FormatBool(r.ExecutionFailed), strconv.Itoa(r.Contribution), strconv.Itoa(r.Invested), strconv.Itoa(r.Returned), strconv.Itoa(r.Retained), strconv.FormatFloat(r.Utility, 'g', -1, 64), strconv.FormatFloat(r.Payoff, 'g', -1, 64), strconv.Itoa(r.RemainingCredits), strconv.FormatBool(r.Intervened), r.Research, r.ManifestHash, strconv.FormatInt(r.Seed, 10), strconv.Itoa(r.Repetition), strconv.Itoa(r.Order), strconv.Itoa(r.Attempt), r.ConfigHash, r.Environment}
 		if err := w.Write(row); err != nil {
 			return err
 		}
@@ -155,11 +155,24 @@ func writeResearchCSV(path string, a research.Analysis) error {
 	}
 	defer file.Close()
 	w := csv.NewWriter(file)
-	if err := w.Write([]string{"condition", "completed_runs", "mean_total_social_welfare", "mean_funding_rate", "mean_credits_spent", "mean_invalid_actions", "mean_consented_teams"}); err != nil {
+	if err := w.Write([]string{"condition", "completed_runs", "mean_total_social_welfare", "mean_funding_rate", "mean_credits_spent", "mean_invalid_actions", "mean_consented_teams", "research", "manifest_sha256", "intervened_runs", "interrupted_runs", "interpretation", "power_warning", "analysis_json"}); err != nil {
 		return err
+	}
+	// Keep all descriptive estimates, warnings and preregistration portable,
+	// including when no condition has an estimate. Analysis excludes prompts.
+	metadata, err := json.Marshal(a)
+	if err != nil {
+		return err
+	}
+	provenance := []string{a.Research, a.ManifestHash, strconv.Itoa(a.IntervenedRuns), strconv.Itoa(a.InterruptedRuns), a.Interpretation, a.PowerWarning, string(metadata)}
+	if len(a.Conditions) == 0 {
+		if err := w.Write(append(make([]string, 7), provenance...)); err != nil {
+			return err
+		}
 	}
 	for _, c := range a.Conditions {
 		row := []string{c.Condition, strconv.Itoa(c.CompletedRuns), strconv.FormatFloat(c.SocialWelfare.Mean, 'g', -1, 64), strconv.FormatFloat(c.FundingRate.Mean, 'g', -1, 64), strconv.FormatFloat(c.Cost.Mean, 'g', -1, 64), strconv.FormatFloat(c.InvalidActions.Mean, 'g', -1, 64), strconv.FormatFloat(c.ConsentedTeams.Mean, 'g', -1, 64)}
+		row = append(row, provenance...)
 		if err := w.Write(row); err != nil {
 			return err
 		}

@@ -70,15 +70,18 @@ func runWorkAddParsed(args []string, out, diagnostics io.Writer, resolvedID *str
 	if flags.NArg() != 0 {
 		return fail(errors.New("unexpected arguments"))
 	}
-	options, err := parseWorkOptions([]string{"--session", *session})
+	var selectors []string
+	flags.Visit(func(f *flag.Flag) {
+		switch f.Name {
+		case "session":
+			selectors = append(selectors, "--session", *session)
+		case "state":
+			selectors = append(selectors, "--state", *state)
+		}
+	})
+	options, err := parseWorkOptions(selectors)
 	if err != nil {
 		return fail(err)
-	}
-	if *state != "" {
-		options, err = parseWorkOptions([]string{"--state", *state})
-		if err != nil {
-			return fail(err)
-		}
 	}
 	if *provider != "claude" && *provider != "codex" && *provider != "pi" {
 		return fail(errors.New("choose claude, codex or pi; use managed configurations for other harnesses"))

@@ -26,7 +26,7 @@ default workspace `work` and opens its workbench.
 | `agentmux send AGENT_ID "Message"` | Queue a native inbox note, or a managed worker instruction task |
 | `agentmux inbox` | Inspect recent coordination and task activity as the owner |
 | `agentmux board "Note" --group GROUP_ID` | Post to a particular collaboration group's board |
-| `agentmux reply TASK_OR_MESSAGE_ID "Follow-up"` | Follow up to the task recipient or original message sender |
+| `agentmux reply TASK_OR_MESSAGE_ID "Follow-up"` | Follow up to the task recipient or direct-message sender; shared board posts require an explicit destination |
 | `agentmux isolate AGENT_ID` | Revoke its peer coordination and memberships across groups; native input stays open |
 | `agentmux remove AGENT_ID` | Close an owned terminal or disconnect an external bridge; retain saved history |
 | `agentmux down` | Stop the workspace's owned processes while keeping saved data |

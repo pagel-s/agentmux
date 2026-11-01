@@ -48,22 +48,27 @@ type autonomyState struct {
 }
 
 type AutonomyStatus struct {
-	Agent         string        `json:"agent"`
-	Enabled       bool          `json:"enabled"`
-	Mode          string        `json:"mode"`
-	State         string        `json:"state"`
-	Version       int           `json:"version"`
-	Ready         bool          `json:"ready"`
-	Reason        string        `json:"reason,omitempty"`
-	TurnsUsed     int           `json:"turns_used"`
-	MaxTurns      int           `json:"max_turns"`
-	Pending       int           `json:"pending"`
-	Inflight      int           `json:"inflight"`
-	Dropped       int64         `json:"dropped"`
-	Suppressed    int64         `json:"suppressed"`
-	Cursor        string        `json:"cursor,omitempty"`
-	NextAllowedAt string        `json:"next_allowed_at,omitempty"`
-	Receipts      []WakeReceipt `json:"receipts,omitempty"`
+	Agent     string `json:"agent"`
+	Enabled   bool   `json:"enabled"`
+	Mode      string `json:"mode"`
+	State     string `json:"state"`
+	Version   int    `json:"version"`
+	Ready     bool   `json:"ready"`
+	Reason    string `json:"reason,omitempty"`
+	TurnsUsed int    `json:"turns_used"`
+	MaxTurns  int    `json:"max_turns"`
+	// Pending remains the observation count for compatibility.
+	Pending             int           `json:"pending"`
+	PendingObservations int           `json:"pending_observations"`
+	PendingInstructions int           `json:"pending_instructions"`
+	AdmissionBlocked    bool          `json:"admission_blocked"`
+	AdmissionReason     string        `json:"admission_reason,omitempty"`
+	Inflight            int           `json:"inflight"`
+	Dropped             int64         `json:"dropped"`
+	Suppressed          int64         `json:"suppressed"`
+	Cursor              string        `json:"cursor,omitempty"`
+	NextAllowedAt       string        `json:"next_allowed_at,omitempty"`
+	Receipts            []WakeReceipt `json:"receipts,omitempty"`
 }
 
 func loadAutonomy(ctx context.Context, q queryer, id string) (autonomyState, error) {
@@ -260,11 +265,12 @@ func (s *Store) autonomyStatus(ctx context.Context, q queryer, id string) (Auton
 		return status, err
 	}
 	status.Pending = len(visible)
+	status.PendingObservations = status.Pending
 	if state.NextAllowed > 0 {
 		status.NextAllowedAt = time.Unix(0, state.NextAllowed).UTC().Format(time.RFC3339Nano)
 	}
 	var pending int
-	err = q.QueryRowContext(ctx, "SELECT count(*) FROM records WHERE kind='task' AND target=? AND json_extract(data,'$.state')='proposed' AND json_extract(data,'$.delivery')='pending'", id).Scan(&pending)
+	err = q.QueryRowContext(ctx, "SELECT count(*), count(CASE WHEN coalesce(json_extract(data,'$.origin.kind'),'instruction') != 'observation' THEN 1 END) FROM records WHERE kind='task' AND target=? AND json_extract(data,'$.state')='proposed' AND json_extract(data,'$.delivery')='pending'", id).Scan(&pending, &status.PendingInstructions)
 	if err != nil {
 		return status, err
 	}
@@ -310,10 +316,18 @@ func (s *Store) autonomyStatus(ctx context.Context, q queryer, id string) (Auton
 			status.State, status.Reason = "busy", "session concurrency budget occupied"
 			return status, nil
 		}
-		status.Ready = pending > 0 || len(visible) > 0
-		if status.Ready {
-			status.State = "ready"
+		if pending == 0 && len(visible) == 0 {
+			return status, nil
 		}
+		if _, problem := s.turnBudgetAllowance(ctx, q, id); problem != nil {
+			if problem.Code != "limit" {
+				return status, problem
+			}
+			status.AdmissionBlocked, status.AdmissionReason = true, problem.Message
+			status.State, status.Reason = "halted", problem.Message
+			return status, nil
+		}
+		status.Ready, status.State = true, "ready"
 	}
 	return status, nil
 }
@@ -348,6 +362,11 @@ func (s *Store) autonomy(ctx context.Context, q queryer, a actor, r Request) (an
 			return nil, internal(err)
 		}
 		if !status.Ready {
+			// Explicit claims retain their authoritative admission fault; status
+			// discovery can describe the same denial without mutating usage.
+			if status.AdmissionBlocked {
+				return nil, fault("limit", status.AdmissionReason)
+			}
 			return map[string]any{"task": nil, "status": status}, nil
 		}
 		var instructions int

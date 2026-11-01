@@ -2451,3 +2451,123 @@ test("Teams separates retained membership from broker-derived recursive access a
   assert.doesNotMatch(text(), /access allowed/);
   assert.equal(f.writes.length, 0);
 });
+
+function rosterAccessibilityContext() {
+  const dom = domFixture(),
+    context = identityContext();
+  Object.assign(context, {
+    document: dom.document,
+    $: dom.node,
+    el: dom.el,
+    selected: "alpha",
+    agentSignature: "",
+    researchSavedOffline: false,
+    renderObserved() {},
+    selectAgent() {},
+    snapshot: {
+      agents: [
+        { id: "alpha", config: { harness: "claude", workdir: "/work/project" } },
+        { id: "beta", title: "Investigate auth", config: { harness: "claude", workdir: "/work/project" } },
+      ],
+      runtime: { agents: {} },
+    },
+  });
+  vm.runInContext(
+    source.slice(source.indexOf("function captureViewState("), source.indexOf("const notice =")),
+    context,
+  );
+  vm.runInContext(
+    source.slice(source.indexOf('$("session-search").oninput'), source.indexOf('$("edit-title").onclick')),
+    context,
+  );
+  return { ...dom, context };
+}
+
+test("session search announces results and clear recovery while polling stays quiet", () => {
+  const f = rosterAccessibilityContext(),
+    status = f.node("session-search-status");
+  let text = "", writes = 0;
+  Object.defineProperty(status, "textContent", {
+    get: () => text,
+    set: (value) => { text = value; writes++; },
+  });
+  f.context.renderSessionLists();
+  assert.equal(writes, 0, "initial polling must not announce the roster");
+  f.node("session-search").value = "nomatch";
+  f.node("session-search").focus();
+  f.node("session-search").oninput();
+  assert.equal(text, "0 of 2 sessions match “nomatch”.");
+  assert.equal(f.document.activeElement, f.node("session-search"));
+  f.context.renderSessionLists();
+  f.context.snapshot.agents[0].title = "Changed asynchronously";
+  f.context.renderSessionLists();
+  assert.equal(writes, 1, "polling and unrelated title changes must stay quiet");
+  const clear = f.node("agents").querySelectorAll("button")[0];
+  clear.focus();
+  clear.click();
+  assert.equal(text, "2 sessions shown.");
+  assert.equal(f.context.sessionQuery, "");
+  assert.equal(f.document.activeElement, f.node("session-search"), "removed Clear search must return focus to search");
+  f.context.snapshot.agents = [];
+  f.context.researchSavedOffline = true;
+  f.node("session-search").value = "alpha";
+  f.node("session-search").oninput();
+  assert.equal(text, "Session registry not loaded. Search results are unavailable.");
+});
+
+test("session identity keeps stable IDs without repeating untitled project/provider rows", () => {
+  const f = rosterAccessibilityContext();
+  f.context.renderSessionLists();
+  const rows = f.node("agents").children,
+    plain = rows[0].children[1],
+    titled = rows[1].children[1];
+  assert.equal(plain.children[0].textContent, "project · Claude");
+  assert.equal(plain.children[1].textContent, "alpha");
+  assert.equal(plain.children.length, 2, "fallback title already contains the project and provider");
+  assert.equal(rows[0].getAttribute("aria-label"), "project · Claude · alpha");
+  assert.equal(titled.children[0].textContent, "Investigate auth");
+  assert.equal(titled.children[1].textContent, "beta · Claude");
+  assert.equal(titled.children[2].textContent, "project");
+  assert.equal(rows[0].getAttribute("aria-pressed"), "true");
+  f.context.snapshot.agents[1].config.workdir = "/tmp/beta";
+  f.context.renderSessionLists();
+  assert.equal(f.node("agents").children[1].children[1].children.length, 2, "project equal to stable ID adds no identifying information");
+});
+
+test("workspace view buttons expose one active state without moving activation focus", () => {
+  const dom = domFixture(), names = ["activity", "agent", "tasks"],
+    buttons = names.map((name) => {
+      const button = dom.el("button");
+      button.dataset.tab = name;
+      dom.document.body.append(button);
+      const view = dom.node("view-" + name, "view");
+      return { button, view };
+    }),
+    context = vm.createContext({
+      document: dom.document, $: dom.node, tab: "activity", renderGlobalHeading() {},
+    });
+  vm.runInContext(source.slice(source.indexOf("function activateTab("), source.indexOf('$("board-filter").onchange')), context);
+  buttons[1].button.focus();
+  buttons[1].button.click();
+  assert.deepEqual(buttons.map(({ button }) => button.getAttribute("aria-pressed")), ["false", "true", "false"]);
+  assert.equal(dom.document.activeElement, buttons[1].button);
+  buttons[2].button.click();
+  assert.deepEqual(buttons.map(({ button }) => button.getAttribute("aria-pressed")), ["false", "false", "true"]);
+  assert.ok(buttons[2].view.className.includes("active"));
+  assert.ok(!buttons[1].view.className.split(/\s+/).includes("active"));
+  const html = fs.readFileSync(path.join(__dirname, "index.html"), "utf8");
+  const initial = [...html.matchAll(/<button\b[^>]*data-tab="([^"]+)"[^>]*>/g)];
+  assert.equal(initial.filter(([markup]) => markup.includes('aria-pressed="true"')).length, 1);
+  for (const [markup, name] of initial)
+    assert.ok(markup.includes('aria-controls="view-' + name + '"'), name);
+  assert.match(html, /id="session-search-status"[^>]*role="status"[^>]*aria-atomic="true"/);
+});
+
+test("recent task view describes its bounded window and avoids implying empty history", () => {
+  const f = pollingContext();
+  f.context.renderTasks();
+  assert.match(f.node("tasks").children[0].textContent, /^No recent tasks\./);
+  const html = fs.readFileSync(path.join(__dirname, "index.html"), "utf8");
+  assert.match(html, /Recent tasks <span id="task-count">/);
+  assert.match(html, /latest 40 tasks.*older tasks may exist/);
+});

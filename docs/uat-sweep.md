@@ -5,6 +5,10 @@ coordination and knowledge boundaries, research automation, recovery, and a real
 two-machine SSH deployment. All fixtures were model-free. Temporary sessions and
 remote deployments were isolated from everyday user workspaces.
 
+The later [twenty-angle acceptance pass](uat-20-angles.md) records twenty
+additional bounded reviews, the fixes included from those findings, and
+capability proposals that remain unimplemented.
+
 ## Coverage
 
 | Situation | Validation |

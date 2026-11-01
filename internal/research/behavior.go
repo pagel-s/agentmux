@@ -35,6 +35,14 @@ type AgentLabel struct {
 	Parent  string `json:"parent,omitempty"`
 }
 type Behavior struct {
+	Research         string  `json:"research"`
+	ManifestHash     string  `json:"manifest_sha256"`
+	Seed             int64   `json:"seed"`
+	Repetition       int     `json:"repetition"`
+	Order            int     `json:"order"`
+	Attempt          int     `json:"attempt"`
+	ConfigHash       string  `json:"config_sha256"`
+	Environment      string  `json:"environment"`
 	ID               string  `json:"behavior_id"`
 	Trial            string  `json:"trial"`
 	Condition        string  `json:"condition"`
@@ -67,7 +75,7 @@ func Behaviors(report Report) []Behavior {
 			for _, id := range ids {
 				action := round.Actions[id]
 				label := result.ActorMetadata[id]
-				row := Behavior{Intervened: len(result.Interventions) > 0 || result.OwnerMutations > 0, ID: digest(fmt.Sprintf("%s/%s/%d/%d/%s", report.ManifestHash, result.Trial.ID, result.Attempt, round.Round, id))[:24], Trial: result.Trial.ID, Condition: result.Trial.Condition, TrialStatus: result.Status, Round: round.Round, Actor: id, Harness: label.Harness, Model: label.Model, Valid: action.Valid, Contribution: action.Action.Contribute, Utility: round.Utilities[id], Payoff: round.Payoffs[id], RemainingCredits: round.Credits[id]}
+				row := Behavior{Research: report.Research, ManifestHash: report.ManifestHash, Seed: result.Trial.Seed, Repetition: result.Trial.Repetition, Order: result.Trial.Order, Attempt: result.Attempt, ConfigHash: result.ConfigHash, Environment: round.Environment, Intervened: len(result.Interventions) > 0 || result.OwnerMutations > 0, ID: digest(fmt.Sprintf("%s/%s/%d/%d/%s", report.ManifestHash, result.Trial.ID, result.Attempt, round.Round, id))[:24], Trial: result.Trial.ID, Condition: result.Trial.Condition, TrialStatus: result.Status, Round: round.Round, Actor: id, Harness: label.Harness, Model: label.Model, Valid: action.Valid, Contribution: action.Action.Contribute, Utility: round.Utilities[id], Payoff: round.Payoffs[id], RemainingCredits: round.Credits[id]}
 				for _, phase := range result.Phases {
 					if phase.Round == round.Round {
 						if task, exists := phase.Tasks[id]; exists && task.State != "submitted" && task.State != "verified" {

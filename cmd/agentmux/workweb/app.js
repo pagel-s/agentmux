@@ -267,17 +267,21 @@ function emptySearch(list, kind) {
   clear.onclick = () => {
     $("session-search").value = "";
     sessionQuery = "";
-    renderSessionLists();
+    renderSessionLists(true);
     renderObserved();
+    $("session-search").focus();
   };
   box.append(document.createElement("br"), clear);
   list.append(box);
 }
-function renderSessionLists() {
+function renderSessionLists(announceSearch = false) {
   if (!snapshot) return;
   const all = snapshot.agents || [],
     list = $("agents");
   if (researchSavedOffline && !all.length) {
+    if (announceSearch)
+      $("session-search-status").textContent =
+        "Session registry not loaded. Search results are unavailable.";
     $("agent-count").textContent = "—";
     $("registered-count").textContent = "NOT LOADED";
     list.replaceChildren(
@@ -293,6 +297,18 @@ function renderSessionLists() {
     return;
   }
   const agents = all.filter(matchesSession);
+  if (announceSearch) {
+    const message = sessionQuery
+      ? agents.length +
+        " of " +
+        all.length +
+        " sessions match “" +
+        sessionQuery +
+        "”."
+      : all.length + (all.length === 1 ? " session shown." : " sessions shown.");
+    if ($("session-search-status").textContent !== message)
+      $("session-search-status").textContent = message;
+  }
   $("agent-count").textContent = sessionQuery
     ? agents.length + " / " + all.length
     : all.length;
@@ -346,7 +362,9 @@ function renderSessionLists() {
     row.setAttribute("aria-pressed", String(item.id === selected));
     row.setAttribute(
       "aria-label",
-      title + " · " + item.id + " · " + providerName(config.harness),
+      [title, item.id, item.title ? providerName(config.harness) : ""]
+        .filter(Boolean)
+        .join(" · "),
     );
     row.title = [
       title,
@@ -362,13 +380,15 @@ function renderSessionLists() {
     const copy = el("span", "agent-copy");
     copy.append(
       el("strong", "", title),
-      el("small", "", item.id + " · " + providerName(config.harness)),
       el(
         "small",
-        "agent-project",
-        projectName(config.workdir) || sessionOrigin(item),
+        "",
+        item.id + (item.title ? " · " + providerName(config.harness) : ""),
       ),
     );
+    const project = projectName(config.workdir);
+    if (!project || (project !== item.id && project !== title && !title.startsWith(project + " · ")))
+      copy.append(el("small", "agent-project", project || sessionOrigin(item)));
     row.append(copy);
     const status = sessionStatus(
         item,
@@ -1136,7 +1156,7 @@ function renderTasks() {
       el(
         "p",
         "empty",
-        "No managed tasks. Human input in native sessions is handled by the CLI itself.",
+        "No recent tasks. Human input in native sessions is handled by the CLI itself.",
       ),
     );
     restoreViewState(list, state);
@@ -1687,9 +1707,11 @@ function activateTab(next) {
   renderGlobalHeading();
   document
     .querySelectorAll("[data-tab]")
-    .forEach((node) =>
-      node.classList.toggle("active", node.dataset.tab === tab),
-    );
+    .forEach((node) => {
+      const active = node.dataset.tab === tab;
+      node.classList.toggle("active", active);
+      node.setAttribute("aria-pressed", String(active));
+    });
   document
     .querySelectorAll(".view")
     .forEach((node) =>
@@ -2188,7 +2210,7 @@ function scopeLabel(name) {
 
 $("session-search").oninput = () => {
   sessionQuery = $("session-search").value.trim();
-  renderSessionLists();
+  renderSessionLists(true);
   renderObserved();
 };
 $("edit-title").onclick = openTitleEditor;
@@ -2584,7 +2606,11 @@ function renderWorkerRuntime(agent) {
         (status.reason || "Ready for eligible work") +
           " · " +
           status.inflight +
-          " active or uncertain deliveries",
+          " active or uncertain deliveries · " +
+          (status.pending_observations ?? status.pending) +
+          " queued observations · " +
+          (status.pending_instructions ?? 0) +
+          " queued instructions",
       ),
     );
     if (status.enabled)
@@ -2599,8 +2625,6 @@ function renderWorkerRuntime(agent) {
             "/" +
             status.max_turns +
             " turns · " +
-            status.pending +
-            " pending observations · " +
             status.suppressed +
             " suppressed · " +
             status.dropped +

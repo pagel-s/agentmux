@@ -15,6 +15,7 @@ import re
 import selectors
 import signal
 import subprocess
+import sys
 import tarfile
 import tempfile
 import time
@@ -98,7 +99,9 @@ def install(archive,manifest,name,destination,replace,expected_version=None):
         os.chmod(path,0o755)
         version=probe_version(path)
         if 'agentmux' not in version.lower():raise ValueError('unexpected executable version response')
-        if expected_version and not re.match(r'^agentmux\s+v?'+re.escape(expected_version.removeprefix('v'))+r'(?:\s|$)',version):raise ValueError('executable version does not match selected release')
+        if expected_version:
+            release_version=expected_version[1:] if expected_version.startswith('v') else expected_version
+            if not re.match(r'^agentmux\s+v?'+re.escape(release_version)+r'(?:\s|$)',version):raise ValueError('executable version does not match selected release')
         if replace:os.replace(path,target)
         else:os.link(path,target);os.unlink(path)
         return version.strip()
@@ -132,4 +135,12 @@ def main():
         base=f'https://github.com/pagel-s/agentmux/releases/download/{a.version}/';manifest=download(base+'checksums.txt',1024*1024);archive=download(base+name,128*1024*1024)
     print(install(archive,manifest,name,a.destination,a.replace,a.version))
 
-if __name__=='__main__':main()
+def cli():
+    try:
+        main()
+    except (ValueError,OSError,tarfile.TarError,EOFError) as error:
+        print('error: '+str(error),file=sys.stderr)
+        return 1
+    return 0
+
+if __name__=='__main__':sys.exit(cli())

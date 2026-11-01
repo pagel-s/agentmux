@@ -36,6 +36,7 @@
             placeholder="Find a session…"
             autocomplete="off"
         /></label>
+        <span id="session-search-status" class="sr-only" role="status" aria-atomic="true"></span>
         <div id="agents" class="agent-list"></div>
         <div class="rail-bottom">
           <span id="workbench-shortcuts"
@@ -99,14 +100,14 @@
           ><span id="agent-terminal"></span><span id="agent-lineage"></span>
         </div>
         <nav class="tabs" aria-label="Workspace views">
-          <button data-tab="activity" class="active">Board</button
-          ><button data-tab="agent">Agent</button
-          ><button data-tab="tasks">Tasks <span id="task-count">0</span></button
-          ><button data-tab="memory">Memory</button
-          ><button data-tab="graph">Graph</button
-          ><button data-tab="teams">Teams</button
-          ><button data-tab="research" id="research-tab" hidden>Research</button
-          ><button data-tab="sessions">Sessions</button
+          <button data-tab="activity" class="active" aria-pressed="true" aria-controls="view-activity">Board</button
+          ><button data-tab="agent" aria-pressed="false" aria-controls="view-agent">Agent</button
+          ><button data-tab="tasks" aria-pressed="false" aria-controls="view-tasks">Recent tasks <span id="task-count">0</span></button
+          ><button data-tab="memory" aria-pressed="false" aria-controls="view-memory">Memory</button
+          ><button data-tab="graph" aria-pressed="false" aria-controls="view-graph">Graph</button
+          ><button data-tab="teams" aria-pressed="false" aria-controls="view-teams">Teams</button
+          ><button data-tab="research" id="research-tab" aria-pressed="false" aria-controls="view-research" hidden>Research</button
+          ><button data-tab="sessions" aria-pressed="false" aria-controls="view-sessions">Sessions</button
           ><span class="tab-tail" id="deadline"></span>
         </nav>
         <div class="workspace-content">
@@ -272,9 +273,10 @@
           </section>
           <section id="view-tasks" class="view">
             <div class="section-label">
-              <h2>Tasks & results</h2>
+              <h2>Recent tasks & results</h2>
               <span>OWNER VIEW</span>
             </div>
+            <p class="session-note">Showing up to the latest 40 tasks. The count describes this recent window; older tasks may exist.</p>
             <div id="tasks" class="task-list"></div>
           </section>
           <section id="view-memory" class="view">

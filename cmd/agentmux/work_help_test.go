@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -82,9 +83,16 @@ func TestInventorySeparatesMissingWorkspaceFromEmptyObservations(t *testing.T) {
 }
 
 func TestAttachMissingWorkspaceGivesExactRecoveryCommand(t *testing.T) {
-	state := filepath.Join(t.TempDir(), "work with spaces")
+	tmp, err := os.MkdirTemp("", "amx-missing-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(tmp) })
+	root := filepath.Join(tmp, "work with spaces")
+	t.Setenv("XDG_STATE_HOME", root)
+	state := filepath.Join(root, "agentmux", "newcomer")
 	var out, diagnostics bytes.Buffer
-	code := runWorkSession("attach", []string{"claude", "--session", "newcomer", "--state", state}, strings.NewReader(""), &out, &diagnostics)
+	code := runWorkSession("attach", []string{"claude", "--session", "newcomer"}, strings.NewReader(""), &out, &diagnostics)
 	for _, want := range []string{"work session not found", "'agentmux' 'start'", "'--session' 'newcomer'", "'--state' '" + state + "'"} {
 		if code == exitSuccess || !strings.Contains(diagnostics.String(), want) {
 			t.Fatalf("missing recovery %q: code=%d %s", want, code, &diagnostics)

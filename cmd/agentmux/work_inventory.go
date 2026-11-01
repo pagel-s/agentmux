@@ -88,6 +88,7 @@ func runWorkInventory(args []string, out, diagnostics io.Writer) int {
 		return exitValidation
 	}
 	credential, registryErr := managed.LoadCredential(managed.CredentialPath(o.state, ""))
+	credentialErr := registryErr
 	observations := discoverWorkSessions(context.Background(), o.state)
 	runtime, runtimeErr := describeWorkRuntime(context.Background(), o.state)
 	var registered []managed.AgentInfo
@@ -110,6 +111,9 @@ func runWorkInventory(args []string, out, diagnostics io.Writer) int {
 			fmt.Fprintln(diagnostics, "Workspace registry not loaded: no owner credential at", consoleContent(o.state, 300))
 			fmt.Fprintln(diagnostics, "Start this workspace:", managedlaunch.ShellCommand([]string{"agentmux", "start", "--session", o.session, "--state", o.state}))
 			fmt.Fprintln(diagnostics, "Or select an existing --session/--state. Existing native terminals are still listed where recognizable.")
+		} else if credentialErr != nil {
+			fmt.Fprintln(diagnostics, "Workspace owner credential could not be read at", consoleContent(managed.CredentialPath(o.state, ""), 300)+":", consoleContent(credentialErr.Error(), 200))
+			fmt.Fprintln(diagnostics, "Restore a valid saved owner credential before reconnecting. Broker availability has not been established; restarting it does not repair this file.")
 		} else if saved, err := managedlaunch.Snapshot(o.state); err == nil && saved.State == "stopped" {
 			fmt.Fprintln(diagnostics, "Saved workspace is stopped. Registered session and bridge status are unknown until it is restarted.")
 			fmt.Fprintln(diagnostics, "Restart this saved workspace:", managedlaunch.ShellCommand([]string{"agentmux", "managed", "restart", "--state", o.state}))
@@ -383,10 +387,15 @@ func runWorkConnect(args []string, out, diagnostics io.Writer) int {
 		fmt.Fprintln(diagnostics, "error: connect accepts one observation ID followed by flags; run agentmux connect --help")
 		return exitValidation
 	}
-	values := []string{"--session", *session}
-	if *state != "" {
-		values = []string{"--state", *state}
-	}
+	var values []string
+	flags.Visit(func(f *flag.Flag) {
+		switch f.Name {
+		case "session":
+			values = append(values, "--session", *session)
+		case "state":
+			values = append(values, "--state", *state)
+		}
+	})
 	o, err := parseWorkOptions(values)
 	if err == nil {
 		var text string

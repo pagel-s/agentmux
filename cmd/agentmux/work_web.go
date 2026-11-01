@@ -205,6 +205,10 @@ func workWebHandler(state string, client *managed.Client, token, host string) ht
 				reply(map[string]any{"ok": true, "result": raw})
 			case "/api/send":
 				target, text := in.Target, in.Text
+				if strings.TrimSpace(text) == "" {
+					failure(errors.New("message text must not be empty; no message or instruction was queued"))
+					return
+				}
 				if in.ReplyTo != "" {
 					target, err = workReplyTarget(r.Context(), client, in.ReplyTo)
 					if err != nil {
@@ -310,7 +314,11 @@ func runWorkWeb(args []string, out, diagnostics io.Writer) int {
 		clean = append(clean, args[i])
 	}
 	o, err := parseWorkOptions(clean)
-	if err != nil || len(o.args) > 0 {
+	if err != nil {
+		fmt.Fprintln(diagnostics, "error:", err)
+		return exitValidation
+	}
+	if len(o.args) > 0 {
 		fmt.Fprintln(diagnostics, "error: web accepts --session, --state, --port and --open")
 		return exitValidation
 	}
