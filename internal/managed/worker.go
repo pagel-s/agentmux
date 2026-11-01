@@ -28,6 +28,7 @@ type WorkerOptions struct {
 	Once           bool
 	DefinitionFile string
 	NativeResume   string
+	NativeLauncher string
 }
 
 type workerCaller interface {
@@ -51,6 +52,9 @@ func RunWorker(ctx context.Context, opts WorkerOptions) error {
 	}
 	if opts.NativeResume != "" {
 		return errors.New("native resume is only available for interactive sessions")
+	}
+	if opts.NativeLauncher != "" {
+		return errors.New("native launcher override is only available for trusted-local interactive sessions")
 	}
 	unlock, err := acquireLock(filepath.Join(dir, "worker-"+opts.AgentID+".lock"))
 	if err != nil {

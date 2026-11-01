@@ -9,9 +9,9 @@ import (
 	"strings"
 )
 
-// Discover resolves executable and public code dependencies. It never mounts
-// a provider's home/config directory or reads credential files.
-func Discover(name, binary string) ([]string, []string, error) {
+// selectedLauncher preserves the public executable selected by PATH or the
+// owner. Native launchers may be symlinks that their updater retargets later.
+func selectedLauncher(name, binary string) (string, error) {
 	if binary == "" {
 		switch name {
 		case "claude", "codex", "pi":
@@ -19,14 +19,41 @@ func Discover(name, binary string) ([]string, []string, error) {
 		case "antigravity":
 			binary = "agy"
 		default:
-			return nil, nil, errors.New("setup supports claude, codex, pi, antigravity")
+			return "", errors.New("setup supports claude, codex, pi, antigravity")
 		}
 	}
 	path, err := exec.LookPath(binary)
 	if err != nil {
-		return nil, nil, errors.New("selected harness executable is not installed")
+		return "", errors.New("selected harness executable is not installed")
 	}
 	path, err = filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+// discoverNativeLauncher keeps the selected launcher and its own shebang or
+// wrapper behavior for trusted-local interactive sessions. Local execution has
+// no dependency mounts to freeze; retaining a versioned target here would break
+// normal native updates when the old version is removed.
+func discoverNativeLauncher(name, binary string) ([]string, []string, error) {
+	path, err := selectedLauncher(name, binary)
+	if err != nil {
+		return nil, nil, err
+	}
+	info, err := os.Stat(path)
+	if err != nil || !info.Mode().IsRegular() || info.Mode()&0111 == 0 {
+		return nil, nil, errors.New("harness executable is not an executable regular file")
+	}
+	return []string{path}, nil, nil
+}
+
+// Discover resolves canonical executable and public code dependencies for
+// managed or sandboxed execution. It never mounts a provider's home/config
+// directory or reads credential files.
+func Discover(name, binary string) ([]string, []string, error) {
+	path, err := selectedLauncher(name, binary)
 	if err != nil {
 		return nil, nil, err
 	}

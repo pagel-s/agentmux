@@ -126,7 +126,11 @@ func Build(spec Spec) (Plan, error) {
 		if a.Harness == "codex" && !spec.InitGit {
 			p.Warnings = append(p.Warnings, "agent "+a.ID+": Codex requires an approved Git workspace; use --init-git for newly created directories or initialize/review it manually")
 		}
-		command, deps, err := Discover(a.Harness, a.Binary)
+		discover := Discover
+		if spec.Sandbox == "local" && a.Interaction == "interactive" {
+			discover = discoverNativeLauncher
+		}
+		command, deps, err := discover(a.Harness, a.Binary)
 		if err != nil {
 			return p, fmt.Errorf("agent %s: %w", a.ID, err)
 		}

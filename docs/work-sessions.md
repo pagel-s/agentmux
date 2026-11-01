@@ -91,6 +91,10 @@ for a different project or definition. `down` stops owned agents and broker in
 order, retaining their data. Detaching or closing a dashboard leaves them running.
 Running the same `start` command again, including `--config FILE`, attaches to
 the running workspace only if the configuration still matches its saved definition.
+Each attachment has its own dashboard process, selection and drafts. Only the
+underlying agent terminals are shared; attaching twice to the same agent still
+shows the same native conversation. Runtime service windows stay out of normal
+navigation. **Ctrl-b**, release, then **Shift+D** opens read-only service logs.
 An explicit `--sandbox` must also match the running broker's mode; reopening never
 changes that mode. A mismatch is rejected without restarting the workspace.
 Use `managed restart --state DIRECTORY` for explicit whole-workspace restart.
@@ -106,9 +110,31 @@ Antigravity accepts `--resume last` or an explicit conversation ID; it has no
 picker mapping. External bridges, revoked agents and still-running native CLIs
 cannot be relaunched through this command.
 
+Native updates may exit successfully and ask you to restart. Agentmux retains
+the final output and marks that CLI `exited`; it never restarts it automatically.
+New trusted-local interactive setups save the selected public launcher, so a
+normal symlink-based native update is used on the next explicit relaunch.
+Managed and sandboxed definitions retain their frozen executable dependencies.
+If an older local definition directly invokes a removed or outdated native
+binary, select its installed public launcher for this one invocation:
+
+```sh
+agentmux relaunch codex --native-launcher "$(command -v codex)"
+```
+
+This requires an updated running controller and an absolute executable path.
+It applies only to trusted-local interactive sessions, preserves trailing
+arguments, and does not rewrite the saved definition or change sandbox mounts.
+It does not repair interpreter-plus-script definitions such as
+`node /old/package/cli.js`: their script argument is preserved too. Review those
+definitions explicitly, or create a new session with the updated setup.
+An older controller rejects this option with upgrade guidance; it is never
+silently ignored. Add the workspace's `--session NAME` or `--state DIR` selector
+when it is not the default workspace.
+
 `agentmux workspaces` lists named workspaces and remembered custom state paths.
 Use `--json` for structured inventory or `--register DIR` to add an older custom
-location. `W` opens the terminal chooser: Enter opens another observer; closing it
+location. **Shift+W** opens the terminal chooser: Enter opens another observer; closing it
 returns to the previous workspace without losing that observer's drafts. The web
 Sessions view lists workspace commands. Identical names remain distinct by state
 path. A failed or exhausted live check reports unknown instead of inventing a
@@ -306,27 +332,30 @@ for the distinction between native startup, actual inference and tool coverage.
 Keys are case-sensitive: `N`, `L`, `V`, and `P` mean Shift plus that letter. For
 `Ctrl-b b`, press Ctrl-b, release both keys, then press b. The same two-step
 prefix applies to the other Ctrl-b bindings. Shortcuts below depend on the
-active view; use Tab or a view number first.
+active view and selected record; the footer shows the actions available there.
+Use Tab or a view number first. In an editor, printable characters are text;
+use **Ctrl-G** for help and **Esc** to cancel before using navigation shortcuts.
 
 | Key | Action |
 | --- | --- |
 | ↑/↓ or j/k | Select agent |
-| Enter | Focus its tracked terminal; attach when outside that tmux server |
+| Enter | Focus its tracked terminal; an exited native CLI opens a same-ID relaunch review. Outside tmux, open an independent attachment |
 | / | Find by task, project, provider, ID or external terminal location |
-| L | Edit the selected session's human task title; empty clears |
-| V | Edit its coordinated role with CAS; prompt-free native sessions reject injected roles |
-| W / U | Choose another workspace observer / deliberately relaunch the selected exited owned native session |
+| Shift+L | Edit the selected session's human task title; empty clears |
+| Shift+V | Edit its coordinated role with CAS; prompt-free native sessions reject injected roles |
+| Shift+W / Shift+U | Choose another workspace observer / deliberately relaunch the selected exited owned native session |
 | ? / Ctrl-G | Open context help outside an editor / while editing or reviewing |
 | F1 / Ctrl-b g in a native session | Return to the workbench |
-| Ctrl-b b / Ctrl-b P / Ctrl-b m / Ctrl-b t in a native session | Open Board / Connections / Memory / Tasks in a popup |
+| Ctrl-b, then b / Shift+P / m / t in a native session | Open Board / Connections / Memory / Tasks in a popup |
+| Ctrl-b, then Shift+D | Choose read-only Broker or Supervisor logs without leaving the current terminal |
 | Tab / Shift-Tab or 1–8 | Switch Board, Agents, Connections, Memory, Tasks, Sessions, Teams, Events |
 | [ / ] in Teams; ← / → | Choose a team; choose an exact agent for a membership action |
-| i / r / d in Teams | Review invite / remove or revoke invitation / dissolve with the current version |
+| i / r / d in Teams | Review invite / remove or revoke invitation / dissolve with the current version; hints follow target membership |
 | e / t in Teams | Edit team name/mission / propose the selected member as owner; acceptance is separate |
 | b / v in Teams | Compose to its board / inspect its shared memory as owner |
 | [ / ] in Events; Home | Inspect an event; return to following the newest event |
 | P / R / S / T in Events | Research pause / resume / one phase / stop, each with a reason and separate review |
-| N / x | Add a native session with an explicit profile / revoke the selected session and descendants; owned shutdown is requested |
+| Shift+N / x | Add a native session with an explicit profile / revoke the selected session and descendants; owned shutdown is requested |
 | s / b | Compose a direct message/instruction or selected shared-board note |
 | + / − in Board | Select an allowed board namespace |
 | Enter / Esc in composer | Submit / cancel; Alt-Enter inserts a newline |
@@ -338,10 +367,10 @@ active view; use Tab or a view number first.
 | c / d in Connections | Connect selected sender/recipient in a group / make sender independent |
 | c in Sessions | Prepare a bridge for the selected observed terminal; paste setup manually |
 | m / p / i in Connections | Toggle messages / pings / commands |
-| M / P / I in Connections | Reset the selected explicit override to the underlying effective policy |
+| Shift+M / Shift+P / Shift+I in Connections | Reset the selected explicit override to the underlying effective policy |
 | [ / ] in Memory | Select a board or memory namespace |
 | r / w in Memory | Toggle read / write |
-| R in Memory | Reset the selected explicit scope override; membership remains authoritative |
+| Shift+R in Memory | Reset the selected explicit scope override; membership remains authoritative |
 | v in Memory | Inspect shared entries; [ / ] selects an entry |
 | e / n in memory entries | Edit an existing entry / create a key and value |
 | [ / ] in Tasks | Select a task in the loaded history page |
@@ -353,9 +382,26 @@ active view; use Tab or a view number first.
 | Esc / q / o in the reader | Return to the previous view while keeping the observer open |
 | Ctrl-R outside a composer | Restore the last failed message, board, memory, role or new-session draft for review |
 | Ctrl-R inside a memory/role editor | Review the latest saved value/version alongside the retained draft; adopting a version does not save |
-| B in Board or Agents | Review four agent admission-budget fields, then confirm with the current resource version |
+| Shift+B in Board or Agents | Review four agent admission-budget fields, then confirm with the current resource version |
 | a | Pause/resume configured autonomy; does not stop in-flight work |
 | q | Detach from the persistent workbench, or close a popup/standalone view; team stays running |
+
+The **Teams** view is for consent-based teams created by permitted agents. An
+empty Teams view does not mean your native sessions are missing. For everyday
+pairing, press **3** for Connections, choose a recipient with **←/→**, then
+**c**. Those owner collaboration groups share a scoped board and memory.
+
+The roster keeps process state visible even with long project names. A native
+CLI marked `exited` can still have an active coordination identity; it does not
+necessarily mean the CLI failed. **Enter** or **Shift+U** opens a deliberate
+relaunch review. Nothing restarts until you confirm; retained output is labeled
+as last output instead of live output.
+
+**Shift+W** can open an observer for another workspace. If this observer is
+hosted inside a different tmux server, **Enter** shows an exact `agentmux attach`
+command to run in a separate terminal. Observation and owner controls remain
+available in the current observer; native input uses that separate terminal.
+This avoids nesting tmux clients or switching unrelated attachments.
 
 Use `o` when a preview is too short. The reader keeps the selected record and
 its loaded text fixed while activity refreshes, so scrolling cannot switch to a

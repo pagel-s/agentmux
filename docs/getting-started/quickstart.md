@@ -80,12 +80,21 @@ Select a session with the arrow keys and press Enter. Ask it to describe the
 playground without changing files. Handle native trust/tool prompts normally.
 Press **F1** (or **Ctrl-b**, release, then **g**) to return to the workbench.
 
-Try **/** to search, **L** to edit its title, **V** to edit its role, **?** for
-context help, and **Tab** or **1–8** to change views. Titles can change or repeat;
+Try **/** to search, **Shift+L** to edit its title, **Shift+V** to edit its role,
+**Shift+N** to add a session, **?** for context help, and **Tab** or **1–8** to
+change views. The footer follows the current view and selection; uppercase
+letters mean hold Shift. Titles can change or repeat;
 commands still use the stable IDs. A role update changes future managed turns
 and sends a native inbox notice; it does not inject a new user turn.
 
+For pairing existing sessions, use **3 Connections**, choose a recipient with
+**←/→**, then **c**. **7 Teams** is for consent-based teams created by agents
+with permission; an empty Teams view is normal for this everyday preset.
+
 Detach with **Ctrl-b**, release, then **d**. The sessions keep running.
+Runtime services are separate from the agent windows. To inspect their logs,
+press **Ctrl-b**, release, then **Shift+D**. From an agent terminal, **Ctrl-b b**
+opens the Board popup; from the workbench, press **1** for Board directly.
 
 ## 4. Keep both native sessions open
 
@@ -102,7 +111,8 @@ agentmux attach codex --session try-agentmux
 ```
 
 Expected: both are normal native CLI conversations. Switching sessions in one
-attachment does not switch the other attachment. Keep a separate regular shell
+attachment does not switch the other attachment. Each attachment also has its
+own dashboard selection and drafts. Keep a separate regular shell
 for owner commands in the following steps.
 
 ## 5. Verify the initial communication boundary
@@ -237,6 +247,10 @@ try-agentmux`, exit that native CLI normally, then detach with **Ctrl-b**, relea
 then **d** to return to the owner shell. The exited pane can retain its final
 output. Then test a deliberate same-ID relaunch:
 
+In the workbench, an exited native CLI is marked `exited`; **Enter** or
+**Shift+U** opens its relaunch review. A clean exit does not mean a failure.
+You can use the owner shell instead:
+
 ```sh
 agentmux relaunch review --session try-agentmux
 agentmux attach review --session try-agentmux
@@ -247,6 +261,12 @@ Expected: a fresh native conversation under the same Agentmux ID, with peers
 untouched. To choose native history deliberately use `--resume picker` or an
 exact native conversation ID instead. `--resume last` means the provider's
 latest applicable conversation, not an Agentmux title match.
+
+A native CLI may exit normally after updating itself. Review and relaunch that
+session in the same way; a clean exit is not a crash. New local setups follow
+the selected public launcher on relaunch. For older saved definitions that
+freeze a versioned executable, see the explicit launcher recovery option in
+[work sessions](../work-sessions.md#start-and-attach).
 
 ## 11. Test discovery or another workspace
 
@@ -262,9 +282,11 @@ into that original native conversation; connecting does not inject it or move
 the external terminal. Some generic interpreter/non-TTY processes cannot be
 identified. Existing external conversations remain under your direct control.
 
-`agentmux workspaces` lists named and remembered custom locations. **W** in the
-terminal opens another running workspace's observer and **q** returns. For an
-older custom state location, use `agentmux workspaces --register DIRECTORY`.
+`agentmux workspaces` lists named and remembered custom locations. **Shift+W**
+opens another running workspace's observer and **q** returns. From inside a
+different workspace's tmux, **Enter** shows a native attach command to run in
+another terminal; it keeps observation and controls in the current observer.
+For an older custom state location, use `agentmux workspaces --register DIRECTORY`.
 
 ## 12. Stop the test and try isolated/managed workflows
 

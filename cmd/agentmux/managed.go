@@ -142,10 +142,9 @@ func runManagedIO(args []string, stdin io.Reader, stdout, stderr io.Writer) int 
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 		defer stop()
 		fmt.Fprintf(stderr, "Agentmux agent %s: starting the configured terminal or managed worker.\n", options.values["agent"])
-		if err := managed.RunWorker(ctx, managed.WorkerOptions{StateDir: state, AgentID: options.values["agent"], Once: options.once, Executable: executable, DefinitionFile: options.values["definition"], NativeResume: options.values["native-resume"]}); err != nil && !errors.Is(err, context.Canceled) {
-			return managedCLIError(stdout, operation, "", exitRuntime, err)
-		}
-		return writeManagedEnvelope(stdout, managedEnvelope{Operation: operation, OK: true, Result: map[string]any{"agent_id": options.values["agent"], "stopped": true}})
+		opts := managed.WorkerOptions{StateDir: state, AgentID: options.values["agent"], Once: options.once, Executable: executable, DefinitionFile: options.values["definition"], NativeResume: options.values["native-resume"], NativeLauncher: options.values["native-launcher"]}
+		native := managedWorkerIsInteractive(opts)
+		return writeManagedWorkerResult(stdout, opts.AgentID, native, managed.RunWorker(ctx, opts))
 	case "rotate":
 		store, err := managed.Open(state)
 		if err != nil {
@@ -327,6 +326,7 @@ func parseManagedCLI(operation string, args []string) (managedCLIOptions, error)
 		allowed["state"], allowed["agent"], allowed["once"] = true, true, true
 		allowed["definition"] = true
 		allowed["native-resume"] = true
+		allowed["native-launcher"] = true
 	case "rotate":
 		allowed["state"], allowed["agent"] = true, true
 	case "call":
@@ -389,6 +389,9 @@ func parseManagedCLI(operation string, args []string) (managedCLIOptions, error)
 	if (operation == "worker" || operation == "rotate") && options.values["agent"] == "" {
 		return options, errors.New("--agent is required (use '$owner' to rotate the owner credential)")
 	}
+	if launcher := options.values["native-launcher"]; launcher != "" && !filepath.IsAbs(launcher) {
+		return options, errors.New("--native-launcher requires an absolute executable path")
+	}
 	if mode := options.values["sandbox"]; mode != "" && mode != "local" && mode != "bubblewrap" {
 		return options, errors.New("--sandbox must be local or bubblewrap")
 	}
@@ -419,7 +422,7 @@ func printManagedUsage(out io.Writer) {
   agentmux managed call <operation> [--credential-file <path>] [--socket <path>]
       [--json <object> | --stdin] [--request-id <id>]
   agentmux managed worker --state <private-dir> --agent <id> [--once] [--definition FILE]
-      [--native-resume ID|last|picker]
+      [--native-resume ID|last|picker] [--native-launcher ABSOLUTE_PATH]
   agentmux managed remote --state DIR --agent ID --host SSH_ALIAS --remote-dir DIR
       [--layout FILE] [--binary FILE] [--once] [--resume]
   agentmux managed memory export|import|search|index|prune [--help]
@@ -435,6 +438,9 @@ func printManagedUsage(out io.Writer) {
 Call credentials may come from AGENTMUX_CREDENTIAL_FILE; AGENTMUX_SOCKET
 overrides the credential's socket when --socket is omitted. Credentials are
 never printed. Local workers are trusted processes, not sandbox isolation.
+Native launcher recovery is explicit and applies only to this invocation of a
+trusted-local interactive agent. It preserves trailing command arguments and
+saved mount declarations; it never rewrites the saved process definition.
 Useful broker calls: identity, boundaries.get, capacity.get, budget.status,
 task.list, agent.role and capacity.update. Owner edits use current CAS versions;
 resource controls govern admissions, not hard provider billing. Consented team

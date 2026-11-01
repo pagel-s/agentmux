@@ -46,12 +46,11 @@ func (m console) workspaceKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if err != nil {
 			return m, func() tea.Msg { return consoleAction{err: err} }
 		}
-		cmd := exec.Command(exe, "dashboard", "--state", row.State)
-		for _, entry := range os.Environ() {
-			if !strings.HasPrefix(entry, "TMUX=") && !strings.HasPrefix(entry, "TMUX_PANE=") {
-				cmd.Env = append(cmd.Env, entry)
-			}
-		}
+		cmd := exec.Command(exe, "dashboard", "--state", row.State, "--popup")
+		// dashboard is an inline observer, not a tmux attachment. Retain its
+		// actual host identity so Enter can prevent nesting another server's
+		// native attachment inside this workspace's dashboard pane.
+		cmd.Env = os.Environ()
 		m.workspacePicker = nil
 		return m, tea.ExecProcess(cmd, func(err error) tea.Msg {
 			return consoleAction{message: "Returned to the previous workspace. Both workspaces keep running.", err: err}

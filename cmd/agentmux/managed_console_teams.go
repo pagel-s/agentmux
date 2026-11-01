@@ -74,54 +74,15 @@ func teamContains(ids []string, id string) bool {
 }
 
 func (m *console) reviewTeamAction(operation string) {
-	if m.busy {
-		return
-	}
-	if m.data.teamsErr != nil {
-		m.message = "Team status unavailable; refresh before changing membership."
+	if reason := m.teamActionReason(operation); reason != "" {
+		m.message = reason
 		return
 	}
 	team := m.selectedTeam()
-	if team == nil {
-		m.message = "No consent-based teams exist in this workspace."
-		return
-	}
-	if team.State != "active" {
-		m.message = "This team is dissolved; its native terminals are unchanged."
-		return
-	}
 	action := consoleTeamAction{operation: operation, teamID: team.ID, teamName: team.Name, version: team.Version}
 	if operation != "team.dissolve" && operation != "team.update" {
 		target := m.teamTarget()
-		if target == nil {
-			m.message = "Choose an agent with ←/→."
-			return
-		}
 		action.agentID = target.ID
-		if operation == "team.transfer" {
-			if target.State != "active" || target.ID == team.Owner || !teamContains(team.Members, target.ID) {
-				m.message = "Propose an active current member as the new owner. They must accept using their own credential."
-				return
-			}
-			if access, ok := team.MemberAccess[target.ID]; ok && !access.Allowed {
-				m.message = "The proposed owner must have current effective team access: " + access.Reason
-				return
-			}
-		}
-		if operation == "team.invite" && (target.State != "active" || teamContains(team.Members, target.ID) || teamContains(team.Invited, target.ID)) {
-			m.message = "Invite a distinct active nonmember. Existing invitations require the agent's own acceptance."
-			return
-		}
-		if operation == "team.remove" {
-			if target.ID == team.Owner {
-				m.message = "A team owner cannot be removed; dissolve the team to end its shared access."
-				return
-			}
-			if !teamContains(team.Members, target.ID) && !teamContains(team.Invited, target.ID) {
-				m.message = "The selected agent is neither a member nor invited."
-				return
-			}
-		}
 	}
 	if operation == "team.update" {
 		action.name, action.description = team.Name, team.Description
@@ -259,17 +220,19 @@ func (m console) teamReviewPanel(width, height int) string {
 func (m console) teamsPanel(width, height int) string {
 	var out strings.Builder
 	out.WriteString(consoleAccent.Render("Consented teams") + "\n")
-	out.WriteString(consoleMuted.Render(consoleClip("[/] team · ←/→ target · i invite · r remove · d dissolve", width, 1)) + "\n")
-	out.WriteString(consoleMuted.Render(consoleClip("v memory · b board · e edit · t owner · o full team", width, 1)) + "\n\n")
+	out.WriteString(consoleMuted.Render(consoleClip(m.teamKeyHints(), width, 2)) + "\n\n")
 	if m.data.teamsErr != nil {
 		return consoleClip(out.String()+"Teams unavailable: "+consoleContent(m.data.teamsErr.Error(), 200), width, height)
 	}
 	if len(m.data.teams) == 0 {
-		out.WriteString(consoleMuted.Render("No agent-created teams. Workspace groups are in Connections.\nTeam creation/invitation/join depends on configured agent permissions.\nA pending invitation never grants access by itself."))
+		out.WriteString(consoleMuted.Render("No agent-created teams.\n\nFor everyday collaboration: press 3 for Connections, choose a recipient\nwith ←/→, then c to connect the selected pair.\n\nDynamic teams appear when a permitted agent creates one.\nInvitations require that agent's own acceptance; they grant no access alone."))
 		return consoleClip(out.String(), width, height)
 	}
 	selected := m.teamIndex % len(m.data.teams)
 	t := m.data.teams[selected]
+	if m.offline {
+		out.WriteString(consoleAccent.Render("Broker offline · saved team state · changes unavailable") + "\n")
+	}
 
 	fmt.Fprintf(&out, "%s · %s · %d/%d\n%s · v%d\n", consoleSelected.Render(ansi.Truncate(consoleContent(t.Name, 90), max(1, width-22), "…")), t.State, selected+1, len(m.data.teams), consoleMuted.Render(consoleContent(t.ID, 80)), t.Version)
 	if target := m.teamTarget(); target != nil {
@@ -418,6 +381,20 @@ func (m console) agentRuntimePanel(width int) string {
 		out.WriteString("Children: " + consoleContent(strings.Join(children, ", "), 400) + "\n")
 	}
 	if a.Config.Interaction == "interactive" {
+		if pane, ok := m.data.runtime.Agents[a.ID]; ok && pane.State != "" {
+			if m.offline {
+				out.WriteString("Saved native process state: " + consoleContent(pane.State, 60) + " · current state unknown\n")
+			} else if pane.State != "running" {
+				out.WriteString(consoleAccent.Render("NATIVE CLI "+strings.ToUpper(consoleContent(pane.State, 60))) + " · coordination identity retained\n")
+				if a.State == "active" && m.data.runtime.RelaunchVersion == 1 {
+					out.WriteString("Enter or Shift+U reviews a same-ID relaunch. Nothing restarts automatically.\n")
+				} else {
+					out.WriteString("Enter explains recovery requirements. Nothing restarts automatically.\n")
+				}
+			} else {
+				out.WriteString("Native process: running\n")
+			}
+		}
 		out.WriteString("Human-led native session · automatic wakeups disabled\nNative inference/tools/history stay in its original CLI.\n")
 	} else if m.data.runtimeErr != nil {
 		out.WriteString("Managed runtime status unavailable: " + consoleContent(m.data.runtimeErr.Error(), 150) + "\n")

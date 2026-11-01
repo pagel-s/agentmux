@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -13,11 +14,12 @@ import (
 )
 
 type relaunchRequest struct {
-	ID      string `json:"id"`
-	Agent   string `json:"agent"`
-	Attempt string `json:"attempt"`
-	Pane    string `json:"pane"`
-	Resume  string `json:"resume,omitempty"`
+	ID             string `json:"id"`
+	Agent          string `json:"agent"`
+	Attempt        string `json:"attempt"`
+	Pane           string `json:"pane"`
+	Resume         string `json:"resume,omitempty"`
+	NativeLauncher string `json:"native_launcher,omitempty"`
 }
 type relaunchResult struct {
 	ID    string `json:"id"`
@@ -30,11 +32,21 @@ func relaunchPath(state, id string) string { return filepath.Join(state, "relaun
 // Relaunch requests one deliberate restart through the existing supervisor.
 // It never kills a live pane, renews deadlines, changes identity or restarts peers.
 func (l *Launcher) Relaunch(ctx context.Context, id, resume string) (Runtime, error) {
+	return l.RelaunchWithLauncher(ctx, id, resume, "")
+}
+
+// RelaunchWithLauncher optionally selects a public native launcher for this
+// invocation alone. The running controller must explicitly support recovery;
+// saved agent definitions, command prefixes and owner mounts stay unchanged.
+func (l *Launcher) RelaunchWithLauncher(ctx context.Context, id, resume, nativeLauncher string) (Runtime, error) {
 	if !validAgentID(id) {
 		return Runtime{}, errors.New("invalid agent ID")
 	}
 	if !validResumeSelection(resume) {
 		return Runtime{}, errors.New("invalid native history selection")
+	}
+	if err := validateNativeLauncher(nativeLauncher); err != nil {
+		return Runtime{}, err
 	}
 	unlock, err := lock(l.options.StateDir + ".launch.lock")
 	if err != nil {
@@ -47,6 +59,9 @@ func (l *Launcher) Relaunch(ctx context.Context, id, resume string) (Runtime, er
 	}
 	if runtime.RelaunchVersion != 1 {
 		return runtime, errors.New("running controller predates individual relaunch; restart this workspace once with the updated CLI")
+	}
+	if nativeLauncher != "" && runtime.NativeLauncherVersion != 1 {
+		return runtime, errors.New("running controller does not support native launcher recovery; update the workspace controller before using --native-launcher")
 	}
 	if runtime.State != "running" || !l.ownsSession(ctx, runtime) {
 		return runtime, errors.New("workspace is not running; restart the workspace first")
@@ -63,14 +78,14 @@ func (l *Launcher) Relaunch(ctx context.Context, id, resume string) (Runtime, er
 		return runtime, err
 	}
 	client := managed.NewClient(credential)
-	if err := validateRelaunch(ctx, client, id, resume); err != nil {
+	if err := validateRelaunchWithLauncher(ctx, client, id, resume, nativeLauncher); err != nil {
 		return runtime, err
 	}
 	nonce, err := newID()
 	if err != nil {
 		return runtime, err
 	}
-	request := relaunchRequest{ID: nonce, Agent: id, Attempt: runtime.AttemptID, Pane: pane.PaneID, Resume: resume}
+	request := relaunchRequest{ID: nonce, Agent: id, Attempt: runtime.AttemptID, Pane: pane.PaneID, Resume: resume, NativeLauncher: nativeLauncher}
 	path := relaunchPath(l.options.StateDir, id)
 	if err := writePrivateJSON(path, request); err != nil {
 		return runtime, err
@@ -99,6 +114,27 @@ func (l *Launcher) Relaunch(ctx context.Context, id, resume string) (Runtime, er
 }
 
 func validateRelaunch(ctx context.Context, client *managed.Client, id, resume string) error {
+	return validateRelaunchWithLauncher(ctx, client, id, resume, "")
+}
+
+func validateNativeLauncher(path string) error {
+	if path == "" {
+		return nil
+	}
+	if !filepath.IsAbs(path) {
+		return errors.New("native launcher recovery requires an absolute executable path")
+	}
+	info, err := os.Stat(path)
+	if err != nil || !info.Mode().IsRegular() || info.Mode()&0111 == 0 {
+		return errors.New("native launcher recovery requires an available executable regular file")
+	}
+	return nil
+}
+
+func validateRelaunchWithLauncher(ctx context.Context, client *managed.Client, id, resume, nativeLauncher string) error {
+	if err := validateNativeLauncher(nativeLauncher); err != nil {
+		return err
+	}
 	raw, problem := client.Call(ctx, managed.Request{Operation: "agent.list", Args: json.RawMessage(`{"limit":200}`)})
 	if problem != nil {
 		return problem
@@ -117,7 +153,17 @@ func validateRelaunch(ctx context.Context, client *managed.Client, id, resume st
 				if a.State != "active" || a.External || a.Config.Interaction != "interactive" {
 					return errors.New("only active workspace-owned native sessions can be relaunched")
 				}
-				_, err := harness.BuildInteractive(harness.Request{Harness: a.Config.Harness, Command: a.Config.Command, NativeResume: resume, Prompt: "", Model: a.Config.Model})
+				command := a.Config.Command
+				if nativeLauncher != "" {
+					if a.Config.Sandbox != "local" {
+						return errors.New("native launcher recovery is only available for trusted-local interactive sessions")
+					}
+					command = []string{nativeLauncher}
+					if len(a.Config.Command) > 0 {
+						command = append(command, a.Config.Command[1:]...)
+					}
+				}
+				_, err := harness.BuildInteractive(harness.Request{Harness: a.Config.Harness, Command: command, NativeResume: resume, Prompt: "", Model: a.Config.Model})
 				return err
 			}
 		}
@@ -160,6 +206,12 @@ func (l *Launcher) processRelaunches(ctx context.Context, runtime *Runtime, clie
 			}
 			continue
 		}
+		if r.NativeLauncher != "" && runtime.NativeLauncherVersion != 1 {
+			if err := reject(errors.New("running controller does not support native launcher recovery")); err != nil {
+				return err
+			}
+			continue
+		}
 		tracked, ok := runtime.Agents[r.Agent]
 		if !ok || tracked.PaneID != r.Pane {
 			if err := reject(errors.New("session changed since relaunch was requested")); err != nil {
@@ -167,7 +219,7 @@ func (l *Launcher) processRelaunches(ctx context.Context, runtime *Runtime, clie
 			}
 			continue
 		}
-		if err := validateRelaunch(ctx, client, r.Agent, r.Resume); err != nil {
+		if err := validateRelaunchWithLauncher(ctx, client, r.Agent, r.Resume, r.NativeLauncher); err != nil {
 			if err := reject(err); err != nil {
 				return err
 			}
@@ -200,6 +252,9 @@ func (l *Launcher) processRelaunches(ctx context.Context, runtime *Runtime, clie
 		if r.Resume != "" {
 			argv = append(argv, "--native-resume", r.Resume)
 		}
+		if r.NativeLauncher != "" {
+			argv = append(argv, "--native-launcher", r.NativeLauncher)
+		}
 		id := tracked.PaneID
 		if found {
 			_, err = l.tmux(ctx, "respawn-pane", "-t", id, "exec "+ShellCommand(argv))
@@ -217,6 +272,9 @@ func (l *Launcher) processRelaunches(ctx context.Context, runtime *Runtime, clie
 		runtime.Agents[r.Agent] = tracked
 		if err := writeRuntime(l.options.StateDir, *runtime); err != nil {
 			return err
+		}
+		if !found {
+			_ = l.syncClientViews(ctx, *runtime)
 		}
 		result.Pane = id
 		if err := writePrivateJSON(path+".result", result); err != nil {

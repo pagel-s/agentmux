@@ -121,6 +121,7 @@ func (l *Launcher) Supervise(ctx context.Context, attempt string) error {
 		if err := l.processRelaunches(ctx, &runtime, client); err != nil {
 			return finish(err)
 		}
+		addedWindows := false
 		for _, agent := range agents {
 			if agent.External {
 				continue
@@ -151,12 +152,16 @@ func (l *Launcher) Supervise(ctx context.Context, attempt string) error {
 				return finish(err)
 			}
 			runtime.Agents[agent.ID] = AgentPane{PaneID: id, State: "running"}
+			addedWindows = true
 			if err := l.syncWindowTitle(ctx, runtime, id, agent.ID, agent.Title); err == nil {
 				windowTitles[id] = agent.Title
 			}
 			if err := writeRuntime(l.options.StateDir, runtime); err != nil {
 				return finish(err)
 			}
+		}
+		if addedWindows {
+			_ = l.syncClientViews(ctx, runtime)
 		}
 		runtime.State = "running"
 		if err := writeRuntime(l.options.StateDir, runtime); err != nil {

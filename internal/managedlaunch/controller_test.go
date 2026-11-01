@@ -1,8 +1,10 @@
 package managedlaunch
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"agentmux/internal/managedconfig"
@@ -48,6 +50,58 @@ func TestControllerIsPinnedOutsideWritableProject(t *testing.T) {
 	l.options.StateDir = filepath.Join(project, "state")
 	if err := l.pinController(cfg); err == nil {
 		t.Fatal("accepted a controller copy inside the writable project")
+	}
+}
+
+func TestConcurrentObserverPinsPublishCompleteImmutableCopy(t *testing.T) {
+	root := t.TempDir()
+	executable := filepath.Join(root, "current-observer")
+	data := bytes.Repeat([]byte("current owner observer binary\n"), 65536)
+	if err := os.WriteFile(executable, data, 0700); err != nil {
+		t.Fatal(err)
+	}
+	state := filepath.Join(root, "state")
+	var workers sync.WaitGroup
+	results := make(chan string, 12)
+	errors := make(chan error, 12)
+	start := make(chan struct{})
+	for i := 0; i < cap(results); i++ {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			<-start
+			observer := &Launcher{options: Options{Executable: executable, StateDir: state}}
+			if err := observer.pinController(managedconfig.Config{}); err != nil {
+				errors <- err
+				return
+			}
+			results <- observer.options.Executable
+		}()
+	}
+	close(start)
+	workers.Wait()
+	close(errors)
+	close(results)
+	for err := range errors {
+		t.Fatalf("simultaneous attachment saw an incomplete or conflicting UI copy: %v", err)
+	}
+	pinned := ""
+	for path := range results {
+		if pinned != "" && pinned != path {
+			t.Fatalf("same observer produced distinct identities: %q and %q", pinned, path)
+		}
+		pinned = path
+	}
+	if err := os.WriteFile(executable, []byte("replacement in writable checkout"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	saved, err := os.ReadFile(pinned)
+	if err != nil || !bytes.Equal(saved, data) {
+		t.Fatalf("pinned observer changed with its writable source: length=%d err=%v", len(saved), err)
+	}
+	entries, err := os.ReadDir(state + ".bin")
+	if err != nil || len(entries) != 1 || entries[0].Name() != filepath.Base(pinned) {
+		t.Fatalf("partial pin files or extra publications remain: %+v err=%v", entries, err)
 	}
 }
 

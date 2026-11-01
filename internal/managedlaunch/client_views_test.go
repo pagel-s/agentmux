@@ -12,6 +12,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"agentmux/internal/managed"
+	"agentmux/internal/managedconfig"
 )
 
 // Real PTY clients exercise the same terminal attach path humans use. Python's
@@ -30,6 +33,16 @@ func TestAttachAgentRealClientsHaveIndependentViewsAndOwnedCleanup(t *testing.T)
 	}
 	state, err := os.MkdirTemp("", "amx-views-")
 	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := managed.Init(state, managedconfig.Config{Version: 2, Mode: "managed", Session: "core", Agents: map[string]managedconfig.Agent{
+		"alice": {Harness: "command", Command: []string{"/bin/true"}},
+		"bob":   {Harness: "command", Command: []string{"/bin/true"}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
@@ -79,6 +92,13 @@ func TestAttachAgentRealClientsHaveIndependentViewsAndOwnedCleanup(t *testing.T)
 	if err := os.WriteFile(filepath.Join(wrapperDir, "tmux"), []byte(wrapper), 0700); err != nil {
 		t.Fatal(err)
 	}
+	popupRecord := filepath.Join(state, "popup-invocation")
+	popupExecutable := filepath.Join(wrapperDir, "popup-#fixture")
+	popupScript := "#!/bin/sh\ncase \" $* \" in\n*' --popup '*) printf '%s\\n' \"$AGENTMUX_CLIENT\" \"$@\" > " + ShellCommand([]string{popupRecord}) + ";;\n*) exec sleep 300;;\nesac\n"
+	if err := os.WriteFile(popupExecutable, []byte(popupScript), 0700); err != nil {
+		t.Fatal(err)
+	}
+	l.options.Executable = popupExecutable
 	t.Setenv("PATH", fixturePath)
 	t.Setenv("TMUX", "")
 	t.Cleanup(func() {
@@ -91,6 +111,7 @@ func TestAttachAgentRealClientsHaveIndependentViewsAndOwnedCleanup(t *testing.T)
 			t.Logf("Private tmux client-view diagnostics retained at %s", state)
 		} else {
 			_ = os.RemoveAll(state)
+			_ = os.RemoveAll(state + ".bin")
 		}
 		_ = os.Remove(state + ".launch.lock")
 	})
@@ -102,7 +123,7 @@ func TestAttachAgentRealClientsHaveIndependentViewsAndOwnedCleanup(t *testing.T)
 		}
 		return strings.TrimSpace(out)
 	}
-	runtime := Runtime{Version: 1, AttemptID: "run_views", Session: "core", State: "running", Agents: map[string]AgentPane{}}
+	runtime := Runtime{Version: 1, AttemptID: "run_views", Controller: "/old/frozen-lifecycle-controller", Session: "core", State: "running", Agents: map[string]AgentPane{}}
 	runtime.DashboardPane = tmux("new-session", "-d", "-s", runtime.Session, "-n", "dashboard", "-P", "-F", "#{pane_id}", "exec sleep 300")
 	tmux("set-option", "-t", runtime.Session, "@agentmux_runtime", runtime.AttemptID)
 	if err := l.tagPane(ctx, runtime.DashboardPane, runtime.AttemptID, "dashboard", ""); err != nil {
@@ -114,6 +135,17 @@ func TestAttachAgentRealClientsHaveIndependentViewsAndOwnedCleanup(t *testing.T)
 			t.Fatal(err)
 		}
 		runtime.Agents[agent] = AgentPane{PaneID: pane, State: "running"}
+	}
+	for _, role := range []string{"supervisor", "broker"} {
+		pane := tmux("new-window", "-d", "-t", runtime.Session, "-n", role, "-P", "-F", "#{pane_id}", "exec sleep 300")
+		if err := l.tagPane(ctx, pane, runtime.AttemptID, role, ""); err != nil {
+			t.Fatal(err)
+		}
+		if role == "supervisor" {
+			runtime.SupervisorPane = pane
+		} else {
+			runtime.BrokerPane = pane
+		}
 	}
 	if err := writeRuntime(state, runtime); err != nil {
 		t.Fatal(err)
@@ -159,6 +191,9 @@ func TestAttachAgentRealClientsHaveIndependentViewsAndOwnedCleanup(t *testing.T)
 		return len(clientSessions()) == 1
 	})
 	first := clientSessions()[0]
+	if err := os.WriteFile(filepath.Join(state, "pty-columns"), []byte("100"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	secondInput, secondDone := attach("bob")
 	wait("second attached view", func() bool {
 		select {
@@ -177,6 +212,37 @@ func TestAttachAgentRealClientsHaveIndependentViewsAndOwnedCleanup(t *testing.T)
 	if first == runtime.Session || second == "" || second == runtime.Session {
 		t.Fatalf("clients did not get independent views: %q", clientSessions())
 	}
+	dashboard := func(view string) string { return tmux("show-options", "-v", "-t", view, "@agentmux_dashboard") }
+	firstDashboard, secondDashboard := dashboard(first), dashboard(second)
+	if firstDashboard == secondDashboard || firstDashboard == runtime.DashboardPane || secondDashboard == runtime.DashboardPane || !validPane(firstDashboard) || !validPane(secondDashboard) {
+		t.Fatalf("attachments share dashboard process state: first=%s second=%s core=%s", firstDashboard, secondDashboard, runtime.DashboardPane)
+	}
+	if tmux("display-message", "-p", "-t", firstDashboard, "#{pane_pid}") == tmux("display-message", "-p", "-t", secondDashboard, "#{pane_pid}") {
+		t.Fatal("private dashboards do not have independent processes")
+	}
+	for _, pane := range []string{firstDashboard, secondDashboard} {
+		if command := tmux("display-message", "-p", "-t", pane, "#{pane_start_command}"); !strings.Contains(command, state+".bin/") || strings.Contains(command, popupExecutable) {
+			t.Fatalf("owner dashboard launched from a mutable source or old lifecycle controller: %s", command)
+		}
+	}
+	if saved, err := Snapshot(state); err != nil || saved.Controller != runtime.Controller || l.options.Executable != popupExecutable {
+		t.Fatalf("pinning upgraded presentation changed the lifecycle controller or caller: runtime=%+v err=%v", saved, err)
+	}
+	for _, view := range []string{first, second} {
+		if group := tmux("display-message", "-p", "-t", view, "#{session_group}"); group != "" {
+			t.Fatalf("private view still belongs to a shared session group: %s", group)
+		}
+		panes := strings.Fields(tmux("list-panes", "-s", "-t", view, "-F", "#{pane_id}"))
+		if len(panes) != 3 {
+			t.Fatalf("view should contain one private dashboard and two workers: %q", panes)
+		}
+		for _, pane := range panes {
+			if pane == runtime.DashboardPane || pane == runtime.SupervisorPane || pane == runtime.BrokerPane {
+				t.Fatalf("core owner UI or service linked into private attachment: %s", pane)
+			}
+		}
+	}
+	peerPID := tmux("display-message", "-p", "-t", runtime.Agents["bob"].PaneID, "#{pane_pid}")
 	if environment := tmux("show-environment", "-g"); strings.Contains(environment, "AGENTMUX_FIXTURE_SECRET") || strings.Contains(environment, "sentinel-must-stay-outside-tmux") {
 		t.Fatal("model-free tmux fixture inherited the caller's environment")
 	}
@@ -184,10 +250,63 @@ func TestAttachAgentRealClientsHaveIndependentViewsAndOwnedCleanup(t *testing.T)
 	if current(first) != "agent-alice" || current(second) != "agent-bob" {
 		t.Fatal("attaching a second agent moved the first client's selected window")
 	}
-	// Navigation in either grouped session must leave the other untouched.
+	// Private dashboard selection and input must leave the other untouched.
 	tmux("select-window", "-t", first+":0")
 	if current(first) != "dashboard" || current(second) != "agent-bob" {
-		t.Fatal("grouped client navigation changed the other terminal")
+		t.Fatal("private client navigation changed the other terminal")
+	}
+	for _, pane := range []string{runtime.SupervisorPane, runtime.BrokerPane} {
+		if got := tmux("display-message", "-p", "-t", pane, workbenchWindowFormat); got != "" {
+			t.Fatalf("service leaked into ordinary window status: %q", got)
+		}
+		if got := tmux("display-message", "-p", "-t", pane, workbenchCurrentWindowFormat); !strings.Contains(got, "Service:") || !strings.Contains(got, "diagnostics") {
+			t.Fatalf("explicit service inspection is not labelled: %q", got)
+		}
+	}
+	if got := tmux("display-message", "-p", "-t", runtime.DashboardPane, workbenchWindowFormat); got != "Workbench" {
+		t.Fatalf("dashboard status still resembles numbered dashboard tabs: %q", got)
+	}
+	if got := tmux("list-keys", "-T", "prefix", "D"); !strings.Contains(got, "display-menu") || !strings.Contains(got, "read-only") || strings.Contains(got, "switch-client") {
+		t.Fatalf("service diagnostics are inaccessible: %s", got)
+	}
+	if _, err := io.WriteString(secondInput, "\x02n"); err != nil {
+		t.Fatal(err)
+	}
+	wait("next-window skips both service windows", func() bool { return current(second) == "dashboard" })
+	if current(first) != "dashboard" {
+		t.Fatal("filtered next-window moved another client")
+	}
+	if _, err := io.WriteString(secondInput, "\x02p"); err != nil {
+		t.Fatal(err)
+	}
+	wait("previous-window skips both service windows", func() bool { return current(second) == "agent-bob" })
+	clientName := func(view string) string {
+		t.Helper()
+		for _, line := range strings.Split(tmux("list-clients", "-F", "#{client_session}\t#{client_name}"), "\n") {
+			fields := strings.Split(line, "\t")
+			if len(fields) == 2 && fields[0] == view {
+				return fields[1]
+			}
+		}
+		t.Fatalf("no client for %s", view)
+		return ""
+	}
+	if _, err := io.WriteString(secondInput, "\x02b"); err != nil {
+		t.Fatal(err)
+	}
+	wait("native pane opens an owner popup", func() bool { _, err := os.Stat(popupRecord); return err == nil })
+	popupData, err := os.ReadFile(popupRecord)
+	if err != nil || !strings.HasPrefix(string(popupData), clientName(second)+"\nmanaged\ndashboard\n") || !strings.Contains(string(popupData), "\n--view\nboard\n--popup\n") {
+		t.Fatalf("popup lost its invoking client or literal executable path: %s %v", popupData, err)
+	}
+	if _, err := io.WriteString(firstInput, "\x02b"); err != nil {
+		t.Fatal(err)
+	}
+	wait("dashboard shortcut explains its existing view instead of layering", func() bool {
+		return strings.Contains(tmux("show-messages", "-t", clientName(first)), "Workbench already open. Press 1")
+	})
+	if after, err := os.ReadFile(popupRecord); err != nil || !bytes.Equal(after, popupData) {
+		t.Fatalf("dashboard opened a second popup: %s %v", after, err)
 	}
 	sessionID := strings.TrimPrefix(tmux("display-message", "-p", "-t", first, "#{session_id}"), "$")
 	t.Setenv("TMUX", SocketPath(state)+",1,"+sessionID)
@@ -197,6 +316,67 @@ func TestAttachAgentRealClientsHaveIndependentViewsAndOwnedCleanup(t *testing.T)
 	if current(first) != "agent-alice" || current(second) != "agent-bob" {
 		t.Fatal("contextual Focus selected another client's view")
 	}
+	if _, err := io.WriteString(firstInput, "\x1bOP"); err != nil {
+		t.Fatal(err)
+	}
+	wait("F1 returns first attachment to its private dashboard", func() bool {
+		return tmux("display-message", "-p", "-t", first+":", "#{pane_id}") == firstDashboard
+	})
+	if current(second) != "agent-bob" {
+		t.Fatal("first attachment's F1 moved another attachment")
+	}
+	if _, err := io.WriteString(secondInput, "\x02g"); err != nil {
+		t.Fatal(err)
+	}
+	wait("prefix-g returns second attachment to its private dashboard", func() bool {
+		return tmux("display-message", "-p", "-t", second+":", "#{pane_id}") == secondDashboard
+	})
+	wait("different terminal widths size only their own dashboards", func() bool {
+		return tmux("display-message", "-p", "-t", firstDashboard, "#{pane_width}") == "80" && tmux("display-message", "-p", "-t", secondDashboard, "#{pane_width}") == "100"
+	})
+	// A dynamically added worker is linked without stealing either UI. Its
+	// core index differs because the core retains hidden service windows.
+	carol := tmux("new-window", "-d", "-t", runtime.Session, "-n", "agent-carol", "-P", "-F", "#{pane_id}", "exec sleep 300")
+	if err := l.tagPane(ctx, carol, runtime.AttemptID, "worker", "carol"); err != nil {
+		t.Fatal(err)
+	}
+	runtime.Agents["carol"] = AgentPane{PaneID: carol, State: "running"}
+	if err := l.syncClientViews(ctx, runtime); err != nil {
+		t.Fatal(err)
+	}
+	for _, view := range []string{first, second} {
+		if !strings.Contains(tmux("list-panes", "-s", "-t", view, "-F", "#{pane_id}"), carol) {
+			t.Fatalf("new worker is absent from existing view %s", view)
+		}
+	}
+	if tmux("display-message", "-p", "-t", first+":", "#{pane_id}") != firstDashboard || tmux("display-message", "-p", "-t", second+":", "#{pane_id}") != secondDashboard {
+		t.Fatal("linking a dynamic worker stole a dashboard selection")
+	}
+	if err := l.Focus(ctx, runtime, "carol"); err != nil {
+		t.Fatal(err)
+	}
+	if current(first) != "agent-carol" || current(second) != "dashboard" {
+		t.Fatal("Focus used the core window index rather than the target view's index")
+	}
+	// Focus must repair a missing link, including views attached to older
+	// supervisors that have not learned to sync structural changes.
+	carolIndex, err := l.workerWindowIndex(ctx, runtime, first, carol)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmux("unlink-window", "-t", first+":"+carolIndex)
+	if err := l.Focus(ctx, runtime, "carol"); err != nil || current(first) != "agent-carol" {
+		t.Fatalf("on-demand link repair failed: %v", err)
+	}
+	if err := l.Focus(ctx, runtime, "alice"); err != nil {
+		t.Fatal(err)
+	}
+	secondID := strings.TrimPrefix(tmux("display-message", "-p", "-t", second, "#{session_id}"), "$")
+	t.Setenv("TMUX", SocketPath(state)+",1,"+secondID)
+	if err := l.Focus(ctx, runtime, "bob"); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TMUX", SocketPath(state)+",1,"+sessionID)
 	// Production keeps exited native windows visible. Exercise that transition
 	// while both real clients are attached, before testing detach and shutdown.
 	tmux("new-session", "-d", "-s", "foreign", "exec sleep 300")
@@ -228,6 +408,9 @@ func TestAttachAgentRealClientsHaveIndependentViewsAndOwnedCleanup(t *testing.T)
 	}
 	if current(second) != "agent-bob" || !l.ownsSession(ctx, runtime) {
 		t.Fatal("detaching one client destroyed the shared runtime or another view")
+	}
+	if got := tmux("display-message", "-p", "-t", runtime.Agents["bob"].PaneID, "#{pane_pid}"); got != peerPID {
+		t.Fatal("detaching a private dashboard restarted a healthy peer")
 	}
 	stopped, err := l.Down(ctx)
 	if err != nil || stopped.State != "stopped" {
@@ -272,7 +455,13 @@ import termios
 
 pid, master = pty.fork()
 if pid == 0:
-    fcntl.ioctl(0, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
+    columns = 80
+    try:
+        with open(os.path.join(os.environ["HOME"], "pty-columns")) as size_file:
+            columns = int(size_file.read())
+    except FileNotFoundError:
+        pass
+    fcntl.ioctl(0, termios.TIOCSWINSZ, struct.pack("HHHH", 24, columns, 0, 0))
     os.execv(sys.argv[1], sys.argv[1:])
 
 input_open = True

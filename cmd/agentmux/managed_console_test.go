@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"os"
 	"strings"
 	"testing"
 
@@ -25,12 +26,16 @@ func TestConsoleComposerAndHelpRemainVisibleInSmallTerminal(t *testing.T) {
 	}
 }
 
-func TestConsoleOutsideAttachUsesIndependentClientViewWithoutFocusingOthers(t *testing.T) {
+func TestConsoleOutsideAttachUsesCurrentObserverWithoutDowngradingToFrozenController(t *testing.T) {
 	t.Setenv("TMUX", "")
 	m := console{state: "/workspace/state", agents: []managed.AgentInfo{{ID: "alice"}}, data: consoleData{runtime: managedlaunch.Runtime{Controller: "/trusted/controller"}}}
 	msg := m.attach()()
 	attach, ok := msg.(consoleAttach)
-	if !ok || attach.agent != "alice" || attach.controller != "/trusted/controller" {
+	current, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok || attach.agent != "alice" || attach.controller != current || m.data.runtime.Controller != "/trusted/controller" {
 		t.Fatalf("outside attach attempted to focus existing view: %+v", msg)
 	}
 }

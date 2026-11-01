@@ -45,20 +45,21 @@ type AgentPane struct {
 // Runtime is presentation/lifecycle metadata only. No configuration, task text,
 // environment values, tokens, or model output enters the launch manifest.
 type Runtime struct {
-	RelaunchVersion int                  `json:"relaunch_version,omitempty"`
-	Controller      string               `json:"controller,omitempty"`
-	Version         int                  `json:"version"`
-	AttemptID       string               `json:"attempt_id"`
-	Session         string               `json:"session"`
-	State           string               `json:"state"`
-	BrokerSandbox   string               `json:"broker_sandbox"`
-	SupervisorPane  string               `json:"supervisor_pane,omitempty"`
-	BrokerPane      string               `json:"broker_pane,omitempty"`
-	DashboardPane   string               `json:"dashboard_pane,omitempty"`
-	Agents          map[string]AgentPane `json:"agents"`
-	UpdatedAt       string               `json:"updated_at"`
-	Problem         string               `json:"problem,omitempty"`
-	AttachCommand   string               `json:"attach_command,omitempty"`
+	RelaunchVersion       int                  `json:"relaunch_version,omitempty"`
+	NativeLauncherVersion int                  `json:"native_launcher_version,omitempty"`
+	Controller            string               `json:"controller,omitempty"`
+	Version               int                  `json:"version"`
+	AttemptID             string               `json:"attempt_id"`
+	Session               string               `json:"session"`
+	State                 string               `json:"state"`
+	BrokerSandbox         string               `json:"broker_sandbox"`
+	SupervisorPane        string               `json:"supervisor_pane,omitempty"`
+	BrokerPane            string               `json:"broker_pane,omitempty"`
+	DashboardPane         string               `json:"dashboard_pane,omitempty"`
+	Agents                map[string]AgentPane `json:"agents"`
+	UpdatedAt             string               `json:"updated_at"`
+	Problem               string               `json:"problem,omitempty"`
+	AttachCommand         string               `json:"attach_command,omitempty"`
 }
 
 type Launcher struct {
@@ -153,7 +154,7 @@ func (l *Launcher) Up(ctx context.Context, cfg managedconfig.Config) (Runtime, e
 	if err != nil {
 		return Runtime{}, err
 	}
-	runtime := Runtime{RelaunchVersion: 1, Controller: l.options.Executable, Version: 1, AttemptID: attempt, Session: cfg.Session, State: "starting", BrokerSandbox: l.options.BrokerSandbox, Agents: map[string]AgentPane{}}
+	runtime := Runtime{RelaunchVersion: 1, NativeLauncherVersion: 1, Controller: l.options.Executable, Version: 1, AttemptID: attempt, Session: cfg.Session, State: "starting", BrokerSandbox: l.options.BrokerSandbox, Agents: map[string]AgentPane{}}
 	runtime.AttachCommand = ShellCommand([]string{"tmux", "-S", SocketPath(l.options.StateDir), "attach-session", "-t", runtime.Session})
 	if err := writeRuntime(l.options.StateDir, runtime); err != nil {
 		return runtime, err
@@ -319,13 +320,13 @@ func (l *Launcher) Attach(ctx context.Context, runtime Runtime, in io.Reader, ou
 	return l.AttachAgent(ctx, runtime, "", in, out, diagnostics)
 }
 
-// Each terminal client gets its own grouped view. Windows and processes are
-// shared, while switching windows in one terminal never moves another client.
+// Each terminal client owns an independent dashboard and window selection.
+// Only native worker windows are linked; dashboard drafts and input are private.
 func (l *Launcher) AttachAgent(ctx context.Context, runtime Runtime, agent string, in io.Reader, out, diagnostics io.Writer) error {
 	if !l.ownsSession(ctx, runtime) {
 		return errors.New("managed tmux session is not running with this attempt identity")
 	}
-	pane := runtime.DashboardPane
+	pane := ""
 	if agent != "" {
 		var err error
 		pane, err = l.liveAgentPane(ctx, runtime, agent)
@@ -333,14 +334,35 @@ func (l *Launcher) AttachAgent(ctx context.Context, runtime Runtime, agent strin
 			return err
 		}
 	}
+	// Presentation may be upgraded independently of the running supervisor.
+	// Pin a separate immutable UI copy before spawning an owner-authority
+	// dashboard from a binary that could live in a writable project checkout.
+	store, err := managed.Open(l.options.StateDir)
+	if err != nil {
+		return err
+	}
+	cfg := store.Config()
+	if err := store.Close(); err != nil {
+		return err
+	}
+	observer := *l
+	if err := observer.pinController(cfg); err != nil {
+		return err
+	}
+	l = &observer
+	if err := l.ensureDashboardFallback(ctx, runtime); err != nil {
+		return err
+	}
 	id, err := newID()
 	if err != nil {
 		return err
 	}
 	view := "view_" + strings.TrimPrefix(id, "run_")
-	if _, err = l.tmux(ctx, "new-session", "-d", "-t", runtime.Session, "-s", view); err != nil {
+	dashboard, err := l.tmux(ctx, "new-session", "-d", "-s", view, "-n", "dashboard", "-P", "-F", "#{pane_id}", "exec sleep 300")
+	if err != nil {
 		return err
 	}
+	dashboard = strings.TrimSpace(dashboard)
 	defer func() {
 		cleanup := context.Background()
 		tag, _ := l.tmux(cleanup, "show-options", "-v", "-t", view, "@agentmux_view")
@@ -355,18 +377,34 @@ func (l *Launcher) AttachAgent(ctx context.Context, runtime Runtime, agent strin
 	}
 	viewRuntime := runtime
 	viewRuntime.Session = view
+	viewRuntime.DashboardPane = dashboard
+	if err = l.tagPane(ctx, dashboard, runtime.AttemptID, "dashboard", ""); err != nil {
+		return err
+	}
+	if _, err = l.tmux(ctx, "respawn-pane", "-k", "-t", dashboard, "exec "+ShellCommand([]string{l.options.Executable, "managed", "dashboard", "--state", l.options.StateDir})); err != nil {
+		return err
+	}
+	windows, err := l.workerWindows(ctx, runtime)
+	if err != nil {
+		return err
+	}
+	if err = l.linkWorkerWindows(ctx, runtime, view, windows); err != nil {
+		return err
+	}
 	if err = l.configureWorkbench(ctx, viewRuntime); err != nil {
 		return err
 	}
 	if _, err = l.tmux(ctx, "set-option", "-t", view, "status-left", "#[fg=#c4b5fd,bold] agentmux #[default]│ "+runtime.Session+" "); err != nil {
 		return err
 	}
-	index, err := l.tmux(ctx, "display-message", "-p", "-t", pane, "#{window_index}")
-	if err != nil {
-		return err
-	}
-	if _, err = l.tmux(ctx, "select-window", "-t", view+":"+strings.TrimSpace(index)); err != nil {
-		return err
+	if agent != "" {
+		index, err := l.workerWindowIndex(ctx, runtime, view, pane)
+		if err != nil {
+			return err
+		}
+		if _, err = l.tmux(ctx, "select-window", "-t", view+":"+index); err != nil {
+			return err
+		}
 	}
 	command := exec.CommandContext(ctx, "tmux", "-S", SocketPath(l.options.StateDir), "attach-session", "-t", view)
 	command.Env = withoutTMux(os.Environ())
@@ -387,7 +425,10 @@ func (l *Launcher) liveAgentPane(ctx context.Context, runtime Runtime, agent str
 		return "", err
 	}
 	for _, p := range panes {
-		if p.ID == pane.PaneID && p.Agent == agent && p.Attempt == runtime.AttemptID && p.Role == "worker" && !p.Dead {
+		if p.ID == pane.PaneID && p.Agent == agent && p.Attempt == runtime.AttemptID && p.Role == "worker" {
+			if p.Dead {
+				return "", errors.New("agent terminal has exited; inspect its last output in the dashboard. For a native session, review a same-ID relaunch with: " + ShellCommand([]string{"agentmux", "relaunch", agent, "--state", l.options.StateDir}))
+			}
 			return p.ID, nil
 		}
 	}
@@ -448,11 +489,11 @@ func (l *Launcher) Focus(ctx context.Context, runtime Runtime, agent string) err
 	if explicitView != "" {
 		target = explicitView
 	}
-	index, err := l.tmux(ctx, "display-message", "-p", "-t", pane, "#{window_index}")
+	index, err := l.workerWindowIndex(ctx, runtime, target, pane)
 	if err != nil {
 		return err
 	}
-	if _, err = l.tmux(ctx, "select-window", "-t", target+":"+strings.TrimSpace(index)); err != nil {
+	if _, err = l.tmux(ctx, "select-window", "-t", target+":"+index); err != nil {
 		return err
 	}
 	_, err = l.tmux(ctx, "select-pane", "-t", pane)

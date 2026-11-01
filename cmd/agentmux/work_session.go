@@ -22,6 +22,7 @@ type workOptions struct {
 	state, session, config, project, sandbox string
 	group, board                             string
 	mode, to, resume, legacyPolicy           string
+	nativeLauncher                           string
 	detach                                   bool
 	sandboxExplicit                          bool
 	args                                     []string
@@ -102,7 +103,7 @@ func parseWorkOptionsWithStorage(args []string, allowNamedState bool) (workOptio
 			o.popup = true
 			continue
 		}
-		if name != "state" && name != "session" && name != "config" && name != "project" && name != "sandbox" && name != "view" && name != "group" && name != "board" && name != "mode" && name != "to" && name != "resume" && name != "legacy-policy" {
+		if name != "state" && name != "session" && name != "config" && name != "project" && name != "sandbox" && name != "view" && name != "group" && name != "board" && name != "mode" && name != "to" && name != "resume" && name != "legacy-policy" && name != "native-launcher" {
 			return o, fmt.Errorf("unknown flag --%s", name)
 		}
 		if !inline {
@@ -116,6 +117,11 @@ func parseWorkOptionsWithStorage(args []string, allowNamedState bool) (workOptio
 			return o, fmt.Errorf("--%s needs a nonempty value", name)
 		}
 		switch name {
+		case "native-launcher":
+			if !filepath.IsAbs(value) {
+				return o, errors.New("--native-launcher requires an absolute executable path")
+			}
+			o.nativeLauncher = value
 		case "legacy-policy":
 			if value != "preserve" && value != "group" {
 				return o, errors.New("--legacy-policy must be preserve or group")
@@ -210,7 +216,7 @@ func runWorkSessionInner(operation string, args []string, in io.Reader, out, dia
   agentmux label ID "Fix login redirect"
   agentmux role ID "Current owner role"
   agentmux workspaces [--json] [--register DIR]
-  agentmux relaunch ID [--resume ID|last|picker]
+  agentmux relaunch ID [--resume ID|last|picker] [--native-launcher ABSOLUTE_PATH]
   agentmux remove NAME
   agentmux sessions
   agentmux connect OBSERVED_ID --name NAME
@@ -239,6 +245,9 @@ Legacy raw pane input remains: agentmux send SESSION PANE -- COMMAND.`)
 	o, err := parseWorkOptionsWithStorage(args, operation == "start")
 	if err == nil && o.legacyPolicy != "" && operation != "collaborate" {
 		err = errors.New("--legacy-policy applies only to collaborate")
+	}
+	if err == nil && o.nativeLauncher != "" {
+		err = errors.New("--native-launcher applies only to relaunch")
 	}
 	if err != nil {
 		fmt.Fprintln(diagnostics, "error:", err)
