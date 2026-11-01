@@ -118,6 +118,7 @@ func (m *console) compose(kind, target, reference, text string) {
 	m.textColumnValid = false
 }
 func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	m.syncHistoryScopes()
 	if msg.Paste && m.composer == "" && (m.teamAction == nil || m.teamAction.editKind == "" && (m.teamAction.researchAction == "" || m.teamAction.reasonReady)) {
 		// Even a one-character clipboard paste is text, never a control key.
 		return m, nil
@@ -145,11 +146,18 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(commands...)
 	}
 	key := msg.String()
-	if m.reader != nil {
-		return m.readerKey(msg)
+	if key == "ctrl+w" && m.workspacePicker == nil {
+		cmd := m.requestWorkspacePicker()
+		return m, cmd
 	}
 	if m.workspacePicker != nil {
 		return m.workspaceKey(msg)
+	}
+	if m.reader != nil {
+		return m.readerKey(msg)
+	}
+	if m.ownerReview != nil {
+		return m.ownerReviewKey(msg)
 	}
 	if key == "ctrl+g" {
 		m.openContextHelp()
@@ -167,6 +175,11 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.textColumnValid = false
 		}
 		switch key {
+		case "ctrl+o":
+			if m.composer == "new-title" {
+				m.newNative.advanced = true
+				m.message = "Advanced configuration selected. Enter saves this title and opens provider choices."
+			}
 		case "tab":
 			if m.composer == "find" {
 				return m.chooseSession(false)
@@ -189,7 +202,16 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.textCursor = 0
 			m.findIndex = 0
 		case "up", "down":
-			if m.composer == "find" {
+			if m.composer == "actions" {
+				n := len(m.menuMatches())
+				if n > 0 {
+					step := 1
+					if key == "up" {
+						step = n - 1
+					}
+					m.actionIndex = (m.actionIndex + step) % n
+				}
+			} else if m.composer == "find" {
 				matches := m.sessionMatches()
 				if n := len(matches); n > 0 {
 					index := m.findMatchIndex(matches)
@@ -256,6 +278,9 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, m.reviewMemoryVersion()
 			}
 		case "enter":
+			if m.composer == "actions" {
+				return m.invokeMenuAction()
+			}
 			if m.composer == "relaunch" {
 				state, id, resume := m.state, m.composeTarget, strings.TrimSpace(string(m.text))
 				m.composer = ""
@@ -272,6 +297,24 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					}
 					return consoleAction{message: "Relaunched " + id + ". Enter opens its native terminal; peers remain running.", err: err}
 				}
+			}
+			if m.composer == "message-search" || m.composer == "event-search" {
+				if m.composer == "message-search" {
+					m.messageQuery = string(m.text)
+					m.messageAfter = ""
+					m.messageBack = nil
+					m.messageIndex = 0
+				} else {
+					m.eventQuery = string(m.text)
+					m.eventAfter = ""
+					m.eventBack = nil
+					m.eventIndex = 0
+					m.eventPinned = nil
+				}
+				m.composer = ""
+				m.text = nil
+				m.syncHistoryScopes()
+				return m, m.fetch
 			}
 			if m.composer == "task-search" {
 				m.taskQuery, m.taskAfter, m.taskBack, m.task = string(m.text), "", nil, 0
@@ -315,7 +358,11 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					return consoleAction{message: "Session title saved; permanent ID and native conversation unchanged.", labelID: target, labelText: text, err: err}
 				}
 				if kind == "memory-value" {
-					_, err := workCall(context.Background(), m.client, "memory.put", map[string]any{"namespace": namespace, "key": memoryKey, "value": text, "version": version})
+					op := "memory.put"
+					if version > 0 {
+						op = "memory.patch"
+					}
+					_, err := workCall(context.Background(), m.client, op, map[string]any{"namespace": namespace, "key": memoryKey, "value": text, "version": version})
 					return consoleAction{message: "Memory saved with version checking. Press v to refresh.", err: err, draft: draft}
 				}
 				if kind == "board" {
@@ -342,6 +389,9 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.message = fmt.Sprintf("Input limit: 16,384 characters (draft has %d). Paste was not inserted; your draft is kept. Shorten it before adding more text.", len(m.text))
 			}
 		}
+		if m.composer == "actions" && string(m.text) != queryBefore {
+			m.actionIndex = 0
+		}
 		if m.composer == "find" && string(m.text) != queryBefore {
 			m.findIndex, m.findIdentity = 0, ""
 			if matches := m.sessionMatches(); len(matches) > 0 {
@@ -350,7 +400,40 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
+	if next, cmd, handled := m.historyPageKey(key); handled {
+		return next, cmd
+	}
 	switch key {
+	case "y":
+		if m.tab == 4 {
+			if m.taskRecipient == "" {
+				m.taskRecipient = m.selectedID()
+			} else {
+				m.taskRecipient = ""
+			}
+			m.taskAfter = ""
+			m.taskBack = nil
+			return m, m.fetch
+		}
+	case "z":
+		if m.tab == 4 {
+			states := []string{"", "proposed", "running", "failed", "submitted", "verified"}
+			for i, v := range states {
+				if v == m.taskState {
+					m.taskState = states[(i+1)%len(states)]
+					break
+				}
+			}
+			m.taskAfter = ""
+			m.taskBack = nil
+			return m, m.fetch
+		}
+	case "ctrl+k":
+		m.openActions()
+	case "!":
+		m.attentionOnly = !m.attentionOnly
+		m.openSessionSwitcher()
+		return m, m.fetch
 	case "D":
 		if m.tab == 1 {
 			m.reviewNativeDelivery(false)
@@ -360,12 +443,8 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.reviewNativeDelivery(true)
 		}
 	case "W":
-		m.workspaceRequest++
-		request := m.workspaceRequest
-		return m, func() tea.Msg {
-			rows, err := workspaceInventory("")
-			return consoleWorkspaceList{rows: rows, err: err, request: request}
-		}
+		cmd := m.requestWorkspacePicker()
+		return m, cmd
 	case "U":
 		m.reviewNativeRelaunch()
 	case "?":
@@ -421,6 +500,10 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "home":
 		if m.tab == 7 {
 			m.eventIndex = 0
+			m.eventPinned = nil
+			m.eventAfter = ""
+			m.eventBack = nil
+			return m, m.fetch
 		}
 	case "up", "k":
 		if m.tab == 5 {
@@ -431,7 +514,7 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if m.selected > 0 {
-			m.selected--
+			m.explicitSessionChoice(m.selected - 1)
 			m.message = ""
 			m.scope = 0
 			m.closeMemory()
@@ -446,7 +529,7 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if m.selected+1 < len(m.agents) {
-			m.selected++
+			m.explicitSessionChoice(m.selected + 1)
 			m.message = ""
 			m.scope = 0
 			m.closeMemory()
@@ -478,14 +561,14 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		if m.tab == 6 {
 			if m.selectedTeam() == nil || m.data.teamsErr != nil {
-				m.message = "No team target is selected. Press 2 for Agents to open a native terminal, or 3 for Connections."
+				m.message = "No team target is selected. Press 2 for Sessions to open a native terminal, or 3 for Connections."
 				return m, nil
 			}
 			if len(m.agents) == 0 {
 				m.message = "No registered agent is available as the team's terminal target."
 				return m, nil
 			}
-			m.selected = m.teamMemberIndex % len(m.agents)
+			m.explicitSessionChoice(m.teamMemberIndex % len(m.agents))
 			m.closeMemory()
 			a := m.agents[m.selected]
 			m.data.headless = !a.External && m.data.runtime.Agents[a.ID].PaneID == "" && (m.data.research != nil || m.data.runtime.AttemptID == "" && a.Config.Interaction != "interactive")
@@ -498,9 +581,9 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.tab == 5 {
 			if observations := m.observedSessions(); len(observations) > 0 {
 				v := observations[m.observedSelected%len(observations)]
-				m.details = observedTitle(v) + "\nObserved ID: " + v.ID + "\nProject: " + v.Project + "\nStarted: " + sessionAdded(v.StartedAt) + "\nOriginal terminal: " + v.TTY + "\nTmux: " + v.TmuxSession + "\n" + v.AttachCommand + "\nConnect bridge: press c, then copy the displayed setup into the existing native conversation. No terminal input is injected."
+				m.details = observedTitle(v) + "\nObserved ID: " + v.ID + "\nProject: " + v.Project + "\nStarted: " + sessionAdded(v.StartedAt) + "\nOriginal terminal: " + v.TTY + "\nTmux: " + v.TmuxSession + "\n" + v.AttachCommand + observationWorkspaceNote(v) + "\nConnect bridge: press c, then copy the displayed setup into the existing native conversation. No terminal input is injected."
 			} else {
-				m.message = "No unregistered terminal is selected. Press 2 for registered Agents, or Shift+N to start one."
+				m.message = "No unregistered terminal is selected. Press 2 for registered Sessions, or Shift+N to start one."
 			}
 			return m, nil
 		}
@@ -541,38 +624,15 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			m.boardSelected = (m.boardSelected + step) % len(boards)
 			m.message = "Board: #" + m.selectedBoard()
-			m.messageIndex = 0
+			m.syncHistoryScopes()
+			return m, m.fetch
 		}
 	case "N":
 		if !m.busy {
-			m.newNative = consoleNativeDraft{provider: "claude", project: m.selectedProject()}
-			m.compose("new-title", "What are you working on? (optional)", "", "")
+			m.startNewSession(false)
 		}
 	case "x":
-		if m.tab == 5 {
-			m.message = "Observed sessions are read-only. Select a registered bridge in Agents to disconnect it; its native terminal keeps running."
-			return m, nil
-		}
-		if !m.busy && len(m.agents) > 0 {
-			a := m.agents[m.selected%len(m.agents)]
-			m.busy = true
-			return m, func() tea.Msg {
-				if m.offline {
-					return consoleAction{err: errors.New("broker offline; refresh before making changes")}
-				}
-				raw, err := workCall(context.Background(), m.client, "agent.stop", map[string]string{"id": a.ID})
-				if err != nil {
-					return consoleAction{err: err}
-				}
-				var result struct {
-					RevokedAgents int `json:"revoked_agents"`
-				}
-				if err := json.Unmarshal(raw, &result); err != nil {
-					return consoleAction{err: err}
-				}
-				return consoleAction{message: consoleRevocationMessage(a.ID, result.RevokedAgents)}
-			}
-		}
+		m.reviewStop()
 	case "f":
 		if m.tab == 4 {
 			m.compose("task-search", "Search all task instructions, results or IDs", "", m.taskQuery)
@@ -580,7 +640,8 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		if m.tab == 0 {
 			m.boardFilter = (m.boardFilter + 1) % 3
-			m.messageIndex = 0
+			m.syncHistoryScopes()
+			return m, m.fetch
 		}
 	case "]":
 		m.stepContent(1)
@@ -718,7 +779,7 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.busy = true
 			return m, func() tea.Msg {
 				setup, err := connectObservedSession(context.Background(), state, v.ID, id)
-				details := "Print setup in a shell:\n" + managedlaunch.ShellCommand([]string{"agentmux", "connect", v.ID, "--name", id, "--state", state}) + "\n\n" + setup
+				details := observationWorkspaceNote(v) + "\n\nPrint setup in a shell:\n" + managedlaunch.ShellCommand([]string{"agentmux", "connect", v.ID, "--name", id, "--state", state}) + "\n\n" + setup
 				return consoleAction{message: "Bridge prepared as " + id + ". Paste the setup in its original native session; readiness is not confirmed.", details: details, err: err}
 			}
 		}
@@ -752,7 +813,7 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.mutate("task.cancel", map[string]any{"id": v.ID, "version": v.Version}, "Cancellation requested. Check delivery acknowledgement.")
 		}
 		if m.tab == 5 {
-			m.message = "No unregistered terminal is selected for a bridge. Registered sessions are in Agents (2)."
+			m.message = "No unregistered terminal is selected for a bridge. Registered sessions are in Sessions (2)."
 		} else if m.tab == 4 {
 			m.message = "No managed task is selected to cancel. Native work is controlled in its own terminal."
 		}
@@ -766,13 +827,9 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if m.tab == 2 && !m.busy && m.selectedID() != "" {
-			id, client := m.selectedID(), m.client
-			m.busy = true
-			return m, func() tea.Msg {
-				_, err := workCollaboration(context.Background(), client, []string{id}, true)
-				return consoleAction{message: id + " disconnected from peer coordination and shared memory. Native interaction continues; previously read data and accepted tasks remain.", err: err}
-			}
+			m.reviewIsolation()
 		}
+
 	case "a":
 		if m.offline {
 			m.message = "Broker offline; refresh before making changes."
@@ -855,6 +912,13 @@ func (m console) nativeDraftNext() (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.newNative.title = text
+		if !m.newNative.advanced {
+			draft := m.newNative
+			m.composer = ""
+			m.text = nil
+			m.ownerReview = &consoleOwnerReview{operation: "launch-native", title: "Review new native session", body: fmt.Sprintf("Title: %s\nProvider: %s\nProject: %s\nNative only: %t\n\nA fresh stable ID is generated. Enter launches; Esc returns without starting a provider. Use Actions → Advanced new session to edit provider, project, profile and role.", draft.title, draft.provider, draft.project, draft.nativeOnly)}
+			return m, nil
+		}
 		m.compose("new-provider", "claude / codex / pi / antigravity", "", m.newNative.provider)
 	case "new-id":
 		if !managedconfig.ValidID(text) {

@@ -46,7 +46,7 @@ agentmux delivery codex auto --max-turns 20 --max-hops 4 --cooldown 1 \
 agentmux delivery claude auto --session collaboration-test
 ```
 
-The terminal Agents view and the web Agent view expose the same delivery
+The terminal Sessions view and the web Session detail view expose the same delivery
 settings and pending approvals. Terminal **Shift+D** edits delivery and
 **Shift+A** reviews an item. Sender grants, receiver mode, current scopes,
 adapter capability, readiness and budgets all have to allow delivery.
@@ -202,3 +202,10 @@ want returned results; omitted boolean fields in that object are false.
 Agent-only bridge operations are `native.register`, `native.peek`, `native.claim`
 and `native.event`. Owner controls are `native.configure` and `native.approve`;
 `native.status` exposes scoped evidence without credentials or task leases.
+
+Human-steered Codex turns continue when delivery is changed to Manual; the
+terminal remains the place to interrupt them explicitly. Cancellation of an
+untouched peer turn retains its original thread/turn identity after a native
+conversation switch. The control center provides exact-version uncertain-task
+fail/retry reviews; a retry is a new execution. External manual bridges do not
+become native delivery adapters through relaunch.

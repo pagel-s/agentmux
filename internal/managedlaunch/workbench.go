@@ -96,6 +96,12 @@ func (l *Launcher) configureWorkbench(ctx context.Context, runtime Runtime) erro
 			return err
 		}
 	}
+	// Each attachment owns this hook and its private dashboard. Record a native
+	// window selection before F1 returns, without sending keys to an editor.
+	remember := "if-shell -F '#{&&:#{==:#{@agentmux_role},worker},#{!=:#{@agentmux_agent},}}' 'run-shell -C \"set-option -t #{q:session_id} @agentmux_focus_pending #{q:@agentmux_agent}\"'"
+	if _, err := l.tmux(ctx, "set-hook", "-t", runtime.Session, "after-select-window[42]", remember); err != nil {
+		return err
+	}
 	menu := []string{"display-menu", "-T", "Runtime services (read-only)"}
 	for _, service := range []struct{ name, key, pane string }{{"Broker logs", "b", runtime.BrokerPane}, {"Supervisor logs", "s", runtime.SupervisorPane}} {
 		if !validPane(service.pane) {

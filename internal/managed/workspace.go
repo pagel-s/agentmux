@@ -57,18 +57,12 @@ func (s *Store) addWorkspaceAgent(ctx context.Context, q queryer, a actor, raw j
 			}
 		}
 	}
-	configured := make([]string, 0, len(s.cfg.Agents))
-	for id := range s.cfg.Agents {
-		configured = append(configured, id)
-	}
-	encodedIDs, _ := json.Marshal(configured)
-	var n int
-	err := q.QueryRowContext(ctx, "SELECT count(*) FROM records WHERE kind='agent' AND target NOT IN (SELECT value FROM json_each(?))", string(encodedIDs)).Scan(&n)
+	n, err := s.unarchivedDefinitionCount(ctx, q)
 	if err != nil {
 		return nil, internal(err)
 	}
-	if n+len(s.cfg.Agents) >= 200 {
-		return nil, fault("limit", "workspace registry limit reached (200 definitions)")
+	if n >= 200 {
+		return nil, fault("limit", "workspace registry limit reached (200 unarchived definitions)")
 	}
 	if in.Config.Interaction != "interactive" {
 		return nil, fault("invalid", "workspace additions must be native interactive agents; use configured spawn templates for managed workers")

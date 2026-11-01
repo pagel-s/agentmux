@@ -18,18 +18,19 @@ import (
 )
 
 type Session struct {
-	ID            string `json:"id"`
-	Harness       string `json:"harness"`
-	Project       string `json:"project"`
-	Title         string `json:"title"`
-	StartedAt     string `json:"started_at,omitempty"`
-	Source        string `json:"source"`
-	PID           int    `json:"pid"`
-	TTY           string `json:"tty,omitempty"`
-	Pane          string `json:"pane,omitempty"`
-	TmuxSession   string `json:"tmux_session,omitempty"`
-	AttachCommand string `json:"attach_command,omitempty"`
-	Coordination  bool   `json:"coordination"`
+	ID               string   `json:"id"`
+	Harness          string   `json:"harness"`
+	Project          string   `json:"project"`
+	Title            string   `json:"title"`
+	StartedAt        string   `json:"started_at,omitempty"`
+	Source           string   `json:"source"`
+	PID              int      `json:"pid"`
+	TTY              string   `json:"tty,omitempty"`
+	Pane             string   `json:"pane,omitempty"`
+	TmuxSession      string   `json:"tmux_session,omitempty"`
+	AttachCommand    string   `json:"attach_command,omitempty"`
+	Coordination     bool     `json:"coordination"`
+	WorkspaceOrigins []string `json:"workspace_origins,omitempty"`
 }
 
 type process struct {

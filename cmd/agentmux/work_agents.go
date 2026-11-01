@@ -197,6 +197,16 @@ func workAgentOperation(operation string, o workOptions, client *managed.Client,
 			return err
 		}
 		fmt.Fprintf(out, "Labelled %s: %s\n", info.ID, o.args[1])
+	case "retire":
+		if len(o.args) != 1 {
+			return errors.New("retire requires one stopped/revoked session ID")
+		}
+		if _, err := workCall(ctx, client, "agent.retire", map[string]any{"agent": o.args[0]}); err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "Archived %s. Immutable identity and history remain; its admission slot is released.\n", o.args[0])
+	case "disconnect":
+		return disconnectWorkGroup(ctx, client, o, out)
 	case "remove":
 		if len(o.args) != 1 {
 			return errors.New("remove requires one agent name")

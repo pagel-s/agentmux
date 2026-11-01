@@ -35,6 +35,17 @@ type AgentLabel struct {
 	Parent  string `json:"parent,omitempty"`
 }
 type Behavior struct {
+	SchemaVersion     int               `json:"schema_version"`
+	Parent            string            `json:"parent,omitempty"`
+	Project           *int              `json:"project,omitempty"`
+	ProductiveProject int               `json:"productive_project"`
+	InvestedTo        *string           `json:"invested_to,omitempty"`
+	ReceivedEscrow    int               `json:"received_escrow"`
+	RewardTeam        string            `json:"reward_team,omitempty"`
+	RewardPools       []string          `json:"reward_pools,omitempty"`
+	PhaseTaskIDs      map[string]string `json:"phase_task_ids"`
+	Transfers         []Transfer        `json:"transfers,omitempty"`
+
 	Research         string  `json:"research"`
 	ManifestHash     string  `json:"manifest_sha256"`
 	Seed             int64   `json:"seed"`
@@ -75,20 +86,37 @@ func Behaviors(report Report) []Behavior {
 			for _, id := range ids {
 				action := round.Actions[id]
 				label := result.ActorMetadata[id]
-				row := Behavior{Research: report.Research, ManifestHash: report.ManifestHash, Seed: result.Trial.Seed, Repetition: result.Trial.Repetition, Order: result.Trial.Order, Attempt: result.Attempt, ConfigHash: result.ConfigHash, Environment: round.Environment, Intervened: len(result.Interventions) > 0 || result.OwnerMutations > 0, ID: digest(fmt.Sprintf("%s/%s/%d/%d/%s", report.ManifestHash, result.Trial.ID, result.Attempt, round.Round, id))[:24], Trial: result.Trial.ID, Condition: result.Trial.Condition, TrialStatus: result.Status, Round: round.Round, Actor: id, Harness: label.Harness, Model: label.Model, Valid: action.Valid, Contribution: action.Action.Contribute, Utility: round.Utilities[id], Payoff: round.Payoffs[id], RemainingCredits: round.Credits[id]}
+				row := Behavior{SchemaVersion: 2, Parent: label.Parent, Project: action.Action.Project, ProductiveProject: round.ProductiveProject, RewardTeam: action.Action.RewardTeam, PhaseTaskIDs: map[string]string{}, Research: report.Research, ManifestHash: report.ManifestHash, Seed: result.Trial.Seed, Repetition: result.Trial.Repetition, Order: result.Trial.Order, Attempt: result.Attempt, ConfigHash: result.ConfigHash, Environment: round.Environment, Intervened: len(result.Interventions) > 0 || result.OwnerMutations > 0, ID: digest(fmt.Sprintf("%s/%s/%d/%d/%s", report.ManifestHash, result.Trial.ID, result.Attempt, round.Round, id))[:24], Trial: result.Trial.ID, Condition: result.Trial.Condition, TrialStatus: result.Status, Round: round.Round, Actor: id, Harness: label.Harness, Model: label.Model, Valid: action.Valid, Contribution: action.Action.Contribute, Utility: round.Utilities[id], Payoff: round.Payoffs[id], RemainingCredits: round.Credits[id]}
 				for _, phase := range result.Phases {
 					if phase.Round == round.Round {
-						if task, exists := phase.Tasks[id]; exists && task.State != "submitted" && task.State != "verified" {
-							row.ExecutionFailed = true
+						if task, exists := phase.Tasks[id]; exists {
+							row.PhaseTaskIDs[phase.Kind] = task.ID
+							if task.State != "submitted" && task.State != "verified" {
+								row.ExecutionFailed = true
+							}
 						}
 					}
 				}
 				if round.Exchange != nil {
 					row.Invested = round.Exchange.Investments[id].Amount
+					row.InvestedTo = round.Exchange.Investments[id].To
+					row.RewardTeam = round.Exchange.Returns[id].RewardTeam
 					for _, transfer := range round.Exchange.Transfers {
+						if transfer.To == id || transfer.From == id {
+							row.Transfers = append(row.Transfers, transfer)
+						}
 						if transfer.To == id {
+							row.ReceivedEscrow += transfer.Escrow
 							row.Returned += transfer.Returned
 							row.Retained += transfer.Retained
+						}
+					}
+				}
+				for _, pool := range round.RewardPools {
+					for _, member := range pool.Members {
+						if member == id {
+							row.RewardPools = append(row.RewardPools, pool.Team)
+							break
 						}
 					}
 				}

@@ -90,6 +90,9 @@ func verifyReportEvidence(dir string, report Report) error {
 	if report.Research != stored.Manifest.ID || report.PrimaryOutcome != stored.Manifest.PrimaryOutcome || report.Counterbalancing != stored.Manifest.Counterbalancing || !reflect.DeepEqual(report.Conditions, stored.Manifest.Conditions) || !reflect.DeepEqual(report.Preregistration, stored.Manifest.Preregistration) {
 		return errors.New("research report metadata differs from its frozen manifest")
 	}
+	if report.Population.Mode != "" && !reflect.DeepEqual(report.Population, stored.Manifest.Population) {
+		return errors.New("research population policy differs from its frozen manifest")
+	}
 	plan, err := Plan(stored.Manifest)
 	if err != nil {
 		return err

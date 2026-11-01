@@ -8,8 +8,15 @@ const { domFixture } = require("./dom-fixture.cjs");
 const source = fs.readFileSync(path.join(__dirname, "app.js"), "utf8");
 
 function createTestContext(values) {
-  return vm.createContext({
+  const context = vm.createContext({
+    routingEpoch:0,routingPending:false,snapshotRoute:{follow:false},taskSummary:{agents:[],loading:false,error:"",epoch:0,updatedAt:0},loadTaskSummary(){},
+    exposureHistory:{epoch:0},
+    followStudy:false,loadStudyStatus(){},loadResearchHistory(){},
+    tab: "activity", includeArchived:false,archivedAgents:[],ownerActionReview:null,taskAttention:"",messageHistory:{messages:null,loading:false,error:"",hasMore:false},eventHistory:{events:null,loading:false,error:"",hasMore:false},
+    renderResourceAvailability(){},renderOwnerActionReview(){},renderAttentionQueue(){},renderSubmissionRecords(){},loadMessageHistory(){},loadEventHistory(){},ageText:()=>"age unknown",sessionTime:()=>"",taskAttentionKind:()=>"",inspectReceiver(){},receiverDeliveryExplanation:()=>"Inbox message; native terminal input was not changed.",
     tab: "activity", relaunchReview: null, teamEditDrafts: new Map(), roleDrafts: new Map(), resourceDrafts: new Map(), resourceReview: null, researchSavedOffline: false, legacyGroupChoices: new Map(), legacyGroupReview: null, memoryMetadataSelection: "",
+    nativeDeliveryHint:()=>"The managed worker runs this instruction when ready.",
+    submissionRecords:new Map(),
     nativeDrafts: new Map(), nativeSignature: "",
     sessionTitle: agent => agent?.title || agent?.id || "Session",
     taskHistory: {tasks:null,cursor:"",hasMore:false,query:"",to:"",state:"",loading:false,epoch:0,updatedAt:0,error:""},
@@ -17,6 +24,8 @@ function createTestContext(values) {
     loadTaskHistory() {}, loadWorkspaces() {}, loadCapacity() {},
     ...values,
   });
+  vm.runInContext(`snapshotIdentity=function(value=snapshot){return value?.study_attempt||value?.runtime?.attempt_id||"";};sendFrozen=async function(operation,args,target){const result=await api("/api/send",{...(operation==="board.post"?{}:{target}),...args,mode:operation==="instruct"?"instruction":"note"});return operation==="instruct"?{task:{id:result.id}}:{message:{id:result.id}};};receiverDeliveryExplanation=function(id,key){return key==="instruct"&&typeof nativeDeliveryHint==="function"?nativeDeliveryHint(id):"Inbox message; native terminal input was not changed.";};`, context);
+  return context;
 }
 
 // Execute the production identity helpers and submit callback as ordinary
@@ -593,7 +602,7 @@ for (const interaction of ["interactive", "managed"]) {
       });
       await f.settled();
       assert.equal(f.node("message").value, "Unsent draft for A");
-      assert.match(f.context.lastNotice, /queued for Session b/);
+      assert.match(f.context.lastNotice, /accepted for Session b/);
       assert.match(
         f.context.lastNotice,
         interaction === "interactive" ? /^Message/ : /^Instruction/,
@@ -1402,7 +1411,7 @@ test("saved metadata roster and task count stay unknown, including after a searc
     c,
   );
   vm.runInContext(
-    source.slice(source.indexOf("function renderMetadataOnly(")),
+    source.slice(source.indexOf("function renderMetadataOnly("),source.indexOf("function ownerActionFingerprint(")),
     c,
   );
   c.renderSessionLists();
@@ -1647,6 +1656,7 @@ test("revoking a graph recipient never silently retargets controls to another ac
     f
       .node("edge-controls")
       .querySelectorAll("button")
+      .filter(node=>node.attributes.role==="switch")
       .every((node) => node.disabled),
   );
   assert.equal(f.node("connect-pair").disabled, true);
@@ -1758,11 +1768,12 @@ test("graph redraw keeps keyboard focus and Space activates node/edge without lo
   edge.onkeydown({ key: "Enter", preventDefault() {} });
   assert.equal(f.document.activeElement.id, "close-inspector");
   f.node("graph-inspector").onkeydown({ key: "Escape", preventDefault() {} });
-  assert.equal(f.document.activeElement.dataset.node, "agent:a");
+  assert.equal(f.document.activeElement.dataset.focusKey, edge.dataset.focusKey);
   assert.equal(vm.runInContext("graphSelection", f.context), null);
+  f.node("interaction-graph").querySelectorAll("[data-node]")[0].focus();
   f.canvas.scrollTop = 180;
   f.document.activeElement.onkeydown({
-    key: "ArrowRight",
+    key: "ArrowRight", shiftKey:true,
     preventDefault() {},
   });
   assert.equal(f.document.activeElement.dataset.node, "agent:a");
@@ -1806,50 +1817,21 @@ test("research review polling preserves Confirm focus and invalidated controls r
   );
 });
 
-test("session close reports descendant revocation without claiming process termination or following navigation", async () => {
-  const f = pollingContext();
-  vm.runInContext(
-    source.slice(
-      source.indexOf("function activeDescendants("),
-      source.indexOf("function nativeHeadless("),
-    ),
-    f.context,
-  );
-  const agents = [
-    { id: "a", state: "active" },
-    { id: "child", state: "active", parent: "a" },
-    { id: "grandchild", state: "active", parent: "child" },
-    { id: "unrelated", state: "active", parent: "$owner" },
-    { id: "old-child", state: "revoked", parent: "a" },
-  ];
-  assert.deepEqual(
-    [...f.context.activeDescendants(agents, "a")],
-    ["child", "grandchild"],
-  );
-  let pending;
-  f.context.action = (fn, success) => {
-    pending = fn().then(() => {
-      f.context.lastNotice = success();
-    });
-  };
-  f.context.call = async (operation, args) => {
-    f.writes.push({ operation, args });
-    return { revoked_agents: 3, process_stopped: false };
-  };
-  vm.runInContext(
-    source.slice(
-      source.indexOf('$("close-agent").onclick ='),
-      source.indexOf('$("connect-pair").onclick ='),
-    ),
-    f.context,
-  );
+test("session close freezes its reviewed subtree and refuses changed descendants", async () => {
+  const f=pollingContext();
+  vm.runInContext(source.slice(source.indexOf("function activeDescendants("),source.indexOf("function nativeHeadless(")),f.context);
+  vm.runInContext(source.slice(source.indexOf("function ownerActionFingerprint("),source.indexOf("function restoreSessionActionFocus(")),f.context);
+  f.context.snapshot.agents=[{id:"a",state:"active"},{id:"child",state:"active",parent:"a"},{id:"grandchild",state:"active",parent:"child"},{id:"unrelated",state:"active"}];
+  vm.runInContext(source.slice(source.indexOf('$("close-agent").onclick ='),source.indexOf('$("connect-pair").onclick =')),f.context);
   f.node("close-agent").onclick();
-  f.context.selected = "b";
-  await pending;
-  assert.equal(f.writes[0].args.id, "a");
-  assert.match(f.context.lastNotice, /a and 2 descendants/);
-  assert.match(f.context.lastNotice, /termination is not yet acknowledged/);
-  assert.doesNotMatch(f.context.lastNotice, /Closed|terminated successfully/);
+  assert.equal(f.writes.length,0,"opening review must not revoke a session");
+  assert.deepEqual([...f.context.ownerActionReview.ids],["a","child","grandchild"]);
+  assert.match(f.node("owner-action-review").children[1].textContent,/termination requires a separate acknowledgment/);
+  f.context.snapshot.agents.push({id:"new-child",state:"active",parent:"a"});
+  f.context.renderOwnerActionReview();
+  assert.equal(f.node("owner-action-review").querySelectorAll("button")[0].disabled,true);
+  assert.deepEqual([...f.context.ownerActionReview.ids],["a","child","grandchild"],"polling cannot adopt a new descendant");
+  assert.equal(f.writes.length,0);
 });
 
 function unloadContext() {
@@ -2027,7 +2009,7 @@ function memoryContext() {
         ? { key: entry.key, state: "live", version: entry.version }
         : { key: args.key, state: "missing", version: 0 };
     if (operation === "memory.get") return { entry: { ...entry } };
-    if (operation === "memory.put") {
+    if (["memory.put","memory.patch"].includes(operation)) {
       if ((entry?.version || 0) !== args.version)
         throw new Error("Memory version conflict");
       const saved = {
@@ -2105,7 +2087,7 @@ test("memory entry and namespace switches retain independent drafts without chan
     "other scopes' drafts still protected",
   );
   assert.equal(
-    f.requests.filter((r) => r.operation === "memory.put").length,
+    f.requests.filter((r) => ["memory.put","memory.patch"].includes(r.operation)).length,
     0,
   );
 });
@@ -2144,7 +2126,7 @@ test("memory conflict review keeps exact draft beside latest and requires explic
     "read review does not adopt or retry",
   );
   assert.equal(
-    f.requests.filter((r) => r.operation === "memory.put").length,
+    f.requests.filter((r) => ["memory.put","memory.patch"].includes(r.operation)).length,
     1,
   );
   f.node("adopt-memory-version").click();
@@ -2152,7 +2134,7 @@ test("memory conflict review keeps exact draft beside latest and requires explic
   assert.equal(f.node("memory-value").value, "My plan draft");
   assert.match(f.node("memory-version").textContent, /not saved/);
   assert.equal(
-    f.requests.filter((r) => r.operation === "memory.put").length,
+    f.requests.filter((r) => ["memory.put","memory.patch"].includes(r.operation)).length,
     1,
   );
   f.submit();
@@ -3000,4 +2982,173 @@ test("untouched native settings follow saved policy changes without a false conf
   assert.equal(f.context.nativeDrafts.get("a").version,2);assert.equal(f.context.nativeDrafts.get("a").dirty,false);
   assert.equal(f.panel.querySelectorAll("input").find(node=>node.dataset.focusKey==="native:max_turns").value,"31");
   assert.equal(f.panel.querySelectorAll(".native-policy-current").length,0);
+});
+
+test("resource inputs wait for the selected capacity and restore its own retained draft",async()=>{
+  const f=pollingContext();Object.assign(f.context,{capacityLoading:"",capacityRequest:0,capacityView:null,resourceSnapshot:{agent:"a",version:1},resourceReview:null,resourceDrafts:new Map([["a",{version:1,values:{session_tokens:"123"}}],["b",{version:2,values:{session_tokens:"456",session_cost:"0",turn_tokens:"0",turn_cost:"0",subtree_tokens:"0",subtree_cost:"0",admission:""}}]])});
+  vm.runInContext(source.slice(source.indexOf("async function loadCapacity()"),source.indexOf("function hasUnsavedWork()")),f.context);
+  f.context.selected="b";f.context.renderResourceAvailability();
+  assert.equal(f.node("resource-session-tokens").disabled,true,"old session limits cannot be edited during selection load");
+  let releaseCapacity,releaseOwner;f.context.call=async(_op,args)=>new Promise(resolve=>{if(args.agent)releaseCapacity=resolve;else releaseOwner=resolve;});
+  const loading=f.context.loadCapacity();assert.equal(f.node("resource-session-tokens").disabled,true);
+  releaseCapacity({agent:"b",resource_version:2,agent_budget:{max_turn_tokens:20},spawn_remaining:1});releaseOwner({resource_version:2,session_budget:{max_tokens:90}});await loading;
+  assert.equal(f.node("resource-session-tokens").disabled,false);assert.equal(f.node("resource-session-tokens").value,"456");assert.equal(f.context.resourceDrafts.get("a").values.session_tokens,"123");
+});
+
+test("uncertain submissions retain their frozen request identity and payload across reconnect",async()=>{
+  const f=pollingContext(),saved=new Map(),requests=[];Object.assign(f.context,{location:{host:"test-owner"},sessionStorage:{getItem:key=>saved.get(key),setItem:(key,value)=>saved.set(key,value)},submissionRecords:new Map(),followStudy:false});
+  f.context.call=async(operation,args,id)=>{requests.push({operation,args:JSON.parse(JSON.stringify(args)),id});if(requests.length===1)throw new Error("connection lost");return {task:{id:"task-one"}};};
+  vm.runInContext(source.slice(source.indexOf('const submissionStorageKey='),source.indexOf('async function loadMessageHistory(')),f.context);
+  const args={to:["b"],text:"one exact instruction",reply_to:""};await assert.rejects(f.context.sendFrozen("instruct",args,"b"));
+  const record=[...f.context.submissionRecords.values()][0];assert.equal(record.status,"uncertain");args.text="new text";
+  assert.equal(record.args.text,"one exact instruction","the record cannot follow later composer typing");
+  f.context.submissionRecords.clear();f.context.restoreSubmissionRecords();
+  await f.context.sendFrozen("instruct",{to:["b"],text:"one exact instruction",reply_to:""},"b");
+  assert.equal(requests[0].id,requests[1].id);assert.equal([...f.context.submissionRecords.values()][0].resultID,"task-one");
+  await f.context.sendFrozen("instruct",args,"b");assert.notEqual(requests[1].id,requests[2].id,"changed payload requires a new identity");
+});
+
+test("existing memory values use metadata-safe patch and retain the saved CAS",async()=>{
+  const f=memoryContext();await f.context.loadMemory();f.entry("plan").click();f.type("value edit only");f.submit();await f.pending();
+  const write=f.requests.find(request=>request.operation==="memory.patch");assert.ok(write);assert.equal(write.args.version,4);assert.deepEqual(Object.keys(write.args).sort(),["key","namespace","value","version"]);
+});
+
+test("permissions explain receiver subscriptions separately from admission and identify external manual bridges",()=>{
+  const f=pollingContext();vm.runInContext(source.slice(source.indexOf("function ageText("),source.indexOf("const submissionStorageKey=")),f.context);
+  f.context.snapshot.agents[1].config.interaction="interactive";f.context.snapshot.native_statuses={b:{mode:"auto",state:"ready",connected:true,session:"native-one",policy:{version:1,notes:false,pings:true}}};
+  assert.match(f.context.receiverDeliveryExplanation("b","message.send"),/notes subscription is off/);
+  assert.match(f.context.receiverDeliveryExplanation("b","ping.send"),/pings subscription is on/);
+  f.context.snapshot.agents[1].external=true;assert.match(f.context.receiverDeliveryExplanation("b","instruct"),/explicitly read its inbox/);
+});
+
+test("message history pages scoped inbox and query before paging without replacing older results on failure",async()=>{
+  const f=pollingContext();Object.assign(f.context,{boardFilter:"agent",messageHistory:{messages:null,cursor:"",hasMore:false,query:"needle",board:"",loading:false,epoch:0,error:""}});
+  const calls=[];f.context.call=async(operation,args)=>{calls.push({operation,args});if(args.after==="m1")return {messages:[{id:"m2",from:"b",to:["a"],text:"second needle"}],cursor:"m2",has_more:false};return {messages:[{id:"m1",from:"b",to:["a"],text:"first needle"}],cursor:"m1",has_more:true};};
+  vm.runInContext(source.slice(source.indexOf("async function loadMessageHistory("),source.indexOf('$("message-history-filter").onsubmit=')),f.context);
+  await f.context.loadMessageHistory("reset");assert.equal(calls[0].args.scope,"all");assert.equal(calls[0].args.agent,"a");assert.equal(calls[0].args.query,"needle");
+  await f.context.loadMessageHistory("more");assert.deepEqual([...f.context.messageHistory.messages].map(message=>message.id),["m1","m2"]);
+  f.context.call=async()=>{throw new Error("history unavailable");};await f.context.loadMessageHistory("refresh");assert.deepEqual([...f.context.messageHistory.messages].map(message=>message.id),["m1","m2"]);
+});
+
+test("connection list includes denied pairs beyond the visual graph budget and keeps graph entries outside Tab order",()=>{
+  const f=graphKeyboardContext();f.context.snapshot.agents=Array.from({length:45},(_,index)=>({id:index?"peer-"+index:"a",state:"active",config:{harness:"codex"}}));
+  f.context.drawGraph();f.context.renderConnectionList();
+  const labels=f.node("connection-list").children.map(node=>node.textContent);assert.ok(labels.some(label=>label.includes("a → peer-44")&&label.includes("No directional permissions")));
+  assert.ok(f.node("interaction-graph").querySelectorAll("[data-focus-key]").every(node=>node.getAttribute("tabindex")==="-1"));
+});
+
+test("study mutation headers use the matching snapshot attempt and a frozen recovery attempt",async()=>{
+  const f=connectionContext();f.context.followStudy=true;f.context.snapshot.study_attempt="study-headless-attempt-one";
+  const pending=f.context.api("/api/call",{operation:"instruct",args:{to:["b"],text:"frozen"}},"original-submission-attempt");
+  assert.equal(f.requests[0].options.headers["X-Agentmux-Follow-Study"],"1");assert.equal(f.requests[0].options.headers["X-Agentmux-Attempt"],"original-submission-attempt");
+  [...f.timers.values()][0]();await assert.rejects(pending);
+  const current=f.context.api("/api/call",{operation:"task.cancel",args:{id:"task-one",version:1}});
+  assert.equal(f.requests[1].options.headers["X-Agentmux-Attempt"],"study-headless-attempt-one");[...f.timers.values()][0]();await assert.rejects(current);
+});
+
+test("study transitions retain independent drafts and filters while clearing every old review",()=>{
+  const f=pollingContext();const names=["messageDrafts","roleDrafts","titleDrafts","observedDrafts","resourceDrafts","nativeDrafts","teamInviteDrafts","teamEditDrafts","legacyGroupChoices","memoryDrafts","memoryLastDrafts","memoryEntries"];
+  for(const name of names)f.context[name]=new Map();Object.assign(f.context,{attemptDrafts:new Map(),newSessionDirty:false,stashMemoryDraft(){},closeTitleEditor(){},selected:"a",replyTo:"old-parent",pendingDraftKind:"direct",memoryEditorEpoch:0,memoryRequest:0,memoryReviewRequest:0,capacityRequest:0,capacityLoading:"",notice(){},taskHistory:{tasks:[],query:"keep task filter",epoch:0},messageHistory:{epoch:0},eventHistory:{epoch:0},ownerActionReview:{old:true},researchReview:{old:true}});
+  f.node("message").value="attempt one unsent";f.node("message-kind").value="direct";f.node("message-mode").value="instruction";f.context.resourceDrafts.set("a",{version:1,values:{session_tokens:"700"}});
+  vm.runInContext(source.slice(source.indexOf("function switchAttemptDraftScope("),source.indexOf("async function loadStudyStatus(")),f.context);
+  f.context.switchAttemptDraftScope("one","two");assert.equal(f.node("message").value,"");assert.equal(f.context.resourceDrafts.size,0);assert.equal(f.context.ownerActionReview,null);assert.equal(f.context.researchReview,null);assert.equal(f.context.taskHistory.query,"keep task filter");
+  f.node("message").value="attempt two unsent";f.context.switchAttemptDraftScope("two","one");assert.equal(f.node("message").value,"attempt one unsent");assert.equal(f.context.resourceDrafts.get("a").values.session_tokens,"700");assert.equal(f.context.replyTo,"old-parent");
+});
+
+test("full application boot renders the current workspace before exposing owner actions",async()=>{
+  const f=domFixture(),events={},storage=new Map(),snap={ok:true,selected:"a",headless:false,native_statuses:{},agents:["a","b"].map(id=>({id,state:"active",config:{harness:"codex",interaction:"interactive",workdir:"/tmp/fixture-project",network:false}})),groups:[],teams:[],observed:[],runtime:{session:"fixture",state:"running",agents:{a:{state:"running",pane_id:"%1"},b:{state:"running",pane_id:"%2"}}},boundaries:{agent:"a",version:1,targets:[],boards:[],memory:[]},activity:{messages:[],tasks:[],events:[]}};
+  const html=fs.readFileSync(path.join(__dirname,"index.html"),"utf8"),declared=new Map();
+  for(const match of html.matchAll(/<([a-z][a-z0-9-]*)\b([^>]*\bid="([^"]+)"[^>]*)>/g)){
+    const node=f.node(match[3]);node.tagName=match[1];declared.set(match[3],node);
+    for(const attribute of match[2].matchAll(/([a-z][a-z0-9-]*)="([^"]*)"/g))node.setAttribute(attribute[1],attribute[2]);
+    node.disabled=/\bdisabled\b/.test(match[2]);node.hidden=/\bhidden\b/.test(match[2]);
+  }
+  for(const match of html.matchAll(/<button\b([^>]*\bdata-tab="([^"]+)"[^>]*)>/g)){const id=match[1].match(/\bid="([^"]+)"/)?.[1],node=id?declared.get(id):f.el("button");for(const attribute of match[1].matchAll(/([a-z][a-z0-9-]*)="([^"]*)"/g))node.setAttribute(attribute[1],attribute[2]);if(!id)f.document.body.append(node);}
+  const findDynamic=(root,id)=>root.id===id?root:root.children.map(child=>findDynamic(child,id)).find(Boolean);
+  f.document.getElementById=id=>declared.get(id)||findDynamic(f.document.body,id)||null;
+  f.document.addEventListener=(name,handler)=>{events[name]=handler;};f.document.hidden=false;
+  for(const match of html.matchAll(/<select\b([^>]*\bid="([^"]+)"[^>]*)>([\s\S]*?)<\/select\s*>/g)){
+    const select=declared.get(match[2]);
+    for(const optionMatch of match[3].matchAll(/<option(?:[^>]*value="([^"]*)")?[^>]*>([\s\S]*?)<\/option>/g)){const option=f.el("option","",optionMatch[2].trim());option.value=optionMatch[1]??optionMatch[2].trim();select.append(option);}
+    select.value=select.options[0]?.value||"";
+  }
+  assert.equal(f.document.getElementById("intentionally-missing-id"),null,"production bootstrap must never fabricate missing HTML IDs");
+  assert.ok(declared.has("open-actions"));assert.ok(declared.has("quick-new-session"));
+  const terminalTab=[...f.document.querySelectorAll("[data-tab]")].find(node=>node.dataset.tab==="terminals");assert.ok(terminalTab,"existing terminal discovery needs a visible navigation entry");
+  const c=vm.createContext({document:f.document,window:{addEventListener(){}},location:{hash:"#fixture-token",pathname:"/",host:"fixture"},history:{replaceState(){}},sessionStorage:{getItem:key=>storage.get(key),setItem:(key,value)=>storage.set(key,value)},localStorage:{getItem:()=>null,setItem(){}},navigator:{},AbortController,setTimeout:()=>1,clearTimeout(){},setInterval(){},queueMicrotask,fetch:async(url,options={})=>({ok:true,text:async()=>{if(url.startsWith("/api/snapshot"))return JSON.stringify(snap);if(url==="/api/workspaces")return JSON.stringify({ok:true,workspaces:[]});const operation=options.body?JSON.parse(options.body).operation:"";return JSON.stringify({ok:true,result:operation==="task.summary"?{agents:[],has_more:false}:operation==="message.list"?{messages:[],has_more:false}:{}});}}),URLSearchParams,console});
+  vm.runInContext(source,c);vm.runInContext(fs.readFileSync(path.join(__dirname,"graph.js"),"utf8"),c);await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(f.node("connection").textContent,"Connected",f.node("notice").textContent);assert.equal(f.node("agent-name").textContent,"fixture-project · Codex");assert.equal(f.node("send-message").disabled,false);assert.equal(f.node("resource-session-tokens").disabled,true);
+  declared.get("open-actions").click();assert.equal(declared.get("action-menu").className.includes("hidden"),false);declared.get("close-actions").click();
+  declared.get("quick-new-session").click();assert.equal(vm.runInContext("tab",c),"sessions");assert.equal(declared.get("new-harness").value,"codex");assert.equal(declared.get("new-project").value,"/tmp/fixture-project");
+  terminalTab.click();assert.equal(vm.runInContext("tab",c),"terminals");assert.equal(terminalTab.attributes["aria-pressed"],"true");await new Promise(resolve=>setImmediate(resolve));
+});
+
+test("resource conflicts preserve all draft fields until explicit adoption of reviewed current limits",()=>{
+  const f=pollingContext();Object.assign(f.context,{capacityLoading:"",capacityRequest:0,resourceSnapshot:{agent:"a",version:3,session_budget:{max_tokens:30},agent_budget:{}},resourceDrafts:new Map([["a",{version:2,values:{session_tokens:"900",session_cost:"2",turn_tokens:"3",turn_cost:"4",subtree_tokens:"5",subtree_cost:"6",admission:"7"}}]])});
+  vm.runInContext(source.slice(source.indexOf("async function loadCapacity()"),source.indexOf("function hasUnsavedWork()")),f.context);f.context.renderResourceEditor();
+  assert.equal(f.node("resource-session-tokens").value,"900");assert.equal(f.node("review-resources").disabled,true);f.node("resource-conflict").querySelectorAll("button")[0].click();
+  assert.equal(f.context.resourceDrafts.get("a").version,3);assert.equal(f.node("resource-session-tokens").value,"900");assert.equal(f.node("resource-admission").value,"7");assert.equal(f.node("review-resources").disabled,false);
+});
+
+test("exposure ledger queries an exact saved memory version before paging and leaves generic version unspecified",async()=>{
+  const f=pollingContext();f.context.exposureHistory={exposures:[],cursor:"",hasMore:false,loading:false,epoch:0,reader:"",kind:"memory",route:"",namespace:"team",key:"plan",version:4,error:"",retainedLimit:10000};
+  vm.runInContext(source.slice(source.indexOf("async function loadExposures("),source.indexOf('$("exposure-filter").onsubmit=')),f.context);
+  const calls=[];f.context.call=async(operation,args)=>{calls.push({operation,args});return {exposures:[{reader:"b",kind:"memory",namespace:"team",key:"plan",version:4,entity_id:"memory-one",at:"2026-11-01T11:00:00Z",routes:["memory.get"],generation:2}],cursor:"receipt-one",has_more:true,retained_limit:10000};};
+  await f.context.loadExposures("reset");assert.equal(calls[0].operation,"exposure.list");assert.equal(calls[0].args.namespace,"team");assert.equal(calls[0].args.key,"plan");assert.equal(calls[0].args.version,4);
+  await f.context.loadExposures("more");assert.equal(calls[1].args.after,"receipt-one");f.context.exposureHistory.version=0;await f.context.loadExposures("reset");assert.equal(Object.hasOwn(calls[2].args,"version"),false);
+});
+
+test("attention queue distinguishes ordinary ready auto admission from review, blocked and uncertain evidence",()=>{
+  const f=pollingContext();vm.runInContext(source.slice(source.indexOf("function ageText("),source.indexOf("const submissionStorageKey=")),f.context);
+  f.context.snapshot.native_statuses={a:{mode:"auto",state:"ready",connected:true,pending_count:2},b:{mode:"review",state:"ready",connected:true,pending_count:1,pending:[{task_id:"task-review"}]},c:{mode:"manual",state:"manual",connected:true,pending_count:1},d:{mode:"auto",state:"uncertain",connected:true,pending_count:0}};
+  f.context.renderAttentionQueue();const flatten=node=>node.textContent+" "+node.children.map(flatten).join(" ");const text=flatten(f.node("attention-queue"));assert.match(text,/Review required · b/);assert.match(text,/Delivery blocked · c/);assert.match(text,/Delivery uncertain · d/);assert.doesNotMatch(text,/Delivery blocked · a/);
+  assert.equal(f.context.taskAttentionKind({id:"task-review",to:"b",state:"proposed",delivery:"pending"}),"review");assert.equal(f.context.taskAttentionKind({id:"not-a-candidate",to:"b",state:"proposed",delivery:"pending"}),"");
+});
+
+test("production HTML declares every static application control and every visible navigation destination",()=>{
+  const html=fs.readFileSync(path.join(__dirname,"index.html"),"utf8"),ids=new Set([...html.matchAll(/\bid="([^"]+)"/g)].map(match=>match[1]));
+  const scripts=source+fs.readFileSync(path.join(__dirname,"graph.js"),"utf8");const optionalDynamic=new Set(["confirm-research"]);
+  for(const match of scripts.matchAll(/\$\("([^"]+)"\)/g))assert.ok(ids.has(match[1])||optionalDynamic.has(match[1]),"missing production control: "+match[1]);
+  for(const match of html.matchAll(/data-tab="([^"]+)"/g))assert.ok(ids.has("view-"+match[1]),"missing view for "+match[1]);
+  assert.match(html,/data-tab="terminals"[^>]*>Existing terminals</);assert.match(html,/data-tab="graph"[^>]*>Connections</);assert.match(html,/data-tab="agent"[^>]*>Session detail</);
+});
+
+test("exact replay retains the saved request and route after a follow toggle and reload, and blocks another attempt",async()=>{
+  const f=pollingContext(),saved=new Map(),requests=[];Object.assign(f.context,{location:{host:"frozen-route"},sessionStorage:{getItem:key=>saved.get(key),setItem:(key,value)=>saved.set(key,value)},submissionRecords:new Map(),followStudy:true,connected:true});f.context.snapshot.study_attempt="attempt-a";
+  f.context.call=async(operation,args,id,attempt,route)=>{requests.push({operation,args:JSON.parse(JSON.stringify(args)),id,attempt,route:JSON.parse(JSON.stringify(route))});if(requests.length===1)throw new Error("unknown acceptance");return {task:{id:"already-saved-task"}};};
+  vm.runInContext(source.slice(source.indexOf("const submissionStorageKey="),source.indexOf("async function loadMessageHistory(")),f.context);
+  await assert.rejects(f.context.sendFrozen("instruct",{to:["b"],text:"saved once",reply_to:""},"b"));const record=[...f.context.submissionRecords.values()][0];
+  f.context.followStudy=false;f.context.submissionRecords.clear();f.context.restoreSubmissionRecords();const restored=f.context.submissionRecords.get(record.id);
+  await f.context.dispatchSubmissionRecord(restored);assert.deepEqual(requests[1],requests[0]);assert.equal(f.context.submissionRecords.size,1);
+  f.context.snapshot.study_attempt="attempt-b";const count=requests.length;await assert.rejects(f.context.dispatchSubmissionRecord(restored),/another attempt/);assert.equal(requests.length,count);assert.equal(f.context.submissionRecords.size,1);assert.equal(restored.id,record.id);
+});
+
+test("follow-off gates writes immediately, discards the old read, and scopes drafts when the fixed attempt arrives",async()=>{
+  const f=connectionContext(),requests=[],scopes=[];Object.assign(f.context,{followStudy:true,routingEpoch:0,routingPending:false,snapshotRoute:{follow:true},capacityRequest:0,capacityLoading:"",memoryRequest:0,memoryReviewRequest:0,renderStudyStatus(){},renderSubmissionRecords(){},switchAttemptDraftScope:(previous,next)=>scopes.push([previous,next]),taskSummary:{agents:[],epoch:0,updatedAt:0,loading:false},taskHistory:{epoch:0,loading:false,updatedAt:0},messageHistory:{epoch:0,loading:false},eventHistory:{epoch:0,loading:false},exposureHistory:{epoch:0,loading:false}});
+  f.context.snapshot={...f.context.snapshot,study_attempt:"attempt-b",runtime:{attempt_id:"runtime-b"}};
+  f.context.fetch=async(path,options)=>new Promise(resolve=>requests.push({path,options,resolve}));
+  vm.runInContext(source.slice(source.indexOf("function changeStudyRoute("),source.indexOf("async function loadResearchHistory(")),f.context);
+  const old=f.context.refresh();assert.equal(requests.length,1);f.node("follow-study").checked=false;f.context.changeStudyRoute();
+  assert.equal(f.context.routingPending,true);assert.equal(f.context.connected,false);assert.equal(f.node("send-message").disabled,true);
+  await assert.rejects(f.context.api("/api/call",{operation:"instruct",args:{to:["a"],text:"must not reach old route"}}),/routing is loading/);assert.equal(requests.length,1);
+  const base={...f.context.snapshot};requests[0].resolve({ok:true,text:async()=>JSON.stringify(base)});await old;await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(requests.length,2);assert.equal(requests[1].options.headers["X-Agentmux-Follow-Study"],undefined);assert.equal(f.context.snapshot.study_attempt,"attempt-b");assert.equal(f.context.routingPending,true);
+  requests[1].resolve({ok:true,text:async()=>JSON.stringify({...base,study_attempt:"attempt-a",runtime:{attempt_id:"runtime-a"}})});await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(f.context.snapshot.study_attempt,"attempt-a");assert.equal(f.context.routingPending,false);assert.equal(f.context.connected,true);assert.deepEqual(scopes,[["attempt-b","attempt-a"]]);
+});
+
+test("complete task summary counts page independently of recent task history",async()=>{
+  const f=pollingContext();Object.assign(f.context,{taskSummary:{agents:[],loading:false,error:"",epoch:0,updatedAt:0},routingPending:false,renderSessionLists(){}});
+  vm.runInContext(source.slice(source.indexOf("async function loadTaskSummary("),source.indexOf("// Native delivery controls")),f.context);
+  const calls=[];f.context.call=async(operation,args)=>{calls.push({operation,args});return args.after?{agents:[{agent:"b",total:1200,failed:75,uncertain:3,pending:8,running:2}],has_more:false,cursor:"b"}:{agents:[{agent:"a",total:300,failed:25,uncertain:0,pending:0,running:1}],has_more:true,cursor:"a"};};
+  await f.context.loadTaskSummary();assert.equal(calls.length,2);assert.equal(calls[1].args.after,"a");assert.equal(f.context.taskSummary.agents.reduce((sum,row)=>sum+row.total,0),1500);assert.equal(f.context.snapshot.activity.tasks.length,0,"summary counts do not depend on the recent window");
+});
+
+test("automatic attempt transitions fence late write responses as well as old read responses",async()=>{
+  const f=connectionContext(),requests=[];Object.assign(f.context,{followStudy:true,routingEpoch:0,switchAttemptDraftScope(){}});f.context.snapshot={...f.context.snapshot,study_attempt:"attempt-a",runtime:{attempt_id:"runtime-a"}};
+  f.context.fetch=async(path,options)=>new Promise(resolve=>requests.push({path,options,resolve}));
+  const write=f.context.api("/api/call",{operation:"instruct",args:{to:["a"],text:"old attempt"}}),read=f.context.refresh();
+  requests[1].resolve({ok:true,text:async()=>JSON.stringify({...f.context.snapshot,study_attempt:"attempt-b",runtime:{attempt_id:"runtime-b"}})});await read;
+  assert.equal(f.context.snapshot.study_attempt,"attempt-b");assert.equal(f.context.routingEpoch,1);
+  requests[0].resolve({ok:true,text:async()=>JSON.stringify({ok:true,result:{task:{id:"old-task"}}})});await assert.rejects(write,/previous workspace route/);
 });

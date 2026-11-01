@@ -44,7 +44,7 @@ func isWrite(op string) bool {
 		return true
 	case "capacity.update", "research.publish", "research.control", "control.update", "worker.next", "autonomy.control", "autonomy.ack", "memory.delete", "memory.prune", "memory.index":
 		return true
-	case "board.post", "message.send", "ping.send", "instruct", "task.claim", "task.complete", "task.stopped", "task.cancel", "task.verify", "task.resolve", "memory.put", "agent.add", "agent.label", "agent.spawn", "agent.stop", "team.create", "team.invite", "team.join", "team.leave", "team.remove", "team.dissolve", "team.update", "team.transfer", "team.accept-owner", "team.move", "conversation.begin", "conversation.reset":
+	case "board.post", "message.send", "ping.send", "instruct", "task.claim", "task.complete", "task.stopped", "task.cancel", "task.verify", "task.resolve", "memory.put", "memory.patch", "agent.retire", "agent.add", "agent.label", "agent.spawn", "agent.stop", "team.create", "team.invite", "team.join", "team.leave", "team.remove", "team.dissolve", "team.update", "team.transfer", "team.accept-owner", "team.move", "conversation.begin", "conversation.reset":
 		return true
 	}
 	return false
@@ -150,6 +150,12 @@ func (s *Store) Call(ctx context.Context, token string, r Request) (json.RawMess
 			if err != nil {
 				return nil, internal(err)
 			}
+			if err := s.recordExposures(ctx, tx, a, r.Operation, replay); err != nil {
+				return nil, internal(err)
+			}
+			if err := tx.Commit(); err != nil {
+				return nil, internal(err)
+			}
 			return replay, nil
 		}
 		if !errors.Is(err, sql.ErrNoRows) {
@@ -178,7 +184,7 @@ func (s *Store) Call(ctx context.Context, token string, r Request) (json.RawMess
 				if in.Action != "pause" && in.Action != "stop" {
 					return nil, fault("limit", "session runtime budget exhausted")
 				}
-			case "research.publish", "task.complete", "task.stopped", "task.cancel", "task.verify", "agent.stop", "agent.label", "team.leave", "team.remove", "team.dissolve", "conversation.reset", "memory.delete", "memory.prune", "native.event":
+			case "research.publish", "task.complete", "task.stopped", "task.cancel", "task.verify", "agent.stop", "agent.retire", "agent.label", "team.leave", "team.remove", "team.dissolve", "conversation.reset", "memory.delete", "memory.prune", "native.event":
 			case "native.configure":
 				var in struct {
 					Mode string `json:"mode"`
@@ -211,6 +217,9 @@ func (s *Store) Call(ctx context.Context, token string, r Request) (json.RawMess
 	}
 	data, err := json.Marshal(result)
 	if err != nil {
+		return nil, internal(err)
+	}
+	if err := s.recordExposures(ctx, q, a, r.Operation, data); err != nil {
 		return nil, internal(err)
 	}
 	if tx != nil {
@@ -307,13 +316,15 @@ func (s *Store) dispatch(ctx context.Context, q queryer, a actor, r Request) (an
 		return result, nil
 	case "board.post", "message.send", "ping.send", "instruct":
 		return s.send(ctx, q, a, r)
-	case "message.list":
-		return s.messages(ctx, q, a, r.Args)
+	case "message.list", "board.list":
+		return s.messages(ctx, q, a, r.Args, r.Operation == "board.list")
+	case "task.summary":
+		return s.taskSummary(ctx, q, a, r.Args)
 	case "task.get", "task.list", "task.claim", "task.complete", "task.stopped", "task.cancel", "task.verify", "task.resolve":
 		return s.tasks(ctx, q, a, r)
-	case "memory.get", "memory.list", "memory.put", "memory.head", "memory.search", "memory.delete", "memory.prune", "memory.index":
+	case "memory.get", "memory.list", "memory.put", "memory.patch", "memory.head", "memory.search", "memory.delete", "memory.prune", "memory.index":
 		return s.memory(ctx, q, a, r)
-	case "agent.list", "agent.add", "agent.label", "agent.role", "agent.spawn", "agent.stop":
+	case "agent.list", "agent.retire", "agent.add", "agent.label", "agent.role", "agent.spawn", "agent.stop":
 		return s.agents(ctx, q, a, r)
 	case "team.create", "team.list", "team.invite", "team.join", "team.leave", "team.remove", "team.dissolve", "team.update", "team.transfer", "team.accept-owner", "team.move":
 		return s.teams(ctx, q, a, r)
@@ -438,24 +449,10 @@ func (s *Store) dispatch(ctx context.Context, q queryer, a actor, r Request) (an
 			}
 		}
 		return map[string]any{"session": s.cfg.Session, "agents": len(s.cfg.Agents), "active_agents": active, "runtime_deadline": deadline, "runtime_expired": !deadline.IsZero() && time.Now().After(deadline), "messages": messages, "tasks": len(tasks), "task_states": states, "deliveries": delivery, "config": cfg}, nil
-	case "events":
-		if !a.owner() {
-			return nil, forbidden()
-		}
-		var in struct {
-			Limit int `json:"limit"`
-		}
-		if err := strictJSON(r.Args, &in); err != nil {
-			return nil, invalid(err)
-		}
-		if in.Limit <= 0 || in.Limit > 1000 {
-			in.Limit = 200
-		}
-		events, err := list[Event](ctx, q, "event", "ORDER BY seq DESC LIMIT ?", in.Limit)
-		if err != nil {
-			return nil, internal(err)
-		}
-		return map[string]any{"events": events}, nil
+	case "events", "events.list", "event.list":
+		return s.listEvents(ctx, q, a, r.Args)
+	case "exposure.list":
+		return s.listExposures(ctx, q, a, r.Args)
 	default:
 		return nil, fault("unsupported", "unsupported managed operation")
 	}
@@ -567,35 +564,65 @@ func (s *Store) send(ctx context.Context, q queryer, a actor, r Request) (any, *
 	return map[string]any{"message": m, "task": t}, nil
 }
 
-func (s *Store) messages(ctx context.Context, q queryer, a actor, raw json.RawMessage) (any, *Fault) {
+func (s *Store) messages(ctx context.Context, q queryer, a actor, raw json.RawMessage, boardOnly bool) (any, *Fault) {
 	var in struct {
 		Board string `json:"board"`
 		After string `json:"after"`
 		Limit int    `json:"limit"`
+		Scope string `json:"scope"`
+		Agent string `json:"agent"`
+		From  string `json:"from"`
+		To    string `json:"to"`
+		Query string `json:"query"`
+		Order string `json:"order"`
 	}
 	if err := strictJSON(raw, &in); err != nil {
 		return nil, invalid(err)
 	}
+	if boardOnly && in.Scope == "" {
+		in.Scope = "board"
+	}
+	if in.Scope != "" && in.Scope != "all" && in.Scope != "inbox" && in.Scope != "board" {
+		return nil, fault("invalid", "scope must be all, inbox or board")
+	}
+	if in.Order != "" && in.Order != "asc" && in.Order != "desc" {
+		return nil, fault("invalid", "order must be asc or desc")
+	}
+	if len(in.Query) > 4096 {
+		return nil, fault("invalid", "query exceeds history bounds")
+	}
+	if in.Agent != "" && !a.owner() && in.Agent != a.ID {
+		return nil, forbidden()
+	}
 	if in.Board != "" && !a.owner() && !s.namespace(ctx, q, a.ID, in.Board, false, false) {
 		return nil, forbidden()
+	}
+	if in.Scope == "inbox" && in.Board != "" {
+		return nil, fault("invalid", "inbox cannot select a board")
 	}
 	if in.Limit <= 0 || in.Limit > 200 {
 		in.Limit = 100
 	}
-	var after int64
+	condition := ""
+	values := []any{}
 	if in.After != "" {
 		var m Message
 		if err := get(ctx, q, "message", in.After, &m); err != nil || !s.canSeeMessage(ctx, q, a, m) {
 			return nil, fault("invalid", "invalid visible message cursor")
 		}
+		var after int64
 		if err := q.QueryRowContext(ctx, "SELECT seq FROM records WHERE kind='message' AND id=?", in.After).Scan(&after); err != nil {
 			return nil, internal(err)
 		}
+		cmp := ">"
+		if in.Order == "desc" {
+			cmp = "<"
+		}
+		condition += " AND seq" + cmp + "?"
+		values = append(values, after)
 	}
-	// Cursor sequences are internal. Agents receive only opaque IDs of messages
-	// they can actually read, never a global event offset or activity count.
-	condition := "AND seq>?"
-	values := []any{after}
+	// Every visibility and history filter precedes LIMIT. An unrelated busy
+	// board or recipient cannot hide a matching older row behind a recent page.
 	if !a.owner() {
 		condition += " AND (actor=? OR EXISTS (SELECT 1 FROM json_each(records.data,'$.to') WHERE value=?)"
 		values = append(values, a.ID, a.ID)
@@ -613,8 +640,41 @@ func (s *Store) messages(ctx context.Context, q queryer, a actor, raw json.RawMe
 			values = append(values, s.boardFloor(ctx, q, a.ID, in.Board))
 		}
 	}
-	condition += " ORDER BY seq LIMIT ?"
-	values = append(values, in.Limit)
+	if in.Scope == "board" {
+		condition += " AND scope<>''"
+	}
+	if in.Scope == "inbox" {
+		condition += " AND scope=''"
+		recipient := in.Agent
+		if recipient == "" && !a.owner() {
+			recipient = a.ID
+		}
+		if recipient != "" {
+			condition += " AND EXISTS (SELECT 1 FROM json_each(records.data,'$.to') WHERE value=?)"
+			values = append(values, recipient)
+		}
+	} else if in.Agent != "" {
+		condition += " AND (actor=? OR EXISTS (SELECT 1 FROM json_each(records.data,'$.to') WHERE value=?))"
+		values = append(values, in.Agent, in.Agent)
+	}
+	if in.From != "" {
+		condition += " AND actor=?"
+		values = append(values, in.From)
+	}
+	if in.To != "" {
+		condition += " AND EXISTS (SELECT 1 FROM json_each(records.data,'$.to') WHERE value=?)"
+		values = append(values, in.To)
+	}
+	if in.Query != "" {
+		condition += " AND (instr(lower(id),lower(?))>0 OR instr(lower(actor),lower(?))>0 OR instr(lower(scope),lower(?))>0 OR instr(lower(coalesce(json_extract(data,'$.text'),'')),lower(?))>0 OR EXISTS (SELECT 1 FROM json_each(records.data,'$.to') WHERE instr(lower(value),lower(?))>0))"
+		values = append(values, in.Query, in.Query, in.Query, in.Query, in.Query)
+	}
+	order := "ASC"
+	if in.Order == "desc" {
+		order = "DESC"
+	}
+	condition += " ORDER BY seq " + order + " LIMIT ?"
+	values = append(values, in.Limit+1)
 	all, err := list[Message](ctx, q, "message", condition, values...)
 	if err != nil {
 		return nil, internal(err)
@@ -624,18 +684,18 @@ func (s *Store) messages(ctx context.Context, q queryer, a actor, raw json.RawMe
 	size := 0
 	for _, m := range all {
 		raw, _ := json.Marshal(m)
-		if size+len(raw) > maxWireBytes/2 {
+		if len(visible) >= in.Limit || size+len(raw) > maxWireBytes/2 {
 			break
 		}
 		size += len(raw)
 		visible = append(visible, m)
 		cursor = m.ID
 	}
-	control, controlErr := controls(ctx, q)
-	if controlErr != nil {
-		return nil, internal(controlErr)
+	control, err := controls(ctx, q)
+	if err != nil {
+		return nil, internal(err)
 	}
-	return map[string]any{"messages": visible, "cursor": cursor, "boundaries_version": control.Version}, nil
+	return map[string]any{"messages": visible, "cursor": cursor, "has_more": len(all) > len(visible), "boundaries_version": control.Version}, nil
 }
 
 func (s *Store) tasks(ctx context.Context, q queryer, a actor, r Request) (any, *Fault) {
@@ -792,7 +852,7 @@ func (s *Store) tasks(ctx context.Context, q queryer, a actor, r Request) (any, 
 		if err = s.autonomyClaimed(ctx, q, t); err != nil {
 			return nil, internal(err)
 		}
-		if err = event(ctx, q, a, "task.claimed", t.ID, nil); err != nil {
+		if err = event(ctx, q, a, "task.claimed", t.ID, map[string]any{"from": t.From, "to": t.To}); err != nil {
 			return nil, internal(err)
 		}
 		return map[string]any{"task": t.Task, "lease": t.LeaseToken, "lease_expires": t.Expires, "role": info.Config.Role, "role_version": info.RoleVersion}, nil
@@ -974,7 +1034,7 @@ func (s *Store) tasks(ctx context.Context, q queryer, a actor, r Request) (any, 
 	if err = s.autonomyCompleted(ctx, q, t); err != nil {
 		return nil, internal(err)
 	}
-	if err = event(ctx, q, a, r.Operation, t.ID, map[string]any{"state": t.State, "delivery": t.Delivery, "version": t.Version}); err != nil {
+	if err = event(ctx, q, a, r.Operation, t.ID, map[string]any{"state": t.State, "delivery": t.Delivery, "version": t.Version, "from": t.From, "to": t.To}); err != nil {
 		return nil, internal(err)
 	}
 	return map[string]any{"task": t.Task}, nil

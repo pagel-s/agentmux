@@ -40,6 +40,7 @@ type AgentInfo struct {
 	Parent       string              `json:"parent,omitempty"`
 	Template     string              `json:"template,omitempty"`
 	State        string              `json:"state"`
+	RetiredAt    string              `json:"retired_at,omitempty"`
 	Depth        int                 `json:"depth"`
 	Config       managedconfig.Agent `json:"config"`
 	Capabilities Capabilities        `json:"capabilities"`
@@ -294,8 +295,9 @@ func (s *Store) agents(ctx context.Context, q queryer, a actor, r Request) (any,
 			return nil, forbidden()
 		}
 		var in struct {
-			After string `json:"after"`
-			Limit int    `json:"limit"`
+			After           string `json:"after"`
+			Limit           int    `json:"limit"`
+			IncludeArchived bool   `json:"include_archived"`
 		}
 		if err := strictJSON(r.Args, &in); err != nil {
 			return nil, invalid(err)
@@ -329,6 +331,9 @@ func (s *Store) agents(ctx context.Context, q queryer, a actor, r Request) (any,
 			if err != nil {
 				return nil, internal(err)
 			}
+			if info.State == "retired" && !in.IncludeArchived {
+				continue
+			}
 			for key := range info.Config.Env {
 				info.Config.Env[key] = "[redacted]"
 			}
@@ -347,6 +352,8 @@ func (s *Store) agents(ctx context.Context, q queryer, a actor, r Request) (any,
 			}
 		}
 		return map[string]any{"agents": out, "cursor": cursor}, nil
+	case "agent.retire":
+		return s.retireAgent(ctx, q, a, r.Args)
 	case "agent.add":
 		return s.addWorkspaceAgent(ctx, q, a, r.Args)
 	case "agent.label":
@@ -552,7 +559,8 @@ func copyAgent(a managedconfig.Agent) managedconfig.Agent {
 
 func (s *Store) stopAgent(ctx context.Context, q queryer, a actor, raw json.RawMessage) (any, *Fault) {
 	var in struct {
-		ID string `json:"id"`
+		ID             string   `json:"id"`
+		ExpectedAgents []string `json:"expected_agents"`
 	}
 	if err := strictJSON(raw, &in); err != nil {
 		return nil, invalid(err)
@@ -579,6 +587,9 @@ func (s *Store) stopAgent(ctx context.Context, q queryer, a actor, raw json.RawM
 			return nil, forbidden()
 		}
 	}
+	if info.State == "retired" {
+		return nil, fault("conflict", "retired agent cannot be changed")
+	}
 	if info.State == "revoked" {
 		return map[string]any{"id": info.ID, "state": "revoked", "process_stopped": false}, nil
 	}
@@ -594,6 +605,18 @@ func (s *Store) stopAgent(ctx context.Context, q queryer, a actor, raw json.RawM
 				ids[child.ID] = true
 				revoke = append(revoke, child)
 			}
+		}
+	}
+	if in.ExpectedAgents != nil {
+		if len(in.ExpectedAgents) != len(ids) {
+			return nil, fault("conflict", "agent subtree changed; refresh before revoking")
+		}
+		seen := map[string]bool{}
+		for _, id := range in.ExpectedAgents {
+			if !ids[id] || seen[id] {
+				return nil, fault("conflict", "agent subtree changed; refresh before revoking")
+			}
+			seen[id] = true
 		}
 	}
 	for _, target := range revoke {

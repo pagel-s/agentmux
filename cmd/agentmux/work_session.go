@@ -177,13 +177,20 @@ func parseWorkOptionsWithStorage(args []string, allowNamedState bool) (workOptio
 }
 
 func workCall(ctx context.Context, client *managed.Client, op string, args any) (json.RawMessage, error) {
+	return workCallRequest(ctx, client, op, args, "")
+}
+
+func workCallRequest(ctx context.Context, client *managed.Client, op string, args any, requestID string) (json.RawMessage, error) {
+	if requestID == "" {
+		requestID = requestIDForWork()
+	}
 	data, err := json.Marshal(args)
 	if err != nil {
 		return nil, err
 	}
 	query, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
-	raw, problem := client.Call(query, managed.Request{Operation: op, RequestID: requestIDForWork(), Args: data})
+	raw, problem := client.Call(query, managed.Request{Operation: op, RequestID: requestID, Args: data})
 	if problem != nil {
 		return nil, problem
 	}
@@ -228,6 +235,8 @@ func runWorkSessionInner(operation string, args []string, in io.Reader, out, dia
   agentmux relaunch ID [--resume ID|last|picker] [--native-launcher ABSOLUTE_PATH]
   agentmux delivery ID [manual|review|auto] [--approve CANDIDATE]
   agentmux remove NAME
+  agentmux retire NAME
+  agentmux disconnect NAME NAME [...] [--group ID]
   agentmux sessions
   agentmux connect OBSERVED_ID --name NAME
   agentmux collaborate NAME NAME [...] [--legacy-policy preserve|group]
@@ -236,7 +245,8 @@ func runWorkSessionInner(operation string, args []string, in io.Reader, out, dia
   agentmux down [--session work | --state DIR]
 
 Select one workspace with --session NAME or --state DIR on each command;
-the default is work. start may combine a name with custom state storage.
+inside an owned attachment it is inferred from that exact context; outside,
+the default is work. start always defaults to work and may combine name/storage.
 start creates a coding preset with real interactive Claude and Codex terminals.
 By default both use normal local native configuration in the current project.
 Collaboration, delegation and autonomous wakeups start disabled. Use collaborate
@@ -252,6 +262,10 @@ help, Ctrl-T message intent, V role editing, B admission budgets, W workspaces,
 and U single-session relaunch. team --help describes participant consent.
 Legacy raw pane input remains: agentmux send SESSION PANE -- COMMAND.`)
 		return exitSuccess
+	}
+	if err := validateWorkFlags(operation, args); err != nil {
+		fmt.Fprintln(diagnostics, "error:", err)
+		return exitValidation
 	}
 	o, err := parseWorkOptionsWithStorage(args, operation == "start")
 	if err == nil && o.legacyPolicy != "" && operation != "collaborate" {
@@ -401,7 +415,7 @@ Legacy raw pane input remains: agentmux send SESSION PANE -- COMMAND.`)
 	}
 	client := managed.NewClient(credential)
 	fmt.Fprintf(out, "Workspace: %s\n", activityText(o.state, 300))
-	if operation == "remove" || operation == "collaborate" || operation == "isolate" || operation == "label" {
+	if operation == "remove" || operation == "retire" || operation == "collaborate" || operation == "disconnect" || operation == "isolate" || operation == "label" {
 		if err := workAgentOperation(operation, o, client, out); err != nil {
 			return fail(err)
 		}

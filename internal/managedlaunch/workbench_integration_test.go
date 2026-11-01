@@ -52,7 +52,7 @@ func TestWorkbenchServiceNavigationAndPopupBindingsUseInvokingClient(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	state, err := os.MkdirTemp("", "amx-#{pane_id}-workbench-")
+	state, err := os.MkdirTemp("", "amx-views-workbench-#{pane_id}-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +79,12 @@ func TestWorkbenchServiceNavigationAndPopupBindingsUseInvokingClient(t *testing.
 	}
 	fixtureEnv := []string{"PATH=" + fixtureBin + ":/usr/bin:/bin", "HOME=" + state, "SHELL=/bin/sh", "TERM=xterm-256color", "LC_ALL=C"}
 	l.run = func(ctx context.Context, args ...string) (string, error) {
-		command := exec.CommandContext(ctx, realTMux, append([]string{"-u"}, args...)...)
+		commandArgs := append([]string{"-u"}, args...)
+		if os.Getenv("AGENTMUX_TMUX_DEBUG") == "1" {
+			commandArgs = append([]string{"-vv"}, commandArgs...)
+		}
+		command := exec.CommandContext(ctx, realTMux, commandArgs...)
+		command.Dir = state
 		command.Env = fixtureEnv
 		output, err := command.CombinedOutput()
 		if err != nil {
@@ -102,7 +107,11 @@ func TestWorkbenchServiceNavigationAndPopupBindingsUseInvokingClient(t *testing.
 				<-terminal.done
 			}
 		}
-		_ = os.RemoveAll(state)
+		if t.Failed() && os.Getenv("AGENTMUX_TMUX_DEBUG") == "1" {
+			t.Logf("Private workbench tmux diagnostics retained: %s", state)
+		} else {
+			_ = os.RemoveAll(state)
+		}
 	})
 	tmux := func(args ...string) string {
 		t.Helper()
@@ -160,6 +169,12 @@ func TestWorkbenchServiceNavigationAndPopupBindingsUseInvokingClient(t *testing.
 			t.Fatal(err)
 		}
 	}
+	// The PTY relay writes shortcut bytes at machine speed, unlike a person.
+	// tmux 3.2a's assume-paste-time heuristic can classify these bursts as a
+	// paste and forward Ctrl-B/n/p to a pane without executing any binding.
+	// Test actual binding dispatch deterministically; keep production's paste
+	// protection unchanged. Every server and option here belongs to this fixture.
+	tmux("set-option", "-g", "assume-paste-time", "0")
 	// A session-targeted window option only reaches its current window.
 	// Services and linked workers must also inherit the dedicated defaults.
 	for _, pane := range []string{core.BrokerPane, core.SupervisorPane, worker} {
@@ -177,6 +192,7 @@ func TestWorkbenchServiceNavigationAndPopupBindingsUseInvokingClient(t *testing.
 	tmux("select-window", "-t", core.DashboardPane)
 	tmux("select-window", "-t", peer.Session+":1")
 	outputs := map[string]*workbenchTerminalOutput{}
+
 	attach := func(session string) io.WriteCloser {
 		t.Helper()
 		command := exec.CommandContext(ctx, python, "-c", clientViewsPTYDriver, realTMux, "-u", "-S", SocketPath(state), "attach-session", "-t", session)
@@ -198,6 +214,22 @@ func TestWorkbenchServiceNavigationAndPopupBindingsUseInvokingClient(t *testing.
 		return input
 	}
 	first, second := attach(core.Session), attach(peer.Session)
+	// Register diagnostics before the first key: early navigation failures must
+	// retain the selected pane, key table and PTY evidence as well as service logs.
+	t.Cleanup(func() {
+		if !t.Failed() {
+			return
+		}
+		for session, output := range outputs {
+			t.Logf("Workbench %s PTY: %q", session, output.snapshot())
+		}
+		for _, args := range [][]string{{"list-clients", "-F", "#{client_name} session=#{client_session} key-table=#{client_key_table} prefix=#{client_prefix}"}, {"list-panes", "-a", "-F", "#{session_name}:#{window_index} #{pane_id} active=#{window_active} role=#{@agentmux_role}"}, {"show-messages"}} {
+			out, err := l.tmux(context.Background(), args...)
+			t.Logf("Workbench %v: %s (%v)", args, out, err)
+		}
+		data, err := os.ReadFile(captureRecord)
+		t.Logf("Service capture: %q (%v)", data, err)
+	})
 	wait("both terminal clients attach", func() bool { return len(strings.Fields(tmux("list-clients", "-F", "#{client_session}"))) == 2 })
 	keys := func(input io.WriteCloser, value string) {
 		t.Helper()
@@ -209,6 +241,22 @@ func TestWorkbenchServiceNavigationAndPopupBindingsUseInvokingClient(t *testing.
 	wait("next-window skips two services", func() bool { return current(core.Session) == worker })
 	keys(first, "\x02p")
 	wait("previous-window skips two services", func() bool { return current(core.Session) == core.DashboardPane })
+	// One PTY write deliberately coalesces both shortcuts. Record all six native
+	// window transitions so a dropped shortcut (or both becoming literal text)
+	// cannot pass merely because the final pane happened to be the dashboard.
+	tmux("set-option", "-t", core.Session, "@agentmux_test_navigation", "")
+	trace := ShellCommand([]string{"set-option", "-aF", "-t", core.Session, "@agentmux_test_navigation", "#{pane_id},"})
+	tmux("set-hook", "-t", core.Session, "after-select-window[99]", trace)
+	keys(first, "\x02n\x02p")
+	expectedRoute := strings.Join([]string{core.SupervisorPane, core.BrokerPane, worker, core.BrokerPane, core.SupervisorPane, core.DashboardPane}, ",") + ","
+	wait("coalesced next/previous executes every service-skipping transition", func() bool {
+		return tmux("show-options", "-v", "-t", core.Session, "@agentmux_test_navigation") == expectedRoute
+	})
+	tmux("set-hook", "-u", "-t", core.Session, "after-select-window[99]")
+	if current(core.Session) != core.DashboardPane || current(peer.Session) != worker {
+		t.Fatal("coalesced shortcuts changed the peer or failed to return to this dashboard")
+	}
+
 	tmux("select-window", "-t", core.Session+":3")
 	keys(first, "\x02g")
 	wait("prefix g returns to invoking dashboard", func() bool { return current(core.Session) == core.DashboardPane })
@@ -228,13 +276,7 @@ func TestWorkbenchServiceNavigationAndPopupBindingsUseInvokingClient(t *testing.
 		return ""
 	}
 	keys(first, "\x02D")
-	t.Cleanup(func() {
-		if t.Failed() {
-			t.Logf("Workbench PTY: %q", outputs[core.Session].snapshot())
-			data, err := os.ReadFile(captureRecord)
-			t.Logf("Service capture: %q (%v)", data, err)
-		}
-	})
+
 	wait("read-only service menu appears", func() bool { return outputs[core.Session].contains("Runtime services") })
 	keys(first, "b")
 	wait("broker log snapshot appears", func() bool { return outputs[core.Session].contains("SERVICE_broker") })

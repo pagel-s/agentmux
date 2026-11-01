@@ -81,6 +81,9 @@ func (m console) sessionMatches() []sessionMatch {
 	}
 	out := []sessionMatch{}
 	for i, a := range m.agents {
+		if m.attentionOnly && m.attentionReason(a.ID) == "" {
+			continue
+		}
 		title := sessionTitle(a)
 		detail := fmt.Sprintf("%s · %s · %s · added %s\n%s", a.ID, a.Config.Harness, sessionOrigin(a), sessionAdded(a.CreatedAt), a.Config.Workdir)
 		if matches(title + " " + detail + " " + a.Config.Role) {
@@ -88,6 +91,9 @@ func (m console) sessionMatches() []sessionMatch {
 		}
 	}
 	for i, v := range m.observedSessions() {
+		if m.attentionOnly {
+			continue
+		}
 		title := observedTitle(v)
 		detail := fmt.Sprintf("%s · %s · %s · started %s\n%s · %s", v.ID, v.Harness, v.TTY, sessionAdded(v.StartedAt), v.Project, v.TmuxSession)
 		if matches(title + " " + detail) {

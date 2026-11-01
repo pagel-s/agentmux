@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"os"
 	"strings"
 	"time"
@@ -208,12 +207,11 @@ func Import(ctx context.Context, c Caller, a Archive, namespace string, replace 
 	// Inspect every destination before the first write. Import is explicitly
 	// per-entry CAS, not an all-or-nothing cross-run transaction.
 	type planned struct {
-		entry        managed.Memory
-		version, ttl int
+		entry   managed.Memory
+		version int
 	}
 	plan := []planned{}
 	for _, m := range a.Entries {
-		ttl := 0
 		if m.ExpiresAt != "" {
 			expiry, err := time.Parse(time.RFC3339Nano, m.ExpiresAt)
 			if err != nil {
@@ -224,7 +222,6 @@ func Import(ctx context.Context, c Caller, a Archive, namespace string, replace 
 				result.Expired++
 				continue
 			}
-			ttl = int(math.Ceil(remaining.Seconds()))
 		}
 		raw, err := Call(ctx, c, "memory.head", map[string]any{"namespace": namespace, "key": m.Key}, "")
 		if err != nil {
@@ -261,14 +258,31 @@ func Import(ctx context.Context, c Caller, a Archive, namespace string, replace 
 		if head.Version > 0 && !replace {
 			return result, fmt.Errorf("destination key %q already has a version; explicit replace is required", m.Key)
 		}
-		plan = append(plan, planned{m, head.Version, ttl})
+		plan = append(plan, planned{m, head.Version})
 	}
 	for _, p := range plan {
+		// Preflight can take arbitrarily long. Keep the source's exact absolute
+		// deadline and recheck just before writing, never extend it via rounding.
+		if p.entry.ExpiresAt != "" {
+			expiry, _ := time.Parse(time.RFC3339Nano, p.entry.ExpiresAt)
+			if !time.Now().Before(expiry) {
+				result.Expired++
+				continue
+			}
+		}
 		sources := []managed.MemorySource{{Kind: "import", ID: marker, SHA256: digestText(p.entry.Value), SourceSession: a.SourceSession, SourceAgent: a.SourceAgent, SourceNamespace: a.Namespace, SourceAuthor: p.entry.Author, SourceKey: p.entry.Key, SourceVersion: p.entry.Version, ArchiveSHA256: a.SHA256}}
-		args := map[string]any{"namespace": namespace, "key": p.entry.Key, "value": p.entry.Value, "version": p.version, "ttl_seconds": p.ttl, "tags": p.entry.Tags, "sources": sources}
+		args := map[string]any{"namespace": namespace, "key": p.entry.Key, "value": p.entry.Value, "version": p.version, "expires_at": p.entry.ExpiresAt, "tags": p.entry.Tags, "sources": sources}
 		id := "memory_import_" + digest([]string{a.SHA256, namespace, p.entry.Key, fmt.Sprint(p.version)})
-		if _, err := Call(ctx, c, "memory.put", args, id); err != nil {
+		encoded, err := json.Marshal(args)
+		if err != nil {
 			return result, err
+		}
+		if _, p := c.Call(ctx, managed.Request{Operation: "memory.put", RequestID: id, Args: encoded}); p != nil {
+			if p.Code == "expired" {
+				result.Expired++
+				continue
+			}
+			return result, fmt.Errorf("memory operation memory.put failed (%s)", p.Code)
 		}
 		result.Imported++
 	}

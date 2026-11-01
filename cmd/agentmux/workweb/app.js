@@ -25,6 +25,18 @@ let snapshot = null,
   teamsSignature = "",
   feedSignature = "",
   lifecycleSignature = "";
+let newSessionDirty = false;
+let followStudy = false, studyView = null, studyLoading = false;
+let routingEpoch=0, routingPending=false, snapshotRoute=null;
+let taskSummary={agents:[],loading:false,error:"",epoch:0,updatedAt:0};
+const attemptDrafts = new Map();
+let exposureHistory={exposures:[],cursor:"",hasMore:false,loading:false,epoch:0,reader:"",kind:"",route:"",namespace:"",key:"",version:0,error:"",retainedLimit:10000};
+let researchHistory = {records:[],cursor:"",hasMore:false,loading:false,epoch:0,query:"",actor:"",type:"",error:""};
+let ownerActionReview = null, actionMenuOrigin = null, includeArchived = false, archivedAgents = [];
+let messageHistory = {messages:null,cursor:"",hasMore:false,query:"",board:"",loading:false,epoch:0,error:"",scope:"all",agent:""};
+let eventHistory = {events:null,cursor:"",hasMore:false,query:"",agent:"",type:"",loading:false,epoch:0,error:""};
+let taskAttention = "";
+const submissionRecords = new Map();
 let teamReview = null;
 let researchReview = null;
 let researchSavedOffline = false;
@@ -43,7 +55,7 @@ let sessionQuery = "",
 let pendingDraftKind = "";
 let taskHistory = { tasks: null, cursor: "", hasMore: false, query: "", to: "", state: "", loading: false, epoch: 0, updatedAt: 0, error: "" };
 let workspaceListings = [], workspaceLoading = false, workspaceLoadedAt = 0;
-let relaunchReview = null, capacityView = null, capacityRequest = 0;
+let relaunchReview = null, capacityView = null, capacityRequest = 0, capacityLoading = "";
 let resourceSnapshot = null, resourceReview = null;
 const resourceDrafts = new Map();
 const nativeDrafts = new Map();
@@ -255,6 +267,7 @@ function matchesSession(item) {
     item.config?.workdir,
     item.config?.harness,
     item.source,
+    ...(item.workspace_origins || []),
     item.parent,
     item.template,
     item.tmux_session,
@@ -289,7 +302,7 @@ function emptySearch(list, kind) {
 }
 function renderSessionLists(announceSearch = false) {
   if (!snapshot) return;
-  const all = snapshot.agents || [],
+  const all = includeArchived ? [...new Map([...(snapshot.agents||[]),...archivedAgents].map(agent=>[agent.id,agent])).values()] : snapshot.agents || [],
     list = $("agents");
   if (researchSavedOffline && !all.length) {
     if (announceSearch)
@@ -329,6 +342,7 @@ function renderSessionLists(announceSearch = false) {
   const signature = JSON.stringify([
     selected,
     sessionQuery,
+    taskSummary.agents,
     (snapshot.observed || []).map((s) => [
       s.id,
       s.started_at,
@@ -370,6 +384,7 @@ function renderSessionLists(announceSearch = false) {
         (s) => s.id === item.external_ref,
       );
     row.type = "button";
+    row.tabIndex=-1;row.disabled=item.state==="retired";
     row.dataset.agent = item.id;
     row.dataset.focusKey = item.id;
     row.setAttribute("aria-pressed", String(item.id === selected));
@@ -402,6 +417,8 @@ function renderSessionLists(announceSearch = false) {
     const project = projectName(config.workdir);
     if (!project || (project !== item.id && project !== title && !title.startsWith(project + " · ")))
       copy.append(el("small", "agent-project", project || sessionOrigin(item)));
+    const counts=taskSummary.agents.find(summary=>summary.agent===item.id);
+    if(counts)copy.append(el("small","agent-task-counts",counts.total+" tasks · "+counts.failed+" failed · "+counts.uncertain+" uncertain"));
     row.append(copy);
     const status = sessionStatus(
         item,
@@ -444,7 +461,12 @@ function renderSessionLists(announceSearch = false) {
     open.setAttribute("aria-label", "Select " + title + " (" + item.id + ")");
     open.dataset.focusKey = item.id;
     open.onclick = () => selectAgent(item.id);
+    if(item.state==="retired") {open.disabled=true;details.append(el("small","",sessionTime(item.retired_at,"Retired")));}
     entry.append(details, open);
+    if(item.state==="revoked") {
+      const retire=el("button","quiet","Retire from active registry");retire.type="button";retire.dataset.ownerWrite="true";retire.dataset.focusKey="retire:"+item.id;retire.disabled=!selectionReady();
+      retire.onclick=()=>reviewOwnerAction({kind:"retire",target:selected,ids:[item.id],title:"Retire "+sessionReference(item.id)+"?",description:"Hide this revoked session from the active registry. Task, message, memory and event records remain available by stable ID. Retirement is rejected until its worker has stopped.",operation:"agent.retire",args:{agent:item.id},origin:"include-archived"});entry.append(retire);
+    }
     $("registered-sessions").append(entry);
   }
   restoreViewState(list, rosterState);
@@ -579,7 +601,10 @@ function savedResearchSnapshot(research) {
     research: { ...research, runner_heartbeat_at: "" },
   };
 }
-async function api(path, body) {
+function snapshotIdentity(value=snapshot) {return value?.study_attempt || value?.runtime?.attempt_id || "";}
+async function api(path, body, attempt, route) {
+  const requestEpoch=routingEpoch, requestFollow=route?.follow ?? followStudy;
+  if(body!==undefined && routingPending){const error=new Error("Workspace routing is loading. Wait for its matching snapshot before sending or changing state.");error.code="conflict";throw error;}
   const controller = new AbortController(),
     timeout = setTimeout(
       () => controller.abort(),
@@ -590,6 +615,8 @@ async function api(path, body) {
     cache: "no-store",
     signal: controller.signal,
   };
+  if(requestFollow)options.headers["X-Agentmux-Follow-Study"]="1";
+  if(body!==undefined)options.headers["X-Agentmux-Attempt"]=attempt ?? snapshotIdentity();
   if (body !== undefined) {
     options.method = "POST";
     options.headers["Content-Type"] = "application/json";
@@ -611,6 +638,7 @@ async function api(path, body) {
         error.code = "forbidden";
       throw error;
     }
+    if(requestEpoch!==routingEpoch){const error=new Error("Discarded a response from the previous workspace route.");error.code="stale_routing";throw error;}
     if (!response.ok || value.ok === false) {
       const error = new Error(value.error || "Operation failed");
       error.code = value.code;
@@ -630,10 +658,11 @@ async function api(path, body) {
     clearTimeout(timeout);
   }
 }
-const call = async (operation, args = {}) =>
-  (await api("/api/call", { operation, args })).result;
+const call = async (operation, args = {}, requestID = "", attempt, route) =>
+  (await api("/api/call", { operation, args, ...(requestID ? {request_id:requestID} : {}) },attempt,route)).result;
 const selectionReady = () =>
   !!snapshot &&
+  !routingPending &&
   connected &&
   snapshot.selected === selected &&
   snapshot.boundaries.agent === selected &&
@@ -652,6 +681,7 @@ function selectionControls() {
     "copy-attach",
     "close-agent",
     "connect-pair",
+    "disconnect-pair",
     "isolate-agent",
     "graph-edit",
     "memory-namespace",
@@ -666,6 +696,7 @@ function selectionControls() {
         "pause-agent",
         "focus-terminal",
         "connect-pair",
+        "disconnect-pair",
         "isolate-agent",
         "graph-edit",
       ].includes(id) &&
@@ -676,7 +707,7 @@ function selectionControls() {
       (id === "focus-terminal" &&
         (!!agent?.external || nativeHeadless(agent))) ||
       (id === "copy-attach" && nativeHeadless(agent)) ||
-      (id === "connect-pair" &&
+      (["connect-pair","disconnect-pair"].includes(id) &&
         (!editable(agent) || !editable(recipient) || peer === selected)) ||
       (id === "isolate-agent" && !editable(agent)) ||
       (id === "close-agent" && agent?.state !== "active") ||
@@ -734,6 +765,7 @@ function selectionControls() {
       : "Last snapshot shown. Reconnect before sending or changing permissions; drafts stay here.";
   }
   updateTitleConflict();
+  renderResourceAvailability();
 }
 function selectAgent(id) {
   if (selected === id) return;
@@ -747,6 +779,8 @@ function selectAgent(id) {
   closeTitleEditor(true);
   if (relaunchReview && relaunchReview.target !== id) { relaunchReview = null; $("relaunch-review").hidden = true; }
   selected = id;
+  resourceReview=null; $("resource-review").hidden=true;
+  renderResourceAvailability();
   clearReply();
   boundarySignature = "";
   const draft = messageDrafts.get(id);
@@ -813,12 +847,13 @@ async function action(fn, success) {
 async function refresh() {
   if (loading) return;
   loading = true;
-  const requested = selected;
+  const requested = selected, requestEpoch=routingEpoch, requestFollow=followStudy;
+  let responseEpoch=requestEpoch;
   try {
     const next = await api(
       "/api/snapshot?agent=" + encodeURIComponent(requested),
     );
-    if (requested !== selected) return;
+    if (requested !== selected || requestEpoch!==routingEpoch) return;
     const initial = !snapshot;
     if (initial)
       notice(
@@ -830,7 +865,9 @@ async function refresh() {
       );
     else if (!connected)
       notice("Reconnected. Current state loaded; drafts are preserved.");
+    if(snapshot && snapshotIdentity(snapshot)!==snapshotIdentity(next)){routingEpoch++;responseEpoch=routingEpoch;switchAttemptDraftScope(snapshotIdentity(snapshot),snapshotIdentity(next),next.selected);}
     snapshot = next;
+    snapshotRoute={follow:requestFollow,epoch:responseEpoch};routingPending=false;
     researchSavedOffline = false;
     connected = true;
     selected = next.selected;
@@ -838,6 +875,12 @@ async function refresh() {
     $("connection").textContent = "Connected";
     $("connection").classList.remove("offline");
     render();
+    if (next.research) loadStudyStatus();
+    if(Date.now()-taskSummary.updatedAt>10000)loadTaskSummary();
+    renderSubmissionRecords();
+    if (tab === "activity") loadMessageHistory("refresh");
+    if (tab === "teams" && Date.now()-(eventHistory.updatedAt||0)>10000)loadEventHistory("refresh");
+    if (tab === "research" && Date.now()-(researchHistory.updatedAt||0)>10000)loadResearchHistory("refresh");
     if (tab === "tasks" && Date.now() - taskHistory.updatedAt > 10000) loadTaskHistory("refresh");
     if (tab === "sessions" && Date.now() - workspaceLoadedAt > 10000) loadWorkspaces();
     if (tab === "agent" && capacityView?.agent !== selected) loadCapacity();
@@ -849,6 +892,8 @@ async function refresh() {
       activateTab(next.research ? "research" : "tasks");
     $("updated").textContent = "Updated " + new Date().toLocaleTimeString();
   } catch (error) {
+    if(responseEpoch!==routingEpoch)return;
+    if(followStudy)loadStudyStatus();
     connected = false;
     boundarySignature = taskSignature = observedSignature = teamsSignature = "";
     $("connection").textContent = "Offline";
@@ -920,7 +965,7 @@ async function refresh() {
     }
   } finally {
     loading = false;
-    if (requested !== selected) queueMicrotask(refresh);
+    if (requested !== selected || responseEpoch!==routingEpoch) queueMicrotask(refresh);
   }
 }
 function render() {
@@ -944,6 +989,8 @@ function render() {
   renderLifecycle();
   renderResearch();
   renderGlobalHeading();
+  renderOwnerActionReview();
+  renderAttentionQueue();
   if (!a) {
     if (researchSavedOffline && snapshot.research) renderMetadataOnly();
     selectionControls();
@@ -997,6 +1044,7 @@ function render() {
   if (!$("new-project").value) $("new-project").value = a.config.workdir || "";
   $("bridge-panel").classList.toggle("hidden", !snapshot.bridge_setup);
   $("bridge-setup").textContent = snapshot.bridge_setup || "";
+  $("bridge-origin").textContent=observed?.workspace_origins?.length?"Observed workspace origin: "+observed.workspace_origins.join(", ")+". This is provenance only; it grants no collaboration access here.":"Workspace origin unknown. Verify the original native terminal before pasting setup.";
   $("copy-attach").textContent =
     a.external && !snapshot.attach_command ? "Copy setup" : "Attach command ↗";
   $("pause-agent").disabled = !a.config.autonomy?.enabled;
@@ -1093,7 +1141,7 @@ function render() {
       el(
         "p",
         "empty",
-        "No shared memory enabled for this session. Connect a collaboration group or grant a namespace in Graph.",
+        "No shared memory enabled for this session. Connect a collaboration group or grant a namespace in Connections.",
       ),
     );
   if (tab === "memory" && memoryNamespace !== ns.value) loadMemory();
@@ -1101,13 +1149,17 @@ function render() {
 }
 function renderFeed() {
   const feed = $("feed"),
-    messages = (snapshot.activity.messages || []).filter((m) =>
+    messages = (messageHistory.messages || snapshot.activity.messages || []).filter((m) =>
       boardFilter === "team"
         ? !!m.board
         : boardFilter === "agent"
           ? !m.board && (m.from === selected || (m.to || []).includes(selected))
           : true,
     );
+  const boardSelect=$("message-board"),boardValue=boardSelect.value,boardOptions=[["","All shared boards"],...(snapshot.boundaries.boards||[]).filter(scope=>scope.read).map(scope=>[scope.name,scopeLabel(scope.name)])];
+  boardSelect.replaceChildren(...boardOptions.map(([value,label])=>{const option=el("option","",label);option.value=value;return option;}));boardSelect.value=boardValue;
+  $("message-history-status").textContent=messageHistory.loading?"Loading message history…":messageHistory.error?"History could not refresh: "+messageHistory.error+". Previous results retained.":messageHistory.messages===null?"Recent snapshot shown. Open Board to load searchable history.":messages.length+" matching message(s) loaded · "+(messageHistory.hasMore?"older messages available":"end of history");
+  $("load-more-messages").hidden=!messageHistory.hasMore;$("load-more-messages").disabled=messageHistory.loading||!connected;
   const signature = JSON.stringify([
     boardFilter,
     selected,
@@ -1120,7 +1172,7 @@ function renderFeed() {
   feedSignature = signature;
   const state = captureViewState(feed);
   feed.replaceChildren();
-  $("feed-count").textContent = messages.length + " RECENT";
+  $("feed-count").textContent = messages.length + (messageHistory.messages===null?" RECENT":" LOADED");
   if (!messages.length) {
     feed.append(
       el(
@@ -1165,7 +1217,8 @@ function renderFeed() {
   restoreViewState(feed, state);
 }
 function renderTasks() {
-  const tasks = taskHistory.tasks || snapshot.activity.tasks || [],
+  const loadedTasks = taskHistory.tasks || snapshot.activity.tasks || [],
+    tasks = taskAttention ? loadedTasks.filter(task=>taskAttentionKind(task)===taskAttention) : loadedTasks,
     list = $("tasks");
   $("task-count").textContent = tasks.length + (taskHistory.hasMore ? "+" : "");
   $("task-history-status").textContent = taskHistory.loading
@@ -1184,7 +1237,7 @@ function renderTasks() {
     recipients.value = priorRecipient || taskHistory.to;
   }
   const nextTasks = JSON.stringify([
-    tasks,
+    tasks, taskAttention, snapshot.native_statuses,
     (snapshot.agents || []).map((a) => [a.id, a.title]),
   ]);
   if (nextTasks === taskSignature) return;
@@ -1215,7 +1268,8 @@ function renderTasks() {
       el("span", "task-state", t.state + " / " + t.delivery),
       el("code", "", t.id),
     );
-    item.append(title, el("p", "", t.text));
+    item.append(title,el("p","task-timestamps",sessionTime(t.created_at,"Created")+" · "+ageText(t.created_at)+" · "+sessionTime(t.updated_at,"Updated")), el("p", "", t.text));
+    const attention=taskAttentionKind(t);if(attention)item.append(el("p","action-error",({review:"Review required",blocked:"Delivery blocked",uncertain:"Delivery uncertain",failed:"Failed"})[attention]));
     if (t.native) item.append(el("p", "session-note", "Native delivery: " + t.native.phase + (t.native.reason ? " · " + t.native.reason : "") + (t.native.adapter === "claude" ? ". Completion is a receiver acknowledgment." : "") + " Transport receipt is separate from task verification."));
     appendThreadMetadata(item,t);
     if (t.result) item.append(el("pre", "", t.result));
@@ -1263,6 +1317,13 @@ function renderTasks() {
     reply.dataset.focusKey = "reply:" + t.id;
     reply.onclick = () => setReply(t.id);
     buttons.append(reply);
+    const inspect=el("button","quiet","Inspect receiver delivery");inspect.type="button";inspect.dataset.focusKey="inspect-receiver:"+t.id;inspect.onclick=()=>inspectReceiver(t.to);buttons.append(inspect);
+    if (["uncertain","cancel_uncertain"].includes(t.delivery)) {
+      for(const [resolution,label] of [["fail","Resolve as failed / stopped"],...(t.delivery==="uncertain"?[["retry","Review safe retry"]]:[])]) {
+        const resolve=el("button","quiet",label);resolve.type="button";resolve.dataset.ownerWrite="true";resolve.dataset.focusKey="resolve:"+t.id+":"+resolution;resolve.disabled=!selectionReady();
+        resolve.onclick=()=>reviewOwnerAction({kind:"resolve",target:selected,ids:[t.id,t.to],version:snapshot.boundaries.version,title:resolution==="retry"?"Retry this uncertain task?":"Resolve this uncertain task?",description:"Task "+t.id+" to "+sessionReference(t.to)+" · version "+t.version+". "+(resolution==="retry"?"First stop or fence the old native turn/process and inspect its result. Retrying may repeat external side effects if the previous attempt ran. This explicitly queues the existing task for another attempt; it does not create a new task.":"Record this attempt as failed or stopped after reviewing the native terminal. This cannot retract a turn already submitted or prove that no side effects occurred."),operation:"task.resolve",args:{id:t.id,version:t.version,resolution},origin:"task-attention-filter"});buttons.append(resolve);
+      }
+    }
     if (["proposed", "running"].includes(t.state)) {
       const cancel = el("button", "quiet", "Cancel task");
       cancel.dataset.ownerWrite = "true";
@@ -1393,7 +1454,8 @@ function renderBoundaries() {
     name.append(el("strong", "", label), el("small", "", description));
     const reason = targetBoundary?.sources?.[key] || targetBoundary?.denied_reasons?.[key];
     if (reason) name.append(el("small", "permission-source", reason));
-    if (key === "instruct") name.append(el("small", "native-edge-status", nativeDeliveryHint(recipient)));
+    name.append(el("small", "native-edge-status", receiverDeliveryExplanation(recipient,key)));
+    const inspect=el("button","quiet","Inspect receiver delivery");inspect.type="button";inspect.dataset.focusKey="receiver:"+recipient+":"+key;inspect.onclick=()=>inspectReceiver(recipient);name.append(inspect);
     const enabled = actions.includes(key);
     const control = toggle(
       enabled,
@@ -1514,7 +1576,7 @@ function renderBoundaries() {
 }
 function replyRecipient(id) {
   const task = [...(taskHistory.tasks || []), ...(snapshot?.activity.tasks || [])].find((item) => item.id === id),
-    message = (snapshot?.activity.messages || []).find(
+    message = [...(messageHistory.messages || []),...(snapshot?.activity.messages || [])].find(
       (item) => item.id === id,
     ),
     target = message?.board ? "" : task
@@ -1531,7 +1593,7 @@ function replyRecipient(id) {
     : "";
 }
 function setReply(id) {
-  const message = (snapshot?.activity.messages || []).find(item => item.id === id);
+  const message = [...(messageHistory.messages || []),...(snapshot?.activity.messages || [])].find(item => item.id === id);
   if (message?.board) {
     const from = snapshot.agents.find(agent => agent.id === message.from && agent.state === "active");
     if (from) selectAgent(from.id);
@@ -1641,6 +1703,8 @@ function renderMemoryMetadata() {
     details.dataset.disclosureKey=JSON.stringify([namespace,key,entry.version,"sources"]);summary.dataset.focusKey=details.dataset.disclosureKey;
     details.append(summary,el("pre","",JSON.stringify(sources,null,2)));panel.append(details);
   } else panel.append(el("p","session-note","No source claims recorded for this saved version."));
+  const received=el("button","quiet","Who received this version?");received.type="button";received.dataset.focusKey="memory-exposure:"+namespace+":"+key+":"+entry.version;
+  received.onclick=()=>{Object.assign(exposureHistory,{reader:"",kind:"memory",route:"",namespace,key,version:entry.version});$("exposure-reader").value="";$("exposure-kind").value="memory";$("exposure-route").value="";$("exposure-ledger").open=true;loadExposures("reset");$("exposure-list").focus();};panel.append(received);
   restoreViewState(panel,view);
 }
 function memoryEdit(entry, namespace) {
@@ -1654,7 +1718,7 @@ function memoryEdit(entry, namespace) {
   memoryVersion = draft ? draft.version : entry.version;
   memoryBaseline = draft
     ? { ...draft.baseline }
-    : { namespace, key: entry.key, value: entry.value };
+    : { namespace, key: entry.key, value: entry.value, state:entry.version>0?"live":"missing" };
   $("memory-version").textContent = draft
     ? "Draft kept · based on version " +
       memoryVersion +
@@ -1881,6 +1945,9 @@ function activateTab(next) {
   if (tab === "memory") loadMemory();
   if (tab === "tasks") loadTaskHistory();
   if (tab === "sessions") loadWorkspaces();
+  if (tab === "activity") loadMessageHistory("refresh");
+  if (tab === "teams") loadEventHistory("refresh");
+  if (tab === "research") {loadStudyStatus();loadResearchHistory("refresh");}
   if (tab === "agent") loadCapacity();
   if (tab === "graph" && typeof renderGraph === "function") renderGraph();
 }
@@ -1891,6 +1958,8 @@ document
   );
 $("board-filter").onchange = (event) => {
   boardFilter = event.target.value;
+  messageHistory.messages=null;
+  loadMessageHistory("reset");
   renderFeed();
 };
 $("composer").onsubmit = (event) => {
@@ -1916,7 +1985,7 @@ $("composer").onsubmit = (event) => {
     );
     return;
   }
-  const referencedBoard = (snapshot.activity.messages || []).find(item=>item.id===reference)?.board;
+  const referencedBoard = ([...messageHistory.messages || [],...snapshot.activity.messages || []]).find(item=>item.id===reference)?.board;
   if (!board && reference && !referencedBoard && replyRecipient(reference) !== recipient) {
     notice(
       "The original reply recipient is unavailable or changed. Refresh and review the reply before sending.",
@@ -1936,28 +2005,12 @@ $("composer").onsubmit = (event) => {
   let confirmation = "Posted to #" + board + ".";
   action(
     async () => {
-      if (board) await api("/api/send", { board, text, mode:"note", reply_to:reference });
-      else {
-        const result = await api("/api/send", {
-          target: recipient,
-          text,
-          reply_to: reference,
-          mode,
-        });
-        confirmation =
-          result.kind +
-          " queued for " +
-          sessionReference(result.target) +
-          (result.kind === "Message"
-            ? ". Native terminal input was not changed."
-            : researchInstruction
-              ? ". This extra instruction interrupts the research phase protocol."
-              : headlessInstruction
-                ? ". Queued only; this one-shot runner may not dispatch additional tasks."
-                : snapshot.agents.find((agent) => agent.id === recipient)?.config.interaction === "interactive"
-                  ? ". " + nativeDeliveryHint(recipient)
-                  : ". The managed worker runs this instruction when ready.");
-      }
+      const instruction = !board && (mode === "instruction" || mode === "auto" && snapshot.agents.find(agent=>agent.id===recipient)?.config.interaction !== "interactive");
+      const operation = board ? "board.post" : instruction ? "instruct" : "message.send";
+      const args = board ? {board,text,reply_to:reference} : {to:[recipient],text,reply_to:reference};
+      const result = await sendFrozen(operation,args,recipient);
+      const kind = board ? "Board note" : instruction ? "Instruction" : "Message";
+      confirmation = kind+" accepted for "+(board ? "#"+scopeLabel(board) : sessionReference(recipient))+" · "+(result.task?.id || result.message?.id || "saved")+(instruction ? researchInstruction ? ". This extra instruction interrupts the research phase protocol." : headlessInstruction ? ". Queued only; this one-shot runner may not dispatch additional tasks." : ". "+nativeDeliveryHint(recipient) : ". "+(board ? "Readers must subscribe for native delivery." : receiverDeliveryExplanation(recipient,"message.send")));
       const draft = messageDrafts.get(recipient);
       if (
         draft?.text === text &&
@@ -2028,6 +2081,7 @@ $("adopt-memory-version").onclick = () => {
     namespace: review.namespace,
     key: review.key,
     value: review.value,
+    state: review.state,
   };
   memoryReview = null;
   stashMemoryDraft();
@@ -2059,10 +2113,11 @@ $("memory-form").onsubmit = (event) => {
     epoch = memoryEditorEpoch,
     identity = memoryDraftKey(namespace, key);
   stashMemoryDraft();
+  const memoryOperation=version>0 && !["deleted","expired","missing"].includes(memoryBaseline.state) ? "memory.patch" : "memory.put";
   action(async () => {
     let result;
     try {
-      result = await call("memory.put", { namespace, key, value, version });
+      result = await call(memoryOperation, { namespace, key, value, version });
     } catch (error) {
       if (namespace === memoryEditorNamespace && key === $("memory-key").value)
         $("memory-version").textContent =
@@ -2097,7 +2152,7 @@ $("memory-form").onsubmit = (event) => {
       version === memoryVersion
     ) {
       memoryVersion = saved.version;
-      memoryBaseline = { namespace, key, value };
+      memoryBaseline = { namespace, key, value, state:"live" };
       memoryReview = null;
       stashMemoryDraft();
       $("memory-version").textContent =
@@ -2194,9 +2249,9 @@ function renderComposer() {
     : board
       ? research
         ? "Research steering note. Agents see permitted board context at their next read; this does not add an extra instruction task."
-        : "Shared board. Only sessions allowed to read this namespace receive its context."
+        : "Shared board. Permitted readers can read this context. Native delivery also requires their board subscription and an enabled compatible receiver."
       : !instruction
-        ? "Inbox message. Direct conversation and native approvals remain in the agent terminal."
+        ? "Inbox message. "+receiverDeliveryExplanation(selected,"message.send")
         : a?.config.interaction === "interactive"
           ? nativeDeliveryHint(selected)
         : research
@@ -2218,7 +2273,7 @@ function renderObserved() {
   const signature = JSON.stringify([sessionQuery, filtered]);
   if (signature === observedSignature) return;
   observedSignature = signature;
-  const list = $("observed-sessions");
+  const list = $("observed-sessions"), view=captureViewState(list);
   list.replaceChildren();
   if (!observed.length) {
     list.append(
@@ -2231,12 +2286,14 @@ function renderObserved() {
     return;
   }
   if (!filtered.length) {
-    emptySearch(list, "observed terminals");
+    emptySearch(list, "existing terminals");
+    restoreViewState(list,view);
     return;
   }
   for (const s of filtered) {
     const row = el("article", "session-row"),
       copy = el("div");
+    row.dataset.itemKey=s.id;
     copy.append(
       el("strong", "", s.title || sessionTitle(s)),
       el(
@@ -2250,12 +2307,14 @@ function renderObserved() {
       .filter(Boolean)
       .join(" · ");
     if (metadata) copy.append(el("small", "", metadata));
+    copy.append(el("small","",s.workspace_origins?.length?"Observed workspace: "+s.workspace_origins.join(", ")+" · provenance only":"Workspace origin unknown"));
     const controls = el("div", "session-actions"),
       title = el("input"),
       name = el("input"),
       details = el("details"),
       summary = el("summary", "", "Stable ID");
     const draft = observedDrafts.get(s.id);
+    title.dataset.focusKey="observed-title:"+s.id;name.dataset.focusKey="observed-name:"+s.id;details.dataset.disclosureKey="observed-id:"+s.id;summary.dataset.focusKey="observed-summary:"+s.id;
     title.value = draft?.title || "";
     title.placeholder = "Task title (optional)";
     title.maxLength = 120;
@@ -2268,7 +2327,8 @@ function renderObserved() {
     title.oninput = saveDraft;
     name.oninput = saveDraft;
     details.append(summary, name);
-    const connect = el("button", "", "Connect");
+    const connect = el("button", "", "Prepare bridge");
+    connect.dataset.focusKey="observed-connect:"+s.id;
     connect.onclick = () => {
       const id = name.value,
         taskTitle = title.value,
@@ -2284,6 +2344,7 @@ function renderObserved() {
         if (selected === initialSelection) {
           selectAgent(result.id);
           $("bridge-setup").textContent = result.setup;
+          $("bridge-origin").textContent=s.workspace_origins?.length?"Observed workspace origin: "+s.workspace_origins.join(", ")+". Provenance grants no access; verify this original terminal before pasting setup.":"Workspace origin unknown. Verify the original native terminal before pasting setup.";
           $("bridge-panel").classList.remove("hidden");
         }
       }, "Bridge ready. Copy setup and paste it in the original native session. Its conversation was not changed.");
@@ -2292,6 +2353,7 @@ function renderObserved() {
     row.append(copy, controls);
     list.append(row);
   }
+  restoreViewState(list,view);
 }
 $("message-kind").onchange = renderComposer;
 $("message-mode").onchange = renderComposer;
@@ -2380,21 +2442,9 @@ $("copy-bridge").onclick = async () => {
   }
 };
 $("close-agent").onclick = () => {
-  const id = selected;
-  let confirmation = "";
-  action(
-    async () => {
-      const result = await call("agent.stop", { id });
-      confirmation =
-        "Revocation requested for " +
-        id +
-        (result.revoked_agents > 1
-          ? " and " + (result.revoked_agents - 1) + " descendants"
-          : "") +
-        ". Process termination is not yet acknowledged; external terminals remain in their original window.";
-    },
-    () => confirmation,
-  );
+  if (!selectionReady()) return;
+  const id=selected, agent=snapshot.agents.find(item=>item.id===id), ids=[id,...activeDescendants(snapshot.agents,id)];
+  reviewOwnerAction({kind:"close",target:id,ids,version:snapshot.boundaries.version,fingerprint:ownerActionFingerprint(ids),title:"Close "+ids.length+" session"+(ids.length===1?"":"s")+"?",description:"Exact subtree: "+ids.map(sessionReference).join(", ")+". This revokes broker access and requests managed process shutdown. Process termination requires a separate acknowledgment. "+(agent.external ? "The external terminal keeps running in its original window." : "Accepted tasks may still need cancellation."),operation:"agent.stop",args:{id,expected_agents:[...ids]},origin:"close-agent"});
 };
 $("connect-pair").onclick = () => {
   const from = selected,
@@ -2408,6 +2458,7 @@ $("connect-pair").onclick = () => {
       kind: "collaboration",
       agents: [from, to],
       enabled: true,
+      commands: !!(snapshot.groups || []).find(group=>group.agents?.length===2 && group.agents.includes(from) && group.agents.includes(to))?.commands,
     });
     notice(
       "Connected " +
@@ -2419,14 +2470,17 @@ $("connect-pair").onclick = () => {
     );
   }, "Collaboration enabled with a dedicated board and memory. Native terminals stay interactive.");
 };
+$("disconnect-pair").onclick = () => {
+  if (!selectionReady() || selected===peer) return;
+  const group=(snapshot.groups||[]).find(item=>item.agents?.length===2 && item.agents.includes(selected) && item.agents.includes(peer));
+  if (!group) { notice("No exact owner group connects this pair. Review individual directional permissions or the contributing groups below.");return; }
+  if (!(group.contributions_version>=1)) {activateTab("teams");notice("Review the legacy group's exact controls and migration policy before disabling it.",true);return;}
+  reviewOwnerAction({kind:"pair",target:selected,ids:[selected,peer],version:snapshot.boundaries.version,fingerprint:JSON.stringify(group),group:group.id,title:"Disable only this pair's group?",description:"Remove group "+group.id+" contributions for "+[selected,peer].map(sessionReference).join(" and ")+". Other groups and explicit overrides can keep access enabled. Reconnecting preserves the saved mutual-instruction choice ("+(group.commands?"on":"off")+").",operation:"control.update",args:{version:snapshot.boundaries.version,kind:"collaboration",agents:[...group.agents],enabled:false,commands:!!group.commands},origin:"disconnect-pair"});
+};
 $("isolate-agent").onclick = () => {
-  const id = selected,
-    version = snapshot.boundaries.version;
-  action(
-    () =>
-      call("control.update", { version, kind: "independent", agents: [id] }),
-    "Session is independent. Native interaction continues; accepted tasks and previously read context remain.",
-  );
+  if (!selectionReady()) return;
+  const id=selected, groups=(snapshot.groups||[]).filter(group=>group.agents?.includes(id)), b=snapshot.boundaries;
+  reviewOwnerAction({kind:"isolate",target:id,ids:[id],version:b.version,fingerprint:JSON.stringify([b,groups]),title:"Make "+sessionReference(id)+" independent globally?",description:"This removes collaboration with every peer, suspends membership in "+groups.length+" owner group(s), and denies shared board and memory access. Explicit directional permissions are also denied. Accepted tasks continue; previously read context remains known. To reconnect, restore the exact group or directional permissions in Connections.",operation:"control.update",args:{version:b.version,kind:"independent",agents:[id]},origin:"isolate-agent"});
 };
 
 function scopeLabel(name) {
@@ -2873,7 +2927,7 @@ function renderTeams() {
       choice.setAttribute("aria-label","Legacy direct permission policy for "+group.id);choice.dataset.focusKey="legacy-policy:"+group.id;
       for(const [value,text] of [["","Choose a legacy policy…"],["preserve","Preserve all existing direct overrides"],["group","Move old direct allows to this group"]]) {const option=el("option","",text);option.value=value;option.disabled=!value;choice.append(option);}
       choice.value=legacyGroupChoices.get(group.id) || "";legacyChoice=choice;
-      label.append(choice);panel.append(label,el("p","session-note","This group predates independent contribution tracking. Existing untagged direct overrides may be historical group grants or deliberate owner intent; Agentmux cannot infer which. Preserve keeps those direct overrides even after disabling this group. Move removes matching ALLOW overrides so the group governs them. Existing DENY overrides remain and require a separate explicit reset in Graph."));
+      label.append(choice);panel.append(label,el("p","session-note","This group predates independent contribution tracking. Existing untagged direct overrides may be historical group grants or deliberate owner intent; Agentmux cannot infer which. Preserve keeps those direct overrides even after disabling this group. Move removes matching ALLOW overrides so the group governs them. Existing DENY overrides remain and require a separate explicit reset in Connections."));
       const edges=el("ul","legacy-edge-list");
       if(Array.isArray(legacyEdges)) {
         for(const edge of legacyEdges) edges.append(el("li","",edge.from+" → "+edge.to+" · "+edge.action+" · "+(edge.allow?"ALLOW (ambiguous origin)":"DENY (retained)")));
@@ -2929,7 +2983,7 @@ function reviewLegacyGroupChange(group,enabled,commands,policy,version) {
 async function applyLegacyGroupReview() {
   const review=legacyGroupReview;
   if(!legacyGroupReviewReady(review)) {notice("Legacy policy review is stale. Cancel and review current membership and permissions.",true);return;}
-  await action(async()=>{await call("control.update",{version:review.version,kind:"collaboration",agents:review.agents,enabled:review.enabled,commands:review.commands,legacy_policy:review.policy});if(legacyGroupReview===review){legacyGroupReview=null;legacyGroupChoices.delete(review.id);}teamsSignature="";},"Legacy policy migrated with your explicit choice. Existing DENY controls remain; review effective permissions in Graph.");
+  await action(async()=>{await call("control.update",{version:review.version,kind:"collaboration",agents:review.agents,enabled:review.enabled,commands:review.commands,legacy_policy:review.policy});if(legacyGroupReview===review){legacyGroupReview=null;legacyGroupChoices.delete(review.id);}teamsSignature="";},"Legacy policy migrated with your explicit choice. Existing DENY controls remain; review effective permissions in Connections.");
 }
 
 function renderWorkerRuntime(agent) {
@@ -3032,14 +3086,16 @@ function renderWorkerRuntime(agent) {
 function renderLifecycle() {
   const list = $("lifecycle-events");
   const signature = JSON.stringify([
-    snapshot.activity.events || [],
+    eventHistory.events || snapshot.activity.events || [],
     (snapshot.agents || []).map((agent) => [agent.id, agent.title]),
   ]);
+  $("event-history-status").textContent=eventHistory.loading?"Loading event history…":eventHistory.error?"History could not refresh: "+eventHistory.error:eventHistory.events===null?"Recent events shown. Open Groups & teams to search full lifecycle history.":eventHistory.events.length+" matching event(s) loaded · "+(eventHistory.hasMore?"older events available":"end of history");
+  $("load-more-events").hidden=!eventHistory.hasMore;$("load-more-events").disabled=eventHistory.loading||!connected;
   if (signature === lifecycleSignature) return;
   lifecycleSignature = signature;
   const state = captureViewState(list);
   list.replaceChildren();
-  for (const event of snapshot.activity.events || []) {
+  for (const event of eventHistory.events || snapshot.activity.events || []) {
     const row = el("article", "lifecycle-row"),
       heading = el("div", "lifecycle-heading");
     row.dataset.itemKey = event.id;
@@ -3410,18 +3466,21 @@ $("relaunch-agent").onclick = () => {
   $("relaunch-review").hidden = false; $("relaunch-resume").focus();
 };
 $("relaunch-resume").onchange = () => { $("relaunch-history-id").hidden = $("relaunch-resume").value !== "id"; };
-$("cancel-relaunch").onclick = () => { relaunchReview = null; $("relaunch-review").hidden = true; };
+$("cancel-relaunch").onclick = () => { relaunchReview = null; $("relaunch-review").hidden = true; restoreSessionActionFocus(); };
 $("relaunch-review").onsubmit = event => {
   event.preventDefault();
   const review = relaunchReview, pane = snapshot?.runtime.agents?.[review?.target];
   if (!review || !selectionReady() || selected !== review.target || snapshot.runtime.attempt_id !== review.attempt || pane?.pane_id !== review.pane || pane?.state === "running") { notice("Session changed after review. Refresh and review its current identity before relaunching.",true); return; }
   const mode = $("relaunch-resume").value, resume = mode === "id" ? $("relaunch-history-id").value.trim() : mode;
   if (mode === "id" && !resume) { notice("Enter a specific native history ID or choose a fresh conversation.",true); return; }
-  action(async () => { await api("/api/relaunch",{target:review.target,resume,attempt:review.attempt,pane:review.pane}); if (relaunchReview === review) { relaunchReview = null; $("relaunch-review").hidden = true; } },"Relaunched " + sessionReference(review.target) + ". Healthy peers keep running; continue in its native terminal.");
+  action(async () => { await api("/api/relaunch",{target:review.target,resume,attempt:review.attempt,pane:review.pane}); if (relaunchReview === review) { relaunchReview = null; $("relaunch-review").hidden = true; restoreSessionActionFocus(true); } },"Relaunched " + sessionReference(review.target) + ". Healthy peers keep running; continue in its native terminal.");
 };
 async function loadCapacity() {
-  if (!selectionReady()) return;
+  if (!selectionReady() || capacityLoading === selected) return;
   const id = selected, request = ++capacityRequest;
+  resourceSnapshot=null;
+  capacityLoading=id;
+  renderResourceAvailability(true);
   try {
     const [capacity,owner] = await Promise.all([call("capacity.get",{agent:id}),call("capacity.get",{})]);
     if (request !== capacityRequest || selected !== id) return;
@@ -3440,17 +3499,32 @@ async function loadCapacity() {
     details.append(summary,el("pre","",JSON.stringify(capacity,null,2)));
     panel.append(details);
   } catch (error) { if (request === capacityRequest) $("agent-capacity").replaceChildren(el("p","action-error",error.message)); }
+  finally { if (request === capacityRequest) {capacityLoading="";if(id === selected)renderResourceAvailability();} }
 }
 $("load-capacity").onclick = loadCapacity;
 const resourceFields = {"resource-session-tokens":"session_tokens","resource-session-cost":"session_cost","resource-turn-tokens":"turn_tokens","resource-turn-cost":"turn_cost","resource-subtree-tokens":"subtree_tokens","resource-subtree-cost":"subtree_cost","resource-admission":"admission"};
 function resourceValues() { return Object.fromEntries(Object.entries(resourceFields).map(([id,key])=>[key,$(id).value])); }
+function renderResourceAvailability(pending = false) {
+  const ready = !pending && capacityLoading !== selected && selectionReady() && resourceSnapshot?.agent === selected;
+  for (const id of Object.keys(resourceFields)) $(id).disabled=!ready;
+  $("review-resources").disabled=!ready || !!resourceDrafts.get(selected) && resourceDrafts.get(selected).version!==resourceSnapshot?.version;
+  $("discard-resources").disabled=!ready;
+  if (!ready) $("resource-current").textContent="Loading admission limits for "+selected+". Saved drafts remain attached to their original session.";
+}
 function renderResourceEditor() {
+  renderResourceAvailability();
   if (!resourceSnapshot || resourceSnapshot.agent!==selected) { $("review-resources").disabled=true; return; }
   const draft=resourceDrafts.get(selected), limits=resourceSnapshot;
   const values=draft?.values || {session_tokens:limits.session_budget.max_tokens || 0,session_cost:limits.session_budget.max_cost_microusd || 0,turn_tokens:limits.agent_budget.max_turn_tokens || 0,turn_cost:limits.agent_budget.max_turn_cost_microusd || 0,subtree_tokens:limits.agent_budget.max_subtree_tokens || 0,subtree_cost:limits.agent_budget.max_subtree_cost_microusd || 0,admission:""};
   for (const [id,key] of Object.entries(resourceFields)) $(id).value=String(values[key]);
   const conflict=!!draft && draft.version!==limits.version;
-  $("resource-current").textContent="Current resource v"+limits.version+" · "+sessionReference(selected)+(conflict ? ". Limits changed; draft retained. Discard and review current limits before editing." : ". Changes apply to future admission only.");
+  const conflictPanel=$("resource-conflict");conflictPanel.hidden=!conflict;
+  if(conflict){
+    const adopt=el("button","quiet","Use reviewed current resource version");adopt.type="button";adopt.dataset.ownerWrite="true";adopt.disabled=!selectionReady();
+    conflictPanel.replaceChildren(el("strong","","Current saved limits · v"+limits.version),el("pre","",JSON.stringify({session_budget:limits.session_budget,agent_budget:limits.agent_budget},null,2)),el("p","session-note","Your unsaved values remain above. Adopting this reviewed version preserves them and does not save."),adopt);
+    adopt.onclick=()=>{if(!selectionReady()||resourceSnapshot!==limits||selected!==limits.agent)return;draft.version=limits.version;renderResourceEditor();};
+  }
+  $("resource-current").textContent="Current resource v"+limits.version+" · "+sessionReference(selected)+(conflict ? ". Limits changed; draft retained. Review the current limits below before adopting their version." : ". Changes apply to future admission only.");
   $("review-resources").disabled=!selectionReady() || conflict;
   if (resourceReview && (resourceReview.agent!==selected || resourceReview.version!==limits.version)) { $("resource-review").hidden=true; resourceReview=null; }
 }
@@ -3465,7 +3539,7 @@ $("resource-form").onsubmit=event=>{
   event.preventDefault();
   if (!selectionReady() || !resourceSnapshot || resourceSnapshot.agent!==selected) return;
   const draft=resourceDrafts.get(selected);
-  if (draft && draft.version!==resourceSnapshot.version) { notice("Resource limits changed. Discard the stale draft and review current limits.",true); return; }
+  if (draft && draft.version!==resourceSnapshot.version) { notice("Resource limits changed. Review current limits and explicitly adopt their version, or discard the draft.",true); return; }
   const values=resourceValues(), numeric={};
   for (const [key,value] of Object.entries(values)) {
     if (key==="admission" && value==="") continue;
@@ -3485,7 +3559,14 @@ $("resource-form").onsubmit=event=>{
 };
 
 function hasUnsavedWork() {
-  if (mutating || teamReview || researchReview || relaunchReview || resourceReview || legacyGroupReview) return true;
+  if (mutating || ownerActionReview || teamReview || researchReview || relaunchReview || resourceReview || legacyGroupReview) return true;
+  if(typeof attemptDrafts!=="undefined")for(const scope of attemptDrafts.values()){
+    if(scope.newSessionDirty || scope.maps.resourceDrafts?.length || scope.maps.memoryDrafts?.length)return true;
+    for(const [,draft] of scope.maps.messageDrafts||[])if(draft.text?.trim()||draft.reply)return true;
+    for(const [,draft] of scope.maps.roleDrafts||[])if(draft.role!==draft.baseline)return true;
+    for(const [,draft] of scope.maps.nativeDrafts||[])if(draft.dirty)return true;
+    for(const [,draft] of scope.maps.titleDrafts||[])if(draft.title!==draft.baseline)return true;
+  }
   if (resourceDrafts.size) return true;
   if ([...nativeDrafts.values()].some(draft=>draft.dirty)) return true;
   if ([...roleDrafts.values()].some(draft=>draft.role!==draft.baseline)) return true;
@@ -3523,7 +3604,7 @@ function hasUnsavedWork() {
   );
 }
 function renderGlobalHeading() {
-  const global = tab === "research" || tab === "teams";
+  const global = ["research","teams","sessions","terminals"].includes(tab);
   document.body.classList.toggle("global-view", global);
   const research = snapshot?.research,
     agent = snapshot?.agents?.find((item) => item.id === selected);
@@ -3533,7 +3614,7 @@ function renderGlobalHeading() {
         (research?.progress.condition
           ? " · " + research.progress.condition
           : "")
-      : "Teams";
+      : tab==="sessions"?"Sessions":tab==="terminals"?"Existing terminals":"Groups & teams";
   $("global-view-context").textContent = agent
     ? "Selected: " + sessionTitle(agent) + " · " + agent.id
     : researchSavedOffline
@@ -3591,6 +3672,316 @@ function renderMetadataOnly() {
     $(id).replaceChildren(el("p", "empty", text));
 }
 
+
+function ownerActionFingerprint(ids) {
+  return JSON.stringify(ids.map(id=>{const a=snapshot?.agents?.find(item=>item.id===id);return [id,a?.state,a?.parent,a?.external];}));
+}
+function ownerActionReady(review) {
+  if (!review || !selectionReady() || selected!==review.target) return false;
+  if (review.kind==="close") return JSON.stringify([review.target,...activeDescendants(snapshot.agents,review.target)])===JSON.stringify(review.ids) && ownerActionFingerprint(review.ids)===review.fingerprint;
+  if (review.kind==="retire")return snapshot.agents.some(agent=>agent.id===review.args.agent && agent.state==="revoked");
+  if (snapshot.boundaries.version!==review.version) return false;
+  if (review.kind==="pair") return JSON.stringify((snapshot.groups||[]).find(group=>group.id===review.group))===review.fingerprint;
+  if (review.kind==="isolate") return JSON.stringify([snapshot.boundaries,(snapshot.groups||[]).filter(group=>group.agents?.includes(review.target))])===review.fingerprint;
+  if (review.kind==="resolve") {if(review.args.resolution==="retry"&&!review.retryConfirmed)return false;const current=(taskHistory.tasks||snapshot.activity.tasks||[]).find(task=>task.id===review.args.id);return current?.version===review.args.version && ["uncertain","cancel_uncertain"].includes(current.delivery);}
+  return true;
+}
+function reviewOwnerAction(review) { ownerActionReview=review; renderOwnerActionReview(); $("owner-action-review").focus(); }
+function renderOwnerActionReview() {
+  const panel=$("owner-action-review"), review=ownerActionReview;
+  panel.hidden=!review;
+  if (!review) return;
+  const state=captureViewState(panel), valid=ownerActionReady(review), confirm=el("button","","Confirm exact action"), cancel=el("button","quiet","Cancel");
+  confirm.type=cancel.type="button";confirm.dataset.ownerWrite="true";confirm.dataset.focusKey="confirm-owner-action";cancel.dataset.focusKey="cancel-owner-action";confirm.disabled=!valid;
+  panel.replaceChildren(el("strong","",review.title),el("p","",review.description),el("code","",review.ids.join(" · ")),el("p",valid?"session-note":"action-error",valid?"The target and impact above are frozen for this review.":review.kind==="resolve"&&review.args.resolution==="retry"&&!review.retryConfirmed?"Review the old process and confirm the recovery condition below before retrying.":"Targets or policy changed. Cancel and review the current state; this action will not adopt new targets."),confirm,cancel);
+  if(review.kind==="resolve"&&review.args.resolution==="retry"){
+    const label=el("label","retry-acknowledgment"),check=el("input");check.type="checkbox";check.checked=!!review.retryConfirmed;check.dataset.focusKey="retry-confirmed";check.onchange=()=>{review.retryConfirmed=check.checked;confirm.disabled=!ownerActionReady(review);};label.append(check,document.createTextNode("I stopped or fenced the old turn/process and reviewed its prior outcome."));panel.append(label);
+  }
+  const close=()=>{ownerActionReview=null;panel.hidden=true;$(review.origin)?.focus({preventScroll:true});};
+  cancel.onclick=close;
+  confirm.onclick=()=>{if(!ownerActionReady(review)){notice("Review changed. Cancel and review current targets.",true);return;}action(async()=>{await call(review.operation,review.args);taskHistory.updatedAt=0;close();},"Applied reviewed action for "+review.ids.join(", ")+". Refreshing evidence.");};
+  panel.onkeydown=event=>{if(event.key==="Escape"){event.preventDefault();close();}};
+  restoreViewState(panel,state);
+}
+function restoreSessionActionFocus(completed=false) { const target=$("relaunch-agent"); (completed||target.hidden||target.disabled ? $("focus-terminal").disabled ? $("workspace") : $("focus-terminal") : target).focus({preventScroll:true}); }
+function ageText(at) {const seconds=Math.max(0,Math.floor((Date.now()-Date.parse(at))/1000));return !Number.isFinite(seconds)?"age unknown":seconds<60?seconds+"s ago":seconds<3600?Math.floor(seconds/60)+"m ago":Math.floor(seconds/3600)+"h ago";}
+function receiverDeliveryExplanation(id,key) {
+  const agent=snapshot?.agents?.find(item=>item.id===id), status=nativeInfo(id), subscription=key==="message.send"?"notes":key==="ping.send"?"pings":"";
+  if(agent?.external) return "External bridge: permission queues broker data. The receiver must explicitly read its inbox in the original native terminal; no verified automatic adapter is connected.";
+  if(agent?.config.interaction!=="interactive") return key==="instruct"?"Authorized instruction runs when the managed worker is ready.":"Inbox data waits for the managed worker to read it; permission alone does not start a turn.";
+  if(!status?.policy) return "Permission stores inbox data; receiver delivery status is unavailable. Inspect the receiver before assuming it will see this.";
+  if(subscription && !status.policy[subscription]) return "Allowed into the inbox, but the receiver's "+subscription+" subscription is off. No automatic native turn will carry it; read manually or enable that subscription.";
+  if(subscription) return "Receiver's "+subscription+" subscription is on. "+nativeDeliveryHint(id);
+  return nativeDeliveryHint(id);
+}
+function inspectReceiver(id) {const receiver=snapshot?.agents?.find(agent=>agent.id===id);if(!receiver){notice("Receiver "+id+" is outside the active registry. Its historical tasks and exposure receipts remain searchable; include retired sessions in Sessions to review its metadata.",true);return;}const interactive=receiver.config.interaction==="interactive";selectAgent(id);activateTab("agent");const panel=$(interactive?"native-delivery":"worker-runtime");panel.setAttribute("tabindex","-1");panel.focus({preventScroll:true});}
+function taskAttentionKind(task) {
+  if(["uncertain","cancel_uncertain"].includes(task.delivery)||task.native?.phase==="uncertain")return "uncertain";
+  if(task.state==="failed"||task.native?.phase==="failed")return "failed";
+  if(!["proposed","running"].includes(task.state))return "";
+  const status=nativeInfo(task.to), agent=snapshot?.agents?.find(item=>item.id===task.to);
+  if(status?.mode==="review" && status.connected && ["ready","active"].includes(status.state) && task.delivery==="pending" && (status.pending||[]).some(candidate=>candidate.task_id===task.id||candidate.source_id===task.id))return "review";
+  if(task.delivery==="pending" && agent?.config.interaction==="interactive" && (agent.external || !status?.connected || status.mode==="manual" || !["ready","active"].includes(status.state)))return "blocked";
+  return "";
+}
+function renderAttentionQueue() {
+  const panel=$("attention-queue");if(!panel||!snapshot)return;
+  const state=captureViewState(panel);panel.replaceChildren(el("h3","","Delivery attention · current session statuses"));
+  const total=taskSummary.agents.reduce((sum,row)=>sum+row.total,0);
+  $("task-summary-status").textContent=taskSummary.loading?"Loading complete retained task counts…":taskSummary.error?"Task counts could not refresh: "+taskSummary.error:taskSummary.updatedAt?total+" tasks across "+taskSummary.agents.length+" recipients · complete retained history · independent of loaded task pages":"Complete task counts have not loaded yet.";
+  if(taskSummary.updatedAt){
+    panel.append(el("h3","","Recorded task outcomes · complete retained history"));
+    for(const summary of taskSummary.agents.filter(row=>row.failed||row.uncertain||row.pending)){
+      const row=el("article","attention-row"),inspect=el("button","quiet","Inspect receiver delivery");row.dataset.itemKey="summary:"+summary.agent;inspect.type="button";inspect.dataset.focusKey="summary:"+summary.agent;inspect.onclick=()=>inspectReceiver(summary.agent);
+      row.append(el("strong","",sessionReference(summary.agent)),el("p","session-note",summary.total+" total · "+summary.failed+" failed · "+summary.uncertain+" uncertain · "+summary.pending+" pending · "+summary.running+" running. Pending alone does not prove delivery is blocked."),inspect);panel.append(row);
+    }
+  }
+  const statuses={...(snapshot.native_statuses||{}),...(snapshot.native?.agent?{[snapshot.native.agent]:snapshot.native}:{})};
+  const classify=status=>status.state==="uncertain"||status.active?.phase==="uncertain"?"Delivery uncertain":status.state==="failed"||status.active?.phase==="failed"?"Delivery failed":(status.pending_count||status.pending?.length)>0?status.mode==="review"&&status.connected&&["ready","active"].includes(status.state)?"Review required":!status.connected||status.mode==="manual"||!["ready","active"].includes(status.state)?"Delivery blocked":"":"";
+  const rows=Object.entries(statuses).filter(([,status])=>classify(status));
+  for(const [id,status] of rows) {
+    const row=el("article","attention-row"),open=el("button","quiet","Inspect receiver delivery");row.dataset.itemKey=id;open.type="button";open.dataset.focusKey="attention:"+id;open.onclick=()=>inspectReceiver(id);
+    row.append(el("strong","",classify(status)+" · "+sessionReference(id)),el("p","session-note",(status.reason||"Awaiting receiver admission")+" · "+(status.pending_count||status.pending?.length||0)+" eligible pending turn(s)"),open);panel.append(row);
+  }
+  const uncertain=[...submissionRecords.values()].filter(record=>record.status==="uncertain");
+  for(const record of uncertain){const row=el("article","attention-row"),open=el("button","quiet","Inspect exact submission");row.dataset.itemKey=record.id;open.type="button";open.dataset.focusKey="submission-attention:"+record.id;open.onclick=()=>{activateTab("activity");const target=[...$("submission-records").children].find(item=>item.dataset.itemKey===record.id);if(target){target.open=true;target.setAttribute("tabindex","-1");target.focus();}};row.append(el("strong","","Submission uncertain · "+record.id),el("p","session-note","Acceptance unknown · "+ageText(record.createdAt)+". Exact replay identity is retained."),open);panel.append(row);}
+  if(!rows.length&&!uncertain.length)panel.append(el("p","session-note","No review, blocked or uncertain state reported by the current native status inventory or local submission records. Use task history for recorded failures."));
+  restoreViewState(panel,state);
+}
+const submissionStorageKey="agentmux-submissions:"+location.host;
+function saveSubmissionRecords() {try{sessionStorage.setItem(submissionStorageKey,JSON.stringify([...submissionRecords.values()]));}catch{}renderSubmissionRecords();}
+function restoreSubmissionRecords() {try{for(const row of JSON.parse(sessionStorage.getItem(submissionStorageKey)||"[]")){if(row && typeof row.id==="string" && ["board.post","message.send","instruct"].includes(row.operation) && row.args && typeof row.args.text==="string")submissionRecords.set(row.id,{...row,route:{follow:typeof row.route?.follow==="boolean"?row.route.follow:!!row.attempt},status:row.status==="submitting"?"uncertain":row.status});}}catch{}renderSubmissionRecords();}
+async function dispatchSubmissionRecord(record) {
+  if(routingPending || !connected || record.attempt!==snapshotIdentity()){
+    const error=new Error("This saved submission belongs to another attempt or an unresolved workspace route. Its original request identity is retained; inspect that attempt before replaying.");error.code="conflict";throw error;
+  }
+  const wasUncertain=record.status==="uncertain";
+  record.status="submitting";saveSubmissionRecords();
+  try {const result=await call(record.operation,record.args,record.id,record.attempt,record.route);record.status="accepted";record.resultID=result.task?.id || result.message?.id || "";record.error="";saveSubmissionRecords();return result;}
+  catch(error){record.status=!wasUncertain && ["invalid","conflict","forbidden","not_found","limit","unsupported","expired"].includes(error.code)?"rejected":"uncertain";record.error=error.message;saveSubmissionRecords();throw error;}
+}
+async function sendFrozen(operation,args,target) {
+  const attempt=snapshotIdentity(),fingerprint=JSON.stringify([attempt,operation,args]),existing=[...submissionRecords.values()].find(record=>record.fingerprint===fingerprint && ["uncertain","submitting"].includes(record.status));
+  const record=existing || {id:"web-"+(globalThis.crypto?.randomUUID?.() || Date.now().toString(36)+"-"+Math.random().toString(36).slice(2)),operation,args:JSON.parse(JSON.stringify(args)),target,attempt,route:{follow:followStudy},fingerprint,createdAt:new Date().toISOString(),status:"submitting"};
+  submissionRecords.set(record.id,record);return dispatchSubmissionRecord(record);
+}
+function renderSubmissionRecords() {
+  const panel=$("submission-records");if(!panel)return;
+  const state=captureViewState(panel), allRecords=[...submissionRecords.values()], records=[...allRecords.filter(record=>record.status==="uncertain"),...allRecords.filter(record=>record.status!=="uncertain").slice(-12)];panel.hidden=!records.length;panel.replaceChildren();
+  for(const record of records.reverse()) {
+    const row=el("details","submission-record");row.dataset.itemKey=record.id;row.dataset.disclosureKey=record.id;
+    row.append(el("summary","",record.status+" · "+(record.operation==="board.post"?"#"+record.args.board:sessionReference(record.target))+" · "+ageText(record.createdAt)),el("code","",record.id),el("pre","",record.args.text));
+    if(record.resultID)row.append(el("code","","Accepted item: "+record.resultID));
+    if(record.error)row.append(el("p","action-error",record.error));
+    if(record.status==="uncertain") {
+      row.append(el("p","session-note","Acceptance is unknown. Replay uses the exact frozen request identity and payload; it cannot create a second task if this request was already saved."));
+      const retry=el("button","","Replay exact submission");retry.type="button";retry.dataset.focusKey="replay:"+record.id;retry.disabled=!connected||routingPending||mutating||record.attempt!==snapshotIdentity();retry.onclick=()=>action(()=>dispatchSubmissionRecord(record),"Recovered the exact submission. Inspect its saved item ID.");row.append(retry);
+    }
+    if(record.status!=="submitting") {const dismiss=el("button","quiet",record.status==="uncertain"?"Keep draft; dismiss recovery record":"Dismiss record");dismiss.type="button";dismiss.dataset.focusKey="dismiss:"+record.id;dismiss.onclick=()=>{submissionRecords.delete(record.id);saveSubmissionRecords();};if(record.status!=="uncertain")row.append(dismiss);}
+    panel.append(row);
+  }
+  restoreViewState(panel,state);
+}
+restoreSubmissionRecords();
+
+async function loadMessageHistory(mode="refresh") {
+  if(!connected || !snapshot || (messageHistory.loading && mode!=="reset"))return;
+  const epoch=++messageHistory.epoch, append=mode==="more", scope=boardFilter==="team"?"board":"all", inbox=boardFilter==="agent", agent=selected, query=messageHistory.query, board=messageHistory.board, target=append?50:Math.max(50,messageHistory.messages?.length||0);
+  messageHistory.loading=true;messageHistory.error="";renderFeed();
+  let cursor=append?messageHistory.cursor:"",rows=[],hasMore=false;
+  try {
+    do {
+      const page=await call("message.list",{scope,agent:inbox?agent:"",board,query,after:cursor,order:"desc",limit:50});
+      if(epoch!==messageHistory.epoch || inbox && selected!==agent)return;
+      const incoming=page.messages||[],next=page.cursor||cursor;rows.push(...incoming);hasMore=page.has_more===true;
+      if(!incoming.length || cursor===next){hasMore=false;break;}cursor=next;
+    }while(hasMore&&rows.length<target);
+    if(epoch!==messageHistory.epoch)return;
+    messageHistory.messages=[...new Map((append?[...(messageHistory.messages||[]),...rows]:rows).map(item=>[item.id,item])).values()];
+    Object.assign(messageHistory,{cursor,hasMore,scope,agent,updatedAt:Date.now()});feedSignature="";
+  }catch(error){if(epoch===messageHistory.epoch)messageHistory.error=error.message;}
+  finally{if(epoch===messageHistory.epoch){messageHistory.loading=false;renderFeed();}}
+}
+$("message-history-filter").onsubmit=event=>{event.preventDefault();messageHistory.query=$("message-query").value.trim();messageHistory.board=$("message-board").value;loadMessageHistory("reset");};
+$("load-more-messages").onclick=()=>loadMessageHistory("more");
+async function loadEventHistory(mode="refresh") {
+  if(!connected || !snapshot || (eventHistory.loading&&mode!=="reset"))return;
+  const epoch=++eventHistory.epoch,append=mode==="more",query=eventHistory.query,agent=eventHistory.agent,type=eventHistory.type,target=append?100:Math.max(100,eventHistory.events?.length||0);
+  eventHistory.loading=true;eventHistory.error="";renderLifecycle();
+  let cursor=append?eventHistory.cursor:"",rows=[],hasMore=false;
+  try {
+    do {
+      const page=await call("events.list",{query,agent,type,after:cursor,order:"desc",limit:100});if(epoch!==eventHistory.epoch)return;
+      const incoming=page.events||[],next=page.cursor||cursor;rows.push(...incoming);hasMore=page.has_more===true;if(!incoming.length||cursor===next){hasMore=false;break;}cursor=next;
+    }while(hasMore&&rows.length<target);
+    if(epoch!==eventHistory.epoch)return;
+    eventHistory.events=[...new Map((append?[...(eventHistory.events||[]),...rows]:rows).map(item=>[item.id,item])).values()];Object.assign(eventHistory,{cursor,hasMore,updatedAt:Date.now()});lifecycleSignature="";
+  }catch(error){if(epoch===eventHistory.epoch)eventHistory.error=error.message;}
+  finally{if(epoch===eventHistory.epoch){eventHistory.loading=false;renderLifecycle();}}
+}
+$("event-history-filter").onsubmit=event=>{event.preventDefault();eventHistory.query=$("event-query").value.trim();eventHistory.agent=$("event-agent").value.trim();eventHistory.type=$("event-type").value.trim();loadEventHistory("reset");};
+$("reset-event-filter").onclick=()=>{for(const id of ["event-query","event-agent","event-type"])$(id).value="";Object.assign(eventHistory,{query:"",agent:"",type:""});loadEventHistory("reset");};
+$("load-more-events").onclick=()=>loadEventHistory("more");
+$("task-attention-filter").onchange=()=>{taskAttention=$("task-attention-filter").value;taskSignature="";renderTasks();};
+function quickNewSession() {
+  const agent=snapshot?.agents?.find(item=>item.id===selected);
+  activateTab("sessions");
+  // Opening an existing unsaved new-session form keeps its draft intact.
+  if(!newSessionDirty && !$("new-title").value && !$("new-name").value && !$("new-role").value) {
+    $("new-harness").value=agent?.config?.harness || "claude";
+    $("new-project").value=agent?.config?.workdir || $("new-project").value;
+    updateNewNativeProfile();
+  }
+  $("new-title").focus();
+}
+$("quick-new-session").onclick=quickNewSession;
+function availableActions() {
+  const ready=selectionReady(),agent=snapshot?.agents?.find(item=>item.id===selected),actions=[];
+  const add=(label,run,shortcut="",reason="",target=selected)=>actions.push({label,run,shortcut,reason,target});
+  for(const [key,label] of [["activity","Board & inbox"],["agent","Session detail & receiver delivery"],["tasks","Tasks & recovery"],["memory","Shared memory"],["graph","Connections"],["teams","Owner groups & agent teams"],["sessions","Sessions & workspaces"],["terminals","Existing terminals & bridge setup"],["research","Research study"]])if(key!=="research"||snapshot?.research)add("Open "+label,()=>activateTab(key));
+  add("New session",quickNewSession,"Ctrl Shift N",ready?"":"Wait for the current workspace to reconnect");
+  for(const [id,label] of [["focus-terminal","Focus native terminal"],["copy-attach","Copy attach command"],["edit-title","Rename session"],["close-agent","Review close session subtree"],["relaunch-agent","Relaunch exited session"],["graph-edit","Connect sessions"]])add(label,()=>$(id).click(),"",!ready?"Current session is loading or offline":$(id).hidden?"Unavailable for this session":$(id).disabled?$(id).title||"Unavailable for the selected session":"");
+  for(const item of snapshot?.agents||[])add("Select "+sessionTitle(item),()=>selectAgent(item.id),"", "",item.id);
+  return actions;
+}
+function renderActionMenu() {
+  const query=$("action-query").value.trim().toLowerCase(),results=$("action-results");results.replaceChildren();
+  for(const item of availableActions().filter(item=>(item.label+" "+item.target+" "+sessionReference(item.target)+" "+(snapshot?.agents?.find(agent=>agent.id===item.target)?.config?.harness||"")+" "+(snapshot?.agents?.find(agent=>agent.id===item.target)?.config?.workdir||"")).toLowerCase().includes(query))) {
+    const button=el("button","action-result");button.type="button";button.tabIndex=-1;button.dataset.actionItem="true";button.setAttribute("role","option");button.setAttribute("aria-disabled",String(!!item.reason));
+    button.append(el("strong","",item.label),el("small","",(item.target?sessionReference(item.target):"Workspace")+(item.shortcut?" · "+item.shortcut:"")+(item.reason?" · "+item.reason:"")));
+    button.onclick=()=>{const current=availableActions().find(action=>action.label===item.label&&action.target===item.target);if(item.target&&!item.label.startsWith("Select ")&&item.target!==selected){notice("Selected session changed. Review the current action target.",true);renderActionMenu();return;}if(!current||current.reason){notice(current?.reason||"Action is no longer available.",true);renderActionMenu();return;}closeActionMenu(false);current.run();};results.append(button);
+  }
+  if(!results.childElementCount)results.append(el("p","empty","No matching action."));
+}
+function openActionMenu() {actionMenuOrigin=document.activeElement;$("action-menu").classList.remove("hidden");$("action-query").value="";renderActionMenu();$("action-query").focus();}
+function closeActionMenu(restore=true) {$("action-menu").classList.add("hidden");if(restore)(actionMenuOrigin||$("open-actions")).focus({preventScroll:true});}
+$("open-actions").onclick=openActionMenu;$("close-actions").onclick=()=>closeActionMenu();$("action-query").oninput=renderActionMenu;
+$("action-menu").onkeydown=event=>{
+  if(event.key==="Escape"){event.preventDefault();closeActionMenu();return;}
+  const items=[...$("action-results").children].filter(item=>item.dataset.actionItem),index=items.indexOf(document.activeElement);
+  if(event.key==="ArrowDown"||event.key==="ArrowUp"){event.preventDefault();items[index<0?(event.key==="ArrowDown"?0:items.length-1):(index+(event.key==="ArrowDown"?1:-1)+items.length)%items.length]?.focus();}
+  if(event.key==="Enter"&&event.target===$("action-query")){event.preventDefault();items[0]?.click();}
+  if(event.key==="Tab"){const controls=[$("action-query"),$("close-actions")],i=controls.indexOf(document.activeElement);event.preventDefault();(i<0?controls[event.shiftKey?0:1]:controls[(i+(event.shiftKey?-1:1)+controls.length)%controls.length])?.focus();}
+};
+document.addEventListener("keydown",event=>{if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==="k"){event.preventDefault();openActionMenu();}else if((event.ctrlKey||event.metaKey)&&event.shiftKey&&event.key.toLowerCase()==="n"){event.preventDefault();quickNewSession();}});
+$("include-archived").onchange=async()=>{includeArchived=$("include-archived").checked;try{archivedAgents=includeArchived?(await call("agent.list",{include_archived:true})).agents||[]:[];agentSignature="";renderSessionLists();}catch(error){notice(error.message,true);}};
+
+
+function switchAttemptDraftScope(previous,next,nextSelected=selected) {
+  if(previous===next)return;
+  stashMemoryDraft();closeTitleEditor(true);
+  if(selected)messageDrafts.set(selected,{text:$("message").value,kind:pendingDraftKind||$("message-kind").value,mode:$("message-mode").value||"auto",reply:replyTo});
+  const maps={messageDrafts,roleDrafts,titleDrafts,observedDrafts,resourceDrafts,nativeDrafts,teamInviteDrafts,teamEditDrafts,legacyGroupChoices,memoryDrafts,memoryLastDrafts,memoryEntries};
+  const sessionFields=["new-title","new-name","new-role","new-project","new-harness","new-sandbox"], prior={maps:Object.fromEntries(Object.entries(maps).map(([name,map])=>[name,[...map]])),session:Object.fromEntries(sessionFields.map(id=>[id,$(id).value])),nativeOnly:$("new-native-only").checked,newSessionDirty};
+  attemptDrafts.set(previous,prior);
+  const restore=attemptDrafts.get(next);
+  for(const [name,map] of Object.entries(maps)){map.clear();for(const [key,value] of restore?.maps[name]||[])map.set(key,value);}
+  for(const id of sessionFields)$(id).value=restore?.session[id] || (id==="new-harness"?"claude":id==="new-sandbox"?"local":"");
+  $("new-native-only").checked=!!restore?.nativeOnly;newSessionDirty=!!restore?.newSessionDirty;
+  ownerActionReview=teamReview=researchReview=legacyGroupReview=relaunchReview=resourceReview=null;
+  for(const id of ["owner-action-review","research-review","relaunch-review","resource-review"])$(id).hidden=true;
+  resourceSnapshot=capacityView=null;capacityLoading="";capacityRequest++;nativeSignature=boundarySignature=agentSignature=taskSignature=feedSignature=teamsSignature=lifecycleSignature="";
+  memoryEditorEpoch++;memoryRequest++;memoryReviewRequest++;memoryReview=null;memoryEditorNamespace="";memoryMetadataSelection="";memoryVersion=0;memoryBaseline={namespace:"",key:"",value:""};
+  $("memory-key").value=$("memory-value").value="";memoryNamespace="";
+  const draft=messageDrafts.get(nextSelected);$("message").value=draft?.text||"";pendingDraftKind=draft?.kind||"direct";$("message-mode").value=draft?.mode||"auto";replyTo=draft?.reply||"";$("reply-context").textContent=replyTo?"↳ "+replyTo:"";$("clear-reply").classList.toggle("hidden",!replyTo);
+  exposureHistory.epoch++;Object.assign(exposureHistory,{exposures:[],cursor:"",hasMore:false,loading:false,namespace:"",key:"",version:0,error:""});
+  taskSummary.epoch++;Object.assign(taskSummary,{agents:[],loading:false,error:"",updatedAt:0});
+  taskHistory.epoch++;Object.assign(taskHistory,{tasks:null,cursor:"",hasMore:false,loading:false,updatedAt:0,error:""});messageHistory.epoch++;Object.assign(messageHistory,{messages:null,cursor:"",hasMore:false,loading:false});eventHistory.epoch++;Object.assign(eventHistory,{events:null,cursor:"",hasMore:false,loading:false});
+  if(typeof graphVersion!=="undefined"){graphVersion="";graphCache.clear();graphSelection=null;}
+  notice("Study moved to another attempt. Previous attempt drafts are retained separately; reviews were cleared before loading the new attempt.");
+}
+async function loadStudyStatus() {
+  if(studyLoading)return;studyLoading=true;
+  try {const value=await api("/api/study");studyView=value.study;renderStudyStatus();}
+  catch {if(!studyView)$("study-observer").hidden=true;}
+  finally{studyLoading=false;}
+}
+function renderStudyStatus() {
+  const panel=$("study-observer");panel.hidden=!studyView;if(!studyView)return;
+  $("study-status").textContent=studyView.completed+" / "+studyView.total+" trials completed · "+studyView.state+(followStudy?" · following current attempt":" · observing this fixed attempt")+(studyView.live?" · runner live":" · no live runner reported")+". Drafts and submission recovery stay bound to their attempt.";
+  const list=$("study-trials"),view=captureViewState(list);list.replaceChildren();
+  for(const trial of studyView.results||[])list.append(el("p","study-trial",trial.trial+" · "+trial.condition+" · attempt "+trial.attempt+" · "+trial.state));restoreViewState(list,view);
+}
+function changeStudyRoute() {
+  const desired=$("follow-study").checked;if(desired===followStudy)return;
+  followStudy=desired;routingEpoch++;routingPending=true;connected=false;
+  ownerActionReview=teamReview=researchReview=legacyGroupReview=relaunchReview=resourceReview=null;
+  for(const id of ["owner-action-review","research-review","relaunch-review","resource-review"])$(id).hidden=true;
+  capacityRequest++;capacityLoading="";memoryRequest++;memoryReviewRequest++;taskHistory.epoch++;taskHistory.loading=false;messageHistory.epoch++;messageHistory.loading=false;eventHistory.epoch++;eventHistory.loading=false;exposureHistory.epoch++;exposureHistory.loading=false;taskSummary.epoch++;taskSummary.loading=false;
+  selectionControls();renderSubmissionRecords();renderStudyStatus();$("connection").textContent="Loading workspace route";
+  notice("Loading the requested workspace route. Writes are disabled until its matching snapshot arrives; drafts stay bound to the displayed attempt.");
+  refresh();
+}
+$("follow-study").onchange=changeStudyRoute;
+async function loadResearchHistory(mode="refresh") {
+  if(researchHistory.loading&&mode!=="reset")return;
+  const epoch=++researchHistory.epoch,append=mode==="more",target=append?100:Math.max(100,researchHistory.records.length);let cursor=append?researchHistory.cursor:"",rows=[],hasMore=false;
+  researchHistory.loading=true;researchHistory.error="";renderResearchHistory();
+  try {
+    do {
+      const params=new URLSearchParams({after:cursor,limit:"100",actor:researchHistory.actor,type:researchHistory.type,query:researchHistory.query});const page=(await api("/api/research-history?"+params)).history;if(epoch!==researchHistory.epoch)return;
+      const incoming=page.records||[],next=page.cursor||cursor;rows.push(...incoming);hasMore=page.has_more===true;if(!incoming.length||next===cursor){hasMore=false;break;}cursor=next;
+    }while(hasMore&&rows.length<target);
+    if(epoch!==researchHistory.epoch)return;
+    researchHistory.records=[...new Map((append?[...researchHistory.records,...rows]:rows).map(row=>[row.sequence,row])).values()];Object.assign(researchHistory,{cursor,hasMore,updatedAt:Date.now()});
+  }catch(error){if(epoch===researchHistory.epoch)researchHistory.error=error.message;}
+  finally{if(epoch===researchHistory.epoch){researchHistory.loading=false;renderResearchHistory();}}
+}
+function renderResearchHistory() {
+  const list=$("research-history"),view=captureViewState(list);list.replaceChildren();
+  $("research-history-status").textContent=researchHistory.loading?"Loading archived study evidence…":researchHistory.error?"Archive unavailable: "+researchHistory.error:researchHistory.records.length+" archived records loaded · archive order"+(researchHistory.hasMore?" · more evidence available":" · end of available archive");
+  $("load-more-research-history").hidden=!researchHistory.hasMore;$("load-more-research-history").disabled=researchHistory.loading;
+  for(const row of researchHistory.records){const record=row.record||{},data=record.data||{},item=el("article","lifecycle-row"),detail=el("details"),summary=el("summary","",record.kind+" · "+record.id);item.dataset.itemKey=String(row.sequence);detail.dataset.disclosureKey=String(row.sequence);summary.dataset.focusKey="archive:"+row.sequence;item.append(el("p","session-note",row.trial+" · attempt "+row.attempt+" · record "+row.sequence));
+    if(record.kind==="message")item.append(el("p","",(data.from||"unknown")+" → "+(data.board?"#"+data.board:(data.to||[]).join(", "))+" · "+(data.reply_to?"reply to "+data.reply_to:"root message")),el("p","",data.text||""));
+    else if(record.kind==="exposure")item.append(el("p","",(data.reader||"unknown reader")+" received "+(data.kind||"data")+" "+(data.entity_id||data.key||"")+" · version "+(data.version??"unknown")+" · "+(data.routes||[]).join(", ")));
+    else if(record.kind==="memory")item.append(el("p","",(data.namespace||"")+" / "+(data.key||"")+" · version "+(data.version??"unknown")));
+    detail.append(summary,el("pre","",JSON.stringify(data,null,2)));item.append(detail);list.append(item);
+  }
+  if(!researchHistory.records.length&&!researchHistory.loading)list.append(el("p","empty","No archived evidence matches. Live coordination is archived at research export boundaries."));restoreViewState(list,view);
+}
+$("research-history-filter").onsubmit=event=>{event.preventDefault();researchHistory.query=$("research-history-query").value.trim();researchHistory.actor=$("research-history-actor").value.trim();researchHistory.type=$("research-history-kind").value;loadResearchHistory("reset");};
+$("load-more-research-history").onclick=()=>loadResearchHistory("more");
+$("agents").onkeydown=event=>{const rows=[...$("agents").children].filter(row=>row.dataset.agent),index=rows.indexOf(document.activeElement);if(["ArrowUp","ArrowDown","Home","End"].includes(event.key)){event.preventDefault();const next=event.key==="Home"?0:event.key==="End"?rows.length-1:index<0?(event.key==="ArrowDown"?0:rows.length-1):(index+(event.key==="ArrowDown"?1:-1)+rows.length)%rows.length;rows[next]?.focus();}else if((event.key==="Enter"||event.key===" ")&&event.target===$("agents")){event.preventDefault();(rows.find(row=>row.dataset.agent===selected)||rows[0])?.focus();}};
+
+for(const id of ["new-title","new-name","new-role","new-project","new-harness","new-sandbox","new-native-only"])$(id).addEventListener("input",()=>{newSessionDirty=true;});
+
+
+async function loadExposures(mode="refresh") {
+  if(!connected||(exposureHistory.loading&&mode!=="reset"))return;
+  const epoch=++exposureHistory.epoch,append=mode==="more",filters={reader:exposureHistory.reader,kind:exposureHistory.kind,route:exposureHistory.route,namespace:exposureHistory.namespace,key:exposureHistory.key,...(exposureHistory.version?{version:exposureHistory.version}:{})};
+  exposureHistory.loading=true;exposureHistory.error="";renderExposures();
+  try {const page=await call("exposure.list",{...filters,after:append?exposureHistory.cursor:"",limit:100});if(epoch!==exposureHistory.epoch)return;exposureHistory.exposures=append?[...exposureHistory.exposures,...(page.exposures||[])]:page.exposures||[];Object.assign(exposureHistory,{cursor:page.cursor||"",hasMore:page.has_more===true,retainedLimit:page.retained_limit||10000});}
+  catch(error){if(epoch===exposureHistory.epoch)exposureHistory.error=error.message;}
+  finally{if(epoch===exposureHistory.epoch){exposureHistory.loading=false;renderExposures();}}
+}
+function renderExposures() {
+  const list=$("exposure-list"),view=captureViewState(list);list.replaceChildren();
+  const exact=exposureHistory.namespace?" · exact "+exposureHistory.namespace+" / "+exposureHistory.key+" · version "+exposureHistory.version:"";
+  $("exposure-status").textContent=exposureHistory.loading?"Loading exposure receipts…":exposureHistory.error?"Receipts could not refresh: "+exposureHistory.error:exposureHistory.exposures.length+" receipt(s) loaded"+exact+" · retained ledger limit "+exposureHistory.retainedLimit+(exposureHistory.hasMore?" · more receipts available":" · end of retained matching receipts");
+  $("load-more-exposures").hidden=!exposureHistory.hasMore;$("load-more-exposures").disabled=exposureHistory.loading;
+  for(const entry of exposureHistory.exposures){const row=el("article","lifecycle-row"),detail=el("details"),summary=el("summary","",sessionReference(entry.reader)+" · "+entry.kind+" · version "+entry.version);row.dataset.itemKey=entry.reader+":"+entry.entity_id+":"+entry.version+":"+entry.at;detail.dataset.disclosureKey=row.dataset.itemKey;summary.dataset.focusKey=row.dataset.itemKey;detail.append(summary,el("p","",entry.namespace+(entry.key?" / "+entry.key:"")+" · "+sessionTime(entry.at,"Disclosed")),el("p","session-note","Routes: "+(entry.routes||[]).join(", ")+" · reader generation "+entry.generation),el("code","",entry.entity_id),el("code","","SHA-256: "+entry.sha256));row.append(detail);list.append(row);}
+  if(!exposureHistory.exposures.length&&!exposureHistory.loading)list.append(el("p","empty","No retained receipt matches. An absent receipt does not prove the session never knew this context."));restoreViewState(list,view);
+}
+$("exposure-filter").onsubmit=event=>{event.preventDefault();exposureHistory.reader=$("exposure-reader").value.trim();exposureHistory.kind=$("exposure-kind").value;exposureHistory.route=$("exposure-route").value.trim();loadExposures("reset");};
+$("clear-exposure-version").onclick=()=>{Object.assign(exposureHistory,{namespace:"",key:"",version:0});loadExposures("reset");};
+$("load-more-exposures").onclick=()=>loadExposures("more");
+
+
+async function loadTaskSummary() {
+  if(!connected||routingPending||taskSummary.loading)return;
+  const epoch=++taskSummary.epoch;taskSummary.loading=true;taskSummary.error="";renderAttentionQueue();
+  try{
+    const rows=[];let cursor="";
+    for(let pageNumber=0;pageNumber<50;pageNumber++){
+      const page=await call("task.summary",{after:cursor,limit:200});if(epoch!==taskSummary.epoch)return;rows.push(...(page.agents||[]));
+      if(!page.has_more){taskSummary.agents=rows;taskSummary.updatedAt=Date.now();agentSignature="";renderSessionLists();break;}
+      if(!page.cursor||page.cursor===cursor)throw new Error("Task summary cursor did not advance");cursor=page.cursor;
+      if(pageNumber===49)throw new Error("Task summary exceeds the pagination budget");
+    }
+  }catch(error){if(epoch===taskSummary.epoch)taskSummary.error=error.message;}
+  finally{if(epoch===taskSummary.epoch){taskSummary.loading=false;renderAttentionQueue();}}
+}
+
 // Native delivery controls permission-independent admission into one existing
 // conversation. Every mutation retains the displayed agent and policy version.
 function nativeInfo(id = selected) {
@@ -3603,8 +3994,8 @@ function nativeDeliveryHint(id) {
   const status = nativeInfo(id);
   if (!status?.policy?.version) return "Native delivery unavailable. Commands remain queued until the session explicitly reads them.";
   if (!status.session || !status.connected) return "Native delivery " + status.state + ": " + (status.reason || "adapter is not connected") + ".";
-  if (status.mode === "manual") return "Manual inbox: commands stay queued. Enable Review or Auto in Agent → Native collaboration to deliver them.";
-  if (status.mode === "review") return "Review delivery: approve each exact request in Agent → Native collaboration before it enters the native conversation.";
+  if (status.mode === "manual") return "Manual inbox: commands stay queued. Enable Review or Auto in Session detail → Native collaboration to deliver them.";
+  if (status.mode === "review") return "Review delivery: approve each exact request in Session detail → Native collaboration before it enters the native conversation.";
   if (!["ready","active"].includes(status.state)) return "Auto delivery is blocked: " + status.reason + ".";
   return "Auto delivery enabled. Native receipts distinguish submitted, running and completed; existing terminal approvals still apply.";
 }
@@ -3628,6 +4019,11 @@ function renderNativeDelivery() {
   heading.append(el("h2","","Native collaboration"),el("span","",status?.state || "UNAVAILABLE"));
   panel.append(heading);
   panel.append(el("p","session-note",status?.reason || snapshot.native_error || "This controller has no native delivery status. Reopen with a current controller before enabling automatic delivery."));
+  if(agent.external) {
+    panel.append(el("p","session-note","External bridge setup authorizes explicit inbox reads in its existing terminal. Automatic delivery needs a verified adapter and authenticated native session; registering a bridge does not supply one. Use the copied setup in Existing terminals, then read the inbox manually."));
+    const sessions=el("button","quiet","Open existing terminal setup");sessions.type="button";sessions.onclick=()=>activateTab("terminals");panel.append(sessions);
+  }
+  if(status?.state==="auth_required" || /auth|credential|sign.?in/i.test(status?.reason||""))panel.append(el("p","action-error","Complete provider authentication in the original native terminal. Agentmux permissions and owner links cannot bypass provider sign-in; retry receiver delivery after authentication succeeds."));
   if (!policy?.version) { restoreViewState(panel,view); return; }
   const enabled = nativeControlReady(id,policy.version), modes = el("div","native-modes");
   modes.setAttribute("aria-label","Native delivery mode");
@@ -3643,9 +4039,9 @@ function renderNativeDelivery() {
     };
     modes.append(button);
   }
-  panel.append(modes,el("p","session-note",status.mode === "manual" ? "No automatic turns. Read the inbox manually, or choose Review / Auto." : status.mode === "review" ? "Review the full request and approve its exact candidate below. Approval does not bypass native tool permissions." : "Authorized requests can start model turns in this conversation. Native tool approvals and provider usage apply."));
+  panel.append(modes,el("p","session-note",status.mode === "manual" ? "No automatic turns. Read the inbox manually. Review / Auto requires a connected compatible adapter; choosing a mode alone cannot connect an external bridge." : status.mode === "review" ? "Review the full request and approve its exact candidate below. Approval does not bypass native tool permissions." : "Authorized requests can start model turns in this conversation. Native tool approvals and provider usage apply."));
   const caps=status.capabilities || {}, capability=el("p","native-capabilities");
-  capability.append(el("span","",status.adapter ? "Adapter: "+status.adapter : "Adapter: relaunch required"),el("span","",caps.instructions ? "Instructions supported" : "Instructions unavailable"),el("span","",caps.native_queue ? "Native queue" : status.adapter ? "Idle admission only" : "No verified delivery adapter"),el("span","",caps.preserves_draft ? "Draft preservation verified" : "Draft preservation unverified"),el("span","",caps.cancellation ? "Cancellation supported" : "Queued native turns cannot be retracted"));
+  capability.append(el("span","",status.adapter ? "Adapter: "+status.adapter : agent.external ? "No verified automatic bridge adapter" : "Adapter: verified session setup required"),el("span","",caps.instructions ? "Instructions supported" : "Instructions unavailable"),el("span","",caps.native_queue ? "Native queue" : status.adapter ? "Idle admission only" : "No verified delivery adapter"),el("span","",caps.preserves_draft ? "Draft preservation verified" : "Draft preservation unverified"),el("span","",caps.cancellation ? "Cancellation supported" : "Queued native turns cannot be retracted"));
   capability.append(el("span","",caps.completion_evidence === "receiver-ack" ? "Completion: receiver acknowledgment" : caps.completion_evidence === "native-events" ? "Completion: correlated native events" : "Completion evidence unavailable"));
   panel.append(capability);
   let draft=nativeDrafts.get(id);
@@ -3697,7 +4093,7 @@ function renderNativeDelivery() {
   if (!pending.length) queue.append(el("p","session-note","No eligible requests waiting."));
   for(const delivery of pending.slice(0,5)) {
     const item=el("details","native-candidate");item.dataset.disclosureKey="native:"+delivery.id;item.dataset.itemKey=delivery.id;
-    item.append(el("summary","",delivery.kind+" from "+sessionReference(delivery.from)),el("code","",delivery.id),el("pre","",delivery.text));
+    item.append(el("summary","",delivery.kind+" from "+sessionReference(delivery.from)+" · "+ageText(delivery.created_at)),el("code","",delivery.id),el("pre","",delivery.text));
     if(status.mode==="review") {
       const approve=el("button","","Approve this exact turn"), version=policy.version, fingerprint=JSON.stringify(delivery);
       approve.type="button";approve.dataset.ownerWrite="true";approve.dataset.focusKey="native-approve:"+delivery.id;

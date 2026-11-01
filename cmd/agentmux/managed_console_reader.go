@@ -134,6 +134,9 @@ func (m *console) restoreDraft() {
 	d := m.failedDraft
 	if d.native != nil {
 		m.newNative = *d.native
+		if d.native.role != "" {
+			m.newNative.advanced = true
+		}
 	}
 	m.memoryNamespace, m.memoryKey, m.memoryVersion = d.namespace, d.key, d.version
 	if d.kind == "role" {
@@ -167,7 +170,7 @@ func (m *console) openReader() {
 		data, _ := json.MarshalIndent(a, "", "  ")
 		body = string(data)
 		if a.External {
-			body += "\n\nBridge setup (read and paste yourself; readiness unconfirmed)\n" + bridgeInstructions(m.state, a.ID)
+			body += "\n\n" + m.externalObservationDetails(a.ExternalRef) + "\n\nBridge setup (read and paste yourself; readiness unconfirmed)\n" + bridgeInstructions(m.state, a.ID)
 		} else if m.data.selected == a.ID && m.data.preview != "" {
 			body += "\n\nObserved terminal preview\n" + m.data.preview
 		}
@@ -213,6 +216,9 @@ func (m *console) openReader() {
 	case 7:
 		if len(m.data.activity.Events) > 0 {
 			v := m.data.activity.Events[m.eventIndex%len(m.data.activity.Events)]
+			m.eventPinned = &v
+			scope := historyScope(m.eventPageRequest())
+			m.eventPinScope = &scope
 			title = "Event " + v.ID
 			data, _ := json.MarshalIndent(v, "", "  ")
 			body = string(data)
@@ -323,5 +329,11 @@ func (m *console) stepContent(delta int) {
 		m.teamIndex = consoleStep(m.teamIndex, len(m.data.teams), delta)
 	case 7:
 		m.eventIndex = consoleStep(m.eventIndex, len(m.data.activity.Events), delta)
+		if len(m.data.activity.Events) > 0 {
+			event := m.data.activity.Events[m.eventIndex]
+			m.eventPinned = &event
+			scope := historyScope(m.eventPageRequest())
+			m.eventPinScope = &scope
+		}
 	}
 }

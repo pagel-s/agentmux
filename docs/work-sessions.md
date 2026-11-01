@@ -137,9 +137,11 @@ when it is not the default workspace.
 
 `agentmux workspaces` lists named workspaces and remembered custom state paths.
 Use `--json` for structured inventory or `--register DIR` to add an older custom
-location. **Shift+W** opens the terminal chooser: Enter opens another observer; closing it
-returns to the previous workspace without losing that observer's drafts. The web
-Sessions view lists workspace commands. Identical names remain distinct by state
+location. **Ctrl+W** (also **Shift+W**) opens the workspace chooser. From an
+interactive attachment, Enter hands off to that workspace while preserving the
+previous workbench and drafts. A standalone observer shows an exact attach
+command when native input needs a different tmux server. The web Sessions view
+lists workspace commands. Identical names remain distinct by state
 path. A failed or exhausted live check reports unknown instead of inventing a
 stopped process; opening an unknown workspace attempts observation without starting
 agents.
@@ -348,12 +350,15 @@ use **Ctrl-G** for help and **Esc** to cancel before using navigation shortcuts.
 | Ctrl+P or / | Find by task, project, provider, ID or terminal location; Enter opens native, Tab selects here, Esc cancels |
 | Shift+L | Edit the selected session's human task title; empty clears |
 | Shift+V | Edit its coordinated role with CAS; prompt-free native sessions reject injected roles |
-| Shift+W / Shift+U | Choose another workspace observer / deliberately relaunch the selected exited owned native session |
+| Ctrl+K | Search and invoke Actions with exact targets and unavailable reasons |
+| Shift+N | Quick new session using selected provider/project; optional title then review |
+| Ctrl+W / Shift+W | Choose another workspace; an attachment hands off interactively and retains prior drafts |
+| Shift+U | Deliberately relaunch the selected exited owned native session |
 | ? / Ctrl-G | Open context help outside an editor / while editing or reviewing |
 | F1 / Ctrl-b g in a native session | Return to the workbench |
 | Ctrl-b, then b / Shift+P / m / t in a native session | Open Board / Connections / Memory / Tasks in a popup |
 | Ctrl-b, then Shift+D | Choose read-only Broker or Supervisor logs without leaving the current terminal |
-| Tab / Shift-Tab or 1–8 | Switch Board, Agents, Connections, Memory, Tasks, Sessions, Teams, Events |
+| Tab / Shift-Tab or 1–8 | Switch Board, Sessions, Connections, Memory, Tasks, Existing terminals, Teams, Events |
 | ←/→ or Ctrl+←/→ in every view | Switch views; editors, readers and reviews keep their own arrow keys |
 | [ / ] in Teams; h/l or Alt+←/→ | Choose a team; choose an exact agent for a membership action |
 | i / r / d in Teams | Review invite / remove or revoke invitation / dissolve with the current version; hints follow target membership |
@@ -403,11 +408,11 @@ necessarily mean the CLI failed. **Enter** or **Shift+U** opens a deliberate
 relaunch review. Nothing restarts until you confirm; retained output is labeled
 as last output instead of live output.
 
-**Shift+W** can open an observer for another workspace. If this observer is
-hosted inside a different tmux server, **Enter** shows an exact `agentmux attach`
-command to run in a separate terminal. Observation and owner controls remain
-available in the current observer; native input uses that separate terminal.
-This avoids nesting tmux clients or switching unrelated attachments.
+**Ctrl+W** (also **Shift+W**) opens the workspace chooser even while a draft or
+review is open. An interactive `amx attach` hands off between tmux servers using
+its outer client; other attachments remain where they are, and returning
+restores the previous workbench and draft. A standalone observer instead
+shows an exact attach command for native input in another server.
 
 Use `o` when a preview is too short. The reader keeps the selected record and
 its loaded text fixed while activity refreshes, so scrolling cannot switch to a
@@ -615,3 +620,9 @@ tasks, results, reported traces and lifecycle information; they do not offer a
 native tmux pane. Research adds reviewed phase-barrier controls and a separate
 runner heartbeat. See [live research](research.md#observe-and-intervene-live) and
 the [single-task pilot](experiments.md#observe-a-running-pilot).
+
+The [control center guide](usability-control-center.md) describes reviewed
+shutdown, scoped history, attention, exact group disconnect, retirement,
+exposure receipts and continuous study observation. Existing `--view agents`
+and `--view sessions` names remain compatible for registered-session detail
+and discovered terminals respectively.

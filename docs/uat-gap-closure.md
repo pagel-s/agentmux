@@ -3,7 +3,9 @@
 This follow-up addresses the eight remaining categories recorded in the
 [20-angle UAT](uat-20-angles.md#historical-capability-proposals-and-design-limits).
 It separates implemented controls from the limits of what was tested. The
-original review and its measurements remain historical evidence.
+original review and its measurements remain historical evidence. The newer
+[control center guide](usability-control-center.md) covers Actions, exact
+selection/handoff, retirement, retrieval evidence and whole-study observation.
 
 For hands-on use, follow [interactive work sessions](work-sessions.md),
 [dynamic teams and capacity](dynamic-teams.md), or the
@@ -16,7 +18,7 @@ is the implementation/validation record, rather than the installation guide.
 
 | Previous category | Concrete behavior now available | Regression evidence and practical limits |
 | --- | --- | --- |
-| Everyday session continuity | `relaunch ID` requests one deliberate relaunch through the running supervisor, retaining the stable ID, peer processes and workspace attempt. Native history selection is explicit: a new conversation, `last`, a supported picker, or a provider-native ID. `workspaces` inventories default/named locations and registered custom directories; terminal **W** and web expose workspace navigation. | `TestIndividualNativeRelaunchPreservesPeerAndAttempt`, workspace concurrent-index tests and web identity-fencing tests. Relaunch refuses live, external or revoked sessions and stale attempt/pane identities. An old controller needs one workspace restart to support individual relaunch; absent custom paths require `workspaces --register DIR`. No native conversation is guessed. |
+| Everyday session continuity | `relaunch ID` requests one deliberate relaunch through the running supervisor, retaining the stable ID, peer processes and workspace attempt. Native history selection is explicit: a new conversation, `last`, a supported picker, or a provider-native ID. `workspaces` inventories default/named locations and registered custom directories; terminal **Ctrl+W** (also **Shift+W**) and web expose workspace navigation. | `TestIndividualNativeRelaunchPreservesPeerAndAttempt`, workspace concurrent-index tests and web identity-fencing tests. Relaunch refuses live, external or revoked sessions and stale attempt/pane identities. An old controller needs one workspace restart to support individual relaunch; absent custom paths require `workspaces --register DIR`. No native conversation is guessed. |
 | History and navigation | Broker `task.list` supports visibility-preserving query/recipient filters, descending history, cursors and `has_more`. Terminal Tasks uses **f**, **PgUp/PgDn**; web has complete-history search and pagination alongside the recent snapshot. **?** and **Ctrl-G** provide contextual terminal help, including editor/review guidance. Graph zoom/fit and keyboard controls remove the mandatory wide mobile canvas; team labels include human titles and exact IDs. | `TestTaskHistorySearchPagingNeverWidensVisibility` traverses 85 tasks and finds the oldest while rejecting hidden cursors. Frontend tests cover short byte-limited pages, late queries, failed pagination, mobile graph fit/zoom, identity and focus. Help/intent tests preserve literal `?` inside drafts. This is targeted accessibility/responsive coverage, not certification across every terminal, browser or assistive technology. |
 | Overlapping permission semantics | Current owner groups contribute grants independently; disabling one removes only its contribution. Exact owner allow/deny overrides remain separate. Effective boundaries expose source and denial reasons plus stored-versus-effective scope values. Isolation suspends prior intent rather than overwriting it; reconnect restores the selected relationships and configured static intent while unrelated isolation remains. Explicit override reset controls are available. | Overlap, isolation/reconnect, explicit-scope and scale regressions cover grant provenance and rollback. Historical groups fail closed until the owner reviews **preserve** versus **group** migration semantics; tests cover exact-pair removal, retained denies, atomic rollback and receipts. New semantics do not guess whether an old untagged edge was manually intended. See [live permissions](live-permissions.md). |
 | Knowledge provenance and portable traces | Imported entries retain source session, exporter agent, namespace, original author/key/version, value digest and complete archive digest as structured claims. Terminal/web readers expose them beside the destination author. `managed trace export` creates an owner-signed portable bundle; `verify-bundle --trust FINGERPRINT` verifies offline without owner state or secret keys. | Cross-run CAS/import-resume tests check exact retained claims and destination authorship. Portable-bundle tests reject tampering, mismatched/missing trust pins, overwrite and secret-key export; verification works without local state. Source claims and checksums are not authenticated source identity. Trace signatures authenticate the pinned owner exporter, not a provider or immutable execution environment. Exports can outlive source deletion. |
@@ -29,9 +31,11 @@ is the implementation/validation record, rather than the installation guide.
 
 The native terminal remains the primary interaction surface. Notes, instructions,
 live role edits, collaboration changes and web controls never become unsolicited
-terminal keystrokes. Managed workers execute queued tasks; a native session must
-read its broker inbox/tasks when the human wants coordination. Observing a process
-or preparing a bridge is distinct from the agent reading its setup.
+terminal keystrokes. Managed workers execute queued tasks. Native sessions use
+Manual delivery by default; supported Claude, Codex and Pi adapters can receive
+reviewed or automatic native turns when the owner explicitly enables delivery.
+External bridges remain manual. Observing a process or preparing a bridge is
+distinct from the agent reading its setup. See [native delivery](native-delivery.md).
 
 Dynamic collaboration and membership are broker authority, while a role or
 personality description is prompt content. An authorized participant may retain
@@ -46,7 +50,15 @@ provider request, or establish what an opaque provider actually billed. An
 owner-signed trace attests to that owner's locally verified adapter-visible
 record; it excludes hidden provider state and unreported native activity.
 
-## Validation record
+## Historical validation record
+
+The measurements below describe the earlier closure pass, not a count of the
+current test suite. The control center follow-up adds reviewer regressions for
+selection and modal focus, stale attempts, exact replay and privacy-preserving
+memory edits. Its acceptance includes 105 web tests, 18 installer tests, the
+full race suite, real sandbox/research integration, ten-session terminal and
+cross-server handoff UAT, and real browser checks. No provider calls were made
+in that follow-up.
 
 The final local build passed `go test -race -count=1 ./...` with the managed,
 experiment, research and sandbox integration flags enabled, all 78 frontend

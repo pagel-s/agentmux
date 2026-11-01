@@ -55,7 +55,7 @@ func workLegacyGroupEdges(control managed.ControlState) map[string][]managed.Edg
 // cross-origin API. Native output is data, never HTML or terminal input.
 func workWebHandler(state string, client *managed.Client, token, host string) http.Handler {
 	allowed := map[string]bool{"activity": true, "agent.list": true, "agent.label": true, "agent.role": true, "boundaries.get": true, "control.get": true, "control.update": true, "capacity.get": true, "capacity.update": true, "task.get": true, "task.list": true, "task.cancel": true, "agent.stop": true, "autonomy.status": true, "autonomy.control": true, "memory.list": true, "memory.get": true, "memory.head": true, "memory.put": true, "board.post": true, "team.invite": true, "team.remove": true, "team.update": true, "team.transfer": true, "team.accept-owner": true, "team.dissolve": true, "research.control": true}
-	for _, operation := range []string{"native.status", "native.configure", "native.approve"} {
+	for _, operation := range []string{"native.status", "native.configure", "native.approve", "memory.patch", "agent.retire", "message.list", "board.list", "events.list", "task.resolve", "message.send", "instruct", "exposure.list", "task.summary"} {
 		allowed[operation] = true
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -197,7 +197,7 @@ func workWebHandler(state string, client *managed.Client, token, host string) ht
 					}
 					return err.Error()
 				}
-				reply(map[string]any{"ok": true, "headless": d.headless, "native": d.native, "native_statuses": nativeStatuses, "native_error": nativeError, "groups": d.controls.Groups, "legacy_group_edges": workLegacyGroupEdges(d.controls), "teams": d.teams, "autonomy": d.autonomy, "conversation": d.conversation, "research": d.research, "runtime_error": errorText(d.runtimeErr), "teams_error": errorText(d.teamsErr), "research_error": errorText(d.researchErr), "observed": d.observed, "bridge_setup": func() string {
+				reply(map[string]any{"ok": true, "study_attempt": workStudyAttempt(state, d.runtime, d.research), "headless": d.headless, "native": d.native, "native_statuses": nativeStatuses, "native_error": nativeError, "groups": d.controls.Groups, "legacy_group_edges": workLegacyGroupEdges(d.controls), "teams": d.teams, "autonomy": d.autonomy, "conversation": d.conversation, "research": d.research, "runtime_error": errorText(d.runtimeErr), "teams_error": errorText(d.teamsErr), "research_error": errorText(d.researchErr), "observed": d.observed, "bridge_setup": func() string {
 					for _, a := range d.agents {
 						if a.ID == d.selected && a.External {
 							return bridgeInstructions(state, a.ID)
@@ -222,6 +222,7 @@ func workWebHandler(state string, client *managed.Client, token, host string) ht
 			}
 			var in struct {
 				Operation  string          `json:"operation"`
+				RequestID  string          `json:"request_id"`
 				Args       json.RawMessage `json:"args"`
 				Target     string          `json:"target"`
 				Text       string          `json:"text"`
@@ -312,7 +313,11 @@ func workWebHandler(state string, client *managed.Client, token, host string) ht
 				if len(args) == 0 {
 					args = json.RawMessage(`{}`)
 				}
-				raw, err := workCall(r.Context(), client, in.Operation, args)
+				if in.RequestID != "" && (len(in.RequestID) > 128 || strings.TrimSpace(in.RequestID) != in.RequestID || strings.ContainsAny(in.RequestID, "\r\n\t ")) {
+					failure(&managed.Fault{Code: "invalid", Message: "request_id must be a nonempty stable identifier of at most 128 characters without whitespace"})
+					return
+				}
+				raw, err := workCallRequest(r.Context(), client, in.Operation, args, in.RequestID)
 				if err != nil {
 					failure(err)
 					return
@@ -429,6 +434,10 @@ func runWorkWeb(args []string, out, diagnostics io.Writer) int {
 		}
 		clean = append(clean, args[i])
 	}
+	if err := validateWorkFlags("web", clean); err != nil {
+		fmt.Fprintln(diagnostics, "error:", err)
+		return exitValidation
+	}
 	o, err := parseWorkOptions(clean)
 	if err != nil {
 		fmt.Fprintln(diagnostics, "error:", err)
@@ -453,7 +462,7 @@ func runWorkWeb(args []string, out, diagnostics io.Writer) int {
 	url := "http://" + host + "/#" + token
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	server := &http.Server{Handler: workWebHandler(o.state, managed.NewClient(credential), token, host), BaseContext: func(net.Listener) context.Context { return ctx }, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16384}
+	server := &http.Server{Handler: workStudyHandler(o.state, managed.NewClient(credential), token, host, workWebHandler), BaseContext: func(net.Listener) context.Context { return ctx }, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16384}
 	go func() {
 		<-ctx.Done()
 		shutdown, cancel := context.WithTimeout(context.Background(), 3*time.Second)

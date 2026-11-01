@@ -31,7 +31,7 @@ func observeWorkSessions(ctx context.Context, state string) []sessioninventory.S
 			}
 		}
 	}
-	return sessioninventory.Discover(ctx, exclude)
+	return annotateSessionOrigins(ctx, state, sessioninventory.Discover(ctx, exclude))
 }
 
 // discoverWorkSessions is replaceable in model-free integration tests.
@@ -75,8 +75,22 @@ func workInventoryMode(agent managed.AgentInfo, observations []sessioninventory.
 
 func runWorkInventory(args []string, out, diagnostics io.Writer) int {
 	if workHelpRequested(args) {
-		fmt.Fprintln(out, "Usage: agentmux sessions [--session work | --state DIR]\nLists registered Agentmux sessions and recognizable existing native terminals.\nTitles describe tasks; use the stable ID to attach, label or connect.")
+		fmt.Fprintln(out, "Usage: agentmux sessions [--archived] [--session work | --state DIR]\nLists registered Agentmux sessions and recognizable existing native terminals.\nTitles describe tasks; use the stable ID to attach, label or connect.")
 		return exitSuccess
+	}
+	archived := false
+	clean := []string{}
+	for _, arg := range args {
+		if arg == "--archived" {
+			archived = true
+		} else {
+			clean = append(clean, arg)
+		}
+	}
+	args = clean
+	if err := validateWorkFlags("sessions", args); err != nil {
+		fmt.Fprintln(diagnostics, "error:", err)
+		return exitValidation
 	}
 	o, err := parseWorkOptions(args)
 	if err != nil {
@@ -93,11 +107,23 @@ func runWorkInventory(args []string, out, diagnostics io.Writer) int {
 	runtime, runtimeErr := describeWorkRuntime(context.Background(), o.state)
 	var registered []managed.AgentInfo
 	if registryErr == nil {
-		registered, registryErr = workRegistry(context.Background(), managed.NewClient(credential))
+		if archived {
+			registered, registryErr = workArchivedRegistry(context.Background(), managed.NewClient(credential))
+		} else {
+			registered, registryErr = workRegistry(context.Background(), managed.NewClient(credential))
+		}
 		if registryErr == nil {
 			for _, a := range registered {
 				mode := workInventoryMode(a, observations, runtime, runtimeErr)
 				fmt.Fprintf(out, "%s\n  ID %s · %s · %s · added %s\n  %s\n", consoleContent(sessionTitle(a), 160), a.ID, a.Config.Harness, mode, sessionAdded(a.CreatedAt), consoleContent(a.Config.Workdir, 300))
+				if a.External {
+					for _, observed := range observations {
+						if observed.ID == a.ExternalRef {
+							fmt.Fprintf(out, "  Original terminal %s · tmux %s · pane %s\n  %s\n", consoleContent(observed.TTY, 100), consoleContent(observed.TmuxSession, 100), consoleContent(observed.Pane, 40), consoleContent(observed.AttachCommand, 500))
+							break
+						}
+					}
+				}
 			}
 		}
 	}
@@ -408,4 +434,27 @@ func runWorkConnect(args []string, out, diagnostics io.Writer) int {
 	}
 	fmt.Fprintln(diagnostics, "error:", err)
 	return exitRuntime
+}
+
+func workArchivedRegistry(ctx context.Context, client *managed.Client) ([]managed.AgentInfo, error) {
+	result := []managed.AgentInfo{}
+	cursor := ""
+	for {
+		raw, err := workCall(ctx, client, "agent.list", map[string]any{"include_archived": true, "limit": 200, "after": cursor})
+		if err != nil {
+			return nil, err
+		}
+		var page struct {
+			Agents []managed.AgentInfo `json:"agents"`
+			Cursor string              `json:"cursor"`
+		}
+		if err := json.Unmarshal(raw, &page); err != nil {
+			return nil, err
+		}
+		result = append(result, page.Agents...)
+		if len(page.Agents) == 0 || page.Cursor == "" || page.Cursor == cursor {
+			return result, nil
+		}
+		cursor = page.Cursor
+	}
 }

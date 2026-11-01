@@ -40,7 +40,7 @@ func TestConsoleLongListsKeepExactSelectionVisibleAndIndependent(t *testing.T) {
 	m.tab = 4
 	m.task = 39
 	if !strings.Contains(m.View(), "selected task result") {
-		t.Fatal("task result hidden behind its instruction")
+		t.Fatalf("task result hidden behind its instruction:\n%s", m.View())
 	}
 	m, _ = consolePress(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{']'}})
 	if m.task != 0 || !strings.Contains(m.View(), "task_00") {

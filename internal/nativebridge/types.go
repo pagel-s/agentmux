@@ -30,16 +30,17 @@ type Readiness struct {
 }
 
 type Delivery struct {
-	ID       string `json:"id"`
-	TaskID   string `json:"task_id,omitempty"`
-	From     string `json:"from"`
-	To       string `json:"to"`
-	Kind     string `json:"kind"`
-	Scope    string `json:"scope,omitempty"`
-	SourceID string `json:"source_id,omitempty"`
-	Text     string `json:"text"`
-	ThreadID string `json:"thread_id,omitempty"`
-	ReplyTo  string `json:"reply_to,omitempty"`
+	ID        string `json:"id"`
+	TaskID    string `json:"task_id,omitempty"`
+	From      string `json:"from"`
+	To        string `json:"to"`
+	Kind      string `json:"kind"`
+	Scope     string `json:"scope,omitempty"`
+	SourceID  string `json:"source_id,omitempty"`
+	CreatedAt string `json:"created_at,omitempty"`
+	Text      string `json:"text"`
+	ThreadID  string `json:"thread_id,omitempty"`
+	ReplyTo   string `json:"reply_to,omitempty"`
 }
 
 type Event struct {

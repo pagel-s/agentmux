@@ -4,6 +4,12 @@
 
 Changes on `main` after the tagged `v0.10.0-rc.1` preview:
 
+- Reviewed, target-bound control center actions, quick native additions,
+  cross-workspace handoff, attention and scoped history; exact group disconnect,
+  safe uncertainty recovery, session retirement and metadata-preserving memory
+  edits. Continuous study observation, archived evidence and richer prompt-free
+  behavior exports. See [the control center guide](docs/usability-control-center.md).
+
 - An installed `amx` shortcut, shorter everyday commands and workspace flags,
   directional `allow`/`deny`, and attachment-local workspace selection. A visible
   terminal session list and Ctrl+P switcher make selecting native sessions clear.

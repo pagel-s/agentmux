@@ -60,6 +60,7 @@ type Result struct {
 	OwnerMutations       int                            `json:"owner_mutations,omitempty"`
 }
 type Report struct {
+	Population       Population         `json:"population_policy,omitempty"`
 	Research         string             `json:"research"`
 	ManifestHash     string             `json:"manifest_sha256"`
 	Results          []Result           `json:"results"`
@@ -113,7 +114,7 @@ func Run(ctx context.Context, m Manifest, opts RunOptions) (Report, error) {
 		return Report{}, errors.New("research output lock unavailable")
 	}
 	defer unlock()
-	report := Report{Research: m.ID, ManifestHash: digest(m), Results: []Result{}, Preregistration: m.Preregistration, Conditions: m.Conditions, PrimaryOutcome: m.PrimaryOutcome, Counterbalancing: m.Counterbalancing}
+	report := Report{Population: m.Population, Research: m.ID, ManifestHash: digest(m), Results: []Result{}, Preregistration: m.Preregistration, Conditions: m.Conditions, PrimaryOutcome: m.PrimaryOutcome, Counterbalancing: m.Counterbalancing}
 	var prior struct {
 		SHA256 string `json:"sha256"`
 	}
@@ -1007,6 +1008,39 @@ func exportTrace(ctx context.Context, client *managed.Client, path string) error
 			}
 		}
 		if len(page.Records) == 0 || page.Cursor == "" || page.Cursor == cursor {
+			break
+		}
+		cursor = page.Cursor
+	}
+	// Retrieval receipts are separately bounded metadata, not domain records.
+	// Preserve retained exposure evidence alongside the coordination archive.
+	cursor = ""
+	for {
+		args, _ := json.Marshal(map[string]any{"after": cursor, "limit": 200})
+		raw, problem := client.Call(ctx, managed.Request{Operation: "exposure.list", Args: args})
+		if problem != nil {
+			return fmt.Errorf("research exposure export failed (%s)", problem.Code)
+		}
+		var page struct {
+			Exposures []json.RawMessage `json:"exposures"`
+			Cursor    string            `json:"cursor"`
+			HasMore   bool              `json:"has_more"`
+		}
+		if json.Unmarshal(raw, &page) != nil {
+			return errors.New("invalid exposure export")
+		}
+		for _, data := range page.Exposures {
+			var id struct {
+				ID string `json:"id"`
+			}
+			if json.Unmarshal(data, &id) != nil {
+				return errors.New("invalid exposure receipt")
+			}
+			if err := json.NewEncoder(f).Encode(managed.ExportRecord{Kind: "exposure", ID: id.ID, Data: data}); err != nil {
+				return err
+			}
+		}
+		if !page.HasMore || len(page.Exposures) == 0 || page.Cursor == "" || page.Cursor == cursor {
 			break
 		}
 		cursor = page.Cursor

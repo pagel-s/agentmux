@@ -30,7 +30,7 @@ func TestConsoleArrowViewNavigationPreservesTargetSelection(t *testing.T) {
 				if next.tab != want || next.target != m.target || next.teamMemberIndex != m.teamMemberIndex || next.selected != m.selected {
 					t.Fatal("view arrows changed the selected agent or an invisible target")
 				}
-				if (cmd != nil) != (want == 4) {
+				if (cmd != nil) != (want == 4 || want == 0 || want == 7) {
 					t.Fatal("arrow navigation did not fetch Tasks on entry")
 				}
 			})
@@ -96,7 +96,7 @@ func TestConsoleArrowWalksReachEveryViewInBothDirections(t *testing.T) {
 					if m.busy || m.composer != "" || m.teamAction != nil {
 						t.Fatal("view navigation opened an editor or prepared a mutation")
 					}
-					if (cmd != nil) != (want == 4) {
+					if (cmd != nil) != (want == 4 || want == 0 || want == 7) {
 						t.Fatalf("view %d returned an unexpected command", want)
 					}
 					if cmd != nil {
@@ -110,7 +110,7 @@ func TestConsoleArrowWalksReachEveryViewInBothDirections(t *testing.T) {
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if len(operations) != 12 {
+	if len(operations) != 36 {
 		t.Fatalf("unexpected refresh count: %v", operations)
 	}
 	for _, operation := range operations {
@@ -161,7 +161,7 @@ func TestConsoleModifiedArrowsNavigateEveryView(t *testing.T) {
 			if next.tab != want || next.target != m.target || next.teamMemberIndex != m.teamMemberIndex {
 				t.Fatalf("Ctrl-arrow from view %d changed a target or failed to navigate", tab)
 			}
-			if (cmd != nil) != (want == 4) {
+			if (cmd != nil) != (want == 4 || want == 0 || want == 7) {
 				t.Fatalf("Ctrl-arrow from view %d did not fetch Tasks on entry", tab)
 			}
 		}

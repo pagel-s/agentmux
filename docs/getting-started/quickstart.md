@@ -21,13 +21,12 @@ make build
 For a user-local executable:
 
 ```sh
-mkdir -p "$HOME/.local/bin"
-install -m 755 bin/agentmux "$HOME/.local/bin/agentmux"
+make install
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
 Make that PATH setting available in each new terminal; see
-[installation](installation.md). Check `command -v agentmux` and
+[installation](installation.md). Check `command -v agentmux amx` and
 `agentmux version` if another installed copy might be selected.
 
 The default team needs both Claude Code and Codex installed and logged in:
@@ -206,7 +205,7 @@ agentmux delivery codex --approve CANDIDATE_ID --session try-agentmux
 
 Expected: Codex receives the attributed turn, and Tasks shows transport progress
 and a correlated result. A queued/submitted item is not yet proof of execution.
-**2 Agents → Shift+D** edits receiver delivery; **Shift+A** reviews an item.
+**2 Sessions → Shift+D** edits receiver delivery; **Shift+A** reviews an item.
 Auto removes per-item approval while retaining limits and permissions.
 Peer commands additionally require the sender's directional Commands grant.
 Return to Manual with `agentmux delivery codex manual --session try-agentmux`.
@@ -311,10 +310,10 @@ into that original native conversation; connecting does not inject it or move
 the external terminal. Some generic interpreter/non-TTY processes cannot be
 identified. Existing external conversations remain under your direct control.
 
-`agentmux workspaces` lists named and remembered custom locations. **Shift+W**
-opens another running workspace's observer and **q** returns. From inside a
-different workspace's tmux, **Enter** shows a native attach command to run in
-another terminal; it keeps observation and controls in the current observer.
+`agentmux workspaces` lists named and remembered custom locations. **Ctrl+W**
+(also **Shift+W**) opens the chooser. An interactive attachment switches to the
+selected workspace and retains the previous workbench and drafts. A standalone
+observer shows an exact attach command when native input needs another server.
 For an older custom state location, use `agentmux workspaces --register DIRECTORY`.
 
 ## 12. Stop the test and try isolated/managed workflows
