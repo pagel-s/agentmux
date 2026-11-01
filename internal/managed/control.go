@@ -315,6 +315,10 @@ func (s *Store) control(ctx context.Context, q queryer, a actor, r Request) (any
 			responseGroup = &group
 			in.Board, in.Memory = group.Board, group.Memory
 		}
+		// Only these ordered-pair checks are read-only: the group mutation above
+		// has completed, and persisted controls/agents cannot change until this
+		// phase ends. Do not pass this context to scope or membership mutations.
+		edgeReadCtx := boundaryReadContext(ctx)
 		putEdge := func(from, to, action string, allow bool) {
 			for i, v := range c.Edges {
 				if v.From == from && v.To == to && v.Action == action {
@@ -322,7 +326,7 @@ func (s *Store) control(ctx context.Context, q queryer, a actor, r Request) (any
 					return
 				}
 			}
-			if !allow && !s.can(ctx, q, from, action, to) {
+			if !allow && !s.can(edgeReadCtx, q, from, action, to) {
 				return
 			}
 			c.Edges = append(c.Edges, EdgeControl{From: from, To: to, Action: action, Allow: allow})

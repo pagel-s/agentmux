@@ -94,13 +94,12 @@ func withinBudget(used, extra, limit int64) bool {
 	return limit == 0 || (used <= limit && extra <= limit-used)
 }
 
-// reserveTurnBudget must run inside the same transaction as the lease claim.
-// No remote model call occurs here. This limits declared admissions, not
-// actual provider tokens/billing, which native CLI protocols cannot bound.
-func (s *Store) reserveTurnBudget(ctx context.Context, q queryer, t *taskRecord) *Fault {
-	lineage, err := s.budgetLineage(ctx, q, t.To)
+// turnBudgetAllowance checks admission without reserving or changing any usage.
+// Both read-only readiness and the transactional lease claim use these rules.
+func (s *Store) turnBudgetAllowance(ctx context.Context, q queryer, id string) (BudgetCharge, *Fault) {
+	lineage, err := s.budgetLineage(ctx, q, id)
 	if err != nil {
-		return internal(err)
+		return BudgetCharge{}, internal(err)
 	}
 	b := lineage[0].Config.Budget
 	extra := BudgetCharge{Tokens: b.MaxTurnTokens, CostMicrousd: b.MaxTurnCostMicrousd, Turns: 1}
@@ -110,27 +109,41 @@ func (s *Store) reserveTurnBudget(ctx context.Context, q queryer, t *taskRecord)
 		needsCost = needsCost || a.Config.Budget.MaxSubtreeCostMicrousd > 0
 	}
 	if needsTokens && extra.Tokens == 0 || needsCost && extra.CostMicrousd == 0 {
-		return fault("limit", "turn requires explicit token/cost reservation under its ancestor/session budget")
+		return BudgetCharge{}, fault("limit", "turn requires explicit token/cost reservation under its ancestor/session budget")
 	}
 	if extra.Tokens == 0 && extra.CostMicrousd == 0 && !needsTokens && !needsCost {
-		return nil
+		return BudgetCharge{}, nil
 	}
 	charges, session, err := s.budgetCharges(ctx, q)
 	if err != nil {
-		return internal(err)
+		return BudgetCharge{}, internal(err)
 	}
 	if !withinBudget(session.Tokens, extra.Tokens, s.cfg.Budget.MaxTokens) || !withinBudget(session.CostMicrousd, extra.CostMicrousd, s.cfg.Budget.MaxCostMicrousd) {
-		return fault("limit", "session admission budget exhausted")
+		return BudgetCharge{}, fault("limit", "session admission budget exhausted")
 	}
 	for _, a := range lineage {
 		used, err := s.subtreeCharge(ctx, q, a.ID, charges)
 		if err != nil {
-			return internal(err)
+			return BudgetCharge{}, internal(err)
 		}
 		limits := a.Config.Budget
 		if !withinBudget(used.Tokens, extra.Tokens, limits.MaxSubtreeTokens) || !withinBudget(used.CostMicrousd, extra.CostMicrousd, limits.MaxSubtreeCostMicrousd) {
-			return fault("limit", "agent ancestry admission budget exhausted")
+			return BudgetCharge{}, fault("limit", "agent ancestry admission budget exhausted")
 		}
+	}
+	return extra, nil
+}
+
+// reserveTurnBudget must run inside the same transaction as the lease claim.
+// No remote model call occurs here. This limits declared admissions, not
+// actual provider tokens/billing, which native CLI protocols cannot bound.
+func (s *Store) reserveTurnBudget(ctx context.Context, q queryer, t *taskRecord) *Fault {
+	extra, problem := s.turnBudgetAllowance(ctx, q, t.To)
+	if problem != nil {
+		return problem
+	}
+	if extra == (BudgetCharge{}) {
+		return nil
 	}
 	prior := BudgetCharge{}
 	if t.BudgetCharge != nil {

@@ -22,6 +22,7 @@ type workOptions struct {
 	state, session, config, project, sandbox string
 	group, board                             string
 	detach                                   bool
+	sandboxExplicit                          bool
 	args                                     []string
 	view                                     string
 	popup                                    bool
@@ -62,6 +63,13 @@ func defaultWorkState(session string) (string, error) {
 	return filepath.Join(root, "agentmux", session), nil
 }
 func parseWorkOptions(args []string) (workOptions, error) {
+	return parseWorkOptionsWithStorage(args, false)
+}
+
+// Starting a workspace may name it and choose its storage location together.
+// Selection commands require one selector so a stale copied flag cannot route
+// an action to a different workspace.
+func parseWorkOptionsWithStorage(args []string, allowNamedState bool) (workOptions, error) {
 	o := workOptions{session: "work", sandbox: "local"}
 	seen := map[string]bool{}
 	for i := 0; i < len(args); i++ {
@@ -123,10 +131,14 @@ func parseWorkOptions(args []string) (workOptions, error) {
 			o.project = value
 		case "sandbox":
 			o.sandbox = value
+			o.sandboxExplicit = true
 		}
 	}
 	if !managedconfig.ValidID(o.session) {
 		return o, errors.New("invalid session name")
+	}
+	if !allowNamedState && seen["session"] && seen["state"] {
+		return o, errors.New("choose either --session or --state to select a workspace, not both; no action was taken")
 	}
 	var err error
 	if o.state == "" {
@@ -186,7 +198,7 @@ managed workers. Use attach to type directly into a native agent terminal.
 Legacy raw pane input remains: agentmux send SESSION PANE -- COMMAND.`)
 		return exitSuccess
 	}
-	o, err := parseWorkOptions(args)
+	o, err := parseWorkOptionsWithStorage(args, operation == "start")
 	if err != nil {
 		fmt.Fprintln(diagnostics, "error:", err)
 		return exitValidation
@@ -232,27 +244,37 @@ Legacy raw pane input remains: agentmux send SESSION PANE -- COMMAND.`)
 				if e = checkSavedWorkProject(config, project); e != nil {
 					return fail(e)
 				}
-				if runtime, e := managedlaunch.Snapshot(o.state); e == nil && runtime.State == "running" {
-					exe, e := os.Executable()
-					if e != nil {
-						return fail(e)
-					}
-					launcher, e := managedlaunch.New(managedlaunch.Options{StateDir: o.state, Executable: exe})
-					if e != nil {
-						return fail(e)
-					}
-					live, e := launcher.Describe(ctx)
-					if e != nil {
-						return fail(e)
-					}
-					if live.State == "running" {
-						fmt.Fprintf(out, "Team %s is already running.\n", live.Session)
-						if o.detach {
-							return exitSuccess
-						}
-						return runWorkSession("attach", []string{"--state", o.state}, in, out, diagnostics)
-					}
+			}
+		}
+		if runtime, e := managedlaunch.Snapshot(o.state); e == nil && runtime.State == "running" {
+			exe, e := os.Executable()
+			if e != nil {
+				return fail(e)
+			}
+			launcher, e := managedlaunch.New(managedlaunch.Options{StateDir: o.state, Executable: exe})
+			if e != nil {
+				return fail(e)
+			}
+			live, e := launcher.Describe(ctx)
+			if e != nil {
+				return fail(e)
+			}
+			if live.State == "running" {
+				if o.sandboxExplicit && o.sandbox != live.BrokerSandbox {
+					return fail(fmt.Errorf("broker sandbox mismatch: requested %q, running workspace uses %q; choose a new workspace for the requested mode; no action was taken", o.sandbox, live.BrokerSandbox))
 				}
+				cfg, e := loadManagedConfig(config)
+				if e != nil {
+					return fail(e)
+				}
+				if e = launcher.CheckConfiguration(cfg); e != nil {
+					return fail(e)
+				}
+				fmt.Fprintf(out, "Team %s is already running.\n", live.Session)
+				if o.detach {
+					return exitSuccess
+				}
+				return runWorkSession("attach", []string{"--state", o.state}, in, out, diagnostics)
 			}
 		}
 		up := []string{"up", config, "--state", o.state, "--broker-sandbox", o.sandbox}
@@ -314,6 +336,7 @@ Legacy raw pane input remains: agentmux send SESSION PANE -- COMMAND.`)
 		return fail(errors.New("work session not found; use agentmux start or select --state / --session"))
 	}
 	client := managed.NewClient(credential)
+	fmt.Fprintf(out, "Workspace: %s\n", activityText(o.state, 300))
 	if operation == "remove" || operation == "collaborate" || operation == "isolate" || operation == "label" {
 		if err := workAgentOperation(operation, o, client, out); err != nil {
 			return fail(err)
@@ -387,6 +410,9 @@ Legacy raw pane input remains: agentmux send SESSION PANE -- COMMAND.`)
 			return fail(errors.New(operation + " requires a recipient/reference and one quoted message"))
 		}
 		target, text := o.args[0], o.args[1]
+		if strings.TrimSpace(text) == "" {
+			return fail(errors.New("message text must not be empty; no message or instruction was queued"))
+		}
 		if operation == "reply" {
 			target, err = workReplyTarget(ctx, client, target)
 			if err != nil {
@@ -430,6 +456,9 @@ func workReplyTarget(ctx context.Context, client *managed.Client, id string) (st
 	}
 	if err = json.Unmarshal(raw, &result); err != nil {
 		return "", err
+	}
+	if result.Message.Board != "" {
+		return "", fmt.Errorf("shared board messages need an explicit destination; use board --board %s with the same workspace selector, or send AGENT for a private reply", result.Message.Board)
 	}
 	if result.Message.From != "$owner" {
 		return result.Message.From, nil

@@ -76,7 +76,8 @@ func TestResearchBehaviorCSVExportsDecisionsWithoutPrompts(t *testing.T) {
 		Research: "test", ManifestHash: "hash",
 		Results: []research.Result{{
 			Status: "completed", Attempt: 1,
-			Trial:         research.Trial{ID: "run-1", Condition: "individual", Seed: 3, Repetition: 1},
+			Trial:         research.Trial{ID: "run-1", Condition: "individual", Seed: 3, Repetition: 1, Order: 4},
+			ConfigHash:    "config-hash",
 			ActorMetadata: map[string]research.AgentLabel{"alice": {Harness: "command", Model: "fixture"}},
 			Phases:        []research.Phase{{Instructions: map[string]string{"alice": "PRIVATE_OBSERVATION_SENTINEL"}}},
 			Rounds:        []research.Outcome{{Round: 1, Actions: map[string]research.ActionResult{"alice": {Valid: true, Action: research.Action{Contribute: 2}}}, Utilities: map[string]float64{"alice": 1}, Payoffs: map[string]float64{"alice": 1}, Credits: map[string]int{"alice": 2}}},
@@ -100,13 +101,36 @@ func TestResearchBehaviorCSVExportsDecisionsWithoutPrompts(t *testing.T) {
 		t.Fatal(err)
 	}
 	rows, err := csv.NewReader(bytes.NewReader(content)).ReadAll()
-	if err != nil || len(rows) != 2 || len(rows[0]) != 18 || len(rows[1][0]) != 24 || rows[1][5] != "alice" || rows[1][10] != "2" {
+	if err != nil || len(rows) != 2 || len(rows[0]) != 26 || len(rows[1][0]) != 24 || rows[1][5] != "alice" || rows[1][10] != "2" {
 		t.Fatalf("unexpected behavior rows: %v %v", rows, err)
+	}
+	if rows[1][18] != "test" || rows[1][19] != "hash" || rows[1][20] != "3" || rows[1][21] != "1" || rows[1][22] != "4" || rows[1][23] != "1" || rows[1][24] != "config-hash" {
+		t.Fatalf("behavior export lost study/block/attempt provenance: %v", rows[1])
 	}
 	if strings.Contains(string(content)+stdout.String(), "PRIVATE_OBSERVATION_SENTINEL") {
 		t.Fatal("behavior export leaked prompt text")
 	}
 	if code := runResearchIO(context.Background(), []string{"analyze", dir, "--behavior-csv", path}, &stdout, &stderr); code != exitRuntime {
 		t.Fatal("behavior export overwrote an existing artifact")
+	}
+}
+
+func TestResearchCSVRetainsInterpretationAndExclusionsWithoutEstimates(t *testing.T) {
+	a := research.Analysis{Research: "portable", ManifestHash: "study-hash", IntervenedRuns: 2, InterruptedRuns: 1, Interpretation: "Exploratory only", PowerWarning: "Too few blocks", EvidenceWarnings: []string{"Owner-intervened runs excluded"}}
+	path := filepath.Join(t.TempDir(), "summary.csv")
+	if err := writeResearchCSV(path, a); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := csv.NewReader(bytes.NewReader(data)).ReadAll()
+	if err != nil || len(rows) != 2 || rows[1][0] != "" || rows[1][7] != a.Research || rows[1][8] != a.ManifestHash || rows[1][9] != "2" || rows[1][10] != "1" || rows[1][12] != a.PowerWarning {
+		t.Fatalf("metadata lost: %v %v", rows, err)
+	}
+	var decoded research.Analysis
+	if err := json.Unmarshal([]byte(rows[1][13]), &decoded); err != nil || len(decoded.EvidenceWarnings) != 1 || decoded.EvidenceWarnings[0] != a.EvidenceWarnings[0] {
+		t.Fatalf("analysis metadata lost: %+v %v", decoded, err)
 	}
 }

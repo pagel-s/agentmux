@@ -65,10 +65,15 @@ agentmux web --open
 ```
 
 `start --detach` starts without attachment. Commands accept `--session NAME` or
-`--state DIRECTORY`; the default session is `work`. Do not reuse a saved session
+`--state DIRECTORY`; the default session is `work`. These are alternative selectors
+for existing workspaces: supplying both is rejected. `start` may combine them to
+name a workspace stored in a custom directory. Do not reuse a saved session
 for a different project or definition. `down` stops owned agents and broker in
 order, retaining their data. Detaching or closing a dashboard leaves them running.
-Running `start` again in the same project attaches to its running default team.
+Running the same `start` command again, including `--config FILE`, attaches to
+the running workspace only if the configuration still matches its saved definition.
+An explicit `--sandbox` must also match the running broker's mode; reopening never
+changes that mode. A mismatch is rejected without restarting the workspace.
 Use `managed restart --state DIRECTORY` for explicit restart.
 
 The current directory does not select a workspace for later commands. If you
@@ -162,6 +167,14 @@ creates another group. A session in two groups can read both authorized contexts
 it can carry that information between them. `isolate api-review` removes that
 session from **all** its groups and revokes peer coordination in both directions,
 not just the board currently displayed. It leaves other members running.
+
+Direct note/ping permissions are directed edges between sessions, rather than
+separate edges for each group. Disabling a group can therefore deny that pair's
+direct messages even if the pair also belongs to another active group. That other
+group's board and memory remain governed by its own membership and scope rules.
+Inspect effective boundaries in Connections before relying on an overlapping group;
+stored control overrides alone do not describe effective access. Reconnecting a
+group does not automatically clear separate denies on a static shared namespace.
 
 Each `attach` opens an independent tmux client view. You can keep Claude in one
 terminal window and Codex in another; switching one does not move the other.
@@ -306,6 +319,11 @@ agentmux reply TASK_OR_MESSAGE_ID "Please also check error handling."
 managed workers, printing the record ID. They never automatically retry writes;
 a transport failure can leave delivery uncertain. The lower-level `managed call`
 API exposes explicit request IDs for durable retries.
+
+`reply` accepts direct messages and tasks. A shared board post has several possible
+audiences, so reply to it with an explicit `board "Follow-up" --board NAMESPACE`
+in the same workspace, or use `send AGENT_ID "Follow-up"` for a private note.
+Empty replies are rejected before creating any message or task.
 
 ## Web app
 

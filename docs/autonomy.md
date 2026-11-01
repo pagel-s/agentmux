@@ -32,6 +32,8 @@ The broker stores bounded message references in one state record per subscribed 
 
 `autonomy.status {}` is read-only. It returns `status.ready`, `mode`, a derived state/reason, pending and inflight counts, turn usage, the next eligible time, drop/suppression counts, a cursor, and bounded processing receipts. Repeated idle discovery changes no durable records or request receipts. `suppressed` counts queued references removed after they cease to qualify; it is not a complete audit of every unsubscribed message.
 
+`pending` remains the observation-notification count for compatibility; `pending_observations` names that count explicitly, while `pending_instructions` counts queued instruction tasks. When otherwise eligible queued work cannot fit its session or ancestry admission allowance, status reports `ready: false`, `state: "halted"`, `admission_blocked: true`, and the existing admission denial in `reason` and `admission_reason`. This check reserves no allowance and does not renew any budget.
+
 The cursor advances when a source is scheduled or explicitly acknowledged. Receipts distinguish `scheduled`, terminal task outcomes, and manual `acknowledged` processing; they do not establish that a model understood or correctly acted on a message. An agent can acknowledge its currently visible queue through an opaque visible message ID:
 
 ```json

@@ -365,8 +365,11 @@ func (m console) agentRuntimePanel(width int) string {
 		if s.Enabled {
 			mode = "automatic admissions " + s.Mode
 		}
-		fmt.Fprintf(&out, "%s · in-flight %d · queued observations %d\n", mode, s.Inflight, s.Pending)
+		fmt.Fprintf(&out, "%s · in-flight %d\nQueued observations %d · queued instructions %d\n", mode, s.Inflight, s.Pending, s.PendingInstructions)
 		fmt.Fprintf(&out, "Status: %s · %s\n", s.State, consoleContent(s.Reason, 150))
+		if s.AdmissionBlocked && s.AdmissionReason != s.Reason {
+			fmt.Fprintf(&out, "Admission: %s\n", consoleContent(s.AdmissionReason, 150))
+		}
 		if s.Enabled {
 			fmt.Fprintf(&out, "Turns %d/%d · hop cap %d · dropped %d · suppressed %d\n", s.TurnsUsed, s.MaxTurns, a.Config.Autonomy.MaxHops, s.Dropped, s.Suppressed)
 			if s.NextAllowedAt != "" {

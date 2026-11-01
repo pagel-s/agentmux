@@ -202,6 +202,7 @@ kbd {
   border-left-color: var(--accent);
 }
 .agent-icon {
+  flex-shrink: 0;
   width: 25px;
   height: 25px;
   display: grid;
@@ -225,9 +226,10 @@ kbd {
   display: block;
   margin-top: 3px;
   color: var(--faint);
-  font: 9px var(--mono);
+  font: 11px/1.35 var(--mono);
 }
 .agent-dot {
+  flex-shrink: 0;
   width: 5px;
   height: 5px;
   background: var(--accent);
@@ -766,8 +768,8 @@ h1 {
   pointer-events: auto;
 }
 .graph-node .node-kind {
-  fill: #8e7ca2;
-  font: 9px var(--mono);
+  fill: var(--muted);
+  font: 11px var(--mono);
 }
 .graph-node.scope rect {
   stroke-dasharray: 4 3;
@@ -1207,7 +1209,7 @@ h1 {
 }
 .agent-copy .agent-project {
   margin-top: 2px;
-  font-size: 8px;
+  font-size: 11px;
 }
 .agent-list .empty {
   padding: 12px;

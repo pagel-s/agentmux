@@ -181,10 +181,10 @@ func TestConsoleRuntimeSeparatesAdmissionsExecutionAndNativeInteraction(t *testi
 	m := console{agents: []managed.AgentInfo{{ID: "worker", Config: managedconfig.Agent{
 		Conversation: "persistent", Autonomy: managedconfig.Autonomy{Enabled: true, MaxHops: 4},
 	}}}, data: consoleData{
-		autonomy:     managed.AutonomyStatus{Agent: "worker", Enabled: true, Mode: "paused", State: "working", Inflight: 1, Pending: 2, TurnsUsed: 3, MaxTurns: 8},
+		autonomy:     managed.AutonomyStatus{Agent: "worker", Enabled: true, Mode: "paused", State: "working", Inflight: 1, Pending: 2, PendingInstructions: 3, TurnsUsed: 3, MaxTurns: 8},
 		conversation: managed.ConversationState{Agent: "worker", Generation: 2, State: "busy"},
 	}}
-	for _, text := range []string{"admissions paused", "in-flight 1", "queued observations 2", "Turns 3/8", "Native history: busy", "generation 2", "Tasks → c cancel"} {
+	for _, text := range []string{"admissions paused", "in-flight 1", "Queued observations 2", "queued instructions 3", "Turns 3/8", "Native history: busy", "generation 2", "Tasks → c cancel"} {
 		if !strings.Contains(m.agentRuntimePanel(100), text) {
 			t.Fatalf("runtime status omitted %q", text)
 		}

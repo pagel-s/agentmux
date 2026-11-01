@@ -20,6 +20,7 @@ import (
 	"agentmux/internal/doctor"
 	"agentmux/internal/envcheck"
 	"agentmux/internal/hooks"
+	"agentmux/internal/managedlaunch"
 	"agentmux/internal/mcp"
 	"agentmux/internal/pack"
 	"agentmux/internal/provider"
@@ -230,6 +231,10 @@ func runTemplates(args []string) int {
 }
 
 func runInit(args []string) int {
+	if workHelpRequested(args) {
+		fmt.Println("Usage: agentmux init TEMPLATE PATH [--force]\nCreates a legacy pane-layout configuration. List templates with agentmux templates.\nFor everyday native work sessions use agentmux start; for managed presets use agentmux managed setup --help.")
+		return exitSuccess
+	}
 	opts, err := cli.ParseInit(args)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
@@ -587,6 +592,10 @@ func runSessionLaunch(mode string, opts cli.LoadOptions, requireExisting bool, r
 }
 
 func runValidate(args []string) int {
+	if workHelpRequested(args) {
+		fmt.Println("Usage: agentmux validate CONFIG [--param key=value] [--strict]\nValidates a pane-layout configuration without launching it.\nFor managed team definitions use agentmux managed doctor CONFIG --help.")
+		return exitSuccess
+	}
 	opts, err := cli.ParseValidate(args)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
@@ -630,11 +639,16 @@ func runRender(args []string) int {
 }
 
 func runList(args []string) int {
+	if workHelpRequested(args) {
+		fmt.Println("Usage: agentmux list\nLists legacy sessions on the default tmux socket.\nEveryday work sessions: agentmux sessions [--session NAME | --state DIR].")
+		return exitSuccess
+	}
 	if len(args) != 0 {
 		fmt.Fprintln(os.Stderr, "error: list does not accept arguments")
 		return exitValidation
 	}
 
+	fmt.Fprintln(os.Stderr, "This lists legacy tmux sessions. For everyday work sessions use agentmux sessions [--session NAME | --state DIR].")
 	sessions, err := tmux.ListSessions()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
@@ -669,6 +683,10 @@ func runDashboard(args []string) int {
 }
 
 func runStatus(args []string) int {
+	if workHelpRequested(args) {
+		fmt.Println("Usage: agentmux status SESSION [--json] [--pane PANE] [--logs [N]]\nInspects a legacy pane layout on the default tmux socket.\nEveryday work sessions: agentmux sessions [--session NAME | --state DIR].\nManaged runtime: agentmux managed status --state DIR [--watch].")
+		return exitSuccess
+	}
 	jsonOut := hasFlag(args, "--json")
 	opts, err := cli.ParseStatus(args)
 	if err != nil {
@@ -1913,6 +1931,13 @@ func printCommandError(command string, jsonOut bool, exitCode int, err error, se
 		fmt.Fprintf(os.Stderr, "error: render %s error json: %v\n", command, renderErr)
 	}
 	fmt.Fprintf(os.Stderr, "error: %v\n", err)
+	if command == "status" {
+		hint := []string{"agentmux", "sessions"}
+		if session != "" {
+			hint = append(hint, "--session", session)
+		}
+		fmt.Fprintln(os.Stderr, "This status command inspects legacy pane layouts. For an everyday workspace use:", managedlaunch.ShellCommand(hint))
+	}
 	return exitCode
 }
 
@@ -2100,6 +2125,9 @@ func mustGetwd() string {
 
 func printUsage() {
 	fmt.Println(`agentmux
+
+Everyday work sessions use dedicated tmux sockets. Use sessions/dashboard to inspect them;
+the legacy list/status commands below address the default tmux socket.
 
 Usage:
   agentmux start [--project DIR] [--session work] [--detach]

@@ -487,7 +487,15 @@ func (m console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		if msg.err != nil {
-			m.message = "Action failed: " + activityText(msg.err.Error(), 200) + ". Refresh before retrying; delivery may be uncertain."
+			advice := "Refresh before retrying; delivery may be uncertain."
+			var rejected *managed.Fault
+			if errors.As(msg.err, &rejected) {
+				switch rejected.Code {
+				case "conflict", "invalid", "forbidden", "not_found", "limit", "expired":
+					advice = "Request rejected. Refresh current state before trying again."
+				}
+			}
+			m.message = "Action failed: " + activityText(msg.err.Error(), 200) + ". " + advice
 			if msg.draft != nil {
 				m.failedDraft = msg.draft
 				m.message = "Draft kept for " + msg.draft.target + "; Ctrl-R restores after reviewing delivery. " + m.message

@@ -211,6 +211,18 @@ func (l *Launcher) ensureState(cfg managedconfig.Config) error {
 	} else if err != nil {
 		return err
 	}
+	return l.CheckConfiguration(cfg)
+}
+
+// CheckConfiguration verifies an existing workspace before reopening it. It
+// never initializes missing state or changes the saved launch definition.
+func (l *Launcher) CheckConfiguration(cfg managedconfig.Config) error {
+	if err := cfg.Validate(); err != nil {
+		return err
+	}
+	if _, err := os.Stat(filepath.Join(l.options.StateDir, "state.sqlite")); err != nil {
+		return err
+	}
 	store, err := managed.Open(l.options.StateDir)
 	if err != nil {
 		return err

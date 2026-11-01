@@ -326,12 +326,42 @@ func (m console) View() string {
 		tabs[2] = "3 Links"
 	}
 	var navigation strings.Builder
-	for i, label := range tabs {
+	firstTab, lastTab := 0, len(tabs)
+	navigationWidth := func() int {
+		length := 0
+		if firstTab > 0 {
+			length += 2 // Left overflow cue and space.
+		}
+		if lastTab < len(tabs) {
+			length += 2 // Space and right overflow cue.
+		}
+		for _, label := range tabs[firstTab:lastTab] {
+			length += len(label) + 2
+		}
+		return length
+	}
+	// Keep the current view in the visible range instead of clipping the final
+	// tabs. Drop the farther edge first, preserving nearby destinations.
+	for lastTab-firstTab > 1 && navigationWidth() > width {
+		if m.tab-firstTab > lastTab-1-m.tab {
+			firstTab++
+		} else {
+			lastTab--
+		}
+	}
+	if firstTab > 0 {
+		navigation.WriteString(consoleMuted.Render("‹ "))
+	}
+	for i := firstTab; i < lastTab; i++ {
+		label := tabs[i]
 		if i == m.tab {
 			navigation.WriteString(consoleSelected.Render(" " + label + " "))
 		} else {
 			navigation.WriteString(consoleMuted.Render(" " + label + " "))
 		}
+	}
+	if lastTab < len(tabs) {
+		navigation.WriteString(consoleMuted.Render(" ›"))
 	}
 	var footer strings.Builder
 	if m.composer != "" && m.reader == nil {

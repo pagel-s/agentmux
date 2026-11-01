@@ -4,9 +4,13 @@ import gzip
 import importlib.util
 import io
 from pathlib import Path
+import platform
+import subprocess
+import sys
 import tarfile
 import tempfile
 import unittest
+from unittest import mock
 
 spec=importlib.util.spec_from_file_location('installer',Path(__file__).with_name('install-release.py'))
 installer=importlib.util.module_from_spec(spec);spec.loader.exec_module(installer)
@@ -19,6 +23,36 @@ def archive(entries):
     return output.getvalue()
 
 class InstallTests(unittest.TestCase):
+    def test_cli_refused_overwrite_is_concise_and_preserves_destination(self):
+        system={'Linux':'linux','Darwin':'darwin'}.get(platform.system())
+        arch={'x86_64':'x86_64','AMD64':'x86_64','aarch64':'arm64','arm64':'arm64'}.get(platform.machine())
+        if not system or not arch:self.skipTest('release installer platform unsupported')
+        name='agentmux_'+system+'_'+arch+'.tar.gz'
+        payload=archive([('agentmux',b'#!/bin/sh\nprintf "agentmux 1.2.3\\n"\n')])
+        with tempfile.TemporaryDirectory() as root:
+            root=Path(root);destination=root/'agentmux';original=b'existing executable'
+            destination.write_bytes(original)
+            (root/name).write_bytes(payload)
+            (root/'checksums.txt').write_text(hashlib.sha256(payload).hexdigest()+'  '+name+'\n')
+            result=subprocess.run([sys.executable,str(Path(__file__).with_name('install-release.py')),'--version','v1.2.3','--destination',str(destination),'--artifact-dir',str(root)],capture_output=True,text=True,timeout=10)
+            self.assertEqual(result.returncode,1)
+            self.assertEqual(result.stdout,'')
+            self.assertEqual(result.stderr,'error: destination exists; stop workers and use --replace explicitly\n')
+            self.assertEqual(destination.read_bytes(),original)
+
+    def test_cli_preserves_unexpected_programming_errors(self):
+        with mock.patch.object(installer,'main',side_effect=RuntimeError('unexpected bug')):
+            with self.assertRaisesRegex(RuntimeError,'unexpected bug'):installer.cli()
+
+    def test_expected_version_removes_only_one_optional_prefix(self):
+        payload=archive([('agentmux',b'#!/bin/sh\nprintf "agentmux 1.2.3\\n"\n')]);name='a.tar.gz'
+        manifest=(hashlib.sha256(payload).hexdigest()+'  '+name).encode()
+        with tempfile.TemporaryDirectory() as root:
+            destination=Path(root)/'agentmux'
+            installer.install(payload,manifest,name,destination,False,'v1.2.3')
+            installer.install(payload,manifest,name,destination,True,'1.2.3')
+            with self.assertRaisesRegex(ValueError,'does not match'):installer.install(payload,manifest,name,destination,True,'vv1.2.3')
+
     def test_version_probe_output_and_inherited_pipe_lifetime_bounded(self):
         with tempfile.TemporaryDirectory() as root:
             path=Path(root)/'probe';path.write_text('#!/bin/sh\nprintf "%70000s" x\n');path.chmod(0o700)
