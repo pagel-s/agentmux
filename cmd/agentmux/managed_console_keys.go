@@ -340,8 +340,9 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			text, target, kind, reference, mode := string(m.text), m.composeTarget, m.composer, m.replyID, m.composeMode
-			draft := &consoleDraft{kind: kind, target: target, reference: reference, text: text, mode: mode, namespace: m.memoryNamespace, key: m.memoryKey, version: m.memoryVersion, roleVersion: m.roleVersion}
+			draft := &consoleDraft{kind: kind, target: target, reference: reference, text: text, mode: mode, namespace: m.memoryNamespace, key: m.memoryKey, version: m.memoryVersion, memoryReplace: m.memoryReplace, roleVersion: m.roleVersion}
 			namespace, memoryKey, version := m.memoryNamespace, m.memoryKey, m.memoryVersion
+			memoryReplace := m.memoryReplace
 			labelVersion := m.labelVersion
 			roleVersion := m.roleVersion
 			m.composer = ""
@@ -359,7 +360,7 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				}
 				if kind == "memory-value" {
 					op := "memory.put"
-					if version > 0 {
+					if version > 0 && !memoryReplace {
 						op = "memory.patch"
 					}
 					_, err := workCall(context.Background(), m.client, op, map[string]any{"namespace": namespace, "key": memoryKey, "value": text, "version": version})
@@ -746,6 +747,7 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			v := m.memoryEntries[m.memoryEntry%len(m.memoryEntries)]
 			m.memoryKey = v.Key
 			m.memoryVersion = v.Version
+			m.memoryReplace = false
 			m.compose("memory-value", m.memoryNamespace+"/"+v.Key, "", v.Value)
 		} else if m.tab == 3 {
 			m.message = "Open a memory namespace with v, then select an entry to edit. Press n inside an empty namespace to create one."
@@ -753,6 +755,7 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "n":
 		if m.tab == 3 && m.memoryOpen {
 			m.memoryVersion = 0
+			m.memoryReplace = false
 			m.compose("memory-key", m.memoryNamespace, "", "")
 		}
 	case "m", "p", "i":

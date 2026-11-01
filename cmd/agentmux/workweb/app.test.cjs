@@ -9,6 +9,7 @@ const source = fs.readFileSync(path.join(__dirname, "app.js"), "utf8");
 
 function createTestContext(values) {
   const context = vm.createContext({
+    selected:"",sessionQuery:"",pendingRailReveal:"",renderSessionLists(){},revealSelectedSession(){},
     routingEpoch:0,routingPending:false,snapshotRoute:{follow:false},taskSummary:{agents:[],loading:false,error:"",epoch:0,updatedAt:0},loadTaskSummary(){},
     exposureHistory:{epoch:0},
     followStudy:false,loadStudyStatus(){},loadResearchHistory(){},
@@ -3032,7 +3033,7 @@ test("message history pages scoped inbox and query before paging without replaci
 
 test("connection list includes denied pairs beyond the visual graph budget and keeps graph entries outside Tab order",()=>{
   const f=graphKeyboardContext();f.context.snapshot.agents=Array.from({length:45},(_,index)=>({id:index?"peer-"+index:"a",state:"active",config:{harness:"codex"}}));
-  f.context.drawGraph();f.context.renderConnectionList();
+  f.context.drawGraph();f.node("graph-list-toggle").click();f.context.renderConnectionList();
   const labels=f.node("connection-list").children.map(node=>node.textContent);assert.ok(labels.some(label=>label.includes("a → peer-44")&&label.includes("No directional permissions")));
   assert.ok(f.node("interaction-graph").querySelectorAll("[data-focus-key]").every(node=>node.getAttribute("tabindex")==="-1"));
 });
@@ -3151,4 +3152,57 @@ test("automatic attempt transitions fence late write responses as well as old re
   requests[1].resolve({ok:true,text:async()=>JSON.stringify({...f.context.snapshot,study_attempt:"attempt-b",runtime:{attempt_id:"runtime-b"}})});await read;
   assert.equal(f.context.snapshot.study_attempt,"attempt-b");assert.equal(f.context.routingEpoch,1);
   requests[0].resolve({ok:true,text:async()=>JSON.stringify({ok:true,result:{task:{id:"old-task"}}})});await assert.rejects(write,/previous workspace route/);
+});
+
+function largeConnectionsContext() {
+  const f=graphKeyboardContext();f.context.snapshot.agents=Array.from({length:200},(_,index)=>({id:index?"s"+String(index).padStart(3,"0"):"a",state:"active",config:{harness:"codex",workdir:"/tmp/fixture/"+index}}));
+  const boundary=id=>({agent:id,version:1,targets:f.context.snapshot.agents.filter(agent=>agent.id!==id).map(agent=>({to:agent.id,actions:[]})),boards:[],memory:[]});
+  f.context.snapshot.boundaries=boundary("a");f.context.call=async(_operation,args)=>boundary(args.agent);return f;
+}
+
+test("large connection lists keep only one bounded page and do no DOM work on unchanged or hidden polls",async()=>{
+  const f=largeConnectionsContext();await f.context.renderGraph();assert.equal(f.node("connection-list").children.length,0,"hidden lists must not materialize connections");
+  f.node("graph-list-toggle").click();assert.equal(f.node("connection-list").children.length,50);const first=f.node("connection-list").children[0];
+  await f.context.renderGraph();assert.equal(f.node("connection-list").children[0],first,"unchanged polling preserves the exact row nodes");
+  f.node("connection-list-next").click();assert.equal(f.node("connection-list").children.length,50);assert.notEqual(f.node("connection-list").children[0],first);assert.match(f.node("connection-list-status").textContent,/Showing 51–100/);
+  const pageFirst=f.node("connection-list").children[0];f.node("graph-list-toggle").click();await f.context.renderGraph();assert.equal(f.node("connection-list").children[0],pageFirst,"hidden polling does not rebuild an existing page");
+});
+
+test("connection search filters uninspected placeholders and explicitly marks unknown permission coverage",async()=>{
+  const f=largeConnectionsContext();await f.context.renderGraph();f.node("graph-list-toggle").click();
+  f.node("connection-search").value="zzzznotfound";f.node("connection-search").oninput();assert.equal(f.node("connection-list").querySelectorAll("button").length,0);assert.match(f.node("connection-list-status").textContent,/160 policies remain uninspected/);
+  f.node("connection-search").value="s199";f.node("connection-search").oninput();const rows=f.node("connection-list").children;assert.ok(rows.length<=50);assert.ok(rows.every(row=>row.textContent.includes("s199")));assert.ok(rows.some(row=>row.textContent.includes("permissions not loaded")));
+  f.node("connection-search").value="instructions";f.node("connection-search").oninput();assert.equal(f.node("connection-list").querySelectorAll("button").length,0);assert.match(f.node("connection-list-status").textContent,/permission searches cannot establish their access/);
+});
+
+test("keyboard connection navigation reveals its focused row instead of retaining an invisible reading position",async()=>{
+  const f=largeConnectionsContext();await f.context.renderGraph();f.node("graph-list-toggle").click();const rows=f.node("connection-list").children,scrolls=[];
+  for(const row of rows)row.scrollIntoView=options=>scrolls.push({row,options});
+  f.node("connection-list").onkeydown({key:"End",preventDefault(){}});assert.equal(f.document.activeElement,rows.at(-1));assert.equal(scrolls.at(-1).row,rows.at(-1));assert.equal(scrolls.at(-1).options.block,"nearest");
+  f.node("connection-list").onkeydown({key:"ArrowUp",preventDefault(){}});assert.equal(f.document.activeElement,rows.at(-2));assert.equal(scrolls.at(-1).row,rows.at(-2));
+});
+
+test("explicit session selection clears only a hiding filter and reveals the rail entry while preserving both drafts",()=>{
+  const f=rosterAccessibilityContext(),revealed=[];Object.assign(f.context,{messageDrafts:new Map([["beta",{text:"beta draft",kind:"direct",mode:"note",reply:""}]]),replyTo:"",pendingDraftKind:"",selectionControls(){},closeTitleEditor(){},clearReply(){},refresh(){},renderResourceAvailability(){}});
+  f.context.renderSessionLists();f.node("message").value="alpha draft";f.node("message-kind").value="direct";f.node("message-mode").value="note";f.node("session-search").value="alpha";f.node("session-search").oninput();
+  vm.runInContext(source.slice(source.indexOf("function selectAgent("),source.indexOf("async function action(")),f.context);
+  const append=f.node("agents").append.bind(f.node("agents"));f.node("agents").append=(...nodes)=>{for(const node of nodes)node.scrollIntoView=()=>revealed.push(node.dataset.agent);append(...nodes);};
+  f.context.selectAgent("beta");assert.equal(f.node("session-search").value,"");assert.equal(f.context.sessionQuery,"");assert.ok(f.node("agents").children.some(row=>row.dataset.agent==="beta"));assert.equal(revealed.at(-1),"beta");assert.equal(f.context.messageDrafts.get("alpha").text,"alpha draft");assert.equal(f.node("message").value,"beta draft");
+  const count=revealed.length;f.context.renderSessionLists();assert.equal(revealed.length,count,"unchanged polling does not keep scrolling the rail");
+});
+
+test("global isolation review enumerates permanent team effects and freezes exact impacted versions including an empty set",()=>{
+  const f=pollingContext();f.context.notice=()=>{};f.context.snapshot.teams=[{id:"owned",name:"Owned team",owner:"a",state:"active",version:3,members:["a","b"],invited:["c"],board:"team-board",memory:"team-memory"},{id:"member",owner:"b",state:"active",version:4,members:["a","b"],invited:[]},{id:"invite",owner:"b",state:"active",version:5,members:["b"],invited:["a"]},{id:"unrelated",owner:"b",state:"active",version:8,members:["b"],invited:[]}];
+  vm.runInContext(source.slice(source.indexOf("function isolationImpact("),source.indexOf("function scopeLabel(")),f.context);vm.runInContext(source.slice(source.indexOf("function ownerActionFingerprint("),source.indexOf("function restoreSessionActionFocus(")),f.context);
+  f.node("isolate-agent").click();const review=f.context.ownerActionReview;assert.equal(f.writes.length,0);assert.match(review.description,/permanently dissolves 1 owned agent team/);assert.match(review.description,/does not restore dissolved teams/);assert.match(review.details[0].items[0],/every member loses.*a, b/);
+  assert.deepEqual(JSON.parse(JSON.stringify(review.args.expected_teams)),[{id:"invite",version:5,agent:"a",action:"withdraw_invitation"},{id:"member",version:4,agent:"a",action:"remove_member"},{id:"owned",version:3,agent:"a",action:"dissolve"}]);
+  f.context.snapshot.teams.push({id:"new-owned",owner:"a",state:"active",version:1,members:["a"],invited:[]});assert.equal(f.context.ownerActionReady(review),false);assert.equal(review.args.expected_teams.length,3,"a review never adopts a newly owned team");
+  f.context.snapshot.teams=[];f.node("isolate-agent").click();assert.deepEqual([...f.context.ownerActionReview.args.expected_teams],[]);f.context.snapshot.teams_error="unavailable";f.context.ownerActionReview=null;f.node("isolate-agent").click();assert.equal(f.context.ownerActionReview,null);delete f.context.snapshot.teams;delete f.context.snapshot.teams_error;f.node("isolate-agent").click();assert.equal(f.context.ownerActionReview,null);
+});
+
+test("owner-provided expired-delivery recovery is actionable without changing raw delivery or inferring private lease time",()=>{
+  const f=pollingContext();f.context.snapshot.activity.tasks=[{id:"expired",from:"$owner",to:"b",state:"running",delivery:"dispatching",version:7,text:"Expired delivery",recovery:{delivery:"uncertain",actions:["fail","retry"],reason:"Dispatch lease expired; stop the old process before retrying."}},{id:"cancel-expired",from:"$owner",to:"c",state:"cancelled",delivery:"cancel_requested",version:8,text:"Expired cancellation",recovery:{delivery:"cancel_uncertain",actions:["fail"],reason:"Cancellation acknowledgment expired."}},{id:"live",from:"$owner",to:"b",state:"running",delivery:"dispatching",version:9,text:"Live delivery"}];
+  f.context.renderTasks();const expired=f.node("tasks").children.find(row=>row.dataset.itemKey==="expired"),cancelled=f.node("tasks").children.find(row=>row.dataset.itemKey==="cancel-expired"),live=f.node("tasks").children.find(row=>row.dataset.itemKey==="live");
+  assert.equal(expired.querySelectorAll("button").filter(button=>button.dataset.focusKey?.startsWith("resolve:")).length,2);assert.equal(cancelled.querySelectorAll("button").filter(button=>button.dataset.focusKey?.startsWith("resolve:")).length,1);assert.equal(live.querySelectorAll("button").filter(button=>button.dataset.focusKey?.startsWith("resolve:")).length,0);assert.equal(f.context.snapshot.activity.tasks[0].delivery,"dispatching");
+  vm.runInContext(source.slice(source.indexOf("function ownerActionFingerprint("),source.indexOf("function restoreSessionActionFocus(")),f.context);const review={kind:"resolve",target:"a",version:1,args:{id:"expired",version:7,resolution:"retry"},retryConfirmed:true};assert.equal(f.context.ownerActionReady(review),true);delete f.context.snapshot.activity.tasks[0].recovery;assert.equal(f.context.ownerActionReady(review),false);
 });

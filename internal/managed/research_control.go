@@ -154,6 +154,12 @@ func (s *Store) researchControl(ctx context.Context, q queryer, a actor, r Reque
 				return nil, fault("conflict", "research phase admission requires the current running or step control version")
 			}
 		}
+		// Completion freezes the admission intent carried to the next trial.
+		// Never let a concurrent owner stop/pause/step disappear behind an
+		// unacknowledged terminal publication.
+		if p.State == "completed" && (p.AckVersion != status.Control.Version || status.Control.Mode == "stopped") {
+			return nil, fault("conflict", "research completion requires the current non-stopped control version")
+		}
 		if status.Progress.Revision > 0 {
 			switch status.Progress.State {
 			case "completed", "interrupted", "stopped":

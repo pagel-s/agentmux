@@ -418,7 +418,7 @@
               ><button id="graph-list-toggle" class="quiet" aria-pressed="false">List view</button><button id="graph-reset" class="quiet">Reset layout</button>
               <div class="graph-viewport-controls" role="group" aria-label="Graph viewport"><button id="graph-fit" class="quiet">Fit</button><button id="graph-zoom-out" class="quiet" aria-label="Zoom graph out">−</button><span id="graph-zoom" aria-live="polite">100%</span><button id="graph-zoom-in" class="quiet" aria-label="Zoom graph in">+</button></div>
             </div>
-            <div id="connection-list-panel" hidden><label class="session-search">Find a connection<input id="connection-search" type="search" placeholder="Session, permission or namespace…"/></label><div id="connection-list" role="listbox" tabindex="0" aria-label="Connections; use arrow keys and Enter"></div></div><div class="graph-canvas" id="graph-canvas">
+            <div id="connection-list-panel" hidden><label class="session-search">Find a connection<input id="connection-search" type="search" placeholder="Session, permission or namespace…"/></label><p id="connection-list-status" class="session-note" role="status" aria-live="polite"></p><div id="connection-list" role="listbox" tabindex="0" aria-label="Connections; use arrow keys and Enter"></div><div class="connection-list-paging" role="group" aria-label="Connection result pages"><button id="connection-list-previous" type="button" class="quiet" disabled>Previous 50</button><button id="connection-list-next" type="button" class="quiet" disabled>Next 50</button></div></div><div class="graph-canvas" id="graph-canvas">
               <svg
                 id="interaction-graph"
                 viewBox="0 0 960 580"

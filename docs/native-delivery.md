@@ -209,3 +209,9 @@ untouched peer turn retains its original thread/turn identity after a native
 conversation switch. The control center provides exact-version uncertain-task
 fail/retry reviews; a retry is a new execution. External manual bridges do not
 become native delivery adapters through relaunch.
+
+Pi can remain `submitting` if a draft appears before injection. A preexisting
+draft blocks readiness before submission begins. `submitted` is recorded only
+after the native transport accepts the message; receipt retries never inject it
+again. These phases describe transport evidence, not whether
+the model understood or completed the instruction.

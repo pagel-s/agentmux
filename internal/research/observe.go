@@ -67,8 +67,8 @@ func StudyStatus(ctx context.Context, path string) (StudyView, error) {
 	if err != nil {
 		return StudyView{}, err
 	}
-	var plan PlanResult
-	if err := privateJSON(filepath.Join(root, "plan.json"), &plan); err != nil {
+	plan, err := verifiedStudyPlan(root)
+	if err != nil {
 		return StudyView{}, err
 	}
 	view := StudyView{Output: root, Total: len(plan.Trials), State: "waiting", Results: []StudyTrial{}}
@@ -140,6 +140,26 @@ func StudyStatus(ctx context.Context, path string) (StudyView, error) {
 	return view, nil
 }
 
+// Observation uses the same frozen trial matrix as continuation and analysis.
+// A readable plan is not enough: omitted, reordered or relabeled trials would
+// otherwise change completion counts and the meaning of archive cursors.
+func verifiedStudyPlan(root string) (PlanResult, error) {
+	var stored struct {
+		Manifest Manifest `json:"manifest"`
+	}
+	if err := privateJSON(filepath.Join(root, "manifest.json"), &stored); err != nil {
+		return PlanResult{}, err
+	}
+	plan, err := Plan(stored.Manifest)
+	if err != nil {
+		return PlanResult{}, err
+	}
+	if err := checkStoredPlan(root, plan); err != nil {
+		return PlanResult{}, err
+	}
+	return plan, nil
+}
+
 func AttemptIdentity(state string, status *managed.ResearchStatus) string {
 	if status == nil {
 		return ""
@@ -203,8 +223,8 @@ func ReadHistory(path string, filter HistoryFilter) (HistoryPage, error) {
 	if limit < 1 || limit > 200 {
 		limit = 100
 	}
-	var plan PlanResult
-	if err := privateJSON(filepath.Join(root, "plan.json"), &plan); err != nil {
+	plan, err := verifiedStudyPlan(root)
+	if err != nil {
 		return page, err
 	}
 	sequence := 0

@@ -122,6 +122,7 @@ func (m console) readerPageRows() int {
 type consoleDraft struct {
 	kind, target, reference, text, namespace, key, mode string
 	version                                             int
+	memoryReplace                                       bool
 	roleVersion                                         int
 	native                                              *consoleNativeDraft
 }
@@ -139,6 +140,7 @@ func (m *console) restoreDraft() {
 		}
 	}
 	m.memoryNamespace, m.memoryKey, m.memoryVersion = d.namespace, d.key, d.version
+	m.memoryReplace = d.memoryReplace
 	if d.kind == "role" {
 		m.roleVersion = d.roleVersion
 	}
@@ -251,6 +253,7 @@ func (m console) readerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if review := m.reader.memoryReview; review != nil {
 			if m.composer == "memory-value" && m.memoryNamespace == review.namespace && m.memoryKey == review.key && string(m.text) == review.draft && m.memoryVersion == review.oldVersion {
 				m.memoryVersion = review.version
+				m.memoryReplace = review.state == "deleted" || review.state == "expired" || review.state == "missing"
 				m.message = fmt.Sprintf("Draft kept; reviewed version %d adopted. Enter in the editor saves with version checking.", review.version)
 			} else {
 				m.message = "Draft changed; review its latest version again before saving."

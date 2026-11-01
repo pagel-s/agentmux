@@ -77,6 +77,19 @@ interrupted and incomplete attempts are labeled explicitly; missing results
 do not establish that a runner is executing. Use `research study OUTPUT` for
 overall status and `research history OUTPUT` for paginated archived evidence.
 
+Final-phase controls also apply at the transition between trials. An accepted
+stop finishes the current phase and prevents the next trial. Pause and an
+already-consumed step initialize the next attempt paused. Without `--start-paused`,
+an unused step admits exactly one phase there; `--start-paused` takes precedence
+and pauses every new attempt. Carried controls appear as audited interventions
+before worker admission. If the entire study has no remaining phases, it can
+complete without waiting for another step. Completion atomically acknowledges
+the latest control version, so a racing accepted stop cannot be lost.
+
+Study status and archived history validate the saved plan against the frozen
+manifest. Omitted, reordered or relabeled trials are rejected instead of changing
+completion counts or silently skipping evidence.
+
 The terminal Events view and web Research view show trial/condition, round and
 phase, population, authoritative phase-task delivery, finite deadline, reserved
 model-task count and requested versus acknowledged control versions. A fresh

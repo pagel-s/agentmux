@@ -95,20 +95,27 @@ func (m *console) reviewIsolation() {
 	if a == nil || m.busy {
 		return
 	}
+	if m.data.teamsErr != nil {
+		m.message = "Team impact is unavailable; refresh before reviewing isolation."
+		return
+	}
 	groups := []string{}
 	for _, g := range m.data.controls.Groups {
 		if teamContains(g.Members, a.ID) {
 			groups = append(groups, g.ID+" · "+strings.Join(g.Members, ", ")+" · board "+g.Board+" · memory "+g.Memory)
 		}
 	}
-	teams := []string{}
-	for _, t := range m.data.teams {
-		if teamContains(t.Members, a.ID) {
-			teams = append(teams, t.ID+" · "+t.Name)
-		}
+	impacts := managed.IsolationTeamImpacts(m.data.teams, []string{a.ID})
+	teamLines := []string{}
+	for _, impact := range impacts {
+		action := map[string]string{"dissolve": "DISSOLVE for all members", "remove_member": "REMOVE membership", "withdraw_invitation": "WITHDRAW pending invitation"}[impact.Action]
+		teamLines = append(teamLines, fmt.Sprintf("%s · %s · v%d · %s", action, impact.ID, impact.Version, impact.Agent))
 	}
-	body := fmt.Sprintf("Stable ID: %s\nPermission version: %d\n\nIsolation suspends peer sends/receives and shared board/memory access across ALL scopes. Saved owner grants are retained. Native interaction, private memory, accepted tasks and previously read knowledge remain.\n\nWorkspace groups:\n%s\n\nConsented teams:\n%s\n\nUse Disable group for one exact contribution instead.", a.ID, m.data.controls.Version, strings.Join(groups, "\n"), strings.Join(teams, "\n"))
-	m.ownerReview = &consoleOwnerReview{operation: "control.update", title: "Review global session isolation", body: body, args: map[string]any{"version": m.data.controls.Version, "kind": "independent", "agents": []string{a.ID}}, message: "Session isolated across shared scopes; saved settings retained."}
+	if len(teamLines) == 0 {
+		teamLines = append(teamLines, "No active team memberships or invitations affected.")
+	}
+	body := fmt.Sprintf("Stable ID: %s\nPermission version: %d\n\nIsolation suspends peer sends/receives and shared board/memory access across ALL scopes. Saved owner grants are retained. Native interaction, private memory, accepted tasks and previously read knowledge remain.\n\nWorkspace groups:\n%s\n\nPermanent team changes:\n%s\n\nOwned teams dissolve for EVERY member. Memberships and invitations are removed. Reconnecting does not restore these teams; create a new team or invite again. If the reviewed team impact changes, confirmation is rejected.\n\nUse Disable group for one exact contribution instead.", a.ID, m.data.controls.Version, strings.Join(groups, "\n"), strings.Join(teamLines, "\n"))
+	m.ownerReview = &consoleOwnerReview{operation: "control.update", title: "Review global session isolation", body: body, args: map[string]any{"version": m.data.controls.Version, "kind": "independent", "agents": []string{a.ID}, "expected_teams": impacts}, message: "Session isolated. Owner grants retained; removed teams and invitations require explicit recreation."}
 }
 func (m *console) reviewGroupDisable(id string) {
 	for _, g := range m.data.controls.Groups {
@@ -128,15 +135,12 @@ func (m *console) reviewTaskResolution(resolution string) {
 		return
 	}
 	t := m.data.activity.Tasks[m.task%len(m.data.activity.Tasks)]
-	if t.Delivery != "uncertain" && t.Delivery != "cancel_uncertain" {
-		m.message = "Only an uncertain delivery needs owner resolution."
+	recovery := consoleTaskRecovery(t)
+	if recovery == nil || !teamContains(recovery.Actions, resolution) {
+		m.message = "This task does not allow that recovery action. Refresh and inspect its delivery evidence."
 		return
 	}
-	if resolution == "retry" && t.Delivery == "cancel_uncertain" {
-		m.message = "Cancellation uncertainty supports fail resolution after verifying the process stopped."
-		return
-	}
-	m.ownerReview = &consoleOwnerReview{operation: "task.resolve", title: "Review uncertain task: " + resolution, body: fmt.Sprintf("Task: %s\nVersion: %d\nRecipient: %s\nState: %s / %s\nInstruction:\n%s\n\nInspect side effects and stop the old process before resolving. Fail records a failed task (cancel_uncertain acknowledges stopped cancellation). Retry requeues this exact task and may repeat effects; a new attempt is charged again. Neither choice proves what previously executed.", t.ID, t.Version, t.To, t.State, t.Delivery, t.Text), args: map[string]any{"id": t.ID, "version": t.Version, "resolution": resolution}, message: "Exact task resolution saved; inspect its new state and version."}
+	m.ownerReview = &consoleOwnerReview{operation: "task.resolve", title: "Review uncertain task: " + resolution, body: fmt.Sprintf("Task: %s\nVersion: %d\nRecipient: %s\nRecorded state: %s / %s\nRecovery: %s\n%s\nInstruction:\n%s\n\nInspect side effects and stop the old process before resolving. Fail records a failed task (cancel_uncertain acknowledges stopped cancellation). Retry requeues this exact task and may repeat effects; a new attempt is charged again. Neither choice proves what previously executed.", t.ID, t.Version, t.To, t.State, t.Delivery, recovery.Delivery, recovery.Reason, t.Text), args: map[string]any{"id": t.ID, "version": t.Version, "resolution": resolution}, message: "Exact task resolution saved; inspect its new state and version."}
 }
 func (m *console) reviewRetire() {
 	a := m.selectedAgent()
@@ -519,14 +523,32 @@ func (m console) menuActionReason(action consoleMenuAction) string {
 		}
 		for _, t := range m.data.activity.Tasks {
 			if t.ID == action.taskID {
-				if t.Delivery != "uncertain" && t.Delivery != "cancel_uncertain" {
-					return "Task delivery is not uncertain"
+				recovery := consoleTaskRecovery(t)
+				if recovery == nil {
+					return "Task has no current owner recovery action"
 				}
-				if action.key == "resolve-retry" && t.Delivery == "cancel_uncertain" {
+				if !teamContains(recovery.Actions, strings.TrimPrefix(action.key, "resolve-")) {
 					return "Cancellation uncertainty supports fail resolution"
 				}
+				return ""
 			}
 		}
+		return "Reviewed task is no longer in the loaded history"
 	}
 	return ""
+}
+
+func consoleTaskRecovery(t managed.Task) *managed.TaskRecovery {
+	if t.Recovery != nil {
+		return t.Recovery
+	}
+	// Older controllers have no projection. Honor their recorded uncertainty,
+	// but never guess a lease expiry from elapsed UI time.
+	if t.Delivery == "cancel_uncertain" {
+		return &managed.TaskRecovery{Delivery: t.Delivery, Actions: []string{"fail"}, Reason: "Confirm that the cancelled process stopped."}
+	}
+	if t.Delivery == "uncertain" && t.State == "running" {
+		return &managed.TaskRecovery{Delivery: t.Delivery, Actions: []string{"fail", "retry"}, Reason: "Inspect the prior outcome before recovery."}
+	}
+	return nil
 }

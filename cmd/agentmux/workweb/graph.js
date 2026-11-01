@@ -9,6 +9,8 @@ let graphMode = "agents",
   graphLayoutSession = "",
   graphDrawSignature = "";
 let graphViewport = null, graphFit = true, graphListView = false, graphOriginKey = "", connectionQuery = "";
+const connectionPageSize=50;
+let connectionPage=0, connectionListSignature="", connectionDataSignature="", connectionRows=[], connectionCacheRevision=0, connectionPageContext="";
 let graphWidth = 960,
   graphHeight = 580;
 const svgNS = "http://www.w3.org/2000/svg";
@@ -143,6 +145,7 @@ async function renderGraph() {
       if (current === signature && values.every((v) => v.version === version)) {
         graphCache = new Map(values.map((v) => [v.agent, v]));
         graphVersion = signature;
+        connectionCacheRevision++;
       } else notice("Permissions changed while loading the graph. Refreshing…");
     } catch (error) {
       notice(error.message, true);
@@ -349,6 +352,8 @@ function drawGraph() {
         edge.kind,
         edge.namespace,
       ]),
+      "data-focus-x": cx,
+      "data-focus-y": cy,
       "aria-label":
         sessionReference(edge.actor) +
         " to " +
@@ -391,6 +396,8 @@ function drawGraph() {
         (node.scope ? " scope" : ""),
       transform: `translate(${node.x},${node.y})`,
       "data-node": node.key,
+      "data-focus-x": node.x,
+      "data-focus-y": node.y,
       "data-focus-key": "node:" + node.key,
       "data-item-key": node.key,
       tabindex: -1,
@@ -532,9 +539,10 @@ $("graph-scopes").onclick = () => {
 };
 $("close-inspector").onclick = () => {
   graphSelection = null; graphInspector();
+  if(graphListView)renderConnectionList(graphOriginKey);
   const roots=graphListView?[$("connection-list")]:[graph];
   const origin=roots.flatMap(root=>[...root.querySelectorAll("[data-focus-key]")]).find(node=>node.dataset.focusKey===graphOriginKey);
-  (origin || (graphListView?$("connection-list"):graph)).focus({preventScroll:true});
+  revealConnectionControl(origin || (graphListView?$("connection-list"):graph),graphListView?$("connection-list"):graph);
 };
 $("graph-inspector").onkeydown = (event) => {
   if (event.key === "Escape") {
@@ -589,34 +597,65 @@ $("graph-edit").onclick = () => {
   graphInspector();
 };
 
-function moveConnectionFocus(root,event) {
-  const items=[...root.querySelectorAll("[data-focus-key]")], index=items.indexOf(document.activeElement);
-  const next=event.key==="Home"?0:event.key==="End"?items.length-1:index<0?(event.key==="ArrowUp"||event.key==="ArrowLeft"?items.length-1:0):index+(event.key==="ArrowUp"||event.key==="ArrowLeft"?-1:1);
-  items[(next+items.length)%items.length]?.focus({preventScroll:true});
-}
-function renderConnectionList() {
-  if(!snapshot || tab!=="graph")return;
-  const list=$("connection-list"),state=captureViewState(list),rows=[];
-  // Complete registry: the graph's visual node budget never limits this list.
-  for(const agent of snapshot.agents||[]) {
-    if(agent.state!=="active")continue;
-    const b=agent.id===selected?snapshot.boundaries:graphCache.get(agent.id);
-    if(!b) {const button=el("button","connection-list-row",sessionReference(agent.id)+" · load this session's full connections");button.type="button";button.tabIndex=-1;button.dataset.focusKey="list-session:"+agent.id;button.onclick=()=>selectAgent(agent.id);rows.push(button);continue;}
-    if(graphMode==="agents")for(const recipient of snapshot.agents||[]) {
-      if(recipient.state!=="active"||recipient.id===agent.id)continue;
-      const target=(b.targets||[]).find(item=>item.to===recipient.id),actions=target?.actions||[],description=actions.length?actions.map(action=>({"message.send":"messages","ping.send":"pings",instruct:"instructions"})[action]||action).join(" · "):"No directional permissions";
-      const label=sessionReference(agent.id)+" → "+sessionReference(recipient.id)+" · "+description;
-      if(connectionQuery&&!label.toLowerCase().includes(connectionQuery))continue;
-      const button=el("button","connection-list-row",label);button.type="button";button.tabIndex=-1;button.setAttribute("role","option");button.dataset.focusKey=JSON.stringify(["list",agent.id,recipient.id]);button.onclick=()=>{graphOriginKey=button.dataset.focusKey;graphPick(agent.id,recipient.id);graphInspector();$("close-inspector").focus();};rows.push(button);
-    }
-    else for(const [kind,scopes] of [["board",b.boards||[]],["memory",b.memory||[]]])for(const scope of scopes) {
-      const label=sessionReference(agent.id)+" → "+scopeLabel(scope.name)+" · "+kind+" · "+(scope.read?"read ":"")+(scope.write?"write":"")+(!scope.read&&!scope.write?"denied":"");
-      if(connectionQuery&&!label.toLowerCase().includes(connectionQuery))continue;
-      const button=el("button","connection-list-row",label);button.type="button";button.tabIndex=-1;button.setAttribute("role","option");button.dataset.focusKey=JSON.stringify(["list",agent.id,kind,scope.name]);button.onclick=()=>{graphOriginKey=button.dataset.focusKey;graphPick(agent.id,"",kind,scope.name);graphInspector();$("close-inspector").focus();};rows.push(button);
+function revealConnectionControl(node,root) {
+  if(!node)return;
+  if(root===graph && !graphFit && graphViewport){
+    const x=Number(node.dataset.focusX),y=Number(node.dataset.focusY),pad=Math.min(80,graphViewport.width*.15);
+    if(Number.isFinite(x)&&Number.isFinite(y)&&(x<graphViewport.x+pad||x>graphViewport.x+graphViewport.width-pad||y<graphViewport.y+pad||y>graphViewport.y+graphViewport.height-pad)){
+      graphViewport.x=x-graphViewport.width/2;graphViewport.y=y-graphViewport.height/2;applyGraphViewport();
     }
   }
-  list.replaceChildren(...rows);if(!rows.length)list.append(el("p","empty","No matching connections. Search includes denied pairs and shared access."));restoreViewState(list,state);
+  node.focus({preventScroll:true});node.scrollIntoView?.({block:"nearest",inline:"nearest"});
+}
+function moveConnectionFocus(root,event) {
+  const items=[...root.querySelectorAll("[data-focus-key]")],index=items.indexOf(document.activeElement),back=event.key==="ArrowUp"||event.key==="ArrowLeft";
+  const next=event.key==="Home"?0:event.key==="End"?items.length-1:index<0?(back?items.length-1:0):index+(back?-1:1);
+  revealConnectionControl(items[(next+items.length)%items.length],root);
+}
+function connectionSessionText(agent) {return [sessionReference(agent.id),agent.config?.harness,agent.config?.workdir,agent.harness,agent.project].filter(Boolean).join(" ").toLowerCase();}
+function connectionListData() {
+  const active=(snapshot.agents||[]).filter(agent=>agent.state==="active"),byID=new Map(active.map(agent=>[agent.id,agent]));
+  const sources=[...(byID.has(selected)?[byID.get(selected)]:[]),...active.filter(agent=>agent.id!==selected)];
+  const rows=[];let loaded=0,unloaded=0;
+  for(const agent of sources){
+    const b=agent.id===selected && snapshot.boundaries.agent===selected?snapshot.boundaries:graphCache.get(agent.id),sourceText=connectionSessionText(agent);
+    if(!b){unloaded++;if(!connectionQuery||sourceText.includes(connectionQuery))rows.push({key:"list-session:"+agent.id,label:sessionReference(agent.id)+" · permissions not loaded; select to inspect this session",source:agent.id,unloaded:true});continue;}
+    loaded++;
+    if(graphMode==="agents"){
+      const targets=new Map((b.targets||[]).map(target=>[target.to,target]));
+      for(const recipient of active){
+        if(recipient.id===agent.id)continue;
+        const actions=targets.get(recipient.id)?.actions||[],description=actions.length?actions.map(action=>({"message.send":"messages","ping.send":"pings",instruct:"instructions"})[action]||action).join(" · "):"No directional permissions";
+        const label=sessionReference(agent.id)+" → "+sessionReference(recipient.id)+" · "+description;
+        if(connectionQuery && ![label.toLowerCase(),sourceText,connectionSessionText(recipient)].some(text=>text.includes(connectionQuery)))continue;
+        rows.push({key:JSON.stringify(["list",agent.id,recipient.id]),label,source:agent.id,target:recipient.id,kind:"edge"});
+      }
+    }else for(const [kind,scopes] of [["board",b.boards||[]],["memory",b.memory||[]]])for(const scope of scopes){
+      const label=sessionReference(agent.id)+" → "+scopeLabel(scope.name)+" · "+kind+" · "+(scope.read?"read ":"")+(scope.write?"write":"")+(!scope.read&&!scope.write?"denied":"");
+      if(connectionQuery&&!label.toLowerCase().includes(connectionQuery)&&!sourceText.includes(connectionQuery))continue;
+      rows.push({key:JSON.stringify(["list",agent.id,kind,scope.name]),label,source:agent.id,target:"",kind,namespace:scope.name});
+    }
+  }
+  return {rows,loaded,unloaded,total:active.length};
+}
+function renderConnectionList(originKey="") {
+  if(!snapshot || tab!=="graph" || !graphListView)return;
+  const context=JSON.stringify([selected,graphMode,connectionQuery]),contextChanged=context!==connectionPageContext;if(contextChanged){connectionPage=0;connectionPageContext=context;}
+  const dataSignature=JSON.stringify([snapshotIdentity(),graphVersion,connectionCacheRevision,graphMode,selected,connectionQuery,snapshot.boundaries.agent,snapshot.boundaries.version,(snapshot.agents||[]).map(agent=>[agent.id,agent.state,agent.title,agent.config?.harness,agent.config?.workdir])]);
+  let counts;
+  if(dataSignature!==connectionDataSignature){counts=connectionListData();connectionRows=counts.rows;connectionDataSignature=dataSignature;renderConnectionList.counts=counts;}
+  counts=counts||renderConnectionList.counts;
+  if(originKey){const index=connectionRows.findIndex(row=>row.key===originKey);if(index>=0)connectionPage=Math.floor(index/connectionPageSize);}
+  connectionPage=Math.max(0,Math.min(connectionPage,Math.max(0,Math.ceil(connectionRows.length/connectionPageSize)-1)));
+  const signature=JSON.stringify([dataSignature,connectionPage]);if(signature===connectionListSignature)return;connectionListSignature=signature;
+  const list=$("connection-list"),state=captureViewState(list),start=connectionPage*connectionPageSize,page=connectionRows.slice(start,start+connectionPageSize);
+  $("connection-list-status").textContent=(connectionRows.length?"Showing "+(start+1)+"–"+(start+page.length)+" of "+connectionRows.length+" matching entries":"No matching loaded connections or session names")+" · "+counts.loaded+" / "+counts.total+" session policies loaded"+(counts.unloaded?". "+counts.unloaded+" policies remain uninspected; permission searches cannot establish their access. Search a session name or ID, then select it to load its policy.":". Includes denied directional pairs and shared access.");
+  $("connection-list-previous").disabled=connectionPage===0;$("connection-list-next").disabled=start+page.length>=connectionRows.length;
+  const nodes=page.map(row=>{const button=el("button","connection-list-row",row.label);button.type="button";button.tabIndex=-1;button.setAttribute("role","option");button.dataset.focusKey=row.key;button.dataset.itemKey=row.key;button.onclick=()=>{graphOriginKey=row.key;if(row.unloaded){selectAgent(row.source);return;}graphPick(row.source,row.target,row.kind,row.namespace||"");graphInspector();$("close-inspector").focus();};return button;});
+  list.replaceChildren(...nodes);if(!nodes.length)list.append(el("p","empty","No matching loaded connections. Uninspected permissions are unknown; search a session name to inspect them."));restoreViewState(list,state);if(contextChanged&&state.inside)revealConnectionControl(nodes[0]||list,list);
 }
 $("graph-list-toggle").onclick=()=>{graphListView=!graphListView;$("graph-list-toggle").setAttribute("aria-pressed",String(graphListView));$("graph-list-toggle").textContent=graphListView?"Graph view":"List view";$("connection-list-panel").hidden=!graphListView;$("graph-canvas").hidden=graphListView;renderConnectionList();};
-$("connection-search").oninput=()=>{connectionQuery=$("connection-search").value.trim().toLowerCase();renderConnectionList();};
-$("connection-list").onkeydown=event=>{if(["ArrowUp","ArrowDown","Home","End"].includes(event.key)){event.preventDefault();moveConnectionFocus($("connection-list"),event);}else if((event.key==="Enter"||event.key===" ")&&event.target===$("connection-list")){event.preventDefault();$("connection-list").querySelectorAll("[data-focus-key]")[0]?.focus();}};
+$("connection-search").oninput=()=>{connectionQuery=$("connection-search").value.trim().toLowerCase();connectionPage=0;renderConnectionList();};
+$("connection-list-previous").onclick=()=>{connectionPage--;renderConnectionList();revealConnectionControl($("connection-list").querySelectorAll("[data-focus-key]")[0]||$("connection-list"),$("connection-list"));};
+$("connection-list-next").onclick=()=>{connectionPage++;renderConnectionList();revealConnectionControl($("connection-list").querySelectorAll("[data-focus-key]")[0]||$("connection-list"),$("connection-list"));};
+$("connection-list").onkeydown=event=>{if(["ArrowUp","ArrowDown","Home","End"].includes(event.key)){event.preventDefault();moveConnectionFocus($("connection-list"),event);}else if((event.key==="Enter"||event.key===" ")&&event.target===$("connection-list")){event.preventDefault();revealConnectionControl($("connection-list").querySelectorAll("[data-focus-key]")[0],$("connection-list"));}};

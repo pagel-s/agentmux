@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"agentmux/internal/managedconfig"
@@ -14,31 +15,47 @@ import (
 
 // A dashboard consumes only its own view's pending native focus. Every attached
 // client has a separate view/dashboard, so no observer state is shared.
+var consoleFocusOrder struct {
+	sync.Mutex
+	sequence uint64
+}
+
 func consumeConsoleFocus(state string) (string, uint64) {
+	id, revision, _ := consumeConsoleFocusOrdered(state)
+	return id, revision
+}
+
+// Serialize only consuming the private focus hint, not the subsequent broker
+// snapshot. The sequence records consumption order even when snapshots finish
+// out of order; explicit selection revisions remain an independent fence.
+func consumeConsoleFocusOrdered(state string) (string, uint64, uint64) {
 	if !strings.HasPrefix(os.Getenv("TMUX"), managedlaunch.SocketPath(state)+",") || os.Getenv("TMUX_PANE") == "" {
-		return "", 0
+		return "", 0, 0
 	}
+	consoleFocusOrder.Lock()
+	defer consoleFocusOrder.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	pane := os.Getenv("TMUX_PANE")
 	out, err := exec.CommandContext(ctx, "tmux", "-S", managedlaunch.SocketPath(state), "display-message", "-p", "-t", pane, "#{@agentmux_role}\t#{session_id}\t#{@agentmux_focus_pending}\t#{?@agentmux_selection_revision,#{@agentmux_selection_revision},0}").Output()
 	if err != nil {
-		return "", 0
+		return "", 0, 0
 	}
 	parts := strings.Split(strings.TrimSpace(string(out)), "\t")
 	if len(parts) != 4 || parts[0] != "dashboard" || !managedconfig.ValidID(parts[2]) {
-		return "", 0
+		return "", 0, 0
 	}
 	revision, err := strconv.ParseUint(parts[3], 10, 64)
 	if err != nil {
-		return "", 0
+		return "", 0, 0
 	}
 	clear := managedlaunch.ShellCommand([]string{"set-option", "-t", parts[1], "@agentmux_focus_pending", ""})
 	condition := "#{&&:#{==:#{@agentmux_focus_pending}," + parts[2] + "},#{==:#{?@agentmux_selection_revision,#{@agentmux_selection_revision},0}," + parts[3] + "}}"
 	if exec.CommandContext(ctx, "tmux", "-S", managedlaunch.SocketPath(state), "if-shell", "-t", parts[1], "-F", condition, clear).Run() != nil {
-		return "", 0
+		return "", 0, 0
 	}
-	return parts[2], revision
+	consoleFocusOrder.sequence++
+	return parts[2], revision, consoleFocusOrder.sequence
 }
 
 // Explicit dashboard navigation supersedes native focus that was observed

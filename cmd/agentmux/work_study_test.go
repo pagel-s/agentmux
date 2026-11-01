@@ -49,13 +49,28 @@ func newStudyWrapperFixture(t *testing.T) studyWrapperFixture {
 			t.Fatal(err)
 		}
 	}
-	manifest := json.RawMessage(`{"version":1,"id":"private-wrapper-study"}`)
-	manifestHash := fmt.Sprintf("%x", sha256.Sum256(manifest))
+	manifest, err := research.Load(filepath.Join("..", "..", "examples", "research", "public-goods.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest.ID = "private-wrapper-study"
+	manifest.Seeds = []int64{11}
+	manifest.Conditions = manifest.Conditions[:1]
+	plan, err := research.Plan(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rawManifest, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifestHash := fmt.Sprintf("%x", sha256.Sum256(rawManifest))
 	writeJSON(filepath.Join(output, "manifest.json"), map[string]any{"sha256": manifestHash, "manifest": manifest})
-	writeJSON(filepath.Join(output, "plan.json"), research.PlanResult{Trials: []research.Trial{{ID: "run-001", Condition: "controlled"}}, Participants: []string{"peer"}})
+	writeJSON(filepath.Join(output, "plan.json"), plan)
+	trial := plan.Trials[0]
 	makeAttempt := func(number int) studyWrapperAttempt {
 		t.Helper()
-		state := filepath.Join(output, "run-001", fmt.Sprintf("attempt-%03d", number), "state")
+		state := filepath.Join(output, trial.ID, fmt.Sprintf("attempt-%03d", number), "state")
 		if err := os.MkdirAll(filepath.Dir(state), 0700); err != nil {
 			t.Fatal(err)
 		}
@@ -73,7 +88,7 @@ func newStudyWrapperFixture(t *testing.T) studyWrapperFixture {
 		if err != nil {
 			t.Fatal(err)
 		}
-		progress := managed.ResearchProgress{Trial: "run-001", Attempt: number, Condition: "controlled", StateDir: state, State: "paused", Population: []string{"peer"}, Tasks: map[string]string{}, Revision: 1, AckVersion: 1}
+		progress := managed.ResearchProgress{Trial: trial.ID, Attempt: number, Condition: trial.Condition, StateDir: state, State: "paused", Population: []string{"peer"}, Tasks: map[string]string{}, Revision: 1, AckVersion: 1}
 		args, err := json.Marshal(progress)
 		if err != nil {
 			t.Fatal(err)

@@ -19,7 +19,7 @@ function fixture(options = {}) {
   const pi = {
     on: (name, handler) => handlers.set(name, handler),
     appendEntry: (customType, data) => entries.push({ type: "custom", customType, data }),
-    sendMessage: (message, opts) => sent.push({ message, opts }),
+    sendMessage: (message, opts) => { sent.push({ message, opts }); options.onSend?.(message, state); },
   };
   const call = async (operation, args) => {
     calls.push({ operation, args });
@@ -60,15 +60,15 @@ test("delivers an attributed native turn and completes only after real settlemen
   assert.ok(message.content.includes(f.delivery.text));
   assert.equal(message.details.delivery_id, "delivery-1");
   assert.deepEqual(opts, { triggerTurn: true, deliverAs: "followUp" });
-  assert.deepEqual(f.events().map(e => e.phase), ["submitted"]);
+  assert.deepEqual(f.events().map(e => e.phase), ["submitting", "submitted"]);
   await f.start();
   await f.emit("message_end", { message: { role: "assistant", content: [{ type: "text", text: "intermediate" }], stopReason: "stop" } });
   await f.emit("agent_end");
   await f.bridge.tick();
-  assert.deepEqual(f.events().map(e => e.phase), ["submitted", "running"]);
+  assert.deepEqual(f.events().map(e => e.phase), ["submitting", "submitted", "running"]);
   await f.finish();
   await f.bridge.tick();
-  assert.deepEqual(f.events().map(e => e.phase), ["submitted", "running", "completed"]);
+  assert.deepEqual(f.events().map(e => e.phase), ["submitting", "submitted", "running", "completed"]);
   assert.equal(f.events().at(-1).result, "A finished stanza");
   assert.ok(!JSON.stringify(f.events()).includes("private"));
 });
@@ -105,7 +105,7 @@ for (const [reason, block, clear] of [
   assert.equal(f.sent.length, 1);
 });
 
-test("draft typed during claim or submitted acknowledgement remains intact and delays injection", async () => {
+test("draft typed during claim or pre-submit acknowledgement remains intact without submission evidence", async () => {
   for (const race of ["native.claim", "native.event"]) {
     let raced = false;
     const f = fixture({ onCall: (op, args, state) => {
@@ -114,10 +114,76 @@ test("draft typed during claim or submitted acknowledgement remains intact and d
     await f.bridge.tick();
     assert.equal(f.sent.length, 0);
     assert.equal(f.ctx.ui.getEditorText(), "human typed during RPC");
+    await f.bridge.tick();
+    assert.equal(f.sent.length, 0);
+    assert.ok(!f.events().some(e => e.phase === "submitted"));
+    assert.equal(f.bridge.getActive().injected, false);
     f.setDraft("");
     await f.bridge.tick();
     assert.equal(f.sent.length, 1);
+    assert.equal(f.events().at(-1).phase, "submitted");
   }
+});
+
+test("cancellation while a draft delays injection never claims native submission", async () => {
+  const f = fixture({ onCall: (op, args, state) => {
+    if (op === "native.event" && args.phase === "submitting") state.setDraft("keep this draft");
+  } });
+  await f.bridge.tick();
+  f.setCancel(true); await f.bridge.tick(); await f.bridge.tick();
+  assert.equal(f.sent.length, 0);
+  assert.equal(f.ctx.ui.getEditorText(), "keep this draft");
+  assert.deepEqual(f.events().map(e => e.phase), ["submitting", "cancelled"]);
+});
+
+test("lost submission acknowledgement retries its receipt without reinjecting", async () => {
+  let failures = 1;
+  const f = fixture({ onCall: (op, args, state) => {
+    if (op === "native.event" && args.phase === "submitted") {
+      assert.equal(state.sent.length, 1);
+      if (failures-- > 0) throw new Error("submission receipt response lost");
+    }
+  } });
+  await f.bridge.tick();
+  assert.equal(f.sent.length, 1);
+  assert.equal(f.bridge.getPendingEvents()[0].phase, "submitted");
+  await f.bridge.tick(); await f.start(); await f.finish(); await f.bridge.tick();
+  assert.equal(f.sent.length, 1);
+  assert.deepEqual(f.events().map(e => e.phase), ["submitting", "submitted", "submitted", "running", "completed"]);
+});
+
+test("synchronous native start evidence is not replaced by a later submission marker", async () => {
+  const f = fixture({ onSend: (message, state) => {
+    void state.emit("before_agent_start", { messageType: "custom", message });
+  } });
+  await f.bridge.tick();
+  assert.deepEqual(f.events().map(e => e.phase), ["submitting", "running"]);
+  assert.equal(f.entries.at(-1).data.phase, "running");
+  await f.finish(); await f.bridge.tick();
+  assert.equal(f.events().at(-1).phase, "completed");
+  assert.equal(f.sent.length, 1);
+});
+
+test("a throwing native submission stays unconfirmed and is never retried", async () => {
+  const f = fixture({ startTimeout: 1, onSend: () => { throw new Error("native submission failed ambiguously"); } });
+  await f.bridge.tick();
+  assert.deepEqual(f.events().map(e => e.phase), ["submitting"]);
+  f.bridge.getActive().injectedAt -= 100;
+  await f.bridge.tick(); await f.bridge.tick();
+  assert.deepEqual(f.events().map(e => e.phase), ["submitting", "uncertain"]);
+  assert.equal(f.sent.length, 1);
+  const resumed = fixture({ entries: f.entries });
+  resumed.setCandidate("");
+  await resumed.bridge.tick();
+  assert.equal(resumed.sent.length, 0);
+});
+
+test("restart after the submitting barrier fences the attempt without a native replay", async () => {
+  const f = fixture({ entries: [{ type: "custom", customType: "agentmux.native.delivery", data: { id: "delivery-1", phase: "submitting", reported: true } }] });
+  f.setCandidate("");
+  await f.bridge.tick();
+  assert.equal(f.sent.length, 0);
+  assert.deepEqual(f.events().map(e => e.phase), ["uncertain"]);
 });
 
 test("cancels only its own started turn and waits for cancellation settlement", async () => {

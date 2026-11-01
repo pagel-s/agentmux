@@ -56,7 +56,20 @@ func TestConsoleMemoryReviewReadsRealTombstoneExpiredAndMissingCAS(t *testing.T)
 			if err := json.Unmarshal(call("memory.head", map[string]any{"namespace": "team", "key": tc.key}), &head); err != nil || head.State != tc.state || head.Version != tc.version {
 				t.Fatalf("adoption mutated memory: %+v %v", head, err)
 			}
-			call("memory.put", map[string]any{"namespace": "team", "key": tc.key, "value": string(m.text), "version": m.memoryVersion})
+			m, cmd = consolePress(m, tea.KeyMsg{Type: tea.KeyEnter})
+			if cmd == nil || !m.busy {
+				t.Fatal("editor did not submit the adopted replacement")
+			}
+			result := cmd().(consoleAction)
+			if result.err != nil {
+				t.Fatalf("editor save after %s review: %v", tc.state, result.err)
+			}
+			var saved struct {
+				Entry managed.Memory `json:"entry"`
+			}
+			if err := json.Unmarshal(call("memory.get", map[string]any{"namespace": "team", "key": tc.key}), &saved); err != nil || saved.Entry.Value != "retained draft" || saved.Entry.Version != tc.version+1 {
+				t.Fatalf("saved replacement: %+v %v", saved, err)
+			}
 		})
 	}
 }

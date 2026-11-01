@@ -298,23 +298,24 @@ func (s *Store) control(ctx context.Context, q queryer, a actor, r Request) (any
 		return c, nil
 	}
 	var in struct {
-		Version      int      `json:"version"`
-		Kind         string   `json:"kind"`
-		From         string   `json:"from"`
-		To           string   `json:"to"`
-		Action       string   `json:"action"`
-		Allow        bool     `json:"allow"`
-		Agent        string   `json:"agent"`
-		Namespace    string   `json:"namespace"`
-		Read         bool     `json:"read"`
-		Write        bool     `json:"write"`
-		Agents       []string `json:"agents"`
-		Enabled      bool     `json:"enabled"`
-		Commands     *bool    `json:"commands"`
-		Board        string   `json:"board"`
-		Memory       string   `json:"memory"`
-		Reset        bool     `json:"reset"`
-		LegacyPolicy string   `json:"legacy_policy"`
+		Version       int                   `json:"version"`
+		Kind          string                `json:"kind"`
+		From          string                `json:"from"`
+		To            string                `json:"to"`
+		Action        string                `json:"action"`
+		Allow         bool                  `json:"allow"`
+		Agent         string                `json:"agent"`
+		Namespace     string                `json:"namespace"`
+		Read          bool                  `json:"read"`
+		Write         bool                  `json:"write"`
+		Agents        []string              `json:"agents"`
+		Enabled       bool                  `json:"enabled"`
+		Commands      *bool                 `json:"commands"`
+		Board         string                `json:"board"`
+		Memory        string                `json:"memory"`
+		Reset         bool                  `json:"reset"`
+		LegacyPolicy  string                `json:"legacy_policy"`
+		ExpectedTeams []IsolationTeamImpact `json:"expected_teams"`
 	}
 	if err := strictJSON(r.Args, &in); err != nil {
 		return nil, invalid(err)
@@ -322,6 +323,10 @@ func (s *Store) control(ctx context.Context, q queryer, a actor, r Request) (any
 	if in.Version != c.Version {
 		return nil, fault("conflict", "permissions changed; refresh before editing")
 	}
+	if in.ExpectedTeams != nil && in.Kind != "independent" {
+		return nil, fault("invalid", "expected_teams applies only to independent controls")
+	}
+
 	if in.LegacyPolicy != "" && in.LegacyPolicy != "preserve" && in.LegacyPolicy != "group" {
 		return nil, fault("invalid", "legacy_policy must be preserve or group")
 	}
@@ -341,9 +346,25 @@ func (s *Store) control(ctx context.Context, q queryer, a actor, r Request) (any
 		if len(in.Agents) == 0 || len(in.Agents) > 32 {
 			return nil, fault("invalid", "select 1–32 workspace agents")
 		}
+		// Removing one saved contribution is permitted even after an original
+		// member was revoked/retired. The exact immutable member-set identity
+		// must already exist; this exception cannot create or enable grants.
+		disableSavedGroup := in.Kind == "collaboration" && !in.Enabled && in.Board == "" && in.Memory == ""
+		if disableSavedGroup {
+			key := workspaceGroupKey(in.Agents)
+			var existing WorkspaceGroup
+			if err := get(ctx, q, "workspace_group", key, &existing); errors.Is(err, sql.ErrNoRows) {
+				return nil, fault("not_found", "workspace collaboration group not found")
+			} else if err != nil {
+				return nil, internal(err)
+			}
+			if workspaceGroupKey(existing.Agents) != key {
+				return nil, fault("conflict", "saved collaboration identity is inconsistent")
+			}
+		}
 		chosen := map[string]bool{}
 		for _, id := range in.Agents {
-			if !static(id) || chosen[id] {
+			if (!disableSavedGroup && !static(id)) || chosen[id] {
 				return nil, fault("invalid", "select distinct active workspace agents")
 			}
 			chosen[id] = true
@@ -351,6 +372,16 @@ func (s *Store) control(ctx context.Context, q queryer, a actor, r Request) (any
 		if in.Kind == "collaboration" && len(chosen) < 2 {
 			return nil, fault("invalid", "collaboration requires at least two agents")
 		}
+		if in.Kind == "independent" && in.ExpectedTeams != nil {
+			teams, err := list[Team](ctx, q, "team", "AND json_extract(data,'$.state')='active'")
+			if err != nil {
+				return nil, internal(err)
+			}
+			if !sameIsolationTeamImpacts(in.ExpectedTeams, IsolationTeamImpacts(teams, in.Agents)) {
+				return nil, fault("conflict", "isolation team impacts changed; refresh and review before applying")
+			}
+		}
+
 		if in.Board != "" {
 			if _, ok := s.cfg.Boards[in.Board]; !ok {
 				return nil, fault("invalid", "unknown shared board")

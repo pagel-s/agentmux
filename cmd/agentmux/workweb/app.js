@@ -49,6 +49,7 @@ const roleDrafts = new Map();
 let roleEditingID = "";
 const titleDrafts = new Map(),
   observedDrafts = new Map();
+let pendingRailReveal = "";
 let sessionQuery = "",
   titleEditor = null,
   titleEditorEpoch = 0;
@@ -300,10 +301,28 @@ function emptySearch(list, kind) {
   box.append(document.createElement("br"), clear);
   list.append(box);
 }
+function revealSelectedSession() {
+  if(pendingRailReveal!==selected)return;
+  const agent=(snapshot?.agents||[]).find(item=>item.id===selected);
+  if(!agent)return;
+  if(sessionQuery && !matchesSession(agent)){
+    sessionQuery="";$("session-search").value="";agentSignature="";
+    $("session-search-status").textContent="Search cleared to show selected session "+sessionReference(selected)+".";
+    renderSessionLists();return;
+  }
+  const row=[...$("agents").children].find(node=>node.dataset.agent===selected);
+  if(!row)return;
+  row.scrollIntoView?.({block:"nearest",inline:"nearest"});pendingRailReveal="";
+}
 function renderSessionLists(announceSearch = false) {
   if (!snapshot) return;
   const all = includeArchived ? [...new Map([...(snapshot.agents||[]),...archivedAgents].map(agent=>[agent.id,agent])).values()] : snapshot.agents || [],
     list = $("agents");
+  const explicitTarget=pendingRailReveal===selected?all.find(agent=>agent.id===selected):null;
+  if(explicitTarget && sessionQuery && !matchesSession(explicitTarget)){
+    sessionQuery="";$("session-search").value="";agentSignature="";
+    $("session-search-status").textContent="Search cleared to show selected session "+sessionReference(selected)+".";
+  }
   if (researchSavedOffline && !all.length) {
     if (announceSearch)
       $("session-search-status").textContent =
@@ -363,7 +382,7 @@ function renderSessionLists(announceSearch = false) {
       snapshot.runtime.agents?.[a.id]?.state,
     ]),
   ]);
-  if (signature === agentSignature) return;
+  if (signature === agentSignature) {revealSelectedSession();return;}
   agentSignature = signature;
   const rosterState = captureViewState(list),
     registeredState = captureViewState($("registered-sessions"));
@@ -471,6 +490,7 @@ function renderSessionLists(announceSearch = false) {
   }
   restoreViewState(list, rosterState);
   restoreViewState($("registered-sessions"), registeredState);
+  revealSelectedSession();
 }
 function closeTitleEditor(preserve = false) {
   const restoreFocus = $("title-editor").contains(document.activeElement);
@@ -709,7 +729,7 @@ function selectionControls() {
       (id === "copy-attach" && nativeHeadless(agent)) ||
       (["connect-pair","disconnect-pair"].includes(id) &&
         (!editable(agent) || !editable(recipient) || peer === selected)) ||
-      (id === "isolate-agent" && !editable(agent)) ||
+      (id === "isolate-agent" && (!editable(agent) || !!snapshot?.teams_error || !Array.isArray(snapshot?.teams))) ||
       (id === "close-agent" && agent?.state !== "active") ||
       (id === "send-message" &&
         $("message-kind").value.startsWith("board:") &&
@@ -723,7 +743,7 @@ function selectionControls() {
     : !editable(agent) || !editable(recipient) || peer === selected
       ? "Choose two active owner-managed sessions. Delegated agents retain inherited limits."
       : "";
-  $("isolate-agent").title = editable(agent)
+  $("isolate-agent").title = snapshot?.teams_error || !Array.isArray(snapshot?.teams) ? "Refresh the unavailable team inventory before reviewing global isolation." : editable(agent)
     ? ""
     : "Delegated agents retain inherited limits; manage their parent or stop the agent.";
   $("memory-form")
@@ -768,7 +788,13 @@ function selectionControls() {
   renderResourceAvailability();
 }
 function selectAgent(id) {
-  if (selected === id) return;
+  pendingRailReveal=id;
+  const target=snapshot?.agents?.find(agent=>agent.id===id);
+  if(target && sessionQuery && !matchesSession(target)){
+    sessionQuery="";$("session-search").value="";agentSignature="";
+    $("session-search-status").textContent="Search cleared to show selected session "+sessionReference(id)+".";
+  }
+  if (selected === id) {renderSessionLists();revealSelectedSession();return;}
   if (selected)
     messageDrafts.set(selected, {
       text: $("message").value,
@@ -798,6 +824,7 @@ function selectAgent(id) {
     row.classList.toggle("active", active);
     row.setAttribute("aria-pressed", String(active));
   });
+  renderSessionLists();revealSelectedSession();
   selectionControls();
   refresh();
 }
@@ -1216,6 +1243,12 @@ function renderFeed() {
   }
   restoreViewState(feed, state);
 }
+function taskRecovery(task) {
+  if(task?.recovery && ["uncertain","cancel_uncertain"].includes(task.recovery.delivery) && Array.isArray(task.recovery.actions))return {delivery:task.recovery.delivery,reason:task.recovery.reason||"Broker reports this delivery requires owner recovery.",actions:task.recovery.actions.filter(action=>["fail","retry"].includes(action))};
+  if(task?.delivery==="uncertain"&&task.state==="running")return {delivery:"uncertain",reason:"Delivery outcome is uncertain.",actions:["fail","retry"]};
+  if(task?.delivery==="cancel_uncertain")return {delivery:"cancel_uncertain",reason:"Cancellation outcome is uncertain.",actions:["fail"]};
+  return {delivery:"",reason:"",actions:[]};
+}
 function renderTasks() {
   const loadedTasks = taskHistory.tasks || snapshot.activity.tasks || [],
     tasks = taskAttention ? loadedTasks.filter(task=>taskAttentionKind(task)===taskAttention) : loadedTasks,
@@ -1318,10 +1351,12 @@ function renderTasks() {
     reply.onclick = () => setReply(t.id);
     buttons.append(reply);
     const inspect=el("button","quiet","Inspect receiver delivery");inspect.type="button";inspect.dataset.focusKey="inspect-receiver:"+t.id;inspect.onclick=()=>inspectReceiver(t.to);buttons.append(inspect);
-    if (["uncertain","cancel_uncertain"].includes(t.delivery)) {
-      for(const [resolution,label] of [["fail","Resolve as failed / stopped"],...(t.delivery==="uncertain"?[["retry","Review safe retry"]]:[])]) {
+    const recovery=taskRecovery(t);
+    if (recovery.actions.length) {
+      item.append(el("p","action-error","Owner recovery available: "+recovery.reason+" Recorded delivery remains "+t.delivery+" until recovery is applied."));
+      for(const resolution of recovery.actions) {const label=resolution==="retry"?"Review safe retry":"Resolve as failed / stopped";
         const resolve=el("button","quiet",label);resolve.type="button";resolve.dataset.ownerWrite="true";resolve.dataset.focusKey="resolve:"+t.id+":"+resolution;resolve.disabled=!selectionReady();
-        resolve.onclick=()=>reviewOwnerAction({kind:"resolve",target:selected,ids:[t.id,t.to],version:snapshot.boundaries.version,title:resolution==="retry"?"Retry this uncertain task?":"Resolve this uncertain task?",description:"Task "+t.id+" to "+sessionReference(t.to)+" · version "+t.version+". "+(resolution==="retry"?"First stop or fence the old native turn/process and inspect its result. Retrying may repeat external side effects if the previous attempt ran. This explicitly queues the existing task for another attempt; it does not create a new task.":"Record this attempt as failed or stopped after reviewing the native terminal. This cannot retract a turn already submitted or prove that no side effects occurred."),operation:"task.resolve",args:{id:t.id,version:t.version,resolution},origin:"task-attention-filter"});buttons.append(resolve);
+        resolve.onclick=()=>reviewOwnerAction({kind:"resolve",target:selected,ids:[t.id,t.to],version:snapshot.boundaries.version,title:resolution==="retry"?"Retry this uncertain task?":"Resolve this uncertain task?",description:"Task "+t.id+" to "+sessionReference(t.to)+" · version "+t.version+" · recorded delivery "+t.delivery+". "+recovery.reason+" "+(resolution==="retry"?"First stop or fence the old native turn/process and inspect its result. Retrying may repeat external side effects if the previous attempt ran. This explicitly queues the existing task for another attempt; it does not create a new task.":"Record this attempt as failed or stopped after reviewing the native terminal. This cannot retract a turn already submitted or prove that no side effects occurred."),operation:"task.resolve",args:{id:t.id,version:t.version,resolution},origin:"task-attention-filter"});buttons.append(resolve);
       }
     }
     if (["proposed", "running"].includes(t.state)) {
@@ -2477,10 +2512,27 @@ $("disconnect-pair").onclick = () => {
   if (!(group.contributions_version>=1)) {activateTab("teams");notice("Review the legacy group's exact controls and migration policy before disabling it.",true);return;}
   reviewOwnerAction({kind:"pair",target:selected,ids:[selected,peer],version:snapshot.boundaries.version,fingerprint:JSON.stringify(group),group:group.id,title:"Disable only this pair's group?",description:"Remove group "+group.id+" contributions for "+[selected,peer].map(sessionReference).join(" and ")+". Other groups and explicit overrides can keep access enabled. Reconnecting preserves the saved mutual-instruction choice ("+(group.commands?"on":"off")+").",operation:"control.update",args:{version:snapshot.boundaries.version,kind:"collaboration",agents:[...group.agents],enabled:false,commands:!!group.commands},origin:"disconnect-pair"});
 };
+function isolationImpact(id) {
+  const teams=(snapshot.teams||[]).filter(team=>team.state==="active"),owned=teams.filter(team=>team.owner===id),members=teams.filter(team=>team.owner!==id&&team.members?.includes(id)),invited=teams.filter(team=>team.owner!==id&&!team.members?.includes(id)&&team.invited?.includes(id));
+  const groups=(snapshot.groups||[]).filter(group=>(group.members||group.agents||[]).includes(id));
+  const teamName=team=>(team.name||team.id)+" ("+team.id+")",peers=team=>(team.members||[]).map(sessionReference).join(", ")||"none";
+  const expectedTeams=[...owned.map(team=>({id:team.id,version:team.version,agent:id,action:"dissolve"})),...members.map(team=>({id:team.id,version:team.version,agent:id,action:"remove_member"})),...invited.map(team=>({id:team.id,version:team.version,agent:id,action:"withdraw_invitation"}))].sort((a,b)=>{for(const key of ["id","agent","action"]){if(a[key]<b[key])return -1;if(a[key]>b[key])return 1;}return 0;});
+  return {groups,owned,members,invited,expectedTeams,details:[
+    {label:"Owned agent teams permanently dissolved",items:owned.map(team=>teamName(team)+" · every member loses this team's shared access: "+peers(team)+" · board "+team.board+" · memory "+team.memory)},
+    {label:"Team memberships removed",items:members.map(team=>teamName(team)+" · remove "+sessionReference(id)+"; other members keep the team")},
+    {label:"Pending invitations withdrawn",items:invited.map(team=>teamName(team)+" · withdraw invitation to "+sessionReference(id))},
+    {label:"Owner-group memberships suspended",items:groups.map(group=>(group.name||group.id)+" ("+group.id+")")}
+  ]};
+}
+function isolationFingerprint(id) {
+  const impact=isolationImpact(id);
+  return JSON.stringify([snapshot.boundaries,impact.groups,...[impact.owned,impact.members,impact.invited].map(teams=>teams.map(team=>[team.id,team.version,team.owner,team.pending_owner,team.members,team.invited,team.board,team.memory]))]);
+}
 $("isolate-agent").onclick = () => {
   if (!selectionReady()) return;
-  const id=selected, groups=(snapshot.groups||[]).filter(group=>group.agents?.includes(id)), b=snapshot.boundaries;
-  reviewOwnerAction({kind:"isolate",target:id,ids:[id],version:b.version,fingerprint:JSON.stringify([b,groups]),title:"Make "+sessionReference(id)+" independent globally?",description:"This removes collaboration with every peer, suspends membership in "+groups.length+" owner group(s), and denies shared board and memory access. Explicit directional permissions are also denied. Accepted tasks continue; previously read context remains known. To reconnect, restore the exact group or directional permissions in Connections.",operation:"control.update",args:{version:b.version,kind:"independent",agents:[id]},origin:"isolate-agent"});
+  if(snapshot.teams_error || !Array.isArray(snapshot.teams)){notice("Current agent-team inventory is unavailable. Refresh before reviewing global isolation; its team effects cannot be safely enumerated.",true);return;}
+  const id=selected,b=snapshot.boundaries,impact=isolationImpact(id);
+  reviewOwnerAction({kind:"isolate",target:id,ids:[id],version:b.version,fingerprint:isolationFingerprint(id),details:impact.details,title:"Make "+sessionReference(id)+" independent globally?",description:"This denies collaboration with every peer and shared board/memory access, suspends "+impact.groups.length+" owner-group membership(s), permanently dissolves "+impact.owned.length+" owned agent team(s) for every member, removes "+impact.members.length+" team membership(s), and withdraws "+impact.invited.length+" pending invitation(s). Dependent descendants can also lose inherited team access. Accepted tasks continue; previously read context remains known. Reconnecting an owner group or directional permissions does not restore dissolved teams, removed memberships or withdrawn invitations. Dissolved teams must be created again; joining again requires new invitations and agent consent.",operation:"control.update",args:{version:b.version,kind:"independent",agents:[id],expected_teams:impact.expectedTeams},origin:"isolate-agent"});
 };
 
 function scopeLabel(name) {
@@ -3682,8 +3734,8 @@ function ownerActionReady(review) {
   if (review.kind==="retire")return snapshot.agents.some(agent=>agent.id===review.args.agent && agent.state==="revoked");
   if (snapshot.boundaries.version!==review.version) return false;
   if (review.kind==="pair") return JSON.stringify((snapshot.groups||[]).find(group=>group.id===review.group))===review.fingerprint;
-  if (review.kind==="isolate") return JSON.stringify([snapshot.boundaries,(snapshot.groups||[]).filter(group=>group.agents?.includes(review.target))])===review.fingerprint;
-  if (review.kind==="resolve") {if(review.args.resolution==="retry"&&!review.retryConfirmed)return false;const current=(taskHistory.tasks||snapshot.activity.tasks||[]).find(task=>task.id===review.args.id);return current?.version===review.args.version && ["uncertain","cancel_uncertain"].includes(current.delivery);}
+  if (review.kind==="isolate") return !snapshot.teams_error && Array.isArray(snapshot.teams) && isolationFingerprint(review.target)===review.fingerprint;
+  if (review.kind==="resolve") {if(review.args.resolution==="retry"&&!review.retryConfirmed)return false;const current=(taskHistory.tasks||snapshot.activity.tasks||[]).find(task=>task.id===review.args.id);return current?.version===review.args.version && taskRecovery(current).actions.includes(review.args.resolution);}
   return true;
 }
 function reviewOwnerAction(review) { ownerActionReview=review; renderOwnerActionReview(); $("owner-action-review").focus(); }
@@ -3694,6 +3746,10 @@ function renderOwnerActionReview() {
   const state=captureViewState(panel), valid=ownerActionReady(review), confirm=el("button","","Confirm exact action"), cancel=el("button","quiet","Cancel");
   confirm.type=cancel.type="button";confirm.dataset.ownerWrite="true";confirm.dataset.focusKey="confirm-owner-action";cancel.dataset.focusKey="cancel-owner-action";confirm.disabled=!valid;
   panel.replaceChildren(el("strong","",review.title),el("p","",review.description),el("code","",review.ids.join(" · ")),el("p",valid?"session-note":"action-error",valid?"The target and impact above are frozen for this review.":review.kind==="resolve"&&review.args.resolution==="retry"&&!review.retryConfirmed?"Review the old process and confirm the recovery condition below before retrying.":"Targets or policy changed. Cancel and review the current state; this action will not adopt new targets."),confirm,cancel);
+  for(const detail of review.details||[]){
+    const section=el("section","isolation-impact"),items=el("ul");section.append(el("strong","",detail.label+" · "+detail.items.length));
+    if(detail.items.length)for(const text of detail.items)items.append(el("li","",text));else items.append(el("li","session-note","None in the current reviewed inventory."));section.append(items);panel.append(section);
+  }
   if(review.kind==="resolve"&&review.args.resolution==="retry"){
     const label=el("label","retry-acknowledgment"),check=el("input");check.type="checkbox";check.checked=!!review.retryConfirmed;check.dataset.focusKey="retry-confirmed";check.onchange=()=>{review.retryConfirmed=check.checked;confirm.disabled=!ownerActionReady(review);};label.append(check,document.createTextNode("I stopped or fenced the old turn/process and reviewed its prior outcome."));panel.append(label);
   }
@@ -3716,7 +3772,7 @@ function receiverDeliveryExplanation(id,key) {
 }
 function inspectReceiver(id) {const receiver=snapshot?.agents?.find(agent=>agent.id===id);if(!receiver){notice("Receiver "+id+" is outside the active registry. Its historical tasks and exposure receipts remain searchable; include retired sessions in Sessions to review its metadata.",true);return;}const interactive=receiver.config.interaction==="interactive";selectAgent(id);activateTab("agent");const panel=$(interactive?"native-delivery":"worker-runtime");panel.setAttribute("tabindex","-1");panel.focus({preventScroll:true});}
 function taskAttentionKind(task) {
-  if(["uncertain","cancel_uncertain"].includes(task.delivery)||task.native?.phase==="uncertain")return "uncertain";
+  if(taskRecovery(task).actions.length||["uncertain","cancel_uncertain"].includes(task.delivery)||task.native?.phase==="uncertain")return "uncertain";
   if(task.state==="failed"||task.native?.phase==="failed")return "failed";
   if(!["proposed","running"].includes(task.state))return "";
   const status=nativeInfo(task.to), agent=snapshot?.agents?.find(item=>item.id===task.to);
@@ -3880,6 +3936,7 @@ function switchAttemptDraftScope(previous,next,nextSelected=selected) {
   $("new-native-only").checked=!!restore?.nativeOnly;newSessionDirty=!!restore?.newSessionDirty;
   ownerActionReview=teamReview=researchReview=legacyGroupReview=relaunchReview=resourceReview=null;
   for(const id of ["owner-action-review","research-review","relaunch-review","resource-review"])$(id).hidden=true;
+  pendingRailReveal="";
   resourceSnapshot=capacityView=null;capacityLoading="";capacityRequest++;nativeSignature=boundarySignature=agentSignature=taskSignature=feedSignature=teamsSignature=lifecycleSignature="";
   memoryEditorEpoch++;memoryRequest++;memoryReviewRequest++;memoryReview=null;memoryEditorNamespace="";memoryMetadataSelection="";memoryVersion=0;memoryBaseline={namespace:"",key:"",value:""};
   $("memory-key").value=$("memory-value").value="";memoryNamespace="";

@@ -16,23 +16,81 @@ func observationStudy(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
 	os.Chmod(root, 0700)
-	manifest := map[string]any{"id": "fixture"}
-	raw, _ := json.Marshal(manifest)
-	var frozen any
-	_ = json.Unmarshal(raw, &frozen)
-	if err := writeJSON(filepath.Join(root, "manifest.json"), map[string]any{"sha256": digest(frozen), "manifest": frozen}); err != nil {
+	manifest, err := Load(filepath.Join("..", "..", "examples", "research", "public-goods.yaml"))
+	if err != nil {
 		t.Fatal(err)
 	}
-	plan := PlanResult{Trials: []Trial{{ID: "run-001", Condition: "a"}, {ID: "run-002", Condition: "b"}}}
+	manifest.ID = "fixture"
+	manifest.Seeds = []int64{11}
+	manifest.Conditions = manifest.Conditions[:2]
+	plan, err := Plan(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writeJSON(filepath.Join(root, "manifest.json"), map[string]any{"sha256": digest(manifest), "manifest": manifest}); err != nil {
+		t.Fatal(err)
+	}
 	if err := writeJSON(filepath.Join(root, "plan.json"), plan); err != nil {
 		t.Fatal(err)
 	}
 	return root
 }
 
+func TestStudyObservationRejectsPlanChangesAgainstFrozenManifest(t *testing.T) {
+	for _, change := range []string{"omit", "reorder", "relabel"} {
+		t.Run(change, func(t *testing.T) {
+			root := observationStudy(t)
+			plan, err := verifiedStudyPlan(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for i, trial := range plan.Trials {
+				dir := filepath.Join(root, trial.ID, "attempt-001")
+				if err := os.MkdirAll(dir, 0700); err != nil {
+					t.Fatal(err)
+				}
+				if i == 0 {
+					if err := writeJSON(filepath.Join(dir, "result.json"), Result{Trial: trial, Attempt: 1, Status: "completed"}); err != nil {
+						t.Fatal(err)
+					}
+				}
+				record, _ := json.Marshal(managed.ExportRecord{Kind: "event", ID: trial.ID, Data: json.RawMessage(`{"actor":"alice"}`)})
+				if err := os.WriteFile(filepath.Join(dir, "coordination.jsonl"), append(record, '\n'), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			before, err := StudyStatus(context.Background(), root)
+			if err != nil || before.Completed != 1 || before.Total != 2 || before.State == "completed" {
+				t.Fatalf("valid initial study: %+v %v", before, err)
+			}
+			history, err := ReadHistory(root, HistoryFilter{Limit: 1})
+			if err != nil || len(history.Records) != 1 || !history.HasMore {
+				t.Fatalf("valid initial history: %+v %v", history, err)
+			}
+			switch change {
+			case "omit":
+				plan.Trials = plan.Trials[:1]
+			case "reorder":
+				plan.Trials[0], plan.Trials[1] = plan.Trials[1], plan.Trials[0]
+			case "relabel":
+				plan.Trials[0].Condition = "false-condition"
+			}
+			if err := writeJSON(filepath.Join(root, "plan.json"), plan); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := StudyStatus(context.Background(), root); err == nil || !strings.Contains(err.Error(), "frozen manifest") {
+				t.Fatalf("accepted changed completion/condition matrix: %v", err)
+			}
+			if _, err := ReadHistory(root, HistoryFilter{After: history.Cursor}); err == nil || !strings.Contains(err.Error(), "frozen manifest") {
+				t.Fatalf("accepted changed archive ordering: %v", err)
+			}
+		})
+	}
+}
+
 func TestArchivedExposureHistoryCanBeFilteredByItsReader(t *testing.T) {
 	root := observationStudy(t)
-	dir := filepath.Join(root, "run-001", "attempt-001")
+	dir := filepath.Join(root, "run-00001", "attempt-001")
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +119,11 @@ func TestStudyDoesNotInferRunningFromMissingResultAndRetainsOfflineStop(t *testi
 	for _, state := range []string{"starting", "stopped", "interrupted"} {
 		t.Run(state, func(t *testing.T) {
 			root := observationStudy(t)
-			stateDir := filepath.Join(root, "run-001", "attempt-001", "state")
+			plan, err := verifiedStudyPlan(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			stateDir := filepath.Join(root, "run-00001", "attempt-001", "state")
 			if err := os.MkdirAll(stateDir, 0700); err != nil {
 				t.Fatal(err)
 			}
@@ -85,7 +147,7 @@ func TestStudyDoesNotInferRunningFromMissingResultAndRetainsOfflineStop(t *testi
 			if err != nil {
 				t.Fatal(err)
 			}
-			l := &liveRunner{path: filepath.Join(root, "live.json"), budget: &modelBudget{}, progress: managed.ResearchProgress{Trial: "run-001", Attempt: 1, Condition: "a", StateDir: stateDir, State: state, Tasks: map[string]string{}, Population: []string{"alice", "bob"}, AckVersion: 1, Deadline: time.Now().Add(time.Minute).UTC().Format(time.RFC3339Nano)}}
+			l := &liveRunner{path: filepath.Join(root, "live.json"), budget: &modelBudget{}, progress: managed.ResearchProgress{Trial: "run-00001", Attempt: 1, Condition: plan.Trials[0].Condition, StateDir: stateDir, State: state, Tasks: map[string]string{}, Population: []string{"alice", "bob"}, AckVersion: 1, Deadline: time.Now().Add(time.Minute).UTC().Format(time.RFC3339Nano)}}
 			l.call = func(ctx context.Context, op string, args any) (json.RawMessage, error) {
 				data, _ := json.Marshal(args)
 				raw, fault := store.Call(ctx, owner.Token, managed.Request{Operation: op, Args: data, ResearchRunnerProof: proof, RequestID: "publish"})
@@ -139,13 +201,17 @@ func TestReadReportValidatesAndBackfillsFrozenPopulationPolicy(t *testing.T) {
 }
 func TestStudyObservationPersistsAcrossFiniteTrialsAndReadsArchivedHistory(t *testing.T) {
 	root := observationStudy(t)
+	plan, err := verifiedStudyPlan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for i := 1; i <= 2; i++ {
-		trial := fmt.Sprintf("run-%03d", i)
+		trial := fmt.Sprintf("run-%05d", i)
 		dir := filepath.Join(root, trial, "attempt-001")
 		if err := os.MkdirAll(dir, 0700); err != nil {
 			t.Fatal(err)
 		}
-		if err := writeJSON(filepath.Join(dir, "result.json"), Result{Trial: Trial{ID: trial}, Attempt: 1, Status: "completed"}); err != nil {
+		if err := writeJSON(filepath.Join(dir, "result.json"), Result{Trial: plan.Trials[i-1], Attempt: 1, Status: "completed"}); err != nil {
 			t.Fatal(err)
 		}
 		if i == 1 {

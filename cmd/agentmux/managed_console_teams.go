@@ -297,6 +297,7 @@ func (m console) teamAgentLabels(ids []string) string {
 
 func (m console) eventsPanel(width, height int) string {
 	var out strings.Builder
+	out.WriteString(consoleMuted.Render(m.historyAvailability()))
 	out.WriteString(m.studyPanel(width))
 	out.WriteString(m.researchPanel(width))
 	out.WriteString(consoleMuted.Render(fmt.Sprintf("History page %d · Shift+F search · g scope · PgUp/PgDn", len(m.eventBack)+1)) + "\n")
