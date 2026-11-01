@@ -333,7 +333,9 @@ Keys are case-sensitive: `N`, `L`, `V`, and `P` mean Shift plus that letter. For
 `Ctrl-b b`, press Ctrl-b, release both keys, then press b. The same two-step
 prefix applies to the other Ctrl-b bindings. Shortcuts below depend on the
 active view and selected record; the footer shows the actions available there.
-Use Tab or a view number first. In an editor, printable characters are text;
+Use Left/Right, Tab or a view number to switch views. Connections and Teams
+use Left/Right for their recipient/target instead; Ctrl-Left/Ctrl-Right switches
+views from either one. In an editor, printable characters are text;
 use **Ctrl-G** for help and **Esc** to cancel before using navigation shortcuts.
 
 | Key | Action |
@@ -349,6 +351,7 @@ use **Ctrl-G** for help and **Esc** to cancel before using navigation shortcuts.
 | Ctrl-b, then b / Shift+P / m / t in a native session | Open Board / Connections / Memory / Tasks in a popup |
 | Ctrl-b, then Shift+D | Choose read-only Broker or Supervisor logs without leaving the current terminal |
 | Tab / Shift-Tab or 1–8 | Switch Board, Agents, Connections, Memory, Tasks, Sessions, Teams, Events |
+| ←/→ outside Connections/Teams; Ctrl+←/→ in every view | Switch views; editors, readers and reviews keep their own arrow keys |
 | [ / ] in Teams; ← / → | Choose a team; choose an exact agent for a membership action |
 | i / r / d in Teams | Review invite / remove or revoke invitation / dissolve with the current version; hints follow target membership |
 | e / t in Teams | Edit team name/mission / propose the selected member as owner; acceptance is separate |

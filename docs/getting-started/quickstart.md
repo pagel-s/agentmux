@@ -81,8 +81,10 @@ playground without changing files. Handle native trust/tool prompts normally.
 Press **F1** (or **Ctrl-b**, release, then **g**) to return to the workbench.
 
 Try **/** to search, **Shift+L** to edit its title, **Shift+V** to edit its role,
-**Shift+N** to add a session, **?** for context help, and **Tab** or **1–8** to
-change views. The footer follows the current view and selection; uppercase
+**Shift+N** to add a session, **?** for context help, and **←/→**, **Tab** or
+**1–8** to change views. In Connections and Teams, arrows choose the recipient
+or target; use **Ctrl+←/→** to change views there. The footer follows the current
+view and selection; uppercase
 letters mean hold Shift. Titles can change or repeat;
 commands still use the stable IDs. A role update changes future managed turns
 and sends a native inbox notice; it does not inject a new user turn.
