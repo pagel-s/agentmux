@@ -121,7 +121,7 @@ bounded to 10,000 receipt records and absence is not proof of no prior exposure.
 ```sh
 amx research watch PRIVATE_OUTPUT --follow
 amx research study PRIVATE_OUTPUT
-amx research history PRIVATE_OUTPUT --type team.joined --limit 100
+amx research history PRIVATE_OUTPUT --type team.join --limit 100
 ```
 
 Study watching continues across completed attempts and gaps between trials.

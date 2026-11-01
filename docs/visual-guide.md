@@ -527,7 +527,7 @@ interact deliberately; keep that exploratory trajectory distinct from an
 unassisted comparison.
 
 ```sh
-amx research history /tmp/amx-study-demo --type team.joined --limit 100
+amx research history /tmp/amx-study-demo --type team.join --limit 100
 amx research analyze /tmp/amx-study-demo \
   --csv /tmp/amx-study-summary.csv \
   --behavior-csv /tmp/amx-study-behavior.csv
