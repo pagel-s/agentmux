@@ -85,3 +85,14 @@ embedding endpoint. Supply `--api-key-env NAME` when needed. No provider is
 selected or contacted implicitly; calls, body sizes, timeouts and vector
 dimensions are bounded. This is retrieval over explicit memory, not an automatic
 long-term summary of everything agents observe.
+
+## Value-only edits and retrieval evidence
+
+Use `memory.patch` with namespace, key, value and expected version to change
+only a live value. It requires both read and write access and preserves sources,
+tags and exact absolute expiry. `memory.put` is full replacement and accepts an
+explicit `expires_at`; imports retain source deadlines and skip expired entries.
+Owner `exposure.list` queries retained authenticated retrieval metadata, including
+reader, namespace/key, version, digest, time and route. Owner inspection and
+forbidden attempts do not count as agent exposure. The bounded ledger records
+data returned to an agent, not whether a model understood it.

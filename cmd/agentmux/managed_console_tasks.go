@@ -1,8 +1,9 @@
 package main
 
 type consoleTaskPage struct {
-	Query  string
-	After  string
-	Cursor string
-	More   bool
+	Recipient, State string
+	Query            string
+	After            string
+	Cursor           string
+	More             bool
 }

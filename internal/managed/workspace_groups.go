@@ -57,7 +57,7 @@ func workspaceGroupKey(ids []string) string {
 	return "workspace_group_" + hash(string(encoded))
 }
 
-func (s *Store) setWorkspaceGroup(ctx context.Context, q queryer, a actor, ids []string, enabled, commands bool) (WorkspaceGroup, *Fault) {
+func (s *Store) setWorkspaceGroup(ctx context.Context, q queryer, a actor, ids []string, enabled bool, commands *bool) (WorkspaceGroup, *Fault) {
 	key := workspaceGroupKey(ids)
 	var group WorkspaceGroup
 	err := get(ctx, q, "workspace_group", key, &group)
@@ -82,9 +82,12 @@ func (s *Store) setWorkspaceGroup(ctx context.Context, q queryer, a actor, ids [
 	} else if err != nil {
 		return group, internal(err)
 	}
+	beforeMembers := append([]string(nil), group.Members...)
 	group.Members = []string{}
 	group.ContributionsVersion = 1
-	group.Commands = commands
+	if commands != nil {
+		group.Commands = *commands
+	}
 	group.State = "inactive"
 	if enabled {
 		group.Members = append(group.Members, group.Agents...)
@@ -94,7 +97,7 @@ func (s *Store) setWorkspaceGroup(ctx context.Context, q queryer, a actor, ids [
 	if err := save(ctx, q, "workspace_group", key, ownerID, "", "owner", group); err != nil {
 		return group, internal(err)
 	}
-	if err := event(ctx, q, a, "workspace_group.changed", group.ID, map[string]any{"version": group.Version, "state": group.State, "members": group.Members, "commands": group.Commands, "contributions_version": group.ContributionsVersion}); err != nil {
+	if err := event(ctx, q, a, "workspace_group.changed", group.ID, map[string]any{"version": group.Version, "state": group.State, "members": group.Members, "before_members": beforeMembers, "commands": group.Commands, "contributions_version": group.ContributionsVersion}); err != nil {
 		return group, internal(err)
 	}
 	return group, nil
@@ -115,6 +118,7 @@ func removeWorkspaceGroupMembers(ctx context.Context, q queryer, a actor, chosen
 		if len(members) == len(group.Members) {
 			continue
 		}
+		beforeMembers := append([]string(nil), group.Members...)
 		group.Members = members
 		if len(members) == 0 {
 			group.State = "inactive"
@@ -123,7 +127,7 @@ func removeWorkspaceGroupMembers(ctx context.Context, q queryer, a actor, chosen
 		if err := save(ctx, q, "workspace_group", workspaceGroupKey(group.Agents), ownerID, "", "owner", group); err != nil {
 			return internal(err)
 		}
-		if err := event(ctx, q, a, "workspace_group.changed", group.ID, map[string]any{"version": group.Version, "state": group.State, "members": members}); err != nil {
+		if err := event(ctx, q, a, "workspace_group.changed", group.ID, map[string]any{"version": group.Version, "state": group.State, "members": members, "before_members": beforeMembers}); err != nil {
 			return internal(err)
 		}
 	}

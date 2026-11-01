@@ -74,6 +74,9 @@ func (s *Store) labelSession(ctx context.Context, q queryer, a actor, raw json.R
 	if err != nil {
 		return nil, internal(err)
 	}
+	if info.State == "retired" {
+		return nil, fault("conflict", "retired agent cannot be changed")
+	}
 	if in.Version != info.TitleVersion {
 		return nil, fault("conflict", "session title changed; refresh before editing")
 	}

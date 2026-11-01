@@ -21,6 +21,10 @@ func runWorkRelaunch(args []string, out, diagnostics io.Writer) int {
 		fmt.Fprintln(out, "Usage: agentmux relaunch ID [--resume ID|last|picker] [--native-launcher ABSOLUTE_PATH] [--session NAME | --state DIR]\nRelaunch one exited native session with its stable ID, preserving healthy peers.\nDefault: fresh native conversation. --resume explicitly selects native history; no conversation is guessed.\n--native-launcher explicitly recovers a trusted-local interactive session using the selected public executable for this attempt only. Configured trailing arguments and saved definitions are preserved; the running controller must support this option.")
 		return exitSuccess
 	}
+	if err := validateWorkFlags("relaunch", args); err != nil {
+		fmt.Fprintln(diagnostics, "error:", err)
+		return exitValidation
+	}
 	o, err := parseWorkOptions(args)
 	if err != nil || len(o.args) != 1 {
 		if err == nil {

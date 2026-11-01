@@ -101,7 +101,7 @@ func TestResearchBehaviorCSVExportsDecisionsWithoutPrompts(t *testing.T) {
 		t.Fatal(err)
 	}
 	rows, err := csv.NewReader(bytes.NewReader(content)).ReadAll()
-	if err != nil || len(rows) != 2 || len(rows[0]) != 26 || len(rows[1][0]) != 24 || rows[1][5] != "alice" || rows[1][10] != "2" {
+	if err != nil || len(rows) != 2 || len(rows[0]) != 36 || len(rows[1][0]) != 24 || rows[1][5] != "alice" || rows[1][10] != "2" {
 		t.Fatalf("unexpected behavior rows: %v %v", rows, err)
 	}
 	if rows[1][18] != "test" || rows[1][19] != "hash" || rows[1][20] != "3" || rows[1][21] != "1" || rows[1][22] != "4" || rows[1][23] != "1" || rows[1][24] != "config-hash" {

@@ -59,7 +59,7 @@ func TestConsoleBoardDraftFreezesNamespaceAndReplyPreservesSource(t *testing.T) 
 
 func TestConsoleNativeWizardAcceptsEmptyRoleAndKeepsSelectedProject(t *testing.T) {
 	m := console{agents: []managed.AgentInfo{{ID: "alice", Config: managedconfig.Agent{Workdir: "/my/project"}}}}
-	for _, key := range []tea.KeyMsg{{Type: tea.KeyRunes, Runes: []rune{'N'}}, {Type: tea.KeyRunes, Runes: []rune("daily")}, {Type: tea.KeyEnter}, {Type: tea.KeyEnter}, {Type: tea.KeyEnter}, {Type: tea.KeyEnter}} {
+	for _, key := range []tea.KeyMsg{{Type: tea.KeyRunes, Runes: []rune{'N'}}, {Type: tea.KeyCtrlO}, {Type: tea.KeyRunes, Runes: []rune("daily")}, {Type: tea.KeyEnter}, {Type: tea.KeyEnter}, {Type: tea.KeyEnter}, {Type: tea.KeyEnter}} {
 		next, _ := m.Update(key)
 		m = next.(console)
 	}

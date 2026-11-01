@@ -442,3 +442,40 @@ func TestBrokerFenceInterruptsOnlyCorrelatedPeerTurnBeforeResolution(t *testing.
 		t.Fatalf("old fenced turn replayed: %s", m.Params)
 	}
 }
+
+func TestCancellationAfterConversationSwitchTargetsOriginalTurn(t *testing.T) {
+	f := newEngineFixture(t, false)
+	f.waitMethod(t, "thread/queue/add")
+	waitPhase(t, f.conn, "submitted")
+	f.emit("item/started", map[string]any{"threadId": "root", "turnId": "peer-turn", "item": map[string]any{"type": "userMessage", "clientId": "delivery-1"}})
+	waitPhase(t, f.conn, "running")
+	f.p.mu.Lock()
+	f.p.current = "new-root"
+	f.p.state = "idle"
+	f.p.mu.Unlock()
+	f.conn.mu.Lock()
+	f.conn.status = nativebridge.Status{Cancel: true, ActiveID: "delivery-1"}
+	f.conn.mu.Unlock()
+	f.waitMethod(t, "turn/interrupt")
+}
+
+func TestManualAfterHumanTakeoverPreservesTurn(t *testing.T) {
+	f := newEngineFixture(t, false)
+	f.waitMethod(t, "thread/queue/add")
+	waitPhase(t, f.conn, "submitted")
+	f.emit("item/started", map[string]any{"threadId": "root", "turnId": "peer-turn", "item": map[string]any{"type": "userMessage", "clientId": "delivery-1"}})
+	waitPhase(t, f.conn, "running")
+	f.emit("agentmux/humanIntervention", map[string]any{"threadId": "root", "turnId": "peer-turn"})
+	time.Sleep(50 * time.Millisecond)
+	f.conn.mu.Lock()
+	f.conn.status = nativebridge.Status{Cancel: true, ActiveID: "delivery-1"}
+	f.conn.mu.Unlock()
+	time.Sleep(600 * time.Millisecond)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, method := range f.methods {
+		if method == "turn/interrupt" {
+			t.Fatal("Manual interrupted human-controlled native turn")
+		}
+	}
+}

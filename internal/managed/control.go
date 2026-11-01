@@ -310,7 +310,7 @@ func (s *Store) control(ctx context.Context, q queryer, a actor, r Request) (any
 		Write        bool     `json:"write"`
 		Agents       []string `json:"agents"`
 		Enabled      bool     `json:"enabled"`
-		Commands     bool     `json:"commands"`
+		Commands     *bool    `json:"commands"`
 		Board        string   `json:"board"`
 		Memory       string   `json:"memory"`
 		Reset        bool     `json:"reset"`
@@ -442,7 +442,7 @@ func (s *Store) control(ctx context.Context, q queryer, a actor, r Request) (any
 						continue
 					}
 					for _, action := range []string{"message.send", "ping.send", "instruct"} {
-						allow := in.Enabled && (action != "instruct" || in.Commands)
+						allow := in.Enabled && (action != "instruct" || in.Commands != nil && *in.Commands)
 						next := []EdgeControl{}
 						for _, edge := range c.Edges {
 							if edge.From == from && edge.To == to && edge.Action == action {
@@ -580,7 +580,7 @@ func (s *Store) control(ctx context.Context, q queryer, a actor, r Request) (any
 	if err := saveControls(ctx, q, c); err != nil {
 		return nil, internal(err)
 	}
-	if err := event(ctx, q, a, "boundaries.changed", "live_access", map[string]any{"version": c.Version, "kind": in.Kind, "agent": in.Agent, "from": in.From, "to": in.To, "action": in.Action, "namespace": in.Namespace, "legacy_policy": in.LegacyPolicy}); err != nil {
+	if err := event(ctx, q, a, "boundaries.changed", "live_access", map[string]any{"version": c.Version, "kind": in.Kind, "agent": in.Agent, "agents": in.Agents, "from": in.From, "to": in.To, "action": in.Action, "namespace": in.Namespace, "legacy_policy": in.LegacyPolicy}); err != nil {
 		return nil, internal(err)
 	}
 	c.Group = responseGroup

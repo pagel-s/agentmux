@@ -241,3 +241,26 @@ func TestWebIdentityClientGuards(t *testing.T) {
 		t.Fatalf("client identity unit tests: %v\n%s", err, output)
 	}
 }
+
+func TestWebFrozenRequestIdentityReplaysWithoutDuplicatingTasks(t *testing.T) {
+	state, client, _ := inventoryBroker(t)
+	body := map[string]any{"operation": "instruct", "request_id": "web-reconnect-exact-request", "args": map[string]any{"to": []string{"peer"}, "text": "Frozen reviewed instruction"}}
+	first := ownerWebRequest(t, state, client, "/api/call", body)
+	second := ownerWebRequest(t, state, client, "/api/call", body)
+	if first.Code != http.StatusOK || second.Code != http.StatusOK || first.Body.String() != second.Body.String() {
+		t.Fatalf("exact replay failed: first=%d %s second=%d %s", first.Code, first.Body.String(), second.Code, second.Body.String())
+	}
+	if tasks := uat20Activity(t, client).Tasks; len(tasks) != 1 {
+		t.Fatalf("same identity created duplicate tasks: %d", len(tasks))
+	}
+	body["args"] = map[string]any{"to": []string{"peer"}, "text": "Changed instruction must have a new identity"}
+	changed := ownerWebRequest(t, state, client, "/api/call", body)
+	if changed.Code != http.StatusBadRequest || !strings.Contains(changed.Body.String(), "conflict") || len(uat20Activity(t, client).Tasks) != 1 {
+		t.Fatalf("changed request reused identity: %d %s", changed.Code, changed.Body.String())
+	}
+	body["request_id"] = "bad\nidentity"
+	invalid := ownerWebRequest(t, state, client, "/api/call", body)
+	if invalid.Code != http.StatusBadRequest || !strings.Contains(invalid.Body.String(), "invalid") {
+		t.Fatalf("unsafe request identity accepted: %d %s", invalid.Code, invalid.Body.String())
+	}
+}

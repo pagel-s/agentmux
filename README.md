@@ -31,6 +31,9 @@ setup. Remote `go install …@latest` is currently unsupported by this module.
 `amx` to open the current workspace or choose a running one, `amx a claude -s work`
 to attach, and `amx link claude codex -s work` to connect a pair. See the
 [everyday command reference](docs/getting-started/everyday-commands.md).
+Use **Ctrl+K** for searchable Actions and **Ctrl+P** for sessions. See the
+[control center guide](docs/usability-control-center.md) for quick launch,
+attention, exact pair controls, recovery, retirement and study observation.
 
 For the complete first-run test, follow the [fresh-install
 walkthrough](docs/getting-started/quickstart.md). It uses a separate workspace

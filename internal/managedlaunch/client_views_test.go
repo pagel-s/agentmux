@@ -325,6 +325,18 @@ func TestAttachAgentRealClientsHaveIndependentViewsAndOwnedCleanup(t *testing.T)
 	if current(second) != "agent-bob" {
 		t.Fatal("first attachment's F1 moved another attachment")
 	}
+	if got := tmux("show-options", "-v", "-t", first, "@agentmux_focus_pending"); got != "alice" {
+		t.Fatalf("F1 lost first view's exact focus: %q", got)
+	}
+	if got := tmux("show-options", "-v", "-t", second, "@agentmux_focus_pending"); got != "bob" {
+		t.Fatalf("first view focus changed second view: %q", got)
+	}
+	// Native window selection is observed without an explicit launcher Focus.
+	tmux("set-option", "-t", first, "@agentmux_focus_pending", "")
+	tmux("select-window", "-t", first+":agent-bob")
+	wait("native window hook retains the exact selected agent", func() bool { return tmux("show-options", "-v", "-t", first, "@agentmux_focus_pending") == "bob" })
+	tmux("select-window", "-t", firstDashboard)
+
 	if _, err := io.WriteString(secondInput, "\x02g"); err != nil {
 		t.Fatal(err)
 	}

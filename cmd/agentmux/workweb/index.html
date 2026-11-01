@@ -20,13 +20,15 @@
         ><span id="session">Work session</span
         ><span class="connection" id="connection">Connecting</span>
         <div class="top-actions">
+          <button id="open-actions" class="quiet" aria-keyshortcuts="Control+k Meta+k">Actions <kbd>Ctrl K</kbd></button>
+          <button id="quick-new-session">New session</button>
           <button id="refresh" class="quiet">Refresh</button
           ><button id="copy-attach" disabled>Attach command ↗</button>
         </div>
       </header>
       <aside class="agents">
         <div class="rail-heading">
-          <span>AGENTS</span><span id="agent-count">0</span>
+          <span>SESSIONS</span><span id="agent-count">0</span>
         </div>
         <label class="session-search"
           ><span class="sr-only">Search sessions</span
@@ -37,7 +39,7 @@
             autocomplete="off"
         /></label>
         <span id="session-search-status" class="sr-only" role="status" aria-atomic="true"></span>
-        <div id="agents" class="agent-list"></div>
+        <div id="agents" class="agent-list" tabindex="0" role="listbox" aria-label="Sessions; use arrow keys and Enter"></div>
         <div class="rail-bottom">
           <span id="workbench-shortcuts"
             ><kbd>F1</kbd> terminal workbench<br /><kbd>Ctrl-b b</kbd> shared
@@ -53,7 +55,7 @@
             <span id="global-view-context"></span>
           </div>
           <div class="agent-title">
-            <h1 id="agent-name">Select an agent</h1>
+            <h1 id="agent-name">Select a session</h1>
             <button
               id="edit-title"
               class="quiet"
@@ -72,6 +74,7 @@
             ><button id="pause-agent" class="quiet" disabled>Autonomy</button>
           </div>
           <p id="agent-role"></p>
+          <section id="owner-action-review" class="team-review" aria-label="Review exact owner action" tabindex="-1" hidden></section>
           <form id="relaunch-review" class="team-review" hidden>
             <strong id="relaunch-target"></strong>
             <label>Conversation <select id="relaunch-resume"><option value="">Fresh conversation</option><option value="picker">Choose native history in terminal</option><option value="last">Resume latest native conversation</option><option value="id">Specific native conversation ID</option></select></label>
@@ -109,13 +112,14 @@
         </div>
         <nav class="tabs" aria-label="Workspace views">
           <button data-tab="activity" class="active" aria-pressed="true" aria-controls="view-activity">Board</button
-          ><button data-tab="agent" aria-pressed="false" aria-controls="view-agent">Agent</button
+          ><button data-tab="agent" aria-pressed="false" aria-controls="view-agent">Session detail</button
           ><button data-tab="tasks" aria-pressed="false" aria-controls="view-tasks">Tasks <span id="task-count">0</span></button
           ><button data-tab="memory" aria-pressed="false" aria-controls="view-memory">Memory</button
-          ><button data-tab="graph" aria-pressed="false" aria-controls="view-graph">Graph</button
-          ><button data-tab="teams" aria-pressed="false" aria-controls="view-teams">Teams</button
+          ><button data-tab="graph" aria-pressed="false" aria-controls="view-graph">Connections</button
+          ><button data-tab="teams" aria-pressed="false" aria-controls="view-teams">Groups &amp; teams</button
           ><button data-tab="research" id="research-tab" aria-pressed="false" aria-controls="view-research" hidden>Research</button
           ><button data-tab="sessions" aria-pressed="false" aria-controls="view-sessions">Sessions</button
+          ><button data-tab="terminals" aria-pressed="false" aria-controls="view-terminals">Existing terminals</button
           ><span class="tab-tail" id="deadline"></span>
         </nav>
         <div class="workspace-content">
@@ -124,7 +128,7 @@
               <h2>Research attempt</h2>
               <span id="research-state"></span>
             </div>
-            <div id="research-status" class="research-status"></div>
+            <section id="study-observer" class="study-observer" hidden><label><input id="follow-study" type="checkbox"/> Follow this study across trials</label><p id="study-status" class="session-note" role="status"></p><div id="study-trials"></div></section><div id="research-status" class="research-status"></div>
             <div class="section-label">
               <h2>Intervene at a phase barrier</h2>
             </div>
@@ -164,11 +168,11 @@
             </div>
             <div id="research-population"></div>
             <div class="section-label"><h2>Intervention history</h2></div>
-            <div id="research-interventions" class="lifecycle-events"></div>
+            <div id="research-interventions" class="lifecycle-events"></div><div class="section-label"><h2>Study evidence timeline</h2><span>ARCHIVED RECORDS · READ ONLY</span></div><p class="session-note">Recorded delivery, replies, memory versions, membership, permissions and exposure receipts show evidence in archive order. Delivery and exposure alone do not prove that an agent understood or used context.</p><form id="research-history-filter" class="history-filters" role="search"><input id="research-history-query" type="search" placeholder="Search exact text or identity…" aria-label="Search study evidence"/><input id="research-history-actor" placeholder="Actor / session ID" aria-label="Filter study actor"/><select id="research-history-kind" aria-label="Filter evidence kind"><option value="">All evidence kinds</option><option value="message">Messages & replies</option><option value="task">Instruction tasks</option><option value="memory">Shared memory</option><option value="team">Agent teams</option><option value="control">Permissions</option><option value="exposure">Exposure receipts</option><option value="event">Broker events</option></select><button type="submit">Search archive</button></form><p id="research-history-status" class="session-note" role="status"></p><div id="research-history" class="lifecycle-events"></div><button id="load-more-research-history" type="button" class="quiet" hidden>Load more evidence</button>
           </section>
           <section id="view-teams" class="view">
             <div class="section-label">
-              <h2>Consented teams</h2>
+              <h2>Agent teams · consented membership</h2>
               <span id="teams-count"></span>
             </div>
             <p class="session-note">
@@ -190,7 +194,7 @@
               <h2>Lifecycle & interventions</h2>
               <span>RECENT BROKER EVENTS</span>
             </div>
-            <div id="lifecycle-events" class="lifecycle-events"></div>
+            <form id="event-history-filter" class="history-filters" role="search" aria-label="Search lifecycle history"><input id="event-query" type="search" placeholder="Search events…" aria-label="Search lifecycle history"/><input id="event-agent" placeholder="Session ID" aria-label="Filter event session"/><input id="event-type" placeholder="Event type" aria-label="Filter event type"/><button type="submit">Search events</button><button id="reset-event-filter" type="button" class="quiet">Clear</button></form><p id="event-history-status" class="session-note" role="status"></p><div id="lifecycle-events" class="lifecycle-events"></div><button id="load-more-events" type="button" class="quiet" hidden>Load older events</button>
           </section>
           <section id="view-sessions" class="view">
             <div class="section-label"><h2>Workspaces</h2><button id="refresh-workspaces" class="quiet">Refresh workspaces</button></div>
@@ -239,12 +243,15 @@
               </details>
             </form>
             <div class="section-label">
-              <h2>Workspace sessions</h2>
-              <span id="registered-count"></span>
+              <h2>Sessions</h2>
+              <label class="quiet"><input id="include-archived" type="checkbox"/> Include retired sessions</label><span id="registered-count"></span>
             </div>
             <div id="registered-sessions"></div>
+          </section>
+          <section id="view-terminals" class="view">
+            <p class="session-note">Discover native terminals already running on this computer. Preparing a bridge does not type into them; review their observed origin and paste setup in the original terminal.</p>
             <div class="section-label">
-              <h2>Observed terminals</h2>
+              <h2>Existing terminals</h2>
               <span>NO INPUT INJECTION</span>
             </div>
             <div id="observed-sessions"></div>
@@ -258,19 +265,19 @@
                 tools stay intact. Permissions are controlled here; inbox
                 processing stays explicit.
               </p>
-              <pre id="bridge-setup"></pre>
+              <p id="bridge-origin" class="session-note"></p><pre id="bridge-setup"></pre>
             </div>
           </section>
           <section id="view-activity" class="view active">
             <div class="section-label">
               <h2>Coordination</h2>
               <select id="board-filter" aria-label="Filter messages">
-                <option value="all">All messages</option>
+                <option value="all">Workspace messages</option>
                 <option value="team">Shared boards</option>
-                <option value="agent">Agent inbox</option></select
+                <option value="agent">Selected session inbox &amp; sent</option></select
               ><span id="feed-count"></span>
             </div>
-            <div id="feed" class="feed"></div>
+            <form id="message-history-filter" class="history-filters" role="search" aria-label="Search message history"><input id="message-query" type="search" placeholder="Search all message history…" aria-label="Search message history"/><select id="message-board" aria-label="Filter shared board"><option value="">All shared boards</option></select><button type="submit">Search</button></form><p id="message-history-status" class="session-note" role="status"></p><div id="feed" class="feed"></div><button id="load-more-messages" type="button" class="quiet" hidden>Load older messages</button>
           </section>
           <section id="view-agent" class="view">
             <div id="worker-runtime" class="worker-runtime"></div>
@@ -284,7 +291,7 @@
             <div id="agent-capacity" class="capacity-panel"></div>
             <details id="resource-editor" class="resource-editor"><summary>Adjust admission budgets & deadline</summary>
               <p class="session-note">These are permanently reserved admission allowances, not provider billing caps. Zero removes a configured cap. Existing reservations cannot be refunded. Shortening admission does not stop running tasks.</p>
-              <p id="resource-current" class="session-note"></p>
+              <p id="resource-current" class="session-note"></p><div id="resource-conflict" class="team-review" hidden></div>
               <form id="resource-form" class="resource-form">
                 <label>Session token cap<input id="resource-session-tokens" type="number" min="0" step="1" required /></label><label>Session cost cap (micro-USD)<input id="resource-session-cost" type="number" min="0" step="1" required /></label>
                 <label>Turn token reservation<input id="resource-turn-tokens" type="number" min="0" step="1" required /></label><label>Turn cost reservation (micro-USD)<input id="resource-turn-cost" type="number" min="0" step="1" required /></label>
@@ -306,7 +313,7 @@
               <h2>Task history & results</h2>
               <span>OWNER VIEW</span>
             </div>
-            <form id="task-history-filter" class="history-filters" role="search" aria-label="Search task history">
+            <p id="task-summary-status" class="session-note" role="status"></p><section id="attention-queue" class="attention-queue" aria-label="Session delivery attention"></section><label class="attention-filter">Attention <select id="task-attention-filter" aria-label="Filter task attention"><option value="">All task outcomes</option><option value="review">Review required</option><option value="blocked">Delivery blocked</option><option value="uncertain">Delivery uncertain</option><option value="failed">Failed</option></select></label><form id="task-history-filter" class="history-filters" role="search" aria-label="Search task history">
               <input id="task-query" type="search" maxlength="512" placeholder="Search task ID, instruction or result…" aria-label="Search all task history" />
               <select id="task-agent-filter" aria-label="Filter task recipient"><option value="">All recipients</option></select>
               <select id="task-state-filter" aria-label="Filter task state"><option value="">All states</option><option>proposed</option><option>running</option><option>submitted</option><option>verified</option><option>failed</option><option>rejected</option><option>cancelled</option></select>
@@ -397,24 +404,25 @@
                 concurrent write will still require another review.
               </p>
             </section>
+            <details id="exposure-ledger"><summary>Who received context? · recorded exposure</summary><p class="session-note">These receipts record successful authenticated disclosure of exact message or memory versions. Current permissions show what a session may read now. Receipts do not prove understanding, use, or continuous access. The broker retains a bounded ledger.</p><form id="exposure-filter" class="history-filters" role="search"><input id="exposure-reader" placeholder="Reader session ID (all if blank)" aria-label="Filter exposure reader"/><select id="exposure-kind" aria-label="Filter exposure kind"><option value="">Messages and memory</option><option value="memory">Memory</option><option value="message">Messages</option></select><input id="exposure-route" placeholder="Delivery route (optional)" aria-label="Filter exposure route"/><button type="submit">Load receipts</button><button id="clear-exposure-version" type="button" class="quiet">Clear exact version filter</button></form><p id="exposure-status" class="session-note" role="status"></p><div id="exposure-list" class="lifecycle-events" tabindex="-1"></div><button id="load-more-exposures" type="button" class="quiet" hidden>Load more receipts</button></details>
           </section>
           <section id="view-graph" class="view">
             <div class="graph-toolbar">
               <div class="segmented">
                 <button id="graph-agents" class="active">
-                  Agent connections</button
+                  Session connections</button
                 ><button id="graph-scopes">Shared access</button>
               </div>
               <span id="graph-limit">Drag nodes · select a connection</span
               ><button id="graph-edit" disabled>Connect…</button
-              ><button id="graph-reset" class="quiet">Reset layout</button>
+              ><button id="graph-list-toggle" class="quiet" aria-pressed="false">List view</button><button id="graph-reset" class="quiet">Reset layout</button>
               <div class="graph-viewport-controls" role="group" aria-label="Graph viewport"><button id="graph-fit" class="quiet">Fit</button><button id="graph-zoom-out" class="quiet" aria-label="Zoom graph out">−</button><span id="graph-zoom" aria-live="polite">100%</span><button id="graph-zoom-in" class="quiet" aria-label="Zoom graph in">+</button></div>
             </div>
-            <div class="graph-canvas">
+            <div id="connection-list-panel" hidden><label class="session-search">Find a connection<input id="connection-search" type="search" placeholder="Session, permission or namespace…"/></label><div id="connection-list" role="listbox" tabindex="0" aria-label="Connections; use arrow keys and Enter"></div></div><div class="graph-canvas" id="graph-canvas">
               <svg
                 id="interaction-graph"
                 viewBox="0 0 960 580"
-                aria-label="Agent interaction graph"
+                aria-label="Session connection graph"
                 role="group"
                 tabindex="0"
               ></svg>
@@ -435,7 +443,7 @@
               <div class="inspector-section" id="edge-section">
                 <div class="connection-actions">
                   <button id="connect-pair" disabled>Collaborate</button
-                  ><button id="isolate-agent" class="quiet" disabled>
+                  ><button id="disconnect-pair" class="quiet" disabled>Disable pair</button><button id="isolate-agent" class="quiet" disabled>
                     Make independent
                   </button>
                 </div>
@@ -482,7 +490,7 @@
             ></textarea
             ><button type="submit" id="send-message" disabled>Send ↵</button>
           </div>
-          <div id="delivery-hint" class="delivery-hint"></div>
+          <div id="delivery-hint" class="delivery-hint"></div><section id="submission-records" class="submission-records" aria-label="Submission recovery" hidden></section>
         </form>
       </main>
       <footer class="statusbar">
@@ -490,6 +498,7 @@
         ><span id="updated">—</span>
       </footer>
     </div>
+    <div id="action-menu" class="action-menu hidden" role="dialog" aria-modal="true" aria-label="Search actions"><div><label for="action-query">Actions · search by action, session or provider</label><input id="action-query" type="search" autocomplete="off" placeholder="Find an action…"/><div id="action-results" role="listbox" aria-label="Available actions"></div><button id="close-actions" class="quiet">Close <kbd>Esc</kbd></button></div></div>
     <div id="error-overlay" class="error-overlay hidden">
       <div>
         <h1>Session unavailable</h1>

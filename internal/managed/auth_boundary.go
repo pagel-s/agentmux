@@ -18,6 +18,9 @@ func (s *Store) authBoundaryConfig(ctx context.Context, q queryer) (managedconfi
 		return cfg, err
 	}
 	for _, info := range agents {
+		if info.State == "retired" {
+			delete(cfg.Agents, info.ID)
+		}
 		if info.State == "active" {
 			cfg.Agents[info.ID] = copyAgent(info.Config)
 		}

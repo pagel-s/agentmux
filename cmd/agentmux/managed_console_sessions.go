@@ -5,12 +5,16 @@ import (
 	"strings"
 
 	"agentmux/internal/managed"
+	"agentmux/internal/sessioninventory"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 func (m *console) openSessionSwitcher() {
 	m.compose("find", "session title, project, provider or ID", "", "")
 	m.findIndex, m.findIdentity = 0, "agent:"+m.selectedID()
+	if m.attentionOnly {
+		m.findIdentity = ""
+	}
 	if m.selectedID() == "" {
 		m.findIdentity = ""
 	}
@@ -64,7 +68,11 @@ func (m console) chooseSession(openNative bool) (tea.Model, tea.Cmd) {
 	m.composer, m.details, m.text = "", "", nil
 	m.message = ""
 	if match.agent >= 0 {
-		m.selected, m.scope = match.agent, 0
+		m.explicitSessionChoice(match.agent)
+		m.scope = 0
+		if m.tab == 6 {
+			m.teamMemberIndex = match.agent
+		}
 		m.closeMemory()
 		a := m.agents[m.selected]
 		m.data.headless = !a.External && m.data.runtime.Agents[a.ID].PaneID == "" && (m.data.research != nil || m.data.runtime.AttemptID == "" && a.Config.Interaction != "interactive")
@@ -81,6 +89,7 @@ func (m console) chooseSession(openNative bool) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Batch(m.fetch, m.attach())
 	}
+	m.explicitSessionChoice(m.selected)
 	m.observedSelected, m.tab = match.observation, 5
 	if openNative {
 		v := m.observedSessions()[m.observedSelected]
@@ -88,7 +97,8 @@ func (m console) chooseSession(openNative bool) (tea.Model, tea.Cmd) {
 		if v.AttachCommand != "" {
 			body += "\n\nOpen from a separate terminal:\n" + v.AttachCommand
 		}
-		body += "\n\nThis terminal was discovered, not launched by Agentmux. Its native input stays in its original terminal. Esc returns to Sessions; c prepares a communication bridge."
+		body += observationWorkspaceNote(v)
+		body += "\n\nThis terminal was discovered, not launched by Agentmux. Its native input stays in its original terminal. Esc returns to Existing terminals; c prepares a communication bridge."
 		m.reader = &consoleReader{title: "Existing terminal", body: body}
 	}
 	return m, nil
@@ -119,9 +129,21 @@ func (m console) sessionSwitcherPanel(width, height int) string {
 	if selected >= 0 {
 		position = selected + 1
 	}
-	fmt.Fprintf(&out, "%s %s\n", consoleAccent.Render("Switch session"), consoleMuted.Render(fmt.Sprintf("%d/%d", position, len(matches))))
+	title := "Switch session"
+	if m.attentionOnly {
+		title = "Attention queue"
+	}
+	fmt.Fprintf(&out, "%s %s\n", consoleAccent.Render(title), consoleMuted.Render(fmt.Sprintf("%d/%d", position, len(matches))))
 	query := consoleEditor(m.text, m.textCursor, max(1, width-9), 1)
 	out.WriteString("Search: " + query + "\n\n")
+	if m.attentionOnly {
+		if m.data.taskSummaryErr != nil {
+			out.WriteString(consoleMuted.Render("Task totals unavailable; native facts and loaded task evidence only") + "\n")
+		} else if m.data.taskSummary != nil {
+			out.WriteString(consoleMuted.Render("Native facts + complete retained task totals") + "\n")
+		}
+	}
+
 	if len(matches) == 0 {
 		out.WriteString("No sessions match. Search a task title, project, provider or ID.")
 		return consoleClip(out.String(), width, height)
@@ -134,18 +156,27 @@ func (m console) sessionSwitcherPanel(width, height int) string {
 	last := min(len(matches), first+rows)
 	for i := first; i < last; i++ {
 		v := matches[i]
-		title := "  " + consoleContent(v.title, 300)
+		title := "  " + consoleMiddle(v.title, max(1, width-2))
 		if i == selected {
-			title = consoleSelected.Render("› " + consoleContent(v.title, 300))
+			title = consoleSelected.Render("› " + consoleMiddle(v.title, max(1, width-2)))
 		}
 		out.WriteString(consoleClip(title, width, 1) + "\n")
 		detail, project := "", ""
 		if v.agent >= 0 {
 			a := m.agents[v.agent]
-			detail = a.ID + " · " + a.Config.Harness + " · " + consoleAgentStatus(a, m)
+			detail = consoleMiddle(a.ID, max(8, width/2)) + " · " + a.Config.Harness + " · " + consoleAgentStatus(a, m)
 			project = a.Config.Workdir
+			if reason := m.attentionReason(a.ID); m.attentionOnly {
+				project = reason
+			}
 			if a.External {
 				detail += " · original terminal"
+				for _, o := range m.data.observed {
+					if o.ID == a.ExternalRef {
+						detail += " · " + o.TTY + " " + o.Pane
+						break
+					}
+				}
 			}
 		} else {
 			o := m.observedSessions()[v.observation]
@@ -176,4 +207,20 @@ func consoleSidebarWidth(width int) int {
 		return 24
 	}
 	return 30
+}
+
+func (m console) externalObservationDetails(reference string) string {
+	for _, v := range m.data.observed {
+		if v.ID == reference {
+			return fmt.Sprintf("Observed ID: %s\nOriginal TTY: %s\nTmux session: %s\nTmux pane: %s\nAttach guidance: %s\nProject: %s", v.ID, v.TTY, v.TmuxSession, v.Pane, v.AttachCommand, v.Project) + observationWorkspaceNote(v)
+		}
+	}
+	return "Observed ID: " + reference + "\nOriginal terminal is not currently observed; no attach location is guessed."
+}
+
+func observationWorkspaceNote(v sessioninventory.Session) string {
+	if len(v.WorkspaceOrigins) == 0 {
+		return ""
+	}
+	return "\nExisting workspace identities: " + strings.Join(v.WorkspaceOrigins, ", ") + "\nThis native process is already associated with these workspaces. A new bridge adds a separate coordination identity; it does not merge or move those identities."
 }

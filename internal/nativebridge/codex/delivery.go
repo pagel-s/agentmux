@@ -12,14 +12,15 @@ import (
 )
 
 type pendingDelivery struct {
-	delivery        nativebridge.Delivery
-	session         string
-	queue           string
-	turn            string
-	terminal        bool
-	settled         bool // native completion/deletion proof, unlike uncertainty
-	cancelling      bool
-	humanIntervened bool
+	delivery          nativebridge.Delivery
+	session           string
+	queue             string
+	turn              string
+	terminal          bool
+	settled           bool // native completion/deletion proof, unlike uncertainty
+	cancelling        bool
+	humanIntervened   bool
+	humanHoldReported bool
 }
 
 // Delivery runs separately from the transparent native transport. A broker
@@ -125,7 +126,11 @@ func (p *proxy) deliver(ctx context.Context, conn nativebridge.Connection) {
 					reports = append(reports, nativebridge.Event{ID: pending.delivery.ID, Phase: "uncertain", Reason: fault})
 					continue
 				}
-				if (status.Cancel && (status.ActiveID == "" || status.ActiveID == pending.delivery.ID)) || session != registered {
+				if status.Cancel && (status.ActiveID == "" || status.ActiveID == pending.delivery.ID) {
+					// Cancellation is addressed to the original correlated turn,
+					// independently of which conversation the human now displays.
+					p.cancelPeer(ctx, pending, &reports)
+				} else if session != registered {
 					// A /new or resume switches the UI, not the destination of an
 					// already submitted peer request. Cancel queued old work; an
 					// active old turn may finish under its original registration.
@@ -401,6 +406,13 @@ func (d *pendingDelivery) observe(event notification) *nativebridge.Event {
 
 func (p *proxy) cancelPeer(ctx context.Context, d *pendingDelivery, reports *[]nativebridge.Event) {
 	if d.terminal || d.cancelling {
+		return
+	}
+	if d.turn != "" && d.humanIntervened {
+		if !d.humanHoldReported {
+			d.humanHoldReported = true
+			*reports = append(*reports, nativebridge.Event{ID: d.delivery.ID, Phase: "running", NativeRef: d.turn, Reason: "human-controlled turn continues; future peer delivery is paused; interrupt explicitly in the native terminal to stop this turn"})
+		}
 		return
 	}
 	callCtx, cancel := context.WithTimeout(ctx, 3*time.Second)

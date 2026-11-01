@@ -351,16 +351,99 @@ func (l *Launcher) Attach(ctx context.Context, runtime Runtime, in io.Reader, ou
 
 // Each terminal client owns an independent dashboard and window selection.
 // Only native worker windows are linked; dashboard drafts and input are private.
+type attachmentView struct {
+	launcher *Launcher
+	runtime  Runtime
+	view     string
+}
+
+// AttachAgent owns one foreground terminal client. Workspace handoffs detach
+// only that client, keep its private dashboard alive, and attach the requested
+// server from here. Returning to a cached view resumes its exact model/drafts.
 func (l *Launcher) AttachAgent(ctx context.Context, runtime Runtime, agent string, in io.Reader, out, diagnostics io.Writer) error {
+	dir, err := os.MkdirTemp("", "agentmux-handoff-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(dir)
+	request := filepath.Join(dir, "request.json")
+	views := map[string]*attachmentView{}
+	defer func() {
+		for _, v := range views {
+			tag, _ := v.launcher.tmux(context.Background(), "show-options", "-v", "-t", v.view, "@agentmux_view")
+			if strings.TrimSpace(tag) == v.runtime.AttemptID {
+				_, _ = v.launcher.tmux(context.Background(), "kill-session", "-t", v.view)
+			}
+		}
+	}()
+	current := &attachmentView{launcher: l, runtime: runtime}
+	for {
+		if current.view == "" {
+			current.view, err = current.launcher.createAttachmentView(ctx, current.runtime, agent, request)
+			if err != nil {
+				return err
+			}
+			views[current.launcher.options.StateDir] = current
+			agent = ""
+		}
+		command := exec.CommandContext(ctx, "tmux", "-S", SocketPath(current.launcher.options.StateDir), "attach-session", "-t", current.view)
+		command.Env = withoutTMux(os.Environ())
+		command.Stdin, command.Stdout, command.Stderr = in, out, diagnostics
+		attachErr := command.Run()
+		raw, readErr := readPrivateFile(request)
+		if readErr != nil {
+			return attachErr
+		}
+		_ = os.Remove(request)
+		var next struct {
+			State string `json:"state"`
+		}
+		if len(raw) > 4096 || json.Unmarshal(raw, &next) != nil || next.State == "" {
+			return errors.New("invalid workspace handoff request")
+		}
+		state, e := filepath.Abs(next.State)
+		if e != nil {
+			return e
+		}
+		if cached := views[state]; cached != nil {
+			if cached.launcher.ownsSession(ctx, cached.runtime) {
+				current = cached
+				continue
+			}
+		}
+		target, e := New(Options{StateDir: state, Executable: l.options.Executable})
+		if e == nil {
+			var r Runtime
+			r, e = Snapshot(state)
+			if e == nil && !target.ownsSession(ctx, r) {
+				e = errors.New("requested workspace is not running with its saved identity")
+			}
+			if e == nil {
+				view, problem := target.createAttachmentView(ctx, r, "", request)
+				if problem == nil {
+					current = &attachmentView{launcher: target, runtime: r, view: view}
+					views[state] = current
+					continue
+				}
+				e = problem
+			}
+		}
+		if diagnostics != nil {
+			_, _ = io.WriteString(diagnostics, "Workspace handoff unavailable: "+e.Error()+". Returning to the previous workspace.\n")
+		}
+	}
+}
+
+func (l *Launcher) createAttachmentView(ctx context.Context, runtime Runtime, agent, handoff string) (string, error) {
 	if !l.ownsSession(ctx, runtime) {
-		return errors.New("managed tmux session is not running with this attempt identity")
+		return "", errors.New("managed tmux session is not running with this attempt identity")
 	}
 	pane := ""
 	if agent != "" {
 		var err error
 		pane, err = l.liveAgentPane(ctx, runtime, agent)
 		if err != nil {
-			return err
+			return "", err
 		}
 	}
 	// Presentation may be upgraded independently of the running supervisor.
@@ -368,31 +451,35 @@ func (l *Launcher) AttachAgent(ctx context.Context, runtime Runtime, agent strin
 	// dashboard from a binary that could live in a writable project checkout.
 	store, err := managed.Open(l.options.StateDir)
 	if err != nil {
-		return err
+		return "", err
 	}
 	cfg := store.Config()
 	if err := store.Close(); err != nil {
-		return err
+		return "", err
 	}
 	observer := *l
 	if err := observer.pinController(cfg); err != nil {
-		return err
+		return "", err
 	}
 	l = &observer
 	if err := l.ensureDashboardFallback(ctx, runtime); err != nil {
-		return err
+		return "", err
 	}
 	id, err := newID()
 	if err != nil {
-		return err
+		return "", err
 	}
 	view := "view_" + strings.TrimPrefix(id, "run_")
 	dashboard, err := l.tmux(ctx, "new-session", "-d", "-s", view, "-n", "dashboard", "-P", "-F", "#{pane_id}", "exec sleep 300")
 	if err != nil {
-		return err
+		return "", err
 	}
 	dashboard = strings.TrimSpace(dashboard)
+	complete := false
 	defer func() {
+		if complete {
+			return
+		}
 		cleanup := context.Background()
 		tag, _ := l.tmux(cleanup, "show-options", "-v", "-t", view, "@agentmux_view")
 		if strings.TrimSpace(tag) == runtime.AttemptID {
@@ -401,44 +488,45 @@ func (l *Launcher) AttachAgent(ctx context.Context, runtime Runtime, agent strin
 	}()
 	for _, pair := range [][2]string{{"@agentmux_view", runtime.AttemptID}, {"@agentmux_runtime", runtime.AttemptID}} {
 		if _, err = l.tmux(ctx, "set-option", "-t", view, pair[0], pair[1]); err != nil {
-			return err
+			return "", err
 		}
 	}
 	viewRuntime := runtime
 	viewRuntime.Session = view
 	viewRuntime.DashboardPane = dashboard
 	if err = l.tagPane(ctx, dashboard, runtime.AttemptID, "dashboard", ""); err != nil {
-		return err
+		return "", err
 	}
-	if _, err = l.tmux(ctx, "respawn-pane", "-k", "-t", dashboard, "exec "+ShellCommand([]string{l.options.Executable, "managed", "dashboard", "--state", l.options.StateDir})); err != nil {
-		return err
+	if _, err = l.tmux(ctx, "respawn-pane", "-k", "-t", dashboard, "exec "+ShellCommand([]string{"env", "AGENTMUX_HANDOFF_FILE=" + handoff, l.options.Executable, "managed", "dashboard", "--state", l.options.StateDir})); err != nil {
+		return "", err
 	}
 	windows, err := l.workerWindows(ctx, runtime)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if err = l.linkWorkerWindows(ctx, runtime, view, windows); err != nil {
-		return err
+		return "", err
 	}
 	if err = l.configureWorkbench(ctx, viewRuntime); err != nil {
-		return err
+		return "", err
 	}
 	if _, err = l.tmux(ctx, "set-option", "-t", view, "status-left", "#[fg=#c4b5fd,bold] agentmux #[default]│ "+runtime.Session+" "); err != nil {
-		return err
+		return "", err
 	}
 	if agent != "" {
+		if _, err = l.tmux(ctx, "set-option", "-t", view, "@agentmux_focus_pending", agent); err != nil {
+			return "", err
+		}
 		index, err := l.workerWindowIndex(ctx, runtime, view, pane)
 		if err != nil {
-			return err
+			return "", err
 		}
 		if _, err = l.tmux(ctx, "select-window", "-t", view+":"+index); err != nil {
-			return err
+			return "", err
 		}
 	}
-	command := exec.CommandContext(ctx, "tmux", "-S", SocketPath(l.options.StateDir), "attach-session", "-t", view)
-	command.Env = withoutTMux(os.Environ())
-	command.Stdin, command.Stdout, command.Stderr = in, out, diagnostics
-	return command.Run()
+	complete = true
+	return view, nil
 }
 
 func (l *Launcher) liveAgentPane(ctx context.Context, runtime Runtime, agent string) (string, error) {
@@ -523,6 +611,9 @@ func (l *Launcher) Focus(ctx context.Context, runtime Runtime, agent string) err
 		return err
 	}
 	if _, err = l.tmux(ctx, "select-window", "-t", target+":"+index); err != nil {
+		return err
+	}
+	if _, err = l.tmux(ctx, "set-option", "-t", target, "@agentmux_focus_pending", agent); err != nil {
 		return err
 	}
 	_, err = l.tmux(ctx, "select-pane", "-t", pane)

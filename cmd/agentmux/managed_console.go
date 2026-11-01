@@ -16,6 +16,7 @@ import (
 	"agentmux/internal/managed"
 	"agentmux/internal/managedconfig"
 	"agentmux/internal/managedlaunch"
+	"agentmux/internal/research"
 	"agentmux/internal/sessioninventory"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -23,29 +24,36 @@ import (
 
 type consoleTick time.Time
 type consoleData struct {
-	taskPage     *consoleTaskPage
-	observed     []sessioninventory.Session
-	agents       []managed.AgentInfo
-	boundaries   managed.Boundaries
-	controls     managed.ControlState
-	teams        []managed.Team
-	autonomy     managed.AutonomyStatus
-	conversation managed.ConversationState
-	native       managed.NativeStatus
-	nativeErr    error
-	research     *managed.ResearchStatus
-	runtimeErr   error
-	teamsErr     error
-	capacity     managed.Capacity
-	budget       managedconfig.AgentBudget
-	capacityErr  error
-	researchErr  error
-	headless     bool
-	activity     managedActivitySnapshot
-	runtime      managedlaunch.Runtime
-	preview      string
-	selected     string
-	err          error
+	focusRevision          uint64
+	taskSummary            map[string]managed.TaskSummary
+	taskSummaryErr         error
+	study                  *research.StudyView
+	messagePage, eventPage *consoleHistoryPage
+	focusID                string
+	nativeStates           map[string]managed.NativeStatus
+	taskPage               *consoleTaskPage
+	observed               []sessioninventory.Session
+	agents                 []managed.AgentInfo
+	boundaries             managed.Boundaries
+	controls               managed.ControlState
+	teams                  []managed.Team
+	autonomy               managed.AutonomyStatus
+	conversation           managed.ConversationState
+	native                 managed.NativeStatus
+	nativeErr              error
+	research               *managed.ResearchStatus
+	runtimeErr             error
+	teamsErr               error
+	capacity               managed.Capacity
+	budget                 managedconfig.AgentBudget
+	capacityErr            error
+	researchErr            error
+	headless               bool
+	activity               managedActivitySnapshot
+	runtime                managedlaunch.Runtime
+	preview                string
+	selected               string
+	err                    error
 }
 type consoleAction struct {
 	message            string
@@ -57,60 +65,78 @@ type consoleAction struct {
 	nativeDraft        *consoleNativeAction
 }
 type console struct {
-	workspaceRequest                       uint64
-	workspacePicker                        *consoleWorkspacePicker
-	taskQuery, taskAfter, taskCursor       string
-	taskBack                               []string
-	taskMore                               bool
-	state                                  string
-	client                                 *managed.Client
-	agents                                 []managed.AgentInfo
-	selected                               int
-	target                                 int
-	scope                                  int
-	task                                   int
-	tab                                    int
-	width, height                          int
-	data                                   consoleData
-	message                                string
-	composer                               string
-	text                                   []rune
-	busy                                   bool
-	popup                                  bool
-	messageIndex                           int
-	boardFilter                            int
-	composeTarget, replyID                 string
-	composeMode                            string
-	textCursor                             int
-	textColumn                             int
-	textColumnValid                        bool
-	memoryNamespace                        string
-	memoryEntries                          []managed.Memory
-	memoryEntry                            int
-	memoryOpen                             bool
-	memoryKey                              string
-	memoryVersion                          int
-	memoryRequest                          uint64
-	memoryLoading                          bool
-	observedSelected                       int
-	boardSelected                          int
-	details                                string
-	newNative                              consoleNativeDraft
-	findIndex                              int
-	findIdentity                           string
-	labelVersion                           int
-	roleVersion                            int
-	labelDrafts                            map[string]string
-	teamIndex, eventIndex, teamMemberIndex int
-	teamAction                             *consoleTeamAction
-	nativeAction                           *consoleNativeAction
-	reader                                 *consoleReader
-	failedDraft                            *consoleDraft
-	offline                                bool
+	selectionRevision                                     uint64
+	messageHistoryScope, eventHistoryScope, eventPinScope *consoleHistoryPage
+	studyFollow                                           bool
+	messageQuery, messageAfter, messageCursor             string
+	messageBack                                           []string
+	messageMore                                           bool
+	eventQuery, eventAfter, eventCursor                   string
+	eventBack                                             []string
+	eventMore, eventScope                                 bool
+	taskRecipient, taskState                              string
+	ownerReview                                           *consoleOwnerReview
+	actionIndex                                           int
+	actionRows                                            []consoleMenuAction
+	pendingFocus                                          string
+	eventPinned                                           *managed.Event
+	attentionOnly                                         bool
+	readRequest                                           uint64
+	workspaceRequest                                      uint64
+	workspacePicker                                       *consoleWorkspacePicker
+	taskQuery, taskAfter, taskCursor                      string
+	taskBack                                              []string
+	taskMore                                              bool
+	state                                                 string
+	client                                                *managed.Client
+	agents                                                []managed.AgentInfo
+	selected                                              int
+	target                                                int
+	scope                                                 int
+	task                                                  int
+	tab                                                   int
+	width, height                                         int
+	data                                                  consoleData
+	message                                               string
+	composer                                              string
+	text                                                  []rune
+	busy                                                  bool
+	popup                                                 bool
+	messageIndex                                          int
+	boardFilter                                           int
+	composeTarget, replyID                                string
+	composeMode                                           string
+	textCursor                                            int
+	textColumn                                            int
+	textColumnValid                                       bool
+	memoryNamespace                                       string
+	memoryEntries                                         []managed.Memory
+	memoryEntry                                           int
+	memoryOpen                                            bool
+	memoryKey                                             string
+	memoryVersion                                         int
+	memoryRequest                                         uint64
+	memoryLoading                                         bool
+	observedSelected                                      int
+	boardSelected                                         int
+	details                                               string
+	newNative                                             consoleNativeDraft
+	findIndex                                             int
+	findIdentity                                          string
+	labelVersion                                          int
+	roleVersion                                           int
+	labelDrafts                                           map[string]string
+	teamIndex, eventIndex, teamMemberIndex                int
+	teamAction                                            *consoleTeamAction
+	nativeAction                                          *consoleNativeAction
+	reader                                                *consoleReader
+	failedDraft                                           *consoleDraft
+	offline                                               bool
 }
 type consoleNativeDraft struct {
 	id, title, provider, project, role string
 	nativeOnly                         bool
+	advanced                           bool
 }
 type consoleMemory struct {
 	agent     string
@@ -161,16 +187,23 @@ func (m console) selectedID() string {
 func (m console) Init() tea.Cmd { return tea.Batch(m.fetch, consoleTimer()) }
 
 func (m console) fetch() tea.Msg {
+	var d consoleData
 	if m.tab == 4 {
-		return fetchWorkSnapshot(m.state, m.client, m.selectedID(), &consoleTaskPage{Query: m.taskQuery, After: m.taskAfter})
+		d = fetchWorkSnapshot(m.state, m.client, m.selectedID(), &consoleTaskPage{Query: m.taskQuery, After: m.taskAfter, Recipient: m.taskRecipient, State: m.taskState})
+	} else {
+		d = fetchWorkSnapshot(m.state, m.client, m.selectedID())
 	}
-	return fetchWorkSnapshot(m.state, m.client, m.selectedID())
+	m.fetchHistory(&d)
+	m.fetchTaskSummary(&d)
+	m.fetchStudy(&d)
+	return d
 }
 
 func fetchWorkSnapshot(state string, client *managed.Client, selected string, tasks ...*consoleTaskPage) consoleData {
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
 	d := consoleData{selected: selected}
+	d.focusID, d.focusRevision = consumeConsoleFocus(state)
 	agents, err := workRegistry(ctx, client)
 	if err != nil {
 		status, problem := client.LocalResearchStatus(ctx, state)
@@ -304,6 +337,24 @@ func fetchWorkSnapshot(state string, client *managed.Client, selected string, ta
 			}
 		}
 	}
+	d.nativeStates = map[string]managed.NativeStatus{}
+	if d.native.Agent != "" {
+		d.nativeStates[d.native.Agent] = d.native
+	}
+	for _, a := range d.agents {
+		if a.State != "active" || a.ID == d.selected || a.Config.Interaction != "interactive" {
+			continue
+		}
+		raw, e := workCall(ctx, client, "native.status", map[string]string{"agent": a.ID})
+		if e == nil {
+			var result struct {
+				Status managed.NativeStatus `json:"status"`
+			}
+			if json.Unmarshal(raw, &result) == nil {
+				d.nativeStates[a.ID] = result.Status
+			}
+		}
+	}
 	if !active {
 		d.boundaries = managed.Boundaries{Version: d.controls.Version, Agent: d.selected}
 	}
@@ -318,7 +369,7 @@ func fetchWorkSnapshot(state string, client *managed.Client, selected string, ta
 	}
 	if len(tasks) > 0 && tasks[0] != nil {
 		page := *tasks[0]
-		raw, err = workCall(ctx, client, "task.list", map[string]any{"limit": 40, "order": "desc", "query": page.Query, "after": page.After})
+		raw, err = workCall(ctx, client, "task.list", map[string]any{"limit": 40, "order": "desc", "query": page.Query, "after": page.After, "to": page.Recipient, "state": page.State})
 		if err == nil {
 			var result struct {
 				Tasks  []managed.Task `json:"tasks"`
@@ -413,8 +464,18 @@ type consoleAttachGuidance struct{ command string }
 
 func (m console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case consoleExposureRead:
+		if msg.request != m.readRequest {
+			return m, nil
+		}
+		m.busy = false
+		if msg.err != nil {
+			m.message = "Exposure ledger unavailable: " + activityText(msg.err.Error(), 160)
+		} else {
+			m.reader = &consoleReader{title: "Knowledge exposure · " + msg.agent, body: msg.body}
+		}
 	case consoleWorkspaceList:
-		if msg.request != m.workspaceRequest || m.composer != "" || m.reader != nil || m.teamAction != nil || m.nativeAction != nil {
+		if msg.request != m.workspaceRequest {
 			return m, nil
 		}
 		if msg.err != nil {
@@ -461,6 +522,16 @@ func (m console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case consoleTick:
 		return m, tea.Batch(m.fetch, consoleTimer())
 	case consoleData:
+		if msg.focusID != "" && msg.focusRevision == m.selectionRevision {
+			m.pendingFocus = msg.focusID
+		}
+		m.syncHistoryScopes()
+		if msg.err != nil && ((msg.messagePage != nil && !sameHistoryRequest(*msg.messagePage, m.messagePageRequest())) || (msg.eventPage != nil && !sameHistoryRequest(*msg.eventPage, m.eventPageRequest()))) {
+			return m, nil
+		}
+		if msg.study != nil {
+			m.data.study = msg.study
+		}
 		if msg.err != nil {
 			m.offline = true
 			if msg.selected == m.selectedID() && msg.research != nil {
@@ -485,6 +556,11 @@ func (m console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			observedID = observations[m.observedSelected%len(observations)].ID
 		}
 		oldID := m.selectedID()
+		previousID := oldID
+		if m.pendingFocus != "" && m.composer == "" && m.reader == nil && m.teamAction == nil && m.nativeAction == nil && m.ownerReview == nil && m.workspacePicker == nil {
+			oldID = m.pendingFocus
+			m.pendingFocus = ""
+		}
 		if m.composer == "find" && m.findIdentity == "" {
 			if match, ok := m.findMatch(); ok {
 				m.findIdentity = m.findMatchIdentity(match)
@@ -507,9 +583,8 @@ func (m console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if len(m.agents) > 0 && m.selected >= len(m.agents) {
 			m.selected = len(m.agents) - 1
 		}
-		if oldID != m.selectedID() {
-			m.closeMemory()
-		}
+		m.resetSessionHistory(previousID, m.selectedID())
+		m.syncHistoryScopes()
 		if msg.err != nil {
 			m.message = "Refresh failed: " + activityText(msg.err.Error(), 160)
 		}
@@ -531,14 +606,44 @@ func (m console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				taskID = m.data.activity.Tasks[m.task].ID
 			}
 			if m.tab == 4 {
-				if msg.taskPage == nil || msg.taskPage.Query != m.taskQuery || msg.taskPage.After != m.taskAfter {
+				if msg.taskPage == nil || msg.taskPage.Query != m.taskQuery || msg.taskPage.After != m.taskAfter || msg.taskPage.Recipient != m.taskRecipient || msg.taskPage.State != m.taskState {
 					msg.activity.Tasks = m.data.activity.Tasks
 				} else {
 					m.taskCursor = msg.taskPage.Cursor
 					m.taskMore = msg.taskPage.More
 				}
 			}
+			if m.tab == 0 && msg.messagePage != nil {
+				if !sameHistoryRequest(*msg.messagePage, m.messagePageRequest()) {
+					msg.activity.Messages = m.data.activity.Messages
+					msg.messagePage = m.data.messagePage
+				} else {
+					m.messageCursor, m.messageMore = msg.messagePage.Cursor, msg.messagePage.More
+				}
+			}
+			if m.tab == 7 && msg.eventPage != nil {
+				if !sameHistoryRequest(*msg.eventPage, m.eventPageRequest()) {
+					msg.activity.Events = m.data.activity.Events
+					msg.eventPage = m.data.eventPage
+				} else {
+					m.eventCursor, m.eventMore = msg.eventPage.Cursor, msg.eventPage.More
+				}
+			}
+			if m.eventPinned != nil && m.eventPinScope != nil && sameHistoryRequest(*m.eventPinScope, historyScope(m.eventPageRequest())) {
+				found := false
+				for _, e := range msg.activity.Events {
+					if e.ID == m.eventPinned.ID {
+						found = true
+						break
+					}
+				}
+				if !found {
+					msg.activity.Events = append([]managed.Event{*m.eventPinned}, msg.activity.Events...)
+				}
+				eventID = m.eventPinned.ID
+			}
 			m.data = msg
+			m.syncHistoryScopes()
 			m.teamIndex = 0
 			for i, team := range msg.teams {
 				if team.ID == teamID {
@@ -664,6 +769,10 @@ func (m *console) toggleScope(write bool) tea.Cmd {
 	}
 	index := m.scope % len(scopes)
 	s := scopes[index]
+	if s.Suspended {
+		m.message = "This scope is suspended: " + s.Reason + ". Saved read/write intent is retained; reconnect or restore membership before editing."
+		return nil
+	}
 	if s.Source == "team" {
 		m.message = "Consented team access follows membership. Open Teams to invite, remove or dissolve; invitations require participant acceptance."
 		return nil
@@ -710,7 +819,7 @@ func runManagedConsoleView(state, view string, popup bool, in io.Reader, out, di
 		fmt.Fprintln(diagnostics, "error: dashboard requires the owner credential")
 		return exitValidation
 	}
-	model := console{state: state, client: managed.NewClient(credential), tab: index, popup: popup}
+	model := console{selectionRevision: currentConsoleFocusRevision(state), studyFollow: true, state: state, client: managed.NewClient(credential), tab: index, popup: popup}
 	_, err = tea.NewProgram(model, tea.WithInput(in), tea.WithOutput(out), tea.WithAltScreen()).Run()
 	if err != nil && !errors.Is(err, context.Canceled) {
 		fmt.Fprintln(diagnostics, "error: dashboard:", err)

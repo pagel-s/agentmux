@@ -63,7 +63,8 @@ amx unlink claude reviewer -s work
 ```
 
 Manual stops future native dispatch. `deny` removes the chosen directional
-permission. `unlink` removes the selected agents from collaboration groups;
+permission. `unlink` disables only the exact selected pair/group; `isolate ID` disconnects
+that session from all peers. Other groups or explicit grants can still provide access;
 inspect active tasks separately because already read context and completed
 effects cannot be undone.
 
@@ -78,7 +79,7 @@ effects cannot be undone.
 | `ws` | `workspaces` |
 | `new` | `add` |
 | `link` | `collaborate` |
-| `unlink` | `isolate` |
+| `unlink` | `disconnect` |
 | `name` | `label` |
 | `mode` | `delivery` |
 

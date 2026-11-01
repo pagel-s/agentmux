@@ -236,7 +236,7 @@ func (m console) teamsPanel(width, height int) string {
 
 	fmt.Fprintf(&out, "%s · %s · %d/%d\n%s · v%d\n", consoleSelected.Render(ansi.Truncate(consoleContent(t.Name, 90), max(1, width-22), "…")), t.State, selected+1, len(m.data.teams), consoleMuted.Render(consoleContent(t.ID, 80)), t.Version)
 	if target := m.teamTarget(); target != nil {
-		fmt.Fprintf(&out, "Action target: %s\n", consoleAccent.Render(consoleClip(consoleContent(target.ID+" · "+m.agentLabel(target.ID), 200), width-15, 1)))
+		fmt.Fprintf(&out, "Action target: %s\n", consoleAccent.Render(consoleMiddle(target.ID+" · "+m.agentLabel(target.ID), max(1, width-15))))
 		membership := "not invited"
 		if teamContains(t.Invited, target.ID) {
 			membership = "awaiting consent"
@@ -297,7 +297,18 @@ func (m console) teamAgentLabels(ids []string) string {
 
 func (m console) eventsPanel(width, height int) string {
 	var out strings.Builder
+	out.WriteString(m.studyPanel(width))
 	out.WriteString(m.researchPanel(width))
+	out.WriteString(consoleMuted.Render(fmt.Sprintf("History page %d · Shift+F search · g scope · PgUp/PgDn", len(m.eventBack)+1)) + "\n")
+	if m.eventScope {
+		out.WriteString("Scope: " + m.selectedID() + "\n")
+	}
+	if m.eventQuery != "" {
+		out.WriteString("Search: " + consoleContent(m.eventQuery, 120) + "\n")
+	}
+	if m.eventPinned != nil {
+		out.WriteString(consoleAccent.Render("Pinned event · Home returns live") + "\n")
+	}
 	out.WriteString(consoleAccent.Render("Events & topology") + consoleMuted.Render("  [/] select · Home latest/live · o details") + "\n\n")
 	events := m.data.activity.Events
 	if len(events) == 0 {
@@ -435,6 +446,9 @@ func (m console) agentRuntimePanel(width int) string {
 	for _, t := range m.data.activity.Tasks {
 		if t.To == a.ID && (t.State == "running" || t.Delivery == "uncertain" || t.Delivery == "cancel_requested" || t.Delivery == "cancel_uncertain") {
 			fmt.Fprintf(&out, "Current task: %s · %s / %s\n", consoleContent(t.ID, 80), t.State, t.Delivery)
+			if t.Delivery == "uncertain" || t.Delivery == "cancel_uncertain" {
+				out.WriteString("Tasks → Ctrl+K reviews exact fail/retry recovery after checking side effects and stopping the old process.\n")
+			}
 			break
 		}
 	}

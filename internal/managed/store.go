@@ -74,6 +74,12 @@ CREATE TABLE IF NOT EXISTS records (
 CREATE INDEX IF NOT EXISTS records_kind_seq ON records(kind,seq);
 CREATE INDEX IF NOT EXISTS records_target ON records(kind,target);
 CREATE INDEX IF NOT EXISTS records_scope ON records(kind,scope);
+CREATE TABLE IF NOT EXISTS exposures (
+ seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE,
+ reader TEXT NOT NULL, kind TEXT NOT NULL, entity_id TEXT NOT NULL,
+ route TEXT NOT NULL, data TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS exposures_reader ON exposures(reader,seq);
 CREATE TABLE IF NOT EXISTS requests (
  actor TEXT NOT NULL, request_id TEXT NOT NULL, digest TEXT NOT NULL,
  response TEXT NOT NULL, PRIMARY KEY(actor,request_id)
@@ -227,6 +233,11 @@ func Open(dir string) (*Store, error) {
 		return nil, err
 	}
 	if err = cfg.Validate(); err != nil {
+		db.Close()
+		return nil, err
+	}
+	// Additive audit schema migration for existing private workspaces.
+	if _, err = db.Exec(schema); err != nil {
 		db.Close()
 		return nil, err
 	}

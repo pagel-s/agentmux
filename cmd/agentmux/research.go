@@ -23,7 +23,7 @@ func runResearch(args []string) int {
 }
 func runResearchIO(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	usage := func() {
-		fmt.Fprintln(stderr, "Usage: agentmux research plan <manifest.yaml>\n       agentmux research run <manifest.yaml> --output <private-dir> [--allow-models] [--rerun-interrupted] [--start-paused]\n       agentmux research analyze <output-dir> [--csv <new-file>] [--behavior-csv <new-file>]\n       agentmux research status|watch <output-dir-or-state>\n       agentmux research pause|resume|step|stop <output-dir-or-state> --version N --reason TEXT")
+		fmt.Fprintln(stderr, "Usage: agentmux research plan <manifest.yaml>\n       agentmux research run <manifest.yaml> --output <private-dir> [--allow-models] [--rerun-interrupted] [--start-paused]\n       agentmux research analyze <output-dir> [--csv <new-file>] [--behavior-csv <new-file>]\n       agentmux research status|watch <output-dir-or-state> [--follow]\n       agentmux research study <output-dir>\n       agentmux research history <output-dir> [--actor ID] [--type TYPE] [--query TEXT] [--after CURSOR] [--limit N]\n       agentmux research pause|resume|step|stop <output-dir-or-state> --version N --reason TEXT")
 	}
 	if len(args) == 1 && (args[0] == "help" || args[0] == "--help" || args[0] == "-h") {
 		usage()
@@ -31,12 +31,28 @@ func runResearchIO(ctx context.Context, args []string, stdout, stderr io.Writer)
 	}
 	if len(args) == 2 && helpArgument(args[1]) {
 		switch args[0] {
-		case "plan", "run", "analyze", "status", "watch", "pause", "resume", "step", "stop":
+		case "plan", "run", "analyze", "status", "watch", "study", "history", "pause", "resume", "step", "stop":
 			usage()
 			return exitSuccess
 		}
 	}
 	if len(args) >= 2 {
+		if args[0] == "study" {
+			if len(args) != 2 {
+				usage()
+				return exitValidation
+			}
+			view, err := research.StudyStatus(ctx, args[1])
+			if err != nil {
+				fmt.Fprintln(stderr, "research:", err)
+				return exitRuntime
+			}
+			_ = json.NewEncoder(stdout).Encode(map[string]any{"ok": true, "study": view})
+			return exitSuccess
+		}
+		if args[0] == "history" {
+			return runResearchHistory(args[1:], stdout, stderr)
+		}
 		switch args[0] {
 		case "status", "watch", "pause", "resume", "step", "stop":
 			return runResearchLiveIO(ctx, args, stdout, stderr)
@@ -110,7 +126,7 @@ func runResearchIO(ctx context.Context, args []string, stdout, stderr io.Writer)
 			} else {
 				var report research.Report
 				report, err = research.Run(ctx, manifest, research.RunOptions{OutputDir: *output, Executable: binary, AllowModels: *allow, RerunInterrupted: *rerun, StartPaused: *startPaused, OnLive: func(state string) {
-					fmt.Fprintf(stderr, "Research live state: %s\nObserve: agentmux research watch %s\nTerminal: agentmux dashboard --state %s --view research\nWeb: agentmux web --state %s\n", state, shellQuote(*output), shellQuote(state), shellQuote(state))
+					fmt.Fprintf(stderr, "Research live state: %s\nObserve: agentmux research watch %s --follow\nTerminal: agentmux dashboard --state %s --view research\nWeb: agentmux web --state %s\n", state, shellQuote(*output), shellQuote(state), shellQuote(state))
 				}})
 				result = research.Analyze(report)
 			}
@@ -126,6 +142,28 @@ func runResearchIO(ctx context.Context, args []string, stdout, stderr io.Writer)
 	return exitSuccess
 }
 
+func runResearchHistory(args []string, out, diagnostics io.Writer) int {
+	flags := flag.NewFlagSet("research history", flag.ContinueOnError)
+	flags.SetOutput(diagnostics)
+	actor := flags.String("actor", "", "authenticated actor")
+	kind := flags.String("type", "", "record kind or event type")
+	query := flags.String("query", "", "search recorded evidence")
+	after := flags.String("after", "", "history cursor")
+	limit := flags.Int("limit", 100, "page size, maximum200")
+	if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 {
+		return exitValidation
+	}
+	page, err := research.ReadHistory(args[0], research.HistoryFilter{Actor: *actor, Type: *kind, Query: *query, After: *after, Limit: *limit})
+	if err != nil {
+		fmt.Fprintln(diagnostics, "research:", err)
+		return exitRuntime
+	}
+	if err := json.NewEncoder(out).Encode(map[string]any{"ok": true, "history": page}); err != nil {
+		return exitRuntime
+	}
+	return exitSuccess
+}
+
 func writeResearchBehaviorCSV(path string, rows []research.Behavior) error {
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if err != nil {
@@ -133,11 +171,26 @@ func writeResearchBehaviorCSV(path string, rows []research.Behavior) error {
 	}
 	defer file.Close()
 	w := csv.NewWriter(file)
-	if err := w.Write([]string{"behavior_id", "trial", "condition", "trial_status", "round", "actor", "harness", "model", "valid", "execution_failed", "contribution", "invested", "returned", "retained", "utility", "payoff", "remaining_credits", "intervened", "research", "manifest_sha256", "seed", "repetition", "order", "attempt", "config_sha256", "environment"}); err != nil {
+	if err := w.Write([]string{"behavior_id", "trial", "condition", "trial_status", "round", "actor", "harness", "model", "valid", "execution_failed", "contribution", "invested", "returned", "retained", "utility", "payoff", "remaining_credits", "intervened", "research", "manifest_sha256", "seed", "repetition", "order", "attempt", "config_sha256", "environment", "schema_version", "parent", "project", "productive_project", "invested_to", "received_escrow", "reward_team", "reward_pools", "phase_task_ids", "transfers"}); err != nil {
 		return err
 	}
 	for _, r := range rows {
 		row := []string{r.ID, r.Trial, r.Condition, r.TrialStatus, strconv.Itoa(r.Round), r.Actor, r.Harness, r.Model, strconv.FormatBool(r.Valid), strconv.FormatBool(r.ExecutionFailed), strconv.Itoa(r.Contribution), strconv.Itoa(r.Invested), strconv.Itoa(r.Returned), strconv.Itoa(r.Retained), strconv.FormatFloat(r.Utility, 'g', -1, 64), strconv.FormatFloat(r.Payoff, 'g', -1, 64), strconv.Itoa(r.RemainingCredits), strconv.FormatBool(r.Intervened), r.Research, r.ManifestHash, strconv.FormatInt(r.Seed, 10), strconv.Itoa(r.Repetition), strconv.Itoa(r.Order), strconv.Itoa(r.Attempt), r.ConfigHash, r.Environment}
+		if r.SchemaVersion > 0 {
+			project, to := "", ""
+			if r.Project != nil {
+				project = strconv.Itoa(*r.Project)
+			}
+			if r.InvestedTo != nil {
+				to = *r.InvestedTo
+			}
+			pools, _ := json.Marshal(r.RewardPools)
+			tasks, _ := json.Marshal(r.PhaseTaskIDs)
+			transfers, _ := json.Marshal(r.Transfers)
+			row = append(row, strconv.Itoa(r.SchemaVersion), r.Parent, project, strconv.Itoa(r.ProductiveProject), to, strconv.Itoa(r.ReceivedEscrow), r.RewardTeam, string(pools), string(tasks), string(transfers))
+		} else {
+			row = append(row, make([]string, 10)...)
+		}
 		if err := w.Write(row); err != nil {
 			return err
 		}
@@ -196,6 +249,7 @@ func runResearchLiveIO(ctx context.Context, args []string, stdout, stderr io.Wri
 	flags.SetOutput(stderr)
 	version := flags.Int("version", 0, "expected research control version from status")
 	reason := flags.String("reason", "", "auditable reason for this exploratory intervention")
+	follow := flags.Bool("follow", false, "follow the whole study across trial transitions (watch only)")
 	if err := flags.Parse(args[2:]); err != nil {
 		if err == flag.ErrHelp {
 			return exitSuccess
@@ -207,12 +261,41 @@ func runResearchLiveIO(ctx context.Context, args []string, stdout, stderr io.Wri
 		return exitValidation
 	}
 	mutating := args[0] != "status" && args[0] != "watch"
+	if *follow && args[0] != "watch" {
+		fmt.Fprintln(stderr, "--follow applies only to research watch")
+		return exitValidation
+	}
 	if (mutating && (*version < 1 || *reason == "")) || (!mutating && (*version != 0 || *reason != "")) {
 		fmt.Fprintln(stderr, "research interventions require --version N --reason TEXT; status/watch accept no mutation flags")
 		return exitValidation
 	}
 	previous := ""
 	for {
+		if *follow {
+			callCtx, stop := context.WithTimeout(ctx, 3*time.Second)
+			study, err := research.StudyStatus(callCtx, args[1])
+			stop()
+			if err != nil {
+				fmt.Fprintln(stderr, "research:", err)
+				return exitRuntime
+			}
+			encoded, _ := json.Marshal(study)
+			if string(encoded) != previous {
+				if json.NewEncoder(stdout).Encode(map[string]any{"schema_version": 1, "kind": "research", "operation": "watch", "ok": true, "study": study}) != nil {
+					return exitRuntime
+				}
+				previous = string(encoded)
+			}
+			if study.State == "completed" {
+				return exitSuccess
+			}
+			select {
+			case <-ctx.Done():
+				return exitSuccess
+			case <-time.After(time.Second):
+				continue
+			}
+		}
 		callCtx, stop := context.WithTimeout(ctx, 3*time.Second)
 		var view research.LiveView
 		var err error
@@ -237,6 +320,7 @@ func runResearchLiveIO(ctx context.Context, args []string, stdout, stderr io.Wri
 			return exitSuccess
 		}
 		if !view.Live || view.Research == nil {
+			// A study watch can explicitly continue across finite attempts.
 			return exitSuccess
 		}
 		switch view.Research.Progress.State {

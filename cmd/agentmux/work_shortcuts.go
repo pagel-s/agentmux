@@ -20,12 +20,13 @@ import (
 var workAliases = map[string]string{
 	"up": "start", "a": "attach", "open": "attach", "ui": "dashboard",
 	"ls": "sessions", "ws": "workspaces", "new": "add", "link": "collaborate",
-	"unlink": "isolate", "name": "label", "mode": "delivery",
+	"unlink": "disconnect", "name": "label", "mode": "delivery",
+	"archive": "retire",
 }
 
 func workCommand(command string) bool {
 	switch command {
-	case "start", "attach", "dashboard", "sessions", "workspaces", "add", "collaborate", "isolate", "label", "delivery", "role", "web", "send", "reply", "inbox", "board", "down", "remove", "connect", "relaunch", "allow", "deny":
+	case "start", "attach", "dashboard", "sessions", "workspaces", "add", "collaborate", "disconnect", "isolate", "label", "delivery", "role", "web", "send", "reply", "inbox", "board", "down", "remove", "retire", "connect", "relaunch", "allow", "deny":
 		return true
 	}
 	return false

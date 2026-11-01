@@ -57,7 +57,7 @@ func runInteractiveAgent(ctx context.Context, opts WorkerOptions, cfg managedcon
 	}
 	auth, err := agentauth.Prepare(agent.Harness, agent.Auth)
 	if err != nil {
-		return errors.New("interactive native authentication could not be prepared")
+		return interactiveAuthError(agent.Auth, err)
 	}
 	defer auth.Close()
 	req := workerRequest(agent, cfg, credentialPath, credential.Socket, executable)
@@ -213,4 +213,27 @@ func interactiveAgentContext(ctx context.Context, cfg managedconfig.Config, dead
 	}
 	limited, stop := context.WithDeadline(base, deadline)
 	return limited, func() { stop(); cancel() }
+}
+
+// Keep launch failures actionable without ever echoing credential contents or
+// arbitrary provider errors. Prepare emits only fixed diagnostics; classify
+// those and inspect file metadata for missing/unreadable source distinctions.
+func interactiveAuthError(auth managedconfig.NativeAuth, cause error) error {
+	category, guidance := "unavailable", "check the selected credential source and relaunch this session"
+	if _, err := os.Lstat(auth.File); os.IsNotExist(err) {
+		category, guidance = "missing", "select an existing absolute credential-file path in session setup and relaunch"
+	} else if os.IsPermission(err) {
+		category, guidance = "unreadable", "grant the controller read access to the selected credential file and relaunch"
+	} else {
+		message := cause.Error()
+		switch {
+		case strings.Contains(message, "symlink"), strings.Contains(message, "owned private"), strings.Contains(message, "changed while opening"), strings.Contains(message, "absolute credential-file"):
+			category, guidance = "unsafe", "select an owned private regular file (mode 0600 or 0400) at an absolute path without symlinks and relaunch"
+		case strings.Contains(message, "could not be opened"), strings.Contains(message, "could not be read"):
+			category, guidance = "unreadable", "check controller read access and the bounded size of the selected credential file and relaunch"
+		case strings.Contains(message, "JSON"), strings.Contains(message, "credential"), strings.Contains(message, "unsupported"):
+			category, guidance = "malformed", "refresh or reselect a supported credential file for this harness/provider and relaunch"
+		}
+	}
+	return fmt.Errorf("interactive native authentication %s: %s", category, guidance)
 }

@@ -38,6 +38,7 @@ type memoryInput struct {
 	Limit          int            `json:"limit"`
 	After          string         `json:"after"`
 	TTLSeconds     *int           `json:"ttl_seconds"`
+	ExpiresAt      *string        `json:"expires_at"`
 	Tags           []string       `json:"tags"`
 	Sources        []MemorySource `json:"sources"`
 	Query          string         `json:"query"`
@@ -62,7 +63,7 @@ func memoryState(m Memory, at time.Time) string {
 }
 
 func (s *Store) memoryReplay(ctx context.Context, q queryer, a actor, r Request, raw json.RawMessage) (json.RawMessage, *Fault) {
-	if r.Operation != "memory.put" && r.Operation != "memory.delete" && r.Operation != "memory.index" {
+	if r.Operation != "memory.put" && r.Operation != "memory.patch" && r.Operation != "memory.delete" && r.Operation != "memory.index" {
 		return raw, nil
 	}
 	var in memoryInput
@@ -73,7 +74,14 @@ func (s *Store) memoryReplay(ctx context.Context, q queryer, a actor, r Request,
 	if p != nil {
 		return nil, p
 	}
-	if r.Operation != "memory.put" {
+	if r.Operation == "memory.patch" {
+		// Preserving and returning prior metadata is also a read. Receipts
+		// cannot restore that visibility after the owner revokes read access.
+		if _, p := s.memoryScope(ctx, q, a, in.Namespace, false); p != nil {
+			return nil, p
+		}
+	}
+	if r.Operation != "memory.put" && r.Operation != "memory.patch" {
 		return raw, nil
 	}
 	var prior struct {
@@ -107,16 +115,33 @@ func (s *Store) memoryScope(ctx context.Context, q queryer, a actor, namespace s
 
 func (s *Store) memoryOperation(ctx context.Context, q queryer, a actor, r Request) (any, *Fault) {
 	var in memoryInput
-	if err := strictJSON(r.Args, &in); err != nil {
+	if r.Operation == "memory.patch" {
+		// A value edit cannot silently reset lifetime or discard asserted sources.
+		var patch struct {
+			Namespace string `json:"namespace"`
+			Key       string `json:"key"`
+			Value     string `json:"value"`
+			Version   int    `json:"version"`
+		}
+		if err := strictJSON(r.Args, &patch); err != nil {
+			return nil, invalid(err)
+		}
+		in.Namespace, in.Key, in.Value, in.Version = patch.Namespace, patch.Key, patch.Value, patch.Version
+	} else if err := strictJSON(r.Args, &in); err != nil {
 		return nil, invalid(err)
 	}
 	if r.Operation == "memory.prune" {
 		return s.pruneMemory(ctx, q, a, in)
 	}
-	write := r.Operation == "memory.put" || r.Operation == "memory.delete" || r.Operation == "memory.index"
+	write := r.Operation == "memory.put" || r.Operation == "memory.patch" || r.Operation == "memory.delete" || r.Operation == "memory.index"
 	scope, problem := s.memoryScope(ctx, q, a, in.Namespace, write)
 	if problem != nil {
 		return nil, problem
+	}
+	if r.Operation == "memory.patch" {
+		if _, p := s.memoryScope(ctx, q, a, in.Namespace, false); p != nil {
+			return nil, p
+		}
 	}
 	if in.Limit <= 0 || in.Limit > 200 {
 		in.Limit = 100
@@ -214,12 +239,20 @@ func (s *Store) memoryOperation(ctx context.Context, q queryer, a actor, r Reque
 		m.Version++
 		m.Author = a.ID
 		m.UpdatedAt = now()
-	} else if r.Operation == "memory.put" {
+	} else if r.Operation == "memory.put" || r.Operation == "memory.patch" {
 		if len(in.Value) > s.cfg.Limits.MaxMessageBytes {
 			return nil, fault("invalid", "memory value exceeds max_message_bytes")
 		}
-		if problem := s.validateMemoryMetadata(ctx, q, a, in); problem != nil {
+		if r.Operation == "memory.patch" {
+			if state != "live" {
+				return nil, fault("not_found", "only live memory may be patched")
+			}
+			in.Tags, in.Sources, in.ExpiresAt = m.Tags, m.Sources, &m.ExpiresAt
+		} else if problem := s.validateMemoryMetadata(ctx, q, a, in); problem != nil {
 			return nil, problem
+		}
+		if in.ExpiresAt != nil && in.TTLSeconds != nil {
+			return nil, fault("invalid", "choose expires_at or ttl_seconds")
 		}
 		policy := s.cfg.MemoryPolicy.Normalized()
 		ttl := policy.DefaultTTLSeconds
@@ -235,7 +268,23 @@ func (s *Store) memoryOperation(ctx context.Context, q queryer, a actor, r Reque
 		}
 		expires := ""
 		var expiresNanos int64
-		if ttl > 0 {
+		if in.ExpiresAt != nil {
+			expires = *in.ExpiresAt
+			if expires != "" {
+				expiry, err := time.Parse(time.RFC3339Nano, expires)
+				if err != nil {
+					return nil, fault("invalid", "expires_at must be an RFC3339 timestamp")
+				}
+				remaining := time.Until(expiry)
+				if remaining <= 0 {
+					return nil, fault("expired", "memory expiry has elapsed")
+				}
+				if r.Operation != "memory.patch" && remaining > time.Duration(policy.MaxTTLSeconds)*time.Second {
+					return nil, fault("invalid", "expires_at exceeds owner memory policy")
+				}
+				expiresNanos = expiry.UnixNano()
+			}
+		} else if ttl > 0 {
 			expiry := time.Now().Add(time.Duration(ttl) * time.Second).UTC()
 			expires = expiry.Format(time.RFC3339Nano)
 			expiresNanos = expiry.UnixNano()
@@ -258,6 +307,11 @@ func (s *Store) memoryOperation(ctx context.Context, q queryer, a actor, r Reque
 		if err := redactMemoryReceipts(ctx, q, scope, m.Key, m.Version); err != nil {
 			return nil, internal(err)
 		}
+	}
+	// Absolute archive expiry and patch lifetime are checked again at the write
+	// boundary, after provenance and allocation work, so neither can revive data.
+	if (r.Operation == "memory.put" || r.Operation == "memory.patch") && m.ExpiresAt != "" && memoryState(m, time.Now()) != "live" {
+		return nil, fault("expired", "memory expiry has elapsed")
 	}
 	if err := save(ctx, q, "memory", id, a.ID, "", scope, m); err != nil {
 		return nil, internal(err)

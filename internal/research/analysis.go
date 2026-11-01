@@ -7,8 +7,16 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 )
+
+type PopulationTrajectory struct {
+	Trial   string               `json:"trial"`
+	Attempt int                  `json:"attempt"`
+	Changed bool                 `json:"changed"`
+	Rounds  []PopulationSnapshot `json:"rounds"`
+}
 
 type Estimate struct {
 	N             int       `json:"n"`
@@ -38,6 +46,10 @@ type Contrast struct {
 	PrimaryDifference Estimate `json:"paired_primary_outcome_difference_to_minus_from"`
 }
 type Analysis struct {
+	BaselineScope          string                 `json:"baseline_population_scope"`
+	PopulationPolicy       Population             `json:"population_policy"`
+	PopulationTrajectories []PopulationTrajectory `json:"population_trajectories,omitempty"`
+
 	Research         string             `json:"research"`
 	ManifestHash     string             `json:"manifest_sha256"`
 	Conditions       []ConditionSummary `json:"conditions"`
@@ -82,6 +94,33 @@ func Analyze(report Report) Analysis {
 		a.Interpretation = "Invalid research evidence; estimates withheld."
 		a.EvidenceWarnings = []string{err.Error()}
 		return a
+	}
+	a.BaselineScope = "initial_fixed_population"
+	a.PopulationPolicy = report.Population
+	for _, r := range report.Results {
+		trajectory := PopulationTrajectory{Trial: r.Trial.ID, Attempt: r.Attempt, Rounds: r.Population}
+		for _, snapshot := range r.Population {
+			for _, change := range snapshot.Changes {
+				if change.Kind == "joined" || change.Kind == "retired" {
+					trajectory.Changed = true
+				}
+			}
+		}
+		if len(r.Population) > 1 {
+			first := append([]string(nil), r.Population[0].Actors...)
+			sort.Strings(first)
+			for _, p := range r.Population[1:] {
+				ids := append([]string(nil), p.Actors...)
+				sort.Strings(ids)
+				if !reflect.DeepEqual(first, ids) {
+					trajectory.Changed = true
+				}
+			}
+		}
+		a.PopulationTrajectories = append(a.PopulationTrajectories, trajectory)
+		if trajectory.Changed {
+			a.EvidenceWarnings = append(a.EvidenceWarnings, "Population changed in "+r.Trial.ID+": baselines use the initial fixed population and are not matched to the observed trajectory.")
+		}
 	}
 	a.PrimaryOutcome = selectedOutcome(report)
 	a.Counterbalancing = report.Counterbalancing
@@ -306,6 +345,20 @@ func ReadReport(dir string) (Report, error) {
 		return r, err
 	}
 	if err := verifyReportEvidence(dir, r); err != nil {
+		return r, err
+	}
+	var stored struct {
+		Manifest Manifest `json:"manifest"`
+	}
+	if err := privateJSON(filepath.Join(dir, "manifest.json"), &stored); err == nil {
+		if err := checkStoredManifest(dir, r.ManifestHash); err != nil {
+			return r, err
+		}
+		if r.Population.Mode != "" && r.Population != stored.Manifest.Population {
+			return r, errors.New("research population policy differs from its frozen manifest")
+		}
+		r.Population = stored.Manifest.Population
+	} else if !os.IsNotExist(err) {
 		return r, err
 	}
 	return r, nil

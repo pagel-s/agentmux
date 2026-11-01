@@ -77,7 +77,7 @@ func run(args []string) int {
 	switch args[0] {
 	case "allow", "deny":
 		return runWorkPermission(args[0], args[1:], os.Stdout, os.Stderr)
-	case "start", "attach", "reply", "inbox", "board", "down", "remove", "collaborate", "isolate", "label":
+	case "start", "attach", "reply", "inbox", "board", "down", "remove", "retire", "collaborate", "disconnect", "isolate", "label":
 		return runWorkSession(args[0], args[1:], os.Stdin, os.Stdout, os.Stderr)
 	case "team":
 		return runWorkTeam(args[1:], os.Stdout, os.Stderr)
@@ -2161,12 +2161,13 @@ Everyday shortcuts:
   amx up -s daily -p ./project
   amx a claude -s daily          amx ui -s daily
   amx ls -s daily               amx ws
-  amx new --harness codex -s daily
+  amx new --harness codex -p ./project -s daily
   amx link claude codex -s daily
   amx allow codex claude commands -s daily
   amx mode claude auto -s daily
 Aliases: up=start, a/open=attach, ui=dashboard, ls=sessions, ws=workspaces,
-new=add, link=collaborate, unlink=isolate, name=label, mode=delivery.
+new=add, link=collaborate, unlink=disconnect, name=label, mode=delivery, archive=retire.
+Ctrl+K in the workbench opens searchable Actions; Ctrl+P switches sessions.
 
 Everyday work sessions use dedicated tmux sockets. Use sessions/dashboard to inspect them;
 the legacy list/status commands below address the default tmux socket.
@@ -2183,6 +2184,8 @@ Usage:
   agentmux allow|deny FROM TO commands|messages|pings [--session work | --state DIR]
   agentmux connect OBSERVED_ID --name NAME [--session work | --state DIR]
   agentmux collaborate AGENT AGENT [...] [--legacy-policy preserve|group] [--session work | --state DIR]
+  agentmux disconnect AGENT AGENT [...] [--session work | --state DIR]
+  agentmux retire ID [--session work | --state DIR]
   agentmux isolate AGENT [...] [--session work | --state DIR]
   agentmux remove AGENT [--session work | --state DIR]
   agentmux attach [AGENT] [--session work | --state DIR]

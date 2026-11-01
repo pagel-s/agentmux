@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -70,7 +71,7 @@ func TestLinkedTmuxPanesChooseDeterministicSessionAndQuoteCommands(t *testing.T)
 	processes := map[int]process{10: fixtureProcess(10, 1, "pts/1", "bash"), 11: fixtureProcess(11, 10, "pts/1", "claude")}
 	first := discoverFixture(processes, parsePanes(strings.Join(rows, "\n")))
 	second := discoverFixture(processes, parsePanes(rows[1]+"\n"+rows[0]))
-	if len(first) != 1 || len(second) != 1 || first[0] != second[0] {
+	if len(first) != 1 || len(second) != 1 || !reflect.DeepEqual(first[0], second[0]) {
 		t.Fatalf("linked windows duplicated/unstable: %#v %#v", first, second)
 	}
 	command := first[0].AttachCommand

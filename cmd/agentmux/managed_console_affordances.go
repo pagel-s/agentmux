@@ -160,9 +160,15 @@ func (m console) teamKeyHints() string {
 // Keep the footer's vocabulary identical to the keys it documents. Uppercase
 // shortcuts are spelled Shift+... so they cannot look like lowercase no-ops.
 func (m console) contextualKeys() string {
-	common := "←/→ views · Ctrl+P sessions · Shift+W workspaces · ? help · q detach/close"
+	common := "←/→ views · Ctrl+P sessions · Ctrl+K Actions\nShift+W workspaces · ? help · q detach/close"
 	if m.workspacePicker != nil {
 		return "↑/↓ workspace · Enter opens observer · Esc/q back"
+	}
+	if m.ownerReview != nil {
+		return "↑/↓ scroll · Enter applies exact reviewed action · Esc cancels"
+	}
+	if m.composer == "actions" {
+		return "↑/↓ action · Enter opens editor/review · Esc back"
 	}
 	if m.nativeAction != nil {
 		if m.nativeAction.latest != nil {
@@ -189,12 +195,12 @@ func (m console) contextualKeys() string {
 		if m.composer == "find" {
 			return "↑/↓ choose · Enter terminal/details · Tab select here\nEsc cancels · Ctrl-G help"
 		}
-		return "Esc cancels (then q detach/close) · Ctrl-C detach/close"
+		return "Ctrl+W workspaces (draft kept) · Ctrl-C detach/close\nEsc cancels · then q detach/close"
 	}
 	var context string
 	switch m.tab {
 	case 0:
-		keys := []string{"f filter"}
+		keys := []string{"f scope", "Shift+F search", "PgUp/PgDn history"}
 		if len(m.boardMessages()) > 0 {
 			keys = append(keys, "[/] message", "r reply", "o read")
 		}
@@ -238,7 +244,7 @@ func (m console) contextualKeys() string {
 			}
 		}
 	case 4:
-		keys := []string{"f search history"}
+		keys := []string{"f history search", "y recipient", "z state"}
 		if len(m.data.activity.Tasks) > 0 {
 			keys = append(keys, "[/] task", "o read", "r reply", "c cancel")
 		}
@@ -259,7 +265,7 @@ func (m console) contextualKeys() string {
 	case 7:
 		context = "Home latest/live"
 		if len(m.data.activity.Events) > 0 {
-			context = "[/] event · Home latest/live · o details"
+			context = "[/] pin event · Home live · PgUp/PgDn history · Shift+F search · g scope · o details"
 		}
 		if m.data.research != nil {
 			context += "\nShift+P/R/S/T pause/resume/step/stop (reason + review)"

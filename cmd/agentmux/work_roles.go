@@ -14,6 +14,9 @@ func runWorkRole(args []string, out, diagnostics io.Writer) int {
 		return exitSuccess
 	}
 	fail := func(err error) int { fmt.Fprintln(diagnostics, "error:", err); return exitValidation }
+	if err := validateWorkFlags("role", args); err != nil {
+		return fail(err)
+	}
 	o, err := parseWorkOptions(args)
 	if err != nil {
 		return fail(err)

@@ -100,7 +100,7 @@ func TestConsoleTeamReviewCancellationAndConsentGuards(t *testing.T) {
 func TestConsoleEventsReturnToLiveWithHome(t *testing.T) {
 	m := console{tab: 7, eventIndex: 3}
 	m, cmd := consolePress(m, tea.KeyMsg{Type: tea.KeyHome})
-	if cmd != nil || m.eventIndex != 0 {
+	if cmd == nil || m.eventIndex != 0 {
 		t.Fatal("Home did not return audit selection to live newest event")
 	}
 }

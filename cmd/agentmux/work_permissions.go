@@ -10,6 +10,7 @@ import (
 
 	"agentmux/internal/managed"
 	"agentmux/internal/managedconfig"
+	"agentmux/internal/managedlaunch"
 )
 
 // Permission edits always use owner authentication. FROM describes the edge,
@@ -85,7 +86,7 @@ Deny applies to future operations; cancel accepted tasks separately if needed.`)
 		return fail(err)
 	}
 	fmt.Fprintf(out, "Saved %s: %s → %s · %s (%s).\n", operation, from, to, label, action)
-	fmt.Fprintf(out, "Native delivery is separate: amx mode %s review|auto.\n", to)
+	fmt.Fprintln(out, "Native delivery is separate. Review requests:", managedlaunch.ShellCommand([]string{"amx", "mode", to, "review", "--state", options.state}))
 	if operation == "deny" {
 		fmt.Fprintln(out, "Future operations are denied; cancel accepted tasks separately if needed.")
 	}

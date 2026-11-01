@@ -55,7 +55,7 @@ func (m console) roster(width, height int) string {
 	}
 	out.WriteString(consoleAccent.Render("SESSIONS · ↑/↓") + "\n")
 	out.WriteString(consoleMuted.Render(fmt.Sprintf("%d/%d · Ctrl+P switch", position, len(m.agents))) + "\n")
-	rows := max(1, (height-4)/4)
+	rows := max(1, (height-4)/2)
 	start := max(0, m.selected-rows+1)
 	end := min(len(m.agents), start+rows)
 	for i := start; i < end; i++ {
@@ -68,18 +68,19 @@ func (m console) roster(width, height int) string {
 			mode = "managed"
 		}
 		status := consoleAgentStatus(a, m)
-		name := "  " + consoleContent(sessionTitle(a), 150)
+		name := "  " + consoleMiddle(sessionTitle(a), max(1, width-2))
 		if i == m.selected {
-			name = consoleSelected.Render("› " + consoleContent(sessionTitle(a), 150))
+			name = consoleSelected.Render("› " + consoleMiddle(sessionTitle(a), max(1, width-2)))
 		}
-		out.WriteString(consoleClip(name, width, 1) + "\n" + consoleMuted.Render(consoleClip("  "+a.ID+" · "+a.Config.Harness, width, 1)) + "\n" + consoleMuted.Render(consoleClip(consoleContent("  "+status+" · "+sessionProject(a.Config.Workdir)+" · "+mode, 300), width, 1)) + "\n\n")
+		_ = mode
+		out.WriteString(consoleClip(name, width, 1) + "\n" + consoleMuted.Render(consoleMiddle(a.ID, max(1, width/2))+" · "+consoleMiddle(status, max(1, width-width/2-3))) + "\n")
 	}
 	if start > 0 || end < len(m.agents) {
 		fmt.Fprintf(&out, "%s\n", consoleMuted.Render(fmt.Sprintf("↑ %d above · ↓ %d below", start, len(m.agents)-end)))
 	}
 	hint := m.nativeEntryHint()
 	if m.tab == 6 {
-		hint = "h/l team action target\n2 Agents: native terminals"
+		hint = "h/l team action target\n2 Sessions: native terminals"
 	} else if m.tab == 5 {
 		hint = "↑/↓ observed terminal\nEnter details · c bridge"
 	}
@@ -93,6 +94,12 @@ func (m console) panel(width, height int) string {
 	if m.workspacePicker != nil {
 		return m.workspacePanel(width, height)
 	}
+	if m.ownerReview != nil {
+		return m.ownerReviewPanel(width, height)
+	}
+	if m.composer == "actions" {
+		return m.actionsPanel(width, height)
+	}
 	if m.teamAction != nil {
 		return m.teamReviewPanel(width, height)
 	}
@@ -103,7 +110,7 @@ func (m console) panel(width, height int) string {
 		return m.sessionSwitcherPanel(width, height)
 	}
 	var out strings.Builder
-	if len(m.agents) > 0 && m.tab != 5 && m.tab != 1 && m.tab != 2 && m.tab != 6 && m.tab != 7 {
+	if len(m.agents) > 0 && m.tab != 5 && m.tab != 1 && m.tab != 2 && m.tab != 6 && m.tab != 7 && m.tab != 4 {
 		a := m.agents[m.selected%len(m.agents)]
 		fmt.Fprintf(&out, "%s\n%s\n\n", consoleAccent.Render(consoleClip(consoleContent(sessionTitle(a), 150), width, 1)), consoleMuted.Render(consoleClip(consoleContent(a.ID+" · "+a.Config.Harness+" · "+a.Config.Workdir, 300), width, 1)))
 	}
@@ -116,7 +123,13 @@ func (m console) panel(width, height int) string {
 		}
 		filters := []string{"All coordination", boardLabel, m.selectedID() + " inbox"}
 		messages := m.boardMessages()
-		boardHints := fmt.Sprintf("%d recent · f filter", len(messages))
+		boardHints := fmt.Sprintf("%d on page %d · f scope · Shift+F search", len(messages), len(m.messageBack)+1)
+		if m.messageMore {
+			boardHints += " · PgDn older"
+		}
+		if len(m.messageBack) > 0 {
+			boardHints += " · PgUp newer"
+		}
 		if len(messages) > 0 {
 			boardHints += " · [/] select · r reply · o read all"
 		}
@@ -183,6 +196,7 @@ func (m console) panel(width, height int) string {
 			out.WriteString(m.agentRuntimePanel(width) + "\n")
 			fmt.Fprintf(&out, "%s\n%s\n%s\n%s\n\n", consoleClip(consoleContent(a.Config.Role, 300), width, 2), consoleMuted.Render(consoleClip(consoleContent(a.Config.Workdir, 200), width, 1)), consoleMuted.Render(a.Config.Harness+" · "+a.Config.Sandbox+" · network "+a.Config.Network), consoleMuted.Render(consoleContent(sessionOrigin(a)+" · added "+sessionAdded(a.CreatedAt), 200)))
 			if a.External {
+				out.WriteString(consoleContent(m.externalObservationDetails(a.ExternalRef), 4000) + "\n")
 				fmt.Fprintf(&out, "%s  %s\n\n%s\n\n%s\n", consoleAccent.Render("EXTERNAL NATIVE SESSION"), consoleMuted.Render(observationStatus(a.ExternalRef, m.data.observed)), consoleContent("Use its original terminal. Helper: "+m.bridgeHelper(a.ID), 500), consoleMuted.Render("Registration prepares a bridge; it does not prove the native agent read the setup.\nCopy the setup below into its existing conversation yourself."))
 				out.WriteString("\n" + consoleContent(bridgeInstructions(m.state, a.ID), 6000))
 				break
@@ -241,7 +255,7 @@ func (m console) panel(width, height int) string {
 				}
 				fmt.Fprintf(&out, "  [%s]  %-13s %s %s\n", row.key, row.label, value, consoleMuted.Render(consoleClip(consoleContent(reason, 250), max(1, width-35), 1)))
 			}
-			out.WriteString("\n" + consoleMuted.Render("c connect scoped group · d isolate sender · M/P/I reset overrides\nCommands authorize tasks; 2 Agents → Shift+D sets native delivery.\nGroups add grants; explicit owner overrides take precedence.\nExisting tasks stay accepted; cancel them in Tasks.\no reads full effective boundaries and stored controls"))
+			out.WriteString("\n" + consoleMuted.Render("c connect scoped group · d isolate sender · M/P/I reset overrides\nCommands authorize tasks; 2 Sessions → Shift+D sets native delivery.\nGroups add grants; explicit owner overrides take precedence.\nExisting tasks stay accepted; cancel them in Tasks.\no reads full effective boundaries and stored controls"))
 			out.WriteString("\n\n" + consoleAccent.Render("Workspace groups") + "\n")
 			found := false
 			for _, g := range m.data.controls.Groups {
@@ -334,7 +348,13 @@ func (m console) panel(width, height int) string {
 			taskHints = "  [/] select · o read all · r follow up · c cancel"
 		}
 		out.WriteString(consoleAccent.Render("Tasks & results") + consoleMuted.Render(taskHints) + "\n\n")
-		historyHint := fmt.Sprintf("History page %d · newest first · f search", len(m.taskBack)+1)
+		historyHint := fmt.Sprintf("Page %d · f search · y to · z state", len(m.taskBack)+1)
+		if m.taskRecipient != "" {
+			historyHint += " · to " + m.taskRecipient
+		}
+		if m.taskState != "" {
+			historyHint += " · " + m.taskState
+		}
 		if m.taskMore {
 			historyHint += " · PgDn older"
 		}
@@ -362,7 +382,7 @@ func (m console) panel(width, height int) string {
 		}
 		if len(m.data.activity.Tasks) > 0 {
 			v := m.data.activity.Tasks[m.task%len(m.data.activity.Tasks)]
-			out.WriteString("\n" + consoleMuted.Render(v.ID) + "\nResult · o reads full result, instruction and trace\n" + consoleContent(v.Result, 4000))
+			out.WriteString("\n" + consoleMuted.Render(v.ID) + "\nResult · o reads full content\n" + consoleContent(v.Result, 4000))
 			if len(v.Usage) > 0 {
 				out.WriteString("\n\n" + consoleMuted.Render("Provider-reported usage: ") + consoleContent(string(v.Usage), 500))
 			}
@@ -375,10 +395,10 @@ func (m console) panel(width, height int) string {
 		if len(observations) > 0 {
 			sessionHints = "  ↑/↓ select · Enter details · c prepare bridge"
 		}
-		out.WriteString(consoleAccent.Render("Existing sessions") + consoleMuted.Render(sessionHints) + "\n\n")
+		out.WriteString(consoleAccent.Render("Existing terminals") + consoleMuted.Render(sessionHints) + "\n\n")
 		out.WriteString(consoleMuted.Render("Observed live terminals keep their native conversation and tools.\nObservation grants no communication rights and sends no input.") + "\n\n")
 		if len(observations) == 0 {
-			out.WriteString(consoleMuted.Render("No unregistered live TTY sessions found.\nRegistered bridges appear in Agents under their assigned names.\nShift+N creates a native session. Generic wrappers may not be identifiable.\nDiscovery is local and best effort; custom tmux servers may be absent."))
+			out.WriteString(consoleMuted.Render("No unregistered live TTY sessions found.\nRegistered bridges appear in Sessions under their assigned names.\nShift+N creates a native session. Generic wrappers may not be identifiable.\nDiscovery is local and best effort; custom tmux servers may be absent."))
 		}
 		first, count := max(0, m.observedSelected-4), 5
 		if m.details != "" {
@@ -414,9 +434,10 @@ func (m console) View() string {
 	if m.offline {
 		header = consoleAccent.Render(" AGENTMUX · BROKER OFFLINE ") + consoleMuted.Render("saved snapshot · writes disabled")
 	}
-	tabs := []string{"1 Board", "2 Agents", "3 Connections", "4 Memory", "5 Tasks", "6 Sessions", "7 Teams", "8 Events"}
+	tabs := []string{"1 Board", "2 Sessions", "3 Connections", "4 Memory", "5 Tasks", "6 Existing terminals", "7 Teams", "8 Events"}
 	if width < 100 {
 		tabs[2] = "3 Links"
+		tabs[5] = "6 Existing"
 	}
 	var navigation strings.Builder
 	firstTab, lastTab := 0, len(tabs)
@@ -457,7 +478,7 @@ func (m console) View() string {
 		navigation.WriteString(consoleMuted.Render(" ›"))
 	}
 	var footer strings.Builder
-	if m.composer != "" && m.composer != "find" && m.reader == nil {
+	if m.composer != "" && m.composer != "find" && m.composer != "actions" && m.reader == nil && m.workspacePicker == nil {
 		label := m.composer + " → " + m.composeTarget
 		if m.composer == "send" || m.composer == "reply" || m.composer == "message" {
 			mode := m.composeMode
@@ -482,7 +503,7 @@ func (m console) View() string {
 		footer.WriteString(consoleClip(consoleContent(m.message, 500), width, 2) + "\n")
 	}
 	help := m.contextualKeys()
-	if m.reader != nil {
+	if m.reader != nil && m.workspacePicker == nil {
 		help = m.readerHelp()
 	}
 	footer.WriteString(consoleMuted.Render(help))
@@ -492,15 +513,21 @@ func (m console) View() string {
 		bodyHeight = 1
 	}
 	var compact string
-	if width < 64 && len(m.agents) > 0 && m.reader == nil && m.nativeAction == nil && m.composer != "find" {
+	if width < 64 && len(m.agents) > 0 && m.workspacePicker == nil && m.reader == nil && m.nativeAction == nil && m.composer != "find" {
 		compact = consoleClip(consoleMuted.Render(fmt.Sprintf("Session %d/%d · ↑/↓ · Ctrl+P switch", m.selected+1, len(m.agents))), width, 1) + "\n" + consoleClip(consoleSelected.Render("› "+consoleContent(m.agentLabel(m.selectedID()), 300)), width, 1) + "\n"
 		bodyHeight = max(1, bodyHeight-2)
 	}
 	var body string
-	if m.reader != nil {
+	if m.workspacePicker != nil {
+		body = m.workspacePanel(width, bodyHeight)
+	} else if m.reader != nil {
 		body = m.readerPanel(width, bodyHeight)
 	} else if m.nativeAction != nil {
 		body = m.nativeDeliveryPanel(width, bodyHeight)
+	} else if m.ownerReview != nil {
+		body = m.ownerReviewPanel(width, bodyHeight)
+	} else if m.composer == "actions" {
+		body = m.actionsPanel(width, bodyHeight)
 	} else if m.composer == "find" {
 		body = m.sessionSwitcherPanel(width, bodyHeight)
 	} else if sideWidth := consoleSidebarWidth(width); sideWidth > 0 {

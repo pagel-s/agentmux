@@ -52,7 +52,7 @@ agentmux research run examples/research/dynamic-population.yaml \
 
 # In another terminal; OUTPUT follows the current attempt:
 agentmux research status /tmp/amx-live-study
-agentmux research watch /tmp/amx-live-study
+agentmux research watch /tmp/amx-live-study --follow
 # Use the exact STATE printed by the runner:
 agentmux dashboard --state STATE --view research
 agentmux web --state STATE
@@ -61,16 +61,21 @@ agentmux web --state STATE
 `OUTPUT` means the study's top-level output directory (here
 `/tmp/amx-live-study`); `STATE` means one attempt's broker directory printed by
 the runner. `status` and `watch` accept either. OUTPUT resolves the most recently
-published attempt; dashboard/web need the exact STATE and must be reopened for
-a later attempt. Before the first attempt is ready, there may be
+published attempt. Add `--follow` to watch the complete study across trial
+transitions. Dashboard/web start with an exact STATE; use study follow in Events
+or the web Research view to observe the matrix. Web follow switches snapshots
+with attempt-fenced controls, while terminal opening of another attempt is explicit. Before the first attempt is ready, there may be
 no live pointer yet. A missing `live.json` alone does not establish a failed run;
 check the runner terminal.
 
 `status` prints one JSON snapshot. `watch` prints JSON snapshots as they change
 and exits when the attempt finishes or is no longer live. Ctrl-C in the watcher
 stops observation while the runner continues. Closing a dashboard or stopping
-the web process also leaves the runner running. If `watch` exits between trials,
-run it again with OUTPUT to observe the next published attempt.
+the web process also leaves the runner running. `watch OUTPUT --follow` stays
+open through gaps until all trials complete or you interrupt it. Stopped,
+interrupted and incomplete attempts are labeled explicitly; missing results
+do not establish that a runner is executing. Use `research study OUTPUT` for
+overall status and `research history OUTPUT` for paginated archived evidence.
 
 The terminal Events view and web Research view show trial/condition, round and
 phase, population, authoritative phase-task delivery, finite deadline, reserved
@@ -415,3 +420,9 @@ cross-condition memory and accidental replacement of failed observations.
 Persistent native histories fail closed after a failed/interrupted begun turn;
 if later phases would need that blocked history, the run interrupts for explicit
 owner resolution rather than silently resetting or starting a fresh history.
+
+Behavior CSV schema 2 also retains selected projects/partners, received escrow,
+reward pools, parent IDs and phase-task references without prompts. Population
+policy is verified against the frozen manifest; dynamic trajectories carry an
+initial-fixed-population baseline scope and comparability warnings. See the
+[control center guide](usability-control-center.md).
