@@ -55,8 +55,9 @@ and preserves a failed draft. **Ctrl-R** reviews the latest role; Enter adopts
 only the reviewed version before a separate save. Managed workers capture the
 current role when claiming the next task. Native conversations stay running and
 receive an informational inbox notice; `managed call identity` returns the
-current role and `role_version`. No user turn is injected and in-flight inputs
-are unchanged. Roles grant no broker permissions. **N** includes an explicit
+current role and `role_version`. Manual mode leaves it in the broker inbox;
+Review/Auto can deliver an attributed role/boundary notice through the native
+adapter. Roles grant no broker permissions. **N** includes an explicit
 coordinated/native-only profile choice before the optional role step.
 
 | Name or ID | Where to use it |
@@ -435,9 +436,12 @@ Offline or failed reviews retain the draft without adopting a new version.
 
 Human input goes directly to the native CLI, including its normal approval
 prompts. Broker messages do not inject keystrokes or impersonate user input.
-Ask an interactive agent to read its inbox when you want it to process notes or
-queued peer instructions. It does not automatically claim or execute a managed
-task; managed workers provide that task-execution lifecycle.
+In the default Manual mode, ask an interactive agent to read its broker inbox.
+For integrated Claude, Codex and Pi sessions, choose Review or Auto in Agents
+or with `agentmux delivery ID review|auto` to enable attributed native turns.
+Sender Commands permission and receiver delivery mode are separate. See
+[native delivery](native-delivery.md) for approvals, subscriptions, lifecycle
+evidence, limits and provider-specific capabilities.
 
 ```sh
 agentmux send codex "Please read the proposed API on the team board."
@@ -452,7 +456,7 @@ agentmux reply BOARD_MESSAGE_ID "Private follow-up." --to codex --mode note
 `send`/`reply` default to `--mode auto`: a note for interactive agents and an
 instruction task for managed workers. Choose `--mode note` for information or
 `--mode instruction` for a task explicitly. An instruction to a native terminal
-is broker work the agent must read; it never injects a native user turn. Both
+stays queued in Manual mode; Review/Auto can deliver it through the native adapter. Both
 forms print the record ID. They never automatically retry writes;
 a transport failure can leave delivery uncertain. The lower-level `managed call`
 API exposes explicit request IDs for durable retries.

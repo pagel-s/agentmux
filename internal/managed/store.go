@@ -51,6 +51,7 @@ type Store struct {
 	closed              bool
 	stagedPaths         []string
 	researchHeartbeatAt string
+	nativePresence      map[string]nativePresence
 }
 
 type queryer interface {
@@ -399,7 +400,9 @@ func lifecycleReserve(ctx context.Context, q queryer) (int, error) {
  WHEN json_extract(data,'$.state')='running' THEN 2
  WHEN json_extract(data,'$.state')='submitted' THEN 1
  WHEN json_extract(data,'$.state')='cancelled' AND json_extract(data,'$.delivery') IN ('cancel_requested','cancel_uncertain') THEN 1
- ELSE 0 END + CASE WHEN (
+ ELSE 0 END + CASE WHEN json_extract(data,'$.native') IS NOT NULL AND json_extract(data,'$.state')='running' THEN
+ CASE json_extract(data,'$.native.phase') WHEN 'claimed' THEN 6 WHEN 'submitting' THEN 5 WHEN 'submitted' THEN 4 WHEN 'running' THEN 3 ELSE 1 END
+ WHEN json_extract(data,'$.native') IS NOT NULL AND json_extract(data,'$.delivery') IN ('cancel_requested','cancel_uncertain') THEN 2 ELSE 0 END + CASE WHEN (
  EXISTS (SELECT 1 FROM metadata WHERE key='config' AND json_extract(value,'$.agents.'||json_quote(records.target)||'.conversation')='persistent')
  OR EXISTS (SELECT 1 FROM records agent WHERE agent.kind='agent' AND agent.target=records.target AND json_extract(agent.data,'$.config.conversation')='persistent')
  ) AND NOT EXISTS (SELECT 1 FROM records c WHERE c.kind='conversation' AND json_extract(c.data,'$.task_id')=records.id)
@@ -436,6 +439,29 @@ func lifecycleReserve(ctx context.Context, q queryer) (int, error) {
 	// An active study retains slots for an audited owner stop and the runner's
 	// terminal checkpoint. Safety controls do not renew ordinary work budgets.
 	err = q.QueryRowContext(ctx, `SELECT COALESCE(SUM(CASE json_extract(data,'$.control.mode') WHEN 'stopped' THEN 1 ELSE 3 END),0) FROM records WHERE kind='research' AND json_extract(data,'$.progress.state') NOT IN ('completed','interrupted','stopped')`).Scan(&extra)
+	if err != nil {
+		return 0, err
+	}
+	n += extra
+	// Native delivery retains an audited Manual pause even when ordinary
+	// writes fill storage. An initial Auto/Review launch policy needs both its
+	// first persisted policy row and pause event; an existing policy needs only
+	// the event. Credentials select active identities, including added/spawned
+	// agents whose dynamic definition overrides the immutable launch config.
+	err = q.QueryRowContext(ctx, `WITH native_agents AS (
+ SELECT
+  (SELECT data FROM records p WHERE p.kind='native_policy' AND p.target=credentials.actor) AS policy,
+  COALESCE(
+   (SELECT json_extract(data,'$.config') FROM records a WHERE a.kind='agent' AND a.target=credentials.actor),
+   (SELECT json_extract(value,'$.agents.'||json_quote(credentials.actor)) FROM metadata WHERE key='config')
+  ) AS definition
+ FROM credentials WHERE actor<>'$owner'
+ ) SELECT COALESCE(SUM(CASE
+ WHEN policy IS NOT NULL THEN CASE WHEN json_extract(policy,'$.mode') IN ('auto','review') THEN 1 ELSE 0 END
+ WHEN json_extract(definition,'$.interaction')='interactive'
+  AND COALESCE(json_extract(definition,'$.native_only'),0)=0
+  AND json_extract(definition,'$.native_delivery.mode') IN ('auto','review') THEN 2
+ ELSE 0 END),0) FROM native_agents`).Scan(&extra)
 	if err != nil {
 		return 0, err
 	}
@@ -490,6 +516,7 @@ type Task struct {
 	UpdatedAt string          `json:"updated_at"`
 	Trace     *TraceSummary   `json:"trace,omitempty"`
 	Origin    *TaskOrigin     `json:"origin,omitempty"`
+	Native    *NativeReceipt  `json:"native,omitempty"`
 }
 
 // Persist lease fields separately from public task JSON. They are never part
@@ -512,6 +539,7 @@ func saveTask(ctx context.Context, q queryer, t taskRecord) error {
 }
 
 type Memory struct {
+	Provenance      *Provenance    `json:"provenance,omitempty"`
 	Namespace       string         `json:"namespace"`
 	Key             string         `json:"key"`
 	Value           string         `json:"value"`

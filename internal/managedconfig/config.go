@@ -44,27 +44,42 @@ type Connection struct {
 }
 
 type Agent struct {
-	Interaction   string            `yaml:"interaction,omitempty" json:"interaction,omitempty"`
-	NativeOnly    bool              `yaml:"native_only,omitempty" json:"native_only,omitempty"`
-	Role          string            `yaml:"role" json:"role,omitempty"`
-	Harness       string            `yaml:"harness" json:"harness"`
-	Model         string            `yaml:"model" json:"model,omitempty"`
-	Connection    string            `yaml:"connection" json:"connection,omitempty"`
-	Sandbox       string            `yaml:"sandbox" json:"sandbox"`
-	Network       string            `yaml:"network" json:"network"`
-	Command       []string          `yaml:"command" json:"command,omitempty"`
-	Workdir       string            `yaml:"workdir" json:"workdir,omitempty"`
-	Env           map[string]string `yaml:"env" json:"env,omitempty"`
-	ReadOnlyPaths []string          `yaml:"read_only_paths" json:"read_only_paths,omitempty"`
-	Auth          NativeAuth        `yaml:"auth" json:"auth,omitempty"`
-	Resources     Resources         `yaml:"resources" json:"resources,omitempty"`
-	CodexSandbox  string            `yaml:"codex_sandbox" json:"codex_sandbox,omitempty"`
-	Autonomy      Autonomy          `yaml:"autonomy" json:"autonomy"`
-	Conversation  string            `yaml:"conversation" json:"conversation,omitempty"`
-	Disk          Disk              `yaml:"disk" json:"disk"`
-	Trace         Trace             `yaml:"trace" json:"trace"`
-	Egress        Egress            `yaml:"egress" json:"egress"`
-	Budget        AgentBudget       `yaml:"budget" json:"budget"`
+	Interaction    string            `yaml:"interaction,omitempty" json:"interaction,omitempty"`
+	NativeOnly     bool              `yaml:"native_only,omitempty" json:"native_only,omitempty"`
+	NativeDelivery *NativeDelivery   `yaml:"native_delivery,omitempty" json:"native_delivery,omitempty"`
+	Role           string            `yaml:"role" json:"role,omitempty"`
+	Harness        string            `yaml:"harness" json:"harness"`
+	Model          string            `yaml:"model" json:"model,omitempty"`
+	Connection     string            `yaml:"connection" json:"connection,omitempty"`
+	Sandbox        string            `yaml:"sandbox" json:"sandbox"`
+	Network        string            `yaml:"network" json:"network"`
+	Command        []string          `yaml:"command" json:"command,omitempty"`
+	Workdir        string            `yaml:"workdir" json:"workdir,omitempty"`
+	Env            map[string]string `yaml:"env" json:"env,omitempty"`
+	ReadOnlyPaths  []string          `yaml:"read_only_paths" json:"read_only_paths,omitempty"`
+	Auth           NativeAuth        `yaml:"auth" json:"auth,omitempty"`
+	Resources      Resources         `yaml:"resources" json:"resources,omitempty"`
+	CodexSandbox   string            `yaml:"codex_sandbox" json:"codex_sandbox,omitempty"`
+	Autonomy       Autonomy          `yaml:"autonomy" json:"autonomy"`
+	Conversation   string            `yaml:"conversation" json:"conversation,omitempty"`
+	Disk           Disk              `yaml:"disk" json:"disk"`
+	Trace          Trace             `yaml:"trace" json:"trace"`
+	Egress         Egress            `yaml:"egress" json:"egress"`
+	Budget         AgentBudget       `yaml:"budget" json:"budget"`
+}
+
+// NativeDelivery controls broker-authored turns in an otherwise normal native
+// terminal. The default is manual; command permission alone never wakes it.
+type NativeDelivery struct {
+	Mode            string `yaml:"mode" json:"mode"`
+	MaxTurns        int    `yaml:"max_turns,omitempty" json:"max_turns"`
+	MaxHops         int    `yaml:"max_hops,omitempty" json:"max_hops"`
+	CooldownSeconds int    `yaml:"cooldown_seconds,omitempty" json:"cooldown_seconds"`
+	Notes           bool   `yaml:"notes,omitempty" json:"notes"`
+	Pings           bool   `yaml:"pings,omitempty" json:"pings"`
+	Boards          bool   `yaml:"boards,omitempty" json:"boards"`
+	MemoryUpdates   bool   `yaml:"memory_updates,omitempty" json:"memory_updates"`
+	Results         bool   `yaml:"results,omitempty" json:"results"`
 }
 
 // NativeAuth selects one owner-provided credential file, never a home or a
@@ -144,6 +159,10 @@ func (c Config) Normalized() Config {
 	if c.Agents != nil {
 		agents := make(map[string]Agent, len(c.Agents))
 		for id, agent := range c.Agents {
+			if agent.NativeDelivery != nil {
+				copy := *agent.NativeDelivery
+				agent.NativeDelivery = &copy
+			}
 			agent.Command = append([]string(nil), agent.Command...)
 			agent.Env = cloneMap(agent.Env)
 			agent.ReadOnlyPaths = append([]string(nil), agent.ReadOnlyPaths...)
@@ -169,6 +188,10 @@ func (c Config) Normalized() Config {
 	}
 	templates := make(map[string]Agent, len(c.Spawn.Templates))
 	for id, a := range c.Spawn.Templates {
+		if a.NativeDelivery != nil {
+			copy := *a.NativeDelivery
+			a.NativeDelivery = &copy
+		}
 		a.Command = append([]string(nil), a.Command...)
 		a.Env = cloneMap(a.Env)
 		a.ReadOnlyPaths = append([]string(nil), a.ReadOnlyPaths...)
@@ -345,6 +368,15 @@ func (c Config) Validate() error {
 			return invalidID("agent", id)
 		}
 		agent := c.Agents[id]
+		if agent.NativeDelivery != nil {
+			p := agent.NativeDelivery
+			if agent.Interaction != "interactive" || agent.NativeOnly || (agent.Harness != "claude" && agent.Harness != "codex" && agent.Harness != "pi") {
+				return fmt.Errorf("agent %q: native_delivery requires an integrated Claude, Codex or Pi interactive session", id)
+			}
+			if p.Mode != "" && p.Mode != "manual" && p.Mode != "review" && p.Mode != "auto" || p.MaxTurns < 0 || p.MaxTurns > 10000 || p.MaxHops < 0 || p.MaxHops > 64 || p.CooldownSeconds < 0 || p.CooldownSeconds > 86400 {
+				return fmt.Errorf("agent %q: invalid native_delivery mode or limits", id)
+			}
+		}
 		if agent.NativeOnly && (agent.Interaction != "interactive" || agent.Role != "") {
 			return fmt.Errorf("agent %q: native_only requires interaction: interactive and an empty role", id)
 		}

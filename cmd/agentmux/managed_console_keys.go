@@ -158,6 +158,9 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.teamAction != nil {
 		return m.teamReviewKey(msg)
 	}
+	if m.nativeAction != nil {
+		return m.nativeDeliveryKey(msg)
+	}
 	if m.composer != "" {
 		if key != "up" && key != "down" {
 			m.textColumnValid = false
@@ -345,6 +348,14 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	switch key {
+	case "D":
+		if m.tab == 1 {
+			m.reviewNativeDelivery(false)
+		}
+	case "A":
+		if m.tab == 1 {
+			m.reviewNativeDelivery(true)
+		}
 	case "W":
 		m.workspaceRequest++
 		request := m.workspaceRequest

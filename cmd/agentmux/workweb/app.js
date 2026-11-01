@@ -46,6 +46,8 @@ let workspaceListings = [], workspaceLoading = false, workspaceLoadedAt = 0;
 let relaunchReview = null, capacityView = null, capacityRequest = 0;
 let resourceSnapshot = null, resourceReview = null;
 const resourceDrafts = new Map();
+const nativeDrafts = new Map();
+let nativeSignature = "";
 let memoryEditorNamespace = "",
   memoryMetadataSelection = "",
   memoryEditorEpoch = 0,
@@ -968,6 +970,7 @@ function render() {
   renderWorkerRuntime(a);
   $("agent-role").textContent = a.config.role || "No role configured";
   renderRoleEditor();
+  renderNativeDelivery();
   const relaunchable = a.state === "active" && !a.external && a.config.interaction === "interactive" && snapshot.runtime.relaunch_version === 1 && snapshot.runtime.state === "running" && !!snapshot.runtime.agents?.[a.id] && snapshot.runtime.agents[a.id].state !== "running";
   $("relaunch-agent").hidden = !relaunchable;
   $("relaunch-agent").disabled = !selectionReady() || !relaunchable;
@@ -1213,6 +1216,7 @@ function renderTasks() {
       el("code", "", t.id),
     );
     item.append(title, el("p", "", t.text));
+    if (t.native) item.append(el("p", "session-note", "Native delivery: " + t.native.phase + (t.native.reason ? " · " + t.native.reason : "") + (t.native.adapter === "claude" ? ". Completion is a receiver acknowledgment." : "") + " Transport receipt is separate from task verification."));
     appendThreadMetadata(item,t);
     if (t.result) item.append(el("pre", "", t.result));
     if (t.usage) {
@@ -1267,7 +1271,7 @@ function renderTasks() {
       cancel.onclick = () =>
         action(
           async () => { await call("task.cancel", { id: t.id, version: t.version }); taskHistory.updatedAt = 0; },
-          "Cancellation requested. Check the process-stop acknowledgement.",
+          t.native ? "Cancellation requested. A native turn already submitted may continue; inspect its receipt and interrupt in the native terminal if needed." : "Cancellation requested. Check the process-stop acknowledgement.",
         );
       buttons.append(cancel);
     }
@@ -1352,6 +1356,7 @@ function renderBoundaries() {
     peer,
     b,
     agents.map((a) => [a.id, a.title, a.state]),
+    snapshot.native_statuses?.[peer],
   ]);
   if (next === boundarySignature) return;
   boundarySignature = next;
@@ -1380,14 +1385,15 @@ function renderBoundaries() {
     recipient = peer;
   for (const [key, label, description] of [
     ["message.send", "Messages", "Notes in the peer inbox"],
-    ["ping.send", "Pings", "May wake a subscribed managed worker"],
-    ["instruct", "Commands", "Create instruction tasks"],
+    ["ping.send", "Pings", "Wake only when the receiver subscribes and enables delivery"],
+    ["instruct", "Commands", "Permission to request work; receiver controls delivery"],
   ]) {
     const row = el("div", "control-row"),
       name = el("div", "control-name");
     name.append(el("strong", "", label), el("small", "", description));
     const reason = targetBoundary?.sources?.[key] || targetBoundary?.denied_reasons?.[key];
     if (reason) name.append(el("small", "permission-source", reason));
+    if (key === "instruct") name.append(el("small", "native-edge-status", nativeDeliveryHint(recipient)));
     const enabled = actions.includes(key);
     const control = toggle(
       enabled,
@@ -1948,7 +1954,9 @@ $("composer").onsubmit = (event) => {
               ? ". This extra instruction interrupts the research phase protocol."
               : headlessInstruction
                 ? ". Queued only; this one-shot runner may not dispatch additional tasks."
-                : ". The managed worker runs this instruction when ready.");
+                : snapshot.agents.find((agent) => agent.id === recipient)?.config.interaction === "interactive"
+                  ? ". " + nativeDeliveryHint(recipient)
+                  : ". The managed worker runs this instruction when ready.");
       }
       const draft = messageDrafts.get(recipient);
       if (
@@ -2190,7 +2198,7 @@ function renderComposer() {
       : !instruction
         ? "Inbox message. Direct conversation and native approvals remain in the agent terminal."
         : a?.config.interaction === "interactive"
-          ? "Queues an explicit instruction task for this native session; it is not typed into the terminal. Native sessions must read and act on it explicitly."
+          ? nativeDeliveryHint(selected)
         : research
           ? "Extra owner instructions interrupt this research attempt's phase protocol. Use a shared board or memory for steering, or review phase controls in Research."
           : headless
@@ -3479,6 +3487,7 @@ $("resource-form").onsubmit=event=>{
 function hasUnsavedWork() {
   if (mutating || teamReview || researchReview || relaunchReview || resourceReview || legacyGroupReview) return true;
   if (resourceDrafts.size) return true;
+  if ([...nativeDrafts.values()].some(draft=>draft.dirty)) return true;
   if ([...roleDrafts.values()].some(draft=>draft.role!==draft.baseline)) return true;
   if ([...teamEditDrafts.values()].some(draft=>draft.name!==draft.baselineName || draft.description!==draft.baselineDescription || draft.transfer)) return true;
   if ($("message").value.trim() || replyTo) return true;
@@ -3580,4 +3589,133 @@ function renderMetadataOnly() {
     ["observed-sessions", "Native terminals have not been observed."],
   ])
     $(id).replaceChildren(el("p", "empty", text));
+}
+
+// Native delivery controls permission-independent admission into one existing
+// conversation. Every mutation retains the displayed agent and policy version.
+function nativeInfo(id = selected) {
+  if (snapshot?.native?.agent === id) return snapshot.native;
+  return snapshot?.native_statuses?.[id] || null;
+}
+function nativeDeliveryHint(id) {
+  const agent = snapshot?.agents?.find((item) => item.id === id);
+  if (agent?.config.interaction !== "interactive") return "Instruction tasks run when the managed worker is ready.";
+  const status = nativeInfo(id);
+  if (!status?.policy?.version) return "Native delivery unavailable. Commands remain queued until the session explicitly reads them.";
+  if (!status.session || !status.connected) return "Native delivery " + status.state + ": " + (status.reason || "adapter is not connected") + ".";
+  if (status.mode === "manual") return "Manual inbox: commands stay queued. Enable Review or Auto in Agent → Native collaboration to deliver them.";
+  if (status.mode === "review") return "Review delivery: approve each exact request in Agent → Native collaboration before it enters the native conversation.";
+  if (!["ready","active"].includes(status.state)) return "Auto delivery is blocked: " + status.reason + ".";
+  return "Auto delivery enabled. Native receipts distinguish submitted, running and completed; existing terminal approvals still apply.";
+}
+function nativeControlReady(id, version) {
+  const status = nativeInfo(id), agent = snapshot?.agents?.find((item) => item.id === id);
+  return selectionReady() && selected === id && agent?.state === "active" && !agent.external && !agent.config.native_only && status?.policy?.version === version;
+}
+function renderNativeDelivery() {
+  const panel = $("native-delivery");
+  if (!panel) return;
+  const agent = snapshot?.agents?.find((item) => item.id === selected);
+  panel.hidden = agent?.config.interaction !== "interactive";
+  if (panel.hidden) return;
+  const status = nativeInfo(selected), id = selected, policy = status?.policy;
+  const signature = JSON.stringify([id,status,snapshot.native_error,selectionReady(),nativeDrafts.get(id)]);
+  if (nativeSignature === signature) return;
+  nativeSignature = signature;
+  const view = captureViewState(panel);
+  panel.replaceChildren();
+  const heading = el("div","section-label");
+  heading.append(el("h2","","Native collaboration"),el("span","",status?.state || "UNAVAILABLE"));
+  panel.append(heading);
+  panel.append(el("p","session-note",status?.reason || snapshot.native_error || "This controller has no native delivery status. Reopen with a current controller before enabling automatic delivery."));
+  if (!policy?.version) { restoreViewState(panel,view); return; }
+  const enabled = nativeControlReady(id,policy.version), modes = el("div","native-modes");
+  modes.setAttribute("aria-label","Native delivery mode");
+  for (const [value,label] of [["manual","Manual inbox"],["review","Review each turn"],["auto","Auto"]]) {
+    const button = el("button", value === status.mode ? "native-mode selected" : "native-mode quiet",label);
+    button.type="button"; button.dataset.ownerWrite="true"; button.dataset.focusKey="native-mode:"+value;
+    button.setAttribute("aria-pressed",String(value === status.mode));
+    button.disabled=!enabled || value===status.mode;
+    const version=policy.version;
+    button.onclick=()=>{
+      if (!nativeControlReady(id,version)) { notice("Native policy changed. Refresh before changing delivery mode.",true); return; }
+      action(async()=>{await call("native.configure",{agent:id,version,mode:value}); if (!nativeDrafts.get(id)?.dirty) nativeDrafts.delete(id);},value==="manual" ? "Future native delivery paused. Turns already submitted may continue; interrupt in the native terminal if needed." : "Native delivery changed to "+value+". Peer permissions and native tool approvals still apply.");
+    };
+    modes.append(button);
+  }
+  panel.append(modes,el("p","session-note",status.mode === "manual" ? "No automatic turns. Read the inbox manually, or choose Review / Auto." : status.mode === "review" ? "Review the full request and approve its exact candidate below. Approval does not bypass native tool permissions." : "Authorized requests can start model turns in this conversation. Native tool approvals and provider usage apply."));
+  const caps=status.capabilities || {}, capability=el("p","native-capabilities");
+  capability.append(el("span","",status.adapter ? "Adapter: "+status.adapter : "Adapter: relaunch required"),el("span","",caps.instructions ? "Instructions supported" : "Instructions unavailable"),el("span","",caps.native_queue ? "Native queue" : status.adapter ? "Idle admission only" : "No verified delivery adapter"),el("span","",caps.preserves_draft ? "Draft preservation verified" : "Draft preservation unverified"),el("span","",caps.cancellation ? "Cancellation supported" : "Queued native turns cannot be retracted"));
+  capability.append(el("span","",caps.completion_evidence === "receiver-ack" ? "Completion: receiver acknowledgment" : caps.completion_evidence === "native-events" ? "Completion: correlated native events" : "Completion evidence unavailable"));
+  panel.append(capability);
+  let draft=nativeDrafts.get(id);
+  if (!draft || !draft.dirty && draft.version !== policy.version) { draft={version:policy.version,max_turns:policy.max_turns,max_hops:policy.max_hops,cooldown_seconds:policy.cooldown_seconds,notes:!!policy.notes,pings:!!policy.pings,boards:!!policy.boards,memory_updates:!!policy.memory_updates,results:!!policy.results,dirty:false};nativeDrafts.set(id,draft); }
+  const conflict=draft.version!==policy.version;
+  const settings=el("details","native-settings");settings.dataset.disclosureKey="native-settings:"+id;
+  settings.append(el("summary","","Delivery limits & subscriptions · "+status.turns+" / "+policy.max_turns+" turns used"));
+  const form=el("form","native-policy-form");
+  const fields=el("div","native-limits");
+  for (const [key,label,min,max] of [["max_turns","Turn limit",1,10000],["max_hops","Maximum hops",1,64],["cooldown_seconds","Cooldown seconds",0,86400]]) {
+    const row=el("label","",label),input=el("input","");input.type="number";input.min=String(min);input.max=String(max);input.step="1";input.required=true;input.value=String(draft[key]??min);input.dataset.focusKey="native:"+key;input.disabled=!enabled;input.dataset.ownerWrite="true";
+    input.oninput=()=>{draft[key]=input.value;draft.dirty=true;};row.append(input);fields.append(row);
+  }
+  form.append(fields);
+  const subscriptions=el("div","native-subscriptions");
+  for (const [key,label] of [["notes","Direct notes"],["pings","Pings"],["boards","Board updates"],["memory_updates","Shared memory updates"],["results","Results of this agent's requests"]]) {
+    const row=el("label",""),input=el("input","");input.type="checkbox";input.checked=draft[key];input.disabled=!enabled;input.dataset.ownerWrite="true";input.dataset.focusKey="native:"+key;input.onchange=()=>{draft[key]=input.checked;draft.dirty=true;};row.append(input,document.createTextNode(label));subscriptions.append(row);
+  }
+  form.append(subscriptions,el("p","session-note","Subscriptions deliver observations as data, not new instruction grants. Shared memory access is still controlled separately."));
+  if (conflict) {
+    form.append(el("p","action-error","Policy changed since this draft. Review current settings before applying your saved changes."));
+    const current=el("div","native-policy-current");
+    current.append(el("strong","","Current saved settings · policy v"+policy.version),el("pre","",nativeSavedPolicyText(policy)),el("p","session-note","Your unsaved values remain in the form above. Review these saved settings before adopting their version; adoption does not save your draft."));
+    form.append(current);
+    const rebase=el("button","quiet","Use reviewed current version");rebase.type="button";rebase.disabled=!enabled;rebase.dataset.ownerWrite="true";rebase.onclick=()=>{if (!nativeControlReady(id,policy.version)) return;draft.version=policy.version;nativeSignature="";renderNativeDelivery();};form.append(rebase);
+  }
+  const save=el("button","","Save limits & subscriptions");save.type="submit";save.disabled=!enabled||conflict;save.dataset.ownerWrite="true";save.dataset.focusKey="native-save";form.append(save);
+  const discard=el("button","quiet","Discard native draft");discard.type="button";discard.disabled=!draft.dirty&&!conflict;discard.dataset.focusKey="native-discard";
+  discard.onclick=()=>{if(selected!==id || nativeDrafts.get(id)!==draft) return;nativeDrafts.delete(id);nativeSignature="";renderNativeDelivery();};form.append(discard);
+  form.onsubmit=(event)=>{
+    event.preventDefault();
+    if (!nativeControlReady(id,draft.version)) { notice("Native policy changed. Review current settings before saving this draft.",true);return; }
+    const args={agent:id,version:draft.version};
+    for(const key of ["max_turns","max_hops","cooldown_seconds"]) {const value=Number(draft[key]);if(!Number.isInteger(value)||value<0){notice("Native limits must be whole numbers within the displayed ranges.",true);return;}args[key]=value;}
+    for(const key of ["notes","pings","boards","memory_updates","results"]) args[key]=!!draft[key];
+    action(async()=>{
+      const result=await call("native.configure",args);
+      if(nativeDrafts.get(id)===draft) {
+        const unchanged=Object.keys(args).filter(key=>key!=="agent"&&key!=="version").every(key=>typeof args[key]==="number" ? Number(draft[key])===args[key] : draft[key]===args[key]);
+        if(unchanged) nativeDrafts.delete(id);
+        else if(Number.isInteger(result?.policy?.version) && result.policy.version>draft.version) draft.version=result.policy.version;
+      }
+    },"Saved native delivery limits and subscriptions. Access permissions remain independently enforced.");
+  };
+  settings.append(form);panel.append(settings);
+  if (status.active) panel.append(el("p",status.active.phase==="uncertain" ? "action-error" : "session-note","Current delivery "+status.active.id+": "+status.active.phase+". "+(status.active.reason||"Awaiting a correlated native receipt.")));
+  const pending=status.pending||[], queue=el("div","native-queue");
+  queue.append(el("h3","","Pending native turns · "+(status.pending_count ?? pending.length)+(status.pending_more ? "+" : "")));
+  if (!pending.length) queue.append(el("p","session-note","No eligible requests waiting."));
+  for(const delivery of pending.slice(0,5)) {
+    const item=el("details","native-candidate");item.dataset.disclosureKey="native:"+delivery.id;item.dataset.itemKey=delivery.id;
+    item.append(el("summary","",delivery.kind+" from "+sessionReference(delivery.from)),el("code","",delivery.id),el("pre","",delivery.text));
+    if(status.mode==="review") {
+      const approve=el("button","","Approve this exact turn"), version=policy.version, fingerprint=JSON.stringify(delivery);
+      approve.type="button";approve.dataset.ownerWrite="true";approve.dataset.focusKey="native-approve:"+delivery.id;
+      approve.disabled=!enabled||!status.connected||!status.session;
+      approve.onclick=()=>{
+        const current=nativeInfo(id), candidate=current?.pending?.find((entry)=>entry.id===delivery.id);
+        if(!nativeControlReady(id,version)||current.mode!=="review"||!candidate||JSON.stringify(candidate)!==fingerprint){notice("Request or policy changed. Review the current request before approving.",true);return;}
+        action(()=>call("native.approve",{agent:id,version,candidate:delivery.id}),"Approved this exact native turn. Submission and completion are reported separately.");
+      };
+      item.append(approve);
+    }
+    queue.append(item);
+  }
+  if(pending.length>5 || status.pending_more) queue.append(el("p","session-note",(pending.length>5 ? (pending.length-5)+" additional requests waiting. " : "More requests waiting. ")+"The next requests appear as this queue advances; Tasks shows all instruction tasks."));
+  panel.append(queue,el("p","session-note","Manual stops future admission. Submitted native turns may continue. Interrupt the native terminal for immediate human intervention; use Tasks to resolve uncertain attempts."));
+  restoreViewState(panel,view);
+}
+
+function nativeSavedPolicyText(policy) {
+  return [["Delivery",policy.mode],["Turn limit",policy.max_turns],["Maximum hops",policy.max_hops],["Cooldown seconds",policy.cooldown_seconds],...[ ["notes","Direct notes"],["pings","Pings"],["boards","Board updates"],["memory_updates","Shared memory updates"],["results","Returned results"] ].map(([key,label])=>[label,policy[key]?"on":"off"])].map(([label,value])=>label+": "+value).join("\n");
 }

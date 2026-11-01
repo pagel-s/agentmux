@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import signal
 import subprocess
+import sys
 import tempfile
 import time
 import urllib.error
@@ -82,8 +83,19 @@ done
         started = True
         panes = {name: runtime["agents"][name]["pane_id"] for name in ("lead", "worker")}
         capture = lambda name: tmux("capture-pane", "-p", "-t", panes[name], "-S", "-100")
-        for name in panes:
-            until(lambda name=name: "NATIVE_TTY_READY" in capture(name))
+        try:
+            for name in panes:
+                until(lambda name=name: "NATIVE_TTY_READY" in capture(name))
+        except Exception:
+            # These panes run only the synthetic fixture above. Preserve its
+            # actual startup error before ordered cleanup removes the panes.
+            for name, pane in panes.items():
+                print(f"Native fixture startup diagnostics: {name} ({pane})", file=sys.stderr)
+                try:
+                    print(capture(name), file=sys.stderr)
+                except Exception as error:
+                    print(f"Could not capture fixture: {error}", file=sys.stderr)
+            raise
         run("send", "worker", "INBOX_ONLY_SENTINEL", "--state", state)
         assert "INBOX_ONLY_SENTINEL" not in capture("worker"), "message was injected into the native terminal"
         assert call("task.list", {})["result"]["tasks"] == [], "interactive message created a managed task"

@@ -45,6 +45,7 @@ func (l *Launcher) Supervise(ctx context.Context, attempt string) error {
 		shutdownCtx, cancel := context.WithTimeout(background, stopTimeout+5*time.Second)
 		defer cancel()
 		runtime.State = "stopping"
+		runtime.BrokerRecovering = false
 		_ = writeRuntime(l.options.StateDir, runtime)
 		if err := l.stopOwned(shutdownCtx, runtime); err != nil {
 			runtime.State, runtime.Problem = "attention", "worker shutdown is unconfirmed; broker remains available"
@@ -57,6 +58,18 @@ func (l *Launcher) Supervise(ctx context.Context, attempt string) error {
 		}
 		_ = writeRuntime(l.options.StateDir, runtime)
 		return cause
+	}
+	// This definition is immutable for the attempt. Only an explicitly native
+	// workspace may preserve human terminals while coordination reconnects.
+	store, err := managed.Open(l.options.StateDir)
+	if err != nil {
+		return finish(err)
+	}
+	nativeWorkspace := store.Config().InteractiveWorkspace
+	deadline, deadlineErr := store.RuntimeDeadline()
+	_ = store.Close()
+	if deadlineErr != nil {
+		return finish(deadlineErr)
 	}
 	brokerArgv := []string{l.options.Executable, "managed", "serve", "--state", l.options.StateDir}
 	if runtime.BrokerSandbox == "bubblewrap" {
@@ -93,8 +106,9 @@ func (l *Launcher) Supervise(ctx context.Context, attempt string) error {
 		return finish(err)
 	}
 	windowTitles := map[string]string{}
+	recovery := brokerRecovery{}
 	for {
-		if ctx.Err() != nil || shouldStop(l.options.StateDir, attempt) {
+		if ctx.Err() != nil || shouldStop(l.options.StateDir, attempt) || !deadline.IsZero() && !time.Now().Before(deadline) {
 			return finish(nil)
 		}
 		if !l.ownsSession(ctx, runtime) {
@@ -107,16 +121,51 @@ func (l *Launcher) Supervise(ctx context.Context, attempt string) error {
 		observeAgentPaneStates(&runtime, panes)
 		brokerAlive := false
 		for _, pane := range panes {
-			if pane.ID == runtime.BrokerPane && pane.Attempt == attempt && !pane.Dead {
+			if pane.ID == runtime.BrokerPane && pane.Attempt == attempt && pane.Role == "broker" && !pane.Dead {
 				brokerAlive = true
 			}
 		}
 		if !brokerAlive {
-			return finish(errors.New("managed broker exited; automatic restart is disabled"))
+			if !nativeWorkspace {
+				return finish(errors.New("managed broker exited; automatic restart is disabled"))
+			}
+			runtime.State, runtime.Problem = "attention", "Broker reconnecting; native terminals remain interactive. In-flight deliveries require explicit resolution."
+			runtime.BrokerRecovering = true
+			if !time.Now().Before(recovery.next) {
+				if err := l.restartBrokerPane(ctx, &runtime, panes, brokerArgv); err != nil {
+					runtime.Problem = "Broker restart deferred; native terminals remain interactive. " + err.Error()
+				}
+				recovery.deferAttempt(time.Now())
+			}
+			if err := writeRuntime(l.options.StateDir, runtime); err != nil {
+				return finish(err)
+			}
+			if err := pause(ctx); err != nil {
+				return finish(nil)
+			}
+			continue
+		}
+		if nativeWorkspace && time.Now().Before(recovery.next) {
+			if err := pause(ctx); err != nil {
+				return finish(nil)
+			}
+			continue
 		}
 		agents, err := registry(ctx, client)
 		if err != nil {
-			return finish(err)
+			if !nativeWorkspace {
+				return finish(err)
+			}
+			runtime.State, runtime.Problem = "attention", "Broker registry reconnecting; native terminals remain interactive. Coordination writes are deferred."
+			runtime.BrokerRecovering = true
+			recovery.deferAttempt(time.Now())
+			if err := writeRuntime(l.options.StateDir, runtime); err != nil {
+				return finish(err)
+			}
+			if err := pause(ctx); err != nil {
+				return finish(nil)
+			}
+			continue
 		}
 		if err := l.processRelaunches(ctx, &runtime, client); err != nil {
 			return finish(err)
@@ -164,6 +213,9 @@ func (l *Launcher) Supervise(ctx context.Context, attempt string) error {
 			_ = l.syncClientViews(ctx, runtime)
 		}
 		runtime.State = "running"
+		runtime.BrokerRecovering = false
+		runtime.Problem = ""
+		recovery = brokerRecovery{}
 		if err := writeRuntime(l.options.StateDir, runtime); err != nil {
 			return finish(err)
 		}
@@ -171,6 +223,50 @@ func (l *Launcher) Supervise(ctx context.Context, attempt string) error {
 			return finish(nil)
 		}
 	}
+}
+
+type brokerRecovery struct {
+	next  time.Time
+	delay time.Duration
+}
+
+func (r *brokerRecovery) deferAttempt(now time.Time) {
+	if r.delay == 0 {
+		r.delay = time.Second
+	} else {
+		r.delay = min(10*time.Second, r.delay*2)
+	}
+	r.next = now.Add(r.delay)
+}
+
+// Recovery can restart only the exact dead broker owned by this attempt. It
+// never kills a live process, respawns a worker, or reaches another tmux server.
+func (l *Launcher) restartBrokerPane(ctx context.Context, runtime *Runtime, panes []paneInfo, argv []string) error {
+	if ctx.Err() != nil || shouldStop(l.options.StateDir, runtime.AttemptID) {
+		return errors.New("workspace shutdown requested")
+	}
+	if !l.ownsSession(ctx, *runtime) {
+		return errors.New("runtime session ownership changed")
+	}
+	for _, pane := range panes {
+		if pane.ID != runtime.BrokerPane {
+			continue
+		}
+		if pane.Attempt != runtime.AttemptID || pane.Role != "broker" || pane.Agent != "" {
+			return errors.New("broker pane ownership changed; refusing automatic replacement")
+		}
+		if !pane.Dead {
+			return errors.New("broker process is still alive; refusing to replace it")
+		}
+		// No -k: a process that became live after the inventory must survive.
+		_, err := l.tmux(ctx, "respawn-pane", "-t", pane.ID, "exec "+ShellCommand(argv))
+		return err
+	}
+	pane, err := l.createPane(ctx, *runtime, "broker", "broker", "", argv)
+	if err == nil {
+		runtime.BrokerPane = pane
+	}
+	return err
 }
 
 // Only call after a successful complete pane inventory. Missing or retagged
@@ -266,7 +362,7 @@ func registry(ctx context.Context, client *managed.Client) ([]registryAgent, err
 		raw, problem := client.Call(queryCtx, managed.Request{Operation: "agent.list", Args: args})
 		cancel()
 		if problem != nil {
-			return nil, errors.New("managed registry is unavailable; workers will be stopped")
+			return nil, errors.New("managed registry is unavailable")
 		}
 		var response struct {
 			Agents []registryAgent `json:"agents"`

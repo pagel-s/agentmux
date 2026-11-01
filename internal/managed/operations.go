@@ -25,6 +25,7 @@ type Fault struct {
 }
 
 func (f *Fault) Error() string          { return f.Code + ": " + f.Message }
+func (f *Fault) ErrorCode() string      { return f.Code }
 func fault(code, message string) *Fault { return &Fault{Code: code, Message: message} }
 func forbidden() *Fault                 { return fault("forbidden", "operation not permitted") }
 func invalid(err error) *Fault          { return fault("invalid", err.Error()) }
@@ -37,6 +38,8 @@ func internal(err error) *Fault {
 
 func isWrite(op string) bool {
 	switch op {
+	case "native.configure", "native.approve", "native.register", "native.claim", "native.event":
+		return true
 	case "agent.role":
 		return true
 	case "capacity.update", "research.publish", "research.control", "control.update", "worker.next", "autonomy.control", "autonomy.ack", "memory.delete", "memory.prune", "memory.index":
@@ -121,6 +124,24 @@ func (s *Store) Call(ctx context.Context, token string, r Request) (json.RawMess
 			if priorDigest != digest {
 				return nil, fault("conflict", "request_id was already used for different arguments")
 			}
+			if r.Operation == "native.claim" {
+				// A receipt can confirm reservation after a lost response, but
+				// must never resubmit native input or resurrect a revoked source.
+				var claimed struct {
+					Delivery *struct {
+						ID string `json:"id"`
+					} `json:"delivery"`
+				}
+				if err := json.Unmarshal([]byte(prior), &claimed); err != nil {
+					return nil, internal(err)
+				}
+				id := ""
+				if claimed.Delivery != nil {
+					id = claimed.Delivery.ID
+				}
+				data, _ := json.Marshal(map[string]any{"delivery": nil, "reserved_id": id, "reason": "reservation already exists; native input is never replayed from a receipt"})
+				return data, nil
+			}
 			memoryReplay, problem := s.memoryReplay(ctx, tx, a, r, json.RawMessage(prior))
 			if problem != nil {
 				return nil, problem
@@ -157,7 +178,15 @@ func (s *Store) Call(ctx context.Context, token string, r Request) (json.RawMess
 				if in.Action != "pause" && in.Action != "stop" {
 					return nil, fault("limit", "session runtime budget exhausted")
 				}
-			case "research.publish", "task.complete", "task.stopped", "task.cancel", "task.verify", "agent.stop", "agent.label", "team.leave", "team.remove", "team.dissolve", "conversation.reset", "memory.delete", "memory.prune":
+			case "research.publish", "task.complete", "task.stopped", "task.cancel", "task.verify", "agent.stop", "agent.label", "team.leave", "team.remove", "team.dissolve", "conversation.reset", "memory.delete", "memory.prune", "native.event":
+			case "native.configure":
+				var in struct {
+					Mode string `json:"mode"`
+				}
+				_ = json.Unmarshal(r.Args, &in)
+				if in.Mode != "manual" {
+					return nil, fault("limit", "session runtime budget exhausted")
+				}
 			case "task.resolve":
 				var in struct {
 					Resolution string `json:"resolution"`
@@ -217,6 +246,8 @@ func (s *Store) dispatch(ctx context.Context, q queryer, a actor, r Request) (an
 		return s.control(ctx, q, a, r)
 	}
 	switch r.Operation {
+	case "native.configure", "native.approve", "native.register", "native.peek", "native.claim", "native.event", "native.status":
+		return s.native(ctx, q, a, r)
 	case "research.status", "research.publish", "research.control", "research.heartbeat":
 		return s.researchControl(ctx, q, a, r)
 	case "capacity.update":

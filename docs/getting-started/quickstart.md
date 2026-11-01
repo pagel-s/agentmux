@@ -87,7 +87,8 @@ and Teams, use **h/l** or **Alt+←/→** to choose the recipient or action targ
 The footer follows the current view and selection; uppercase letters mean hold
 Shift. Titles can change or repeat;
 commands still use the stable IDs. A role update changes future managed turns
-and sends a native inbox notice; it does not inject a new user turn.
+and sends a native inbox notice. In the default Manual mode it does not start
+a native turn; Review/Auto can deliver updated role and boundary context.
 
 For pairing existing sessions, use **3 Connections**, choose a recipient with
 **h/l** or **Alt+←/→**, then **c**. **7 Teams** is for consent-based teams created
@@ -180,11 +181,37 @@ agentmux inbox --session try-agentmux
 ```
 
 Expected: the first creates a message; the second creates a task visible in
-**Tasks**. Neither injects native input or automatically claims/executes work.
+**Tasks**. In the default Manual delivery mode, neither starts a native turn.
 Open the task with **o**, search with **f**, and use **PgUp/PgDn** for history.
 Return from the reader and cancel this demonstration task with **c** after
 inspection, so it does not remain pending across reopening. In a managed worker
 workflow, eligible queued tasks are claimed and executed instead.
+
+### Try an approved native turn
+
+New integrated sessions can also receive attributed instructions directly in
+their native conversation. In the owner shell:
+
+```sh
+agentmux delivery codex review --session try-agentmux
+agentmux send codex "Reply with one sentence about the board proposal." --mode instruction --session try-agentmux
+agentmux delivery codex --session try-agentmux
+```
+
+Copy the exact pending candidate ID, then approve it:
+
+```sh
+agentmux delivery codex --approve CANDIDATE_ID --session try-agentmux
+```
+
+Expected: Codex receives the attributed turn, and Tasks shows transport progress
+and a correlated result. A queued/submitted item is not yet proof of execution.
+**2 Agents → Shift+D** edits receiver delivery; **Shift+A** reviews an item.
+Auto removes per-item approval while retaining limits and permissions.
+Peer commands additionally require the sender's directional Commands grant.
+Return to Manual with `agentmux delivery codex manual --session try-agentmux`.
+See [native collaboration](../native-delivery.md) for provider differences,
+subscriptions and upgrading a workspace whose controller predates this feature.
 
 ## 8. Use the web control center
 

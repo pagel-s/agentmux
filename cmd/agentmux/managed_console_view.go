@@ -98,6 +98,9 @@ func (m console) panel(width, height int) string {
 	if m.teamAction != nil {
 		return m.teamReviewPanel(width, height)
 	}
+	if m.nativeAction != nil {
+		return m.nativeDeliveryPanel(width, height)
+	}
 	if m.composer == "find" {
 		return m.sessionSearchPanel(width, height)
 	}
@@ -220,7 +223,7 @@ func (m console) panel(width, height int) string {
 				}
 				fmt.Fprintf(&out, "  [%s]  %-13s %s %s\n", row.key, row.label, value, consoleMuted.Render(consoleClip(consoleContent(reason, 250), max(1, width-35), 1)))
 			}
-			out.WriteString("\n" + consoleMuted.Render("c connect scoped group · d isolate sender · M/P/I reset overrides\nGroups add grants; explicit owner overrides take precedence.\nExisting tasks stay accepted; cancel them in Tasks.\no reads full effective boundaries and stored controls"))
+			out.WriteString("\n" + consoleMuted.Render("c connect scoped group · d isolate sender · M/P/I reset overrides\nCommands authorize tasks; 2 Agents → Shift+D sets native delivery.\nGroups add grants; explicit owner overrides take precedence.\nExisting tasks stay accepted; cancel them in Tasks.\no reads full effective boundaries and stored controls"))
 			out.WriteString("\n\n" + consoleAccent.Render("Workspace groups") + "\n")
 			found := false
 			for _, g := range m.data.controls.Groups {
@@ -471,7 +474,7 @@ func (m console) View() string {
 		bodyHeight = 1
 	}
 	var compact string
-	if width < 85 && len(m.agents) > 0 && m.reader == nil {
+	if width < 85 && len(m.agents) > 0 && m.reader == nil && m.nativeAction == nil {
 		first := max(0, m.selected-1)
 		for i := first; i < len(m.agents) && i < first+3; i++ {
 			label := " " + consoleContent(sessionTitle(m.agents[i])+" ["+m.agents[i].ID+"]", 28) + " "
@@ -487,6 +490,8 @@ func (m console) View() string {
 	var body string
 	if m.reader != nil {
 		body = m.readerPanel(width, bodyHeight)
+	} else if m.nativeAction != nil {
+		body = m.nativeDeliveryPanel(width, bodyHeight)
 	} else if width >= 85 {
 		sideWidth := 30
 		if width < 105 {

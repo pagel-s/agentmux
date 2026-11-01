@@ -531,6 +531,10 @@ func (s *Store) spawn(ctx context.Context, q queryer, a actor, raw json.RawMessa
 }
 
 func copyAgent(a managedconfig.Agent) managedconfig.Agent {
+	if a.NativeDelivery != nil {
+		copy := *a.NativeDelivery
+		a.NativeDelivery = &copy
+	}
 	env := make(map[string]string, len(a.Env))
 	for k, v := range a.Env {
 		env[k] = v

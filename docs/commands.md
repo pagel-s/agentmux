@@ -23,6 +23,7 @@ default workspace `work` and opens its workbench.
 | `agentmux sessions` | List registered sessions and separately observed external terminals |
 | `agentmux workspaces [--register DIR]` | Find named and remembered custom workspaces; register an older custom location |
 | `agentmux relaunch AGENT_ID [--resume ID\|last\|picker] [--native-launcher ABSOLUTE_PATH]` | Relaunch one exited native session, retaining its stable ID and healthy peers; optional launcher recovery applies only to trusted-local interactive sessions |
+| `agentmux delivery AGENT_ID [manual\|review\|auto] [--approve CANDIDATE_ID]` | Inspect native delivery evidence, set receiver mode, or approve an exact queued item; `--help` lists limits and subscriptions |
 | `agentmux connect OBSERVED_ID --title "Task"` | Prepare a helper for an existing external session; paste the printed setup into its original terminal |
 | `agentmux label AGENT_ID "Task"` | Rename its display title while keeping its ID and conversation |
 | `agentmux role AGENT_ID "Role"` | Change the owner role with CAS; managed workers use it at their next claim, native agents receive an inbox notice |
@@ -58,8 +59,10 @@ agentmux web --session review --open
 agentmux down --session review
 ```
 
-`send` queues coordination; it does not type into a native terminal or start a
-native model turn. Use `attach` to talk directly. With several groups, copy the
+`send` queues coordination. Integrated native sessions can receive attributed
+turns when their receiver policy is Review/Auto and current permissions allow;
+Manual remains the default. It never types terminal keystrokes. See
+[native delivery](native-delivery.md). Use `attach` to talk directly. With several groups, copy the
 group ID printed by `collaborate` or shown under **Teams → Owner collaboration
 groups** in the web app. `board` can choose the only active group automatically;
 with multiple groups select `--group ID` or `--board NAMESPACE` explicitly.

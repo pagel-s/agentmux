@@ -73,6 +73,8 @@ func run(args []string) int {
 		return runWorkspaceInventory(args[1:], os.Stdout, os.Stderr)
 	case "relaunch":
 		return runWorkRelaunch(args[1:], os.Stdout, os.Stderr)
+	case "delivery":
+		return runWorkDelivery(args[1:], os.Stdout, os.Stderr)
 	case "connect":
 		return runWorkConnect(args[1:], os.Stdout, os.Stderr)
 	case "add":
@@ -2145,6 +2147,7 @@ Usage:
   agentmux sessions [--session work | --state DIR]
   agentmux workspaces [--json] [--register DIR]
   agentmux relaunch ID [--resume ID|last|picker] [--session work | --state DIR]
+  agentmux delivery ID [manual|review|auto] [--approve CANDIDATE] [--session work | --state DIR]
   agentmux connect OBSERVED_ID --name NAME [--session work | --state DIR]
   agentmux collaborate AGENT AGENT [...] [--legacy-policy preserve|group] [--session work | --state DIR]
   agentmux isolate AGENT [...] [--session work | --state DIR]

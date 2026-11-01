@@ -52,6 +52,7 @@ type Boundaries struct {
 	Version       int              `json:"version"`
 	Agent         string           `json:"agent"`
 	Targets       []BoundaryTarget `json:"targets"`
+	Incoming      []BoundarySource `json:"incoming,omitempty"`
 	Boards        []BoundaryScope  `json:"boards"`
 	Memory        []BoundaryScope  `json:"memory"`
 	PrivateMemory string           `json:"private_memory"`
@@ -61,6 +62,11 @@ type BoundaryTarget struct {
 	Actions       []string          `json:"actions"`
 	Sources       map[string]string `json:"sources,omitempty"`
 	DeniedReasons map[string]string `json:"denied_reasons,omitempty"`
+}
+
+type BoundarySource struct {
+	From    string   `json:"from"`
+	Actions []string `json:"actions"`
 }
 
 func readControls(ctx context.Context, q queryer) (ControlState, error) {
@@ -186,6 +192,15 @@ func (s *Store) control(ctx context.Context, q queryer, a actor, r Request) (any
 			return nil, internal(err)
 		}
 		for _, id := range ids {
+			incoming := BoundarySource{From: id, Actions: []string{}}
+			for _, action := range []string{"message.send", "ping.send", "instruct"} {
+				if s.can(ctx, q, id, action, in.Agent) {
+					incoming.Actions = append(incoming.Actions, action)
+				}
+			}
+			if len(incoming.Actions) > 0 {
+				b.Incoming = append(b.Incoming, incoming)
+			}
 			t := BoundaryTarget{To: id, Actions: []string{}, Sources: map[string]string{}, DeniedReasons: map[string]string{}}
 			for _, action := range []string{"message.send", "ping.send", "instruct"} {
 				if s.can(ctx, q, in.Agent, action, id) {

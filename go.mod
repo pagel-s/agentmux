@@ -5,6 +5,7 @@ go 1.24.0
 require (
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
+	github.com/coder/websocket v1.8.14
 	github.com/rivo/uniseg v0.4.7
 	golang.org/x/sys v0.36.0
 	gopkg.in/yaml.v3 v3.0.1

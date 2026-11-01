@@ -241,6 +241,13 @@ func (s *Store) memoryOperation(ctx context.Context, q queryer, a actor, r Reque
 			expiresNanos = expiry.UnixNano()
 		}
 		m = Memory{Namespace: in.Namespace, Key: in.Key, Value: in.Value, Version: m.Version + 1, Author: a.ID, CreatedAt: created, UpdatedAt: now(), ExpiresAt: expires, ExpiresUnixNano: expiresNanos, Tags: append([]string(nil), in.Tags...), Sources: append([]MemorySource(nil), in.Sources...), SHA256: hash(in.Value), PreviousSHA256: m.SHA256}
+		m.Provenance, err = s.messageProvenance(ctx, q, a, id)
+		if err != nil {
+			return nil, internal(err)
+		}
+		if m.Provenance.ParentTaskID == "" {
+			m.Provenance = nil
+		}
 		if problem := s.memoryAllocation(ctx, q, id, m); problem != nil {
 			return nil, problem
 		}

@@ -47,6 +47,9 @@ func runManaged(args []string) int {
 }
 
 func runManagedIO(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	if len(args) > 0 && (args[0] == "native-run" || args[0] == "native-hook") {
+		return runNativeBridge(args, stdin, stderr)
+	}
 	if len(args) > 0 && args[0] == "dashboard" {
 		return runWorkSession("dashboard", args[1:], stdin, stdout, stderr)
 	}

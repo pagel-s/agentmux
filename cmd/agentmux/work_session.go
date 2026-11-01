@@ -217,6 +217,7 @@ func runWorkSessionInner(operation string, args []string, in io.Reader, out, dia
   agentmux role ID "Current owner role"
   agentmux workspaces [--json] [--register DIR]
   agentmux relaunch ID [--resume ID|last|picker] [--native-launcher ABSOLUTE_PATH]
+  agentmux delivery ID [manual|review|auto] [--approve CANDIDATE]
   agentmux remove NAME
   agentmux sessions
   agentmux connect OBSERVED_ID --name NAME
@@ -234,7 +235,8 @@ for a dedicated board/memory group, or --sandbox bubblewrap for isolated profile
 send/reply default to notes for native agents and instruction tasks for managed
 workers; --mode selects intent explicitly. Replies retain broker-checked ancestry
 and cannot widen a private audience. Board replies need an explicit destination.
-No broker message injects native input or automatically starts a native model turn.
+Native receiver delivery defaults to Manual. Use delivery ID review|auto to allow
+attributed native turns; sender command permissions remain separate.
 Use attach to type directly. Native Antigravity requires --native-only; use its Pi
 bridge for injected coordination context. ? opens workbench help, Ctrl-G editor
 help, Ctrl-T message intent, V role editing, B admission budgets, W workspaces,
@@ -491,6 +493,22 @@ Legacy raw pane input remains: agentmux send SESSION PANE -- COMMAND.`)
 		fmt.Fprintf(out, "%s queued for %s: %s\n", kind, audience, id)
 		if kind == "Message" {
 			fmt.Fprintln(out, "Interactive agent: read its broker inbox, or talk directly with:", managedlaunch.ShellCommand([]string{"agentmux", "attach", target, "--state", o.state}))
+		}
+		if target != "" {
+			if raw, err := workCall(ctx, client, "native.status", map[string]any{"agent": target}); err == nil {
+				var v struct {
+					Status managed.NativeStatus `json:"status"`
+				}
+				if json.Unmarshal(raw, &v) == nil {
+					fmt.Fprintf(out, "Native receiver: %s · %s. %s\n", v.Status.Mode, v.Status.State, consoleContent(v.Status.Reason, 600))
+					if kind == "Message" && !v.Status.Policy.Notes {
+						fmt.Fprintln(out, "Automatic note delivery is off; this note stays in the broker inbox.")
+					}
+					if kind == "Instruction" && v.Status.Mode == "review" {
+						fmt.Fprintln(out, "Approve the exact item in Agents (Shift+A) or with agentmux delivery", target, "--approve", id)
+					}
+				}
+			}
 		}
 		return exitSuccess
 	}
