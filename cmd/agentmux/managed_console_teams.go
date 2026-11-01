@@ -359,7 +359,7 @@ func (m console) researchPanel(width int) string {
 	if m.offline {
 		heartbeat = "broker offline · saved research state · writes disabled"
 	}
-	return consoleClip(fmt.Sprintf("%s · %s · attempt %d\nRound %d / %s · runner %s · admissions %s\nControl v%d / acknowledged v%d (%s)\nModel tasks %d/%d · owner mutations %d\n%s\nP pause · R resume · S one phase · T stop (reviewed reason)\n\n", consoleAccent.Render("Research"), consoleContent(p.Condition, 100), p.Attempt, p.Round, consoleContent(p.Phase, 50), p.State, c.Mode, c.Version, p.AckVersion, ack, p.ModelTasksReserved, p.ModelTasksLimit, s.OwnerMutations, heartbeat), width, 8)
+	return consoleClip(fmt.Sprintf("%s · %s · attempt %d\nRound %d / %s · runner %s\nadmissions %s · %s\nControl v%d / acknowledged v%d\nModel tasks %d/%d · owner mutations %d\n%s\nP pause · R resume · S step · T stop\n\n", consoleAccent.Render("Research"), consoleContent(p.Condition, 100), p.Attempt, p.Round, consoleContent(p.Phase, 50), p.State, c.Mode, ack, c.Version, p.AckVersion, p.ModelTasksReserved, p.ModelTasksLimit, s.OwnerMutations, heartbeat), width, 8)
 }
 
 func (m console) agentRuntimePanel(width int) string {

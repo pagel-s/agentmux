@@ -57,12 +57,26 @@ func main() {
 }
 
 func run(args []string) int {
+	if len(args) == 0 && strings.TrimSuffix(filepath.Base(os.Args[0]), ".exe") == "amx" {
+		return runWorkHome(os.Stdin, os.Stdout, os.Stderr)
+	}
+	if len(args) == 1 && args[0] == "ui" {
+		return runWorkHome(os.Stdin, os.Stdout, os.Stderr)
+	}
+	var err error
+	args, err = normalizeWorkCLI(args)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
+		return exitValidation
+	}
 	if len(args) == 0 {
 		printUsage()
 		return exitValidation
 	}
 
 	switch args[0] {
+	case "allow", "deny":
+		return runWorkPermission(args[0], args[1:], os.Stdout, os.Stderr)
 	case "start", "attach", "reply", "inbox", "board", "down", "remove", "collaborate", "isolate", "label":
 		return runWorkSession(args[0], args[1:], os.Stdin, os.Stdout, os.Stderr)
 	case "team":
@@ -2136,6 +2150,24 @@ func mustGetwd() string {
 func printUsage() {
 	fmt.Println(`agentmux
 
+Short command: amx (installed alongside agentmux). Run amx to open the current
+workspace or choose a running one. Short options: -s workspace, -p project,
+-d detach on up/start, -j JSON on mode/delivery or ws/workspaces, -o web browser.
+Use -s before or after the command. Inside an owned tmux attachment, omitted
+workspace selectors use that attachment; outside, commands default to work.
+Creation with up/start always defaults to work unless a selector is supplied.
+
+Everyday shortcuts:
+  amx up -s daily -p ./project
+  amx a claude -s daily          amx ui -s daily
+  amx ls -s daily               amx ws
+  amx new --harness codex -s daily
+  amx link claude codex -s daily
+  amx allow codex claude commands -s daily
+  amx mode claude auto -s daily
+Aliases: up=start, a/open=attach, ui=dashboard, ls=sessions, ws=workspaces,
+new=add, link=collaborate, unlink=isolate, name=label, mode=delivery.
+
 Everyday work sessions use dedicated tmux sockets. Use sessions/dashboard to inspect them;
 the legacy list/status commands below address the default tmux socket.
 
@@ -2148,6 +2180,7 @@ Usage:
   agentmux workspaces [--json] [--register DIR]
   agentmux relaunch ID [--resume ID|last|picker] [--session work | --state DIR]
   agentmux delivery ID [manual|review|auto] [--approve CANDIDATE] [--session work | --state DIR]
+  agentmux allow|deny FROM TO commands|messages|pings [--session work | --state DIR]
   agentmux connect OBSERVED_ID --name NAME [--session work | --state DIR]
   agentmux collaborate AGENT AGENT [...] [--legacy-policy preserve|group] [--session work | --state DIR]
   agentmux isolate AGENT [...] [--session work | --state DIR]

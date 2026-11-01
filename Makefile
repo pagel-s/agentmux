@@ -6,13 +6,22 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo none)
 DATE ?= $(shell date -u +%Y-%m-%d)
 BINARY := bin/agentmux
+PREFIX ?= $(HOME)/.local
+BINDIR ?= $(PREFIX)/bin
+DESTDIR ?=
 UNIT_PACKAGES := $(shell GOCACHE=$(GOCACHE) $(GO) list ./... | grep -v '^agentmux/internal/tmux$$')
 
-.PHONY: build test test-unit test-integration test-managed test-sandbox test-resources test-research test-soak test-scale fmt check clean
+.PHONY: build install test test-unit test-integration test-managed test-sandbox test-resources test-research test-soak test-scale fmt check clean
 
 build:
 	mkdir -p bin
 	GOCACHE=$(GOCACHE) $(GO) build -ldflags "-X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DATE)" -o $(BINARY) ./cmd/agentmux
+
+# Atomic binary replacement retains the previous executable. An unrelated amx
+# command is never replaced, including when upgrading Agentmux.
+install: build
+	mkdir -p "$(DESTDIR)$(BINDIR)"
+	python3 scripts/install-local.py --source "$(BINARY)" --destination "$(DESTDIR)$(BINDIR)/agentmux" --replace
 
 test: test-unit test-integration
 

@@ -49,9 +49,16 @@ func consoleClip(value string, width, height int) string {
 }
 func (m console) roster(width, height int) string {
 	var out strings.Builder
-	out.WriteString(consoleMuted.Render("AGENTS") + "\n\n")
-	start := max(0, m.selected-max(1, (height-5)/4)+1)
-	for i := start; i < len(m.agents); i++ {
+	position := 0
+	if len(m.agents) > 0 {
+		position = m.selected + 1
+	}
+	out.WriteString(consoleAccent.Render("SESSIONS · ↑/↓") + "\n")
+	out.WriteString(consoleMuted.Render(fmt.Sprintf("%d/%d · Ctrl+P switch", position, len(m.agents))) + "\n")
+	rows := max(1, (height-4)/4)
+	start := max(0, m.selected-rows+1)
+	end := min(len(m.agents), start+rows)
+	for i := start; i < end; i++ {
 		a := m.agents[i]
 		mode := a.Config.Interaction
 		if a.External {
@@ -60,26 +67,17 @@ func (m console) roster(width, height int) string {
 		if mode == "" {
 			mode = "managed"
 		}
-		status := a.State
-		if a.External && a.State == "active" {
-			status = observationStatus(a.ExternalRef, m.data.observed)
-		}
-		if pane, ok := m.data.runtime.Agents[a.ID]; ok {
-			status = pane.State
-		}
-		if m.offline {
-			status = "saved " + status
-		}
+		status := consoleAgentStatus(a, m)
 		name := "  " + consoleContent(sessionTitle(a), 150)
 		if i == m.selected {
 			name = consoleSelected.Render("› " + consoleContent(sessionTitle(a), 150))
 		}
-		out.WriteString(consoleClip(name, width, 1) + "\n" + consoleMuted.Render(consoleClip("  "+status+" · "+a.ID+" · "+a.Config.Harness, width, 1)) + "\n" + consoleMuted.Render(consoleClip(consoleContent("  "+sessionProject(a.Config.Workdir)+" · "+mode, 300), width, 1)) + "\n\n")
-		if lipgloss.Height(out.String()) >= height-2 {
-			break
-		}
+		out.WriteString(consoleClip(name, width, 1) + "\n" + consoleMuted.Render(consoleClip("  "+a.ID+" · "+a.Config.Harness, width, 1)) + "\n" + consoleMuted.Render(consoleClip(consoleContent("  "+status+" · "+sessionProject(a.Config.Workdir)+" · "+mode, 300), width, 1)) + "\n\n")
 	}
-	hint := "↑/↓ select · / find\n" + m.nativeEntryHint()
+	if start > 0 || end < len(m.agents) {
+		fmt.Fprintf(&out, "%s\n", consoleMuted.Render(fmt.Sprintf("↑ %d above · ↓ %d below", start, len(m.agents)-end)))
+	}
+	hint := m.nativeEntryHint()
 	if m.tab == 6 {
 		hint = "h/l team action target\n2 Agents: native terminals"
 	} else if m.tab == 5 {
@@ -102,10 +100,10 @@ func (m console) panel(width, height int) string {
 		return m.nativeDeliveryPanel(width, height)
 	}
 	if m.composer == "find" {
-		return m.sessionSearchPanel(width, height)
+		return m.sessionSwitcherPanel(width, height)
 	}
 	var out strings.Builder
-	if len(m.agents) > 0 && m.tab != 5 && m.tab != 1 && m.tab != 6 && m.tab != 7 {
+	if len(m.agents) > 0 && m.tab != 5 && m.tab != 1 && m.tab != 2 && m.tab != 6 && m.tab != 7 {
 		a := m.agents[m.selected%len(m.agents)]
 		fmt.Fprintf(&out, "%s\n%s\n\n", consoleAccent.Render(consoleClip(consoleContent(sessionTitle(a), 150), width, 1)), consoleMuted.Render(consoleClip(consoleContent(a.ID+" · "+a.Config.Harness+" · "+a.Config.Workdir, 300), width, 1)))
 	}
@@ -160,9 +158,25 @@ func (m console) panel(width, height int) string {
 		if m.data.headless {
 			hint = "Headless managed worker · 5 Tasks output · 8 Events · o details"
 		}
-		fmt.Fprintf(&out, "%s\n%s\n\n", consoleAccent.Render(consoleClip(consoleContent(m.agentLabel(m.selectedID()), 200), width, 1)), consoleMuted.Render(hint))
+		fmt.Fprintf(&out, "%s\n%s\n\n", consoleAccent.Render(consoleClip(consoleContent(m.agentLabel(m.selectedID()), 200), width, 1)), consoleMuted.Render(consoleClip(hint, width, 1)))
 		if len(m.agents) > 0 {
 			a := m.agents[m.selected%len(m.agents)]
+			if m.nativeNeedsRelaunch() && !m.offline {
+				pane := m.data.runtime.Agents[a.ID]
+				out.WriteString(consoleAccent.Render("NATIVE CLI "+strings.ToUpper(consoleContent(pane.State, 60))) + "\n")
+				out.WriteString("Nothing restarts automatically.\n")
+				out.WriteString(consoleMuted.Render("Enter or Shift+U reviews this session's relaunch.") + "\n\n")
+				out.WriteString(consoleMuted.Render("LAST TERMINAL OUTPUT") + "\n")
+				preview := strings.TrimSpace(m.data.preview)
+				if m.data.selected != a.ID {
+					preview = "Loading this session's terminal preview…"
+				}
+				if preview == "" {
+					preview = "No captured output."
+				}
+				out.WriteString(consoleContent(preview, 6000))
+				break
+			}
 			if m.offline && a.Config.Interaction != "interactive" {
 				out.WriteString(consoleAccent.Render("Saved runtime snapshot · execution now unknown") + "\n")
 			}
@@ -187,8 +201,12 @@ func (m console) panel(width, height int) string {
 		} else if m.offline {
 			previewLabel = "SAVED TERMINAL PREVIEW · current process state unknown"
 		}
-		out.WriteString(consoleMuted.Render(previewLabel) + "\n")
 		preview := strings.TrimSpace(m.data.preview)
+		if m.data.selected != m.selectedID() {
+			previewLabel = "TERMINAL PREVIEW · loading"
+			preview = "Loading this session's terminal preview…"
+		}
+		out.WriteString(consoleMuted.Render(previewLabel) + "\n")
 		if preview == "" {
 			preview = "Waiting for terminal output…"
 			if m.nativeNeedsRelaunch() {
@@ -204,7 +222,7 @@ func (m console) panel(width, height int) string {
 		out.WriteString(consoleAccent.Render("Connections") + consoleMuted.Render(fmt.Sprintf("  revision %d", m.data.boundaries.Version)) + "\n\n")
 		if len(m.agents) > 0 {
 			target := m.agents[m.target%len(m.agents)].ID
-			fmt.Fprintf(&out, "%s  →  %s\n%s\n\n", consoleAccent.Render(consoleContent(m.agentLabel(m.selectedID()), 150)), consoleAccent.Render(consoleContent(m.agentLabel(target), 150)), consoleMuted.Render("h/l or Alt+←/→ recipient · ↑/↓ sender"))
+			fmt.Fprintf(&out, "%s\n%s\n%s\n%s\n\n", consoleMuted.Render("SENDER · ↑/↓ session"), consoleAccent.Render(consoleClip(consoleContent(m.agentLabel(m.selectedID()), 300), width, 1)), consoleMuted.Render("RECIPIENT · h/l or Alt+←/→"), consoleAccent.Render(consoleClip(consoleContent(m.agentLabel(target), 300), width, 1)))
 			for _, row := range []struct{ key, action, label string }{{"m", "message.send", "Messages"}, {"p", "ping.send", "Pings"}, {"i", "instruct", "Commands"}} {
 				enabled := boundaryAllows(m.data.boundaries, target, row.action)
 				value := "○  denied"
@@ -439,7 +457,7 @@ func (m console) View() string {
 		navigation.WriteString(consoleMuted.Render(" ›"))
 	}
 	var footer strings.Builder
-	if m.composer != "" && m.reader == nil {
+	if m.composer != "" && m.composer != "find" && m.reader == nil {
 		label := m.composer + " → " + m.composeTarget
 		if m.composer == "send" || m.composer == "reply" || m.composer == "message" {
 			mode := m.composeMode
@@ -474,29 +492,18 @@ func (m console) View() string {
 		bodyHeight = 1
 	}
 	var compact string
-	if width < 85 && len(m.agents) > 0 && m.reader == nil && m.nativeAction == nil {
-		first := max(0, m.selected-1)
-		for i := first; i < len(m.agents) && i < first+3; i++ {
-			label := " " + consoleContent(sessionTitle(m.agents[i])+" ["+m.agents[i].ID+"]", 28) + " "
-			if i == m.selected {
-				compact += consoleSelected.Render(label)
-			} else {
-				compact += consoleMuted.Render(label)
-			}
-		}
-		compact = consoleClip(compact, width, 1) + "\n"
-		bodyHeight = max(1, bodyHeight-1)
+	if width < 64 && len(m.agents) > 0 && m.reader == nil && m.nativeAction == nil && m.composer != "find" {
+		compact = consoleClip(consoleMuted.Render(fmt.Sprintf("Session %d/%d · ↑/↓ · Ctrl+P switch", m.selected+1, len(m.agents))), width, 1) + "\n" + consoleClip(consoleSelected.Render("› "+consoleContent(m.agentLabel(m.selectedID()), 300)), width, 1) + "\n"
+		bodyHeight = max(1, bodyHeight-2)
 	}
 	var body string
 	if m.reader != nil {
 		body = m.readerPanel(width, bodyHeight)
 	} else if m.nativeAction != nil {
 		body = m.nativeDeliveryPanel(width, bodyHeight)
-	} else if width >= 85 {
-		sideWidth := 30
-		if width < 105 {
-			sideWidth = 24
-		}
+	} else if m.composer == "find" {
+		body = m.sessionSwitcherPanel(width, bodyHeight)
+	} else if sideWidth := consoleSidebarWidth(width); sideWidth > 0 {
 		separator := consoleMuted.Render("│")
 		// Each divider row needs its own left gutter. Prefixing the complete
 		// multiline block would indent only its first row.
