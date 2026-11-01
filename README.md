@@ -35,6 +35,10 @@ Use **Ctrl+K** for searchable Actions and **Ctrl+P** for sessions. See the
 [control center guide](docs/usability-control-center.md) for quick launch,
 attention, exact pair controls, recovery, retirement and study observation.
 
+For screenshots and practical journeys from everyday sessions to dynamic teams,
+competition studies and remote workers, read the
+[visual workflow guide](docs/visual-guide.md).
+
 For the complete first-run test, follow the [fresh-install
 walkthrough](docs/getting-started/quickstart.md). It uses a separate workspace
 and covers direct native interaction, opt-in collaboration, shared memory,

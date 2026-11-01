@@ -4,6 +4,9 @@
 
 Changes on `main` after the tagged `v0.10.0-rc.1` preview:
 
+- Illustrated workflow guide with terminal and web screenshots, everyday session
+  navigation, a worked poem collaboration, dynamic teams, research and scaling.
+
 - A further usability sweep fixes loading-modal input capture, stale native
   focus, old-controller history compatibility, large-list navigation, exact
   permanent-team impact reviews, recovery of expired deliveries, memory

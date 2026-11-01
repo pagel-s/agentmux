@@ -7,9 +7,12 @@ bounded autonomous workflows, or the research runners for controlled experiments
 ## Start here
 
 1. [Build and install](getting-started/installation.md).
-2. [Try the fresh-install walkthrough](getting-started/quickstart.md): use two
+2. [Explore the illustrated workflow guide](visual-guide.md): navigate the
+   terminal and web app, connect everyday sessions, and follow teams, automation
+   and research with screenshots and examples.
+3. [Try the fresh-install walkthrough](getting-started/quickstart.md): use two
    native sessions, connect them, exchange context, and disconnect them again.
-3. Keep [work sessions](work-sessions.md) open for terminal keys, session
+4. Keep [work sessions](work-sessions.md) open for terminal keys, session
    discovery, workspace switching and individual-session recovery. Use the local
    web app for activity, tasks, shared-memory editing and permission controls.
 
