@@ -36,7 +36,13 @@ func activityText(value string, limit int) string {
 
 func formatManagedActivity(snapshot managedActivitySnapshot) string {
 	var out strings.Builder
-	fmt.Fprintf(&out, "Owner activity (recent items, newest first)\nRun deadline: %s\n", activityText(snapshot.RuntimeDeadline, 80))
+	deadline := activityText(snapshot.RuntimeDeadline, 80)
+	if snapshot.RuntimeDeadline == "" {
+		deadline = "unknown"
+	} else if parsed, err := time.Parse(time.RFC3339Nano, snapshot.RuntimeDeadline); err == nil && parsed.IsZero() {
+		deadline = "none (no automatic deadline)"
+	}
+	fmt.Fprintf(&out, "Owner activity (recent items, newest first)\nRun deadline: %s\n", deadline)
 	out.WriteString("\nMESSAGES\n")
 	for i, message := range snapshot.Messages {
 		if i == 20 {

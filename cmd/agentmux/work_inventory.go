@@ -37,6 +37,42 @@ func observeWorkSessions(ctx context.Context, state string) []sessioninventory.S
 // discoverWorkSessions is replaceable in model-free integration tests.
 var discoverWorkSessions = observeWorkSessions
 
+// Describe rechecks pane ownership and exit state; the registry's active state
+// only describes coordination access and cannot establish a live terminal.
+var describeWorkRuntime = func(ctx context.Context, state string) (managedlaunch.Runtime, error) {
+	executable, err := os.Executable()
+	if err != nil {
+		return managedlaunch.Runtime{}, err
+	}
+	launcher, err := managedlaunch.New(managedlaunch.Options{StateDir: state, Executable: executable})
+	if err != nil {
+		return managedlaunch.Runtime{}, err
+	}
+	return launcher.Describe(ctx)
+}
+
+func workInventoryMode(agent managed.AgentInfo, observations []sessioninventory.Session, runtime managedlaunch.Runtime, runtimeErr error) string {
+	if agent.External {
+		return "external bridge · coordination " + agent.State + " · " + observationStatus(agent.ExternalRef, observations)
+	}
+	status := "unknown"
+	if runtimeErr == nil {
+		if pane, ok := runtime.Agents[agent.ID]; ok {
+			switch {
+			case runtime.State == "unavailable":
+				status = "unavailable"
+			case pane.State == "running" && runtime.State != "running" && runtime.State != "starting":
+				// A failed attempt may retain its last pre-shutdown snapshot.
+				// Do not present that cached running bit as current liveness.
+				status = "unknown"
+			case pane.State == "running", pane.State == "exited", pane.State == "unavailable", pane.State == "stopped":
+				status = pane.State
+			}
+		}
+	}
+	return "workspace coordination " + agent.State + " · worker " + status
+}
+
 func runWorkInventory(args []string, out, diagnostics io.Writer) int {
 	if workHelpRequested(args) {
 		fmt.Fprintln(out, "Usage: agentmux sessions [--session work | --state DIR]\nLists registered Agentmux sessions and recognizable existing native terminals.\nTitles describe tasks; use the stable ID to attach, label or connect.")
@@ -53,25 +89,14 @@ func runWorkInventory(args []string, out, diagnostics io.Writer) int {
 	}
 	credential, registryErr := managed.LoadCredential(managed.CredentialPath(o.state, ""))
 	observations := discoverWorkSessions(context.Background(), o.state)
+	runtime, runtimeErr := describeWorkRuntime(context.Background(), o.state)
 	var registered []managed.AgentInfo
 	if registryErr == nil {
-		raw, e := workCall(context.Background(), managed.NewClient(credential), "agent.list", map[string]any{"limit": 200})
-		registryErr = e
+		registered, registryErr = workRegistry(context.Background(), managed.NewClient(credential))
 		if registryErr == nil {
-			var registry struct {
-				Agents []managed.AgentInfo `json:"agents"`
-			}
-			registryErr = json.Unmarshal(raw, &registry)
-			if registryErr != nil {
-				registry.Agents = nil
-			}
-			registered = registry.Agents
-			for _, a := range registry.Agents {
-				mode := "workspace coordination"
-				if a.External {
-					mode = "external bridge · " + observationStatus(a.ExternalRef, observations)
-				}
-				fmt.Fprintf(out, "%s\n  ID %s · %s · %s · %s · added %s\n  %s\n", consoleContent(sessionTitle(a), 160), a.ID, a.Config.Harness, mode, a.State, sessionAdded(a.CreatedAt), consoleContent(a.Config.Workdir, 300))
+			for _, a := range registered {
+				mode := workInventoryMode(a, observations, runtime, runtimeErr)
+				fmt.Fprintf(out, "%s\n  ID %s · %s · %s · added %s\n  %s\n", consoleContent(sessionTitle(a), 160), a.ID, a.Config.Harness, mode, sessionAdded(a.CreatedAt), consoleContent(a.Config.Workdir, 300))
 			}
 		}
 	}
@@ -85,10 +110,13 @@ func runWorkInventory(args []string, out, diagnostics io.Writer) int {
 			fmt.Fprintln(diagnostics, "Workspace registry not loaded: no owner credential at", consoleContent(o.state, 300))
 			fmt.Fprintln(diagnostics, "Start this workspace:", managedlaunch.ShellCommand([]string{"agentmux", "start", "--session", o.session, "--state", o.state}))
 			fmt.Fprintln(diagnostics, "Or select an existing --session/--state. Existing native terminals are still listed where recognizable.")
+		} else if saved, err := managedlaunch.Snapshot(o.state); err == nil && saved.State == "stopped" {
+			fmt.Fprintln(diagnostics, "Saved workspace is stopped. Registered session and bridge status are unknown until it is restarted.")
+			fmt.Fprintln(diagnostics, "Restart this saved workspace:", managedlaunch.ShellCommand([]string{"agentmux", "managed", "restart", "--state", o.state}))
 		} else {
 			fmt.Fprintln(diagnostics, "Workspace registry unavailable:", consoleContent(registryErr.Error(), 300))
 			fmt.Fprintln(diagnostics, "Registered session and bridge status are unknown. Existing native terminals are listed observationally; refresh after restoring the broker.")
-			fmt.Fprintln(diagnostics, "Inspect this workspace:", managedlaunch.ShellCommand([]string{"agentmux", "managed", "status", "--state", o.state}))
+			fmt.Fprintln(diagnostics, "Inspect launch and worker state:", managedlaunch.ShellCommand([]string{"agentmux", "managed", "status", "--watch", "--state", o.state}))
 		}
 	} else if len(registered) == 0 {
 		fmt.Fprintln(out, "No registered Agentmux sessions in this workspace.")
@@ -143,17 +171,11 @@ func connectObservedSessionWithID(ctx context.Context, state, reference, id stri
 	if id == "" {
 		// Reconnecting without a hand-chosen ID recovers the existing bridge;
 		// labels never create a second identity for the same live terminal.
-		raw, e := workCall(ctx, client, "agent.list", map[string]any{"limit": 200})
+		registry, e := workRegistry(ctx, client)
 		if e != nil {
 			return "", id, e
 		}
-		var registry struct {
-			Agents []managed.AgentInfo `json:"agents"`
-		}
-		if e = json.Unmarshal(raw, &registry); e != nil {
-			return "", id, e
-		}
-		for _, a := range registry.Agents {
+		for _, a := range registry {
 			if a.External && a.State == "active" && a.ExternalRef == reference {
 				id = a.ID
 				break

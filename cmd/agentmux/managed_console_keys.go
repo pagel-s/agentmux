@@ -50,15 +50,33 @@ func (m *console) loadMemory(namespace string) tea.Cmd {
 	m.memoryLoading, m.busy = true, true
 	agent, request, client := m.selectedID(), m.memoryRequest, m.client
 	return func() tea.Msg {
-		raw, err := workCall(context.Background(), client, "memory.list", map[string]any{"namespace": namespace, "limit": 100})
-		if err != nil {
-			return consoleMemory{agent: agent, request: request, namespace: namespace, err: err}
+		entries := []managed.Memory{}
+		cursor := ""
+		seen := map[string]bool{}
+		for {
+			raw, err := workCall(context.Background(), client, "memory.list", map[string]any{"namespace": namespace, "limit": 100, "after": cursor})
+			if err != nil {
+				return consoleMemory{agent: agent, request: request, namespace: namespace, err: err}
+			}
+			var result struct {
+				Entries []managed.Memory `json:"entries"`
+				Cursor  string           `json:"cursor"`
+			}
+			if err = json.Unmarshal(raw, &result); err != nil {
+				return consoleMemory{agent: agent, request: request, namespace: namespace, err: err}
+			}
+			for _, entry := range result.Entries {
+				if !seen[entry.Key] {
+					entries = append(entries, entry)
+					seen[entry.Key] = true
+				}
+			}
+			if len(result.Entries) == 0 || result.Cursor == "" || result.Cursor == cursor {
+				break
+			}
+			cursor = result.Cursor
 		}
-		var result struct {
-			Entries []managed.Memory `json:"entries"`
-		}
-		err = json.Unmarshal(raw, &result)
-		return consoleMemory{agent: agent, request: request, namespace: namespace, entries: result.Entries, err: err}
+		return consoleMemory{agent: agent, request: request, namespace: namespace, entries: entries}
 	}
 }
 func (m console) close() tea.Cmd {
@@ -84,6 +102,7 @@ func (m *console) compose(kind, target, reference, text string) {
 	m.replyID = reference
 	m.text = []rune(text)
 	m.textCursor = len(m.text)
+	m.textColumnValid = false
 }
 func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if msg.Paste && m.composer == "" && (m.teamAction == nil || m.teamAction.researchAction == "" || m.teamAction.reasonReady) {
@@ -120,6 +139,9 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.teamReviewKey(msg)
 	}
 	if m.composer != "" {
+		if key != "up" && key != "down" {
+			m.textColumnValid = false
+		}
 		switch key {
 		case "esc":
 			m.composer = ""
@@ -139,6 +161,17 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					}
 					m.findIndex = (m.findIndex + step) % n
 				}
+			} else {
+				width := m.width
+				if width <= 0 {
+					width = 100
+				}
+				step := 1
+				if key == "up" {
+					step = -1
+				}
+				m.textCursor, m.textColumn = consoleEditorMove(m.text, m.textCursor, width, step, m.textColumn, m.textColumnValid)
+				m.textColumnValid = true
 			}
 		case "left":
 			if m.textCursor > 0 {
@@ -148,9 +181,11 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.textCursor < len(m.text) {
 				m.textCursor++
 			}
-		case "home", "ctrl+a":
+		case "home", "end":
+			m.textCursor = consoleEditorLineEdge(m.text, m.textCursor, key == "end")
+		case "ctrl+a", "ctrl+home":
 			m.textCursor = 0
-		case "end", "ctrl+e":
+		case "ctrl+e", "ctrl+end":
 			m.textCursor = len(m.text)
 		case "backspace", "ctrl+h":
 			if m.textCursor > 0 {
@@ -243,6 +278,8 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.findIndex = 0
 				m.text = append(m.text[:m.textCursor], append(append([]rune{}, runes...), m.text[m.textCursor:]...)...)
 				m.textCursor += len(runes)
+			} else {
+				m.message = fmt.Sprintf("Input limit: 16,384 characters (draft has %d). Paste was not inserted; your draft is kept. Shorten it before adding more text.", len(m.text))
 			}
 		}
 		return m, nil

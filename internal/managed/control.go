@@ -51,7 +51,7 @@ type Boundaries struct {
 	PrivateMemory string          `json:"private_memory"`
 }
 
-func controls(ctx context.Context, q queryer) (ControlState, error) {
+func readControls(ctx context.Context, q queryer) (ControlState, error) {
 	c := ControlState{Version: 1, Edges: []EdgeControl{}, Scopes: []ScopeControl{}}
 	var persisted *ControlState
 	var raw json.RawMessage
@@ -138,6 +138,7 @@ func advanceBoundaryRevision(ctx context.Context, q queryer) error {
 
 func (s *Store) control(ctx context.Context, q queryer, a actor, r Request) (any, *Fault) {
 	if r.Operation == "boundaries.get" {
+		ctx = boundaryReadContext(ctx)
 		var in struct {
 			Agent string `json:"agent"`
 		}
@@ -217,7 +218,7 @@ func (s *Store) control(ctx context.Context, q queryer, a actor, r Request) (any
 				}
 			}
 		}
-		teams, err := list[Team](ctx, q, "team", "AND json_extract(data,'$.state')='active' ORDER BY seq")
+		teams, err := activeTeams(ctx, q)
 		if err != nil {
 			return nil, internal(err)
 		}

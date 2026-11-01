@@ -39,3 +39,15 @@ func TestManagedActivityBoundsLargeContentAndItemCount(t *testing.T) {
 		t.Fatalf("activity output was not bounded: bytes=%d, items=%d", len(output), strings.Count(output, "instruction="))
 	}
 }
+
+func TestManagedActivityDistinguishesUnlimitedUnknownAndTimedRuns(t *testing.T) {
+	for _, tc := range []struct{ value, want string }{
+		{"0001-01-01T00:00:00Z", "Run deadline: none (no automatic deadline)"},
+		{"", "Run deadline: unknown"},
+		{"2026-11-01T12:00:00Z", `Run deadline: "2026-11-01T12:00:00Z"`},
+	} {
+		if output := formatManagedActivity(managedActivitySnapshot{RuntimeDeadline: tc.value}); !strings.Contains(output, tc.want) {
+			t.Fatalf("deadline %q: %s", tc.value, output)
+		}
+	}
+}

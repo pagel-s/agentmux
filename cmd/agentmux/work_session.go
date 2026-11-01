@@ -287,6 +287,9 @@ Legacy raw pane input remains: agentmux send SESSION PANE -- COMMAND.`)
 		}
 		runtime, e := launcher.Describe(ctx)
 		if e != nil {
+			if os.IsNotExist(e) {
+				return fail(fmt.Errorf("work session not found; start this workspace with %s, or select an existing --state / --session", managedlaunch.ShellCommand([]string{"agentmux", "start", "--session", o.session, "--state", o.state})))
+			}
 			return fail(e)
 		}
 		agent := ""
@@ -336,6 +339,9 @@ Legacy raw pane input remains: agentmux send SESSION PANE -- COMMAND.`)
 		if len(o.args) != 1 {
 			return fail(errors.New("board requires one quoted note"))
 		}
+		if o.board != "" && o.group != "" {
+			return fail(errors.New("choose either --group or --board for the destination, not both; no message was posted"))
+		}
 		namespace := o.board
 		if namespace == "" {
 			raw, e := workCall(ctx, client, "control.get", map[string]any{})
@@ -373,7 +379,7 @@ Legacy raw pane input remains: agentmux send SESSION PANE -- COMMAND.`)
 		if e != nil {
 			return fail(e)
 		}
-		fmt.Fprintln(out, "Posted to team board.")
+		fmt.Fprintf(out, "Posted to board %s.\n", namespace)
 		return exitSuccess
 	}
 	if operation == "send" || operation == "reply" {

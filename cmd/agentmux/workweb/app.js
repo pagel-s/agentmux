@@ -1536,15 +1536,23 @@ async function loadMemory() {
   if (!namespace || !selectionReady()) return;
   const request = ++memoryRequest;
   try {
-    const result = await call("memory.list", { namespace, limit: 100 });
-    if (
-      request !== memoryRequest ||
-      namespace !== $("memory-namespace").value ||
-      !selectionReady()
-    )
-      return;
+    const entries = new Map();
+    let after = "";
+    while (true) {
+      const result = await call("memory.list", { namespace, limit: 100, after });
+      if (
+        request !== memoryRequest ||
+        namespace !== $("memory-namespace").value ||
+        !selectionReady()
+      )
+        return;
+      for (const entry of result.entries || []) entries.set(entry.key, entry);
+      if (!result.entries?.length || !result.cursor || result.cursor === after)
+        break;
+      after = result.cursor;
+    }
     memoryNamespace = namespace;
-    memoryEntries.set(namespace, result.entries || []);
+    memoryEntries.set(namespace, [...entries.values()]);
     renderMemoryEntries(namespace);
   } catch (error) {
     notice(error.message, true);
@@ -2374,6 +2382,22 @@ function renderTeams() {
           snapshot.agents.find((agent) => agent.id === id),
         );
         if (pending && joining) participant.append(el("small", "", joining));
+        if (!pending) {
+          const access = team.member_access?.[id];
+          let status = "Membership recorded · effective access unavailable";
+          if (access?.allowed === true)
+            status = "Current board + memory access allowed";
+          else if (access?.allowed === false)
+            status =
+              "Membership retained · effective access blocked" +
+              (access.reason ? ": " + access.reason : "") +
+              (access.blocked_by
+                ? " · Blocked by " + sessionReference(access.blocked_by)
+                : "");
+          participant.append(
+            el("small", access?.allowed === false ? "action-error" : "", status),
+          );
+        }
         if (team.state === "active" && id !== team.owner) {
           const remove = el(
             "button",

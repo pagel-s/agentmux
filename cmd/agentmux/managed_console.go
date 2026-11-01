@@ -68,6 +68,8 @@ type console struct {
 	boardFilter                            int
 	composeTarget, replyID                 string
 	textCursor                             int
+	textColumn                             int
+	textColumnValid                        bool
 	memoryNamespace                        string
 	memoryEntries                          []managed.Memory
 	memoryEntry                            int
@@ -146,7 +148,7 @@ func fetchWorkSnapshot(state string, client *managed.Client, selected string) co
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
 	d := consoleData{selected: selected}
-	raw, err := workCall(ctx, client, "agent.list", map[string]any{"limit": 200})
+	agents, err := workRegistry(ctx, client)
 	if err != nil {
 		status, problem := client.LocalResearchStatus(ctx, state)
 		d.research = status
@@ -156,14 +158,8 @@ func fetchWorkSnapshot(state string, client *managed.Client, selected string) co
 		d.err = err
 		return d
 	}
-	var registry struct {
-		Agents []managed.AgentInfo `json:"agents"`
-	}
-	if err = json.Unmarshal(raw, &registry); err != nil {
-		d.err = err
-		return d
-	}
-	d.agents = registry.Agents
+	d.agents = agents
+	var raw json.RawMessage
 	cursor := ""
 	for {
 		raw, err = workCall(ctx, client, "team.list", map[string]any{"limit": 200, "after": cursor})

@@ -16,8 +16,13 @@ func ValidateSessionTitle(title string) error {
 	if !utf8.ValidString(title) || len(title) > 512 || utf8.RuneCountInString(title) > 120 {
 		return errors.New("session title must be valid UTF-8, at most 120 characters and 512 bytes")
 	}
-	for _, r := range title {
-		if !unicode.IsPrint(r) || r == 0x061c || r == 0x200e || r == 0x200f || r >= 0x202a && r <= 0x202e || r >= 0x2066 && r <= 0x2069 {
+	runes := []rune(title)
+	for i, r := range runes {
+		joiner := r == 0x200c || r == 0x200d
+		if joiner && (i == 0 || i+1 == len(runes) || !unicode.IsPrint(runes[i-1]) || !unicode.IsPrint(runes[i+1]) || unicode.IsSpace(runes[i-1]) || unicode.IsSpace(runes[i+1])) {
+			return errors.New("session title joiners must connect printable characters")
+		}
+		if (!unicode.IsPrint(r) && !joiner) || r == 0x061c || r == 0x200e || r == 0x200f || r >= 0x202a && r <= 0x202e || r >= 0x2066 && r <= 0x2069 {
 			return errors.New("session title must be one printable line without control or bidirectional formatting characters")
 		}
 	}
