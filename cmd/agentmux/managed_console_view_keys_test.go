@@ -1,8 +1,15 @@
 package main
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
+	"net"
+	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"agentmux/internal/managed"
@@ -19,16 +26,6 @@ func TestConsoleArrowViewNavigationPreservesTargetSelection(t *testing.T) {
 				m := teamConsoleFixture()
 				m.tab, m.target = tab, 1
 				next, cmd := consolePress(m, tea.KeyMsg{Type: direction.key})
-				if tab == 2 || tab == 6 {
-					if next.tab != tab || cmd != nil {
-						t.Fatal("target-selection arrows unexpectedly changed views")
-					}
-					want := (1 + direction.step + len(m.agents)) % len(m.agents)
-					if tab == 2 && next.target != want || tab == 6 && next.teamMemberIndex != want {
-						t.Fatal("Connections/Teams arrows lost their existing target behavior")
-					}
-					return
-				}
 				want := (tab + direction.step + 8) % 8
 				if next.tab != want || next.target != m.target || next.teamMemberIndex != m.teamMemberIndex || next.selected != m.selected {
 					t.Fatal("view arrows changed the selected agent or an invisible target")
@@ -37,6 +34,116 @@ func TestConsoleArrowViewNavigationPreservesTargetSelection(t *testing.T) {
 					t.Fatal("arrow navigation did not fetch Tasks on entry")
 				}
 			})
+		}
+	}
+}
+
+func TestConsoleArrowWalksReachEveryViewInBothDirections(t *testing.T) {
+	root, err := os.MkdirTemp("", "amx-nav-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(root) })
+	socket := filepath.Join(root, "broker.sock")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var mu sync.Mutex
+	var operations []string
+	server := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var request managed.Request
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		mu.Lock()
+		operations = append(operations, request.Operation)
+		mu.Unlock()
+		// A Tasks-entry refresh must remain a read, even when the broker
+		// cannot supply a registry. Do not execute real coordination writes.
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"error":{"code":"unavailable","message":"offline fixture"}}`))
+	})}
+	go func() { _ = server.Serve(listener) }()
+	t.Cleanup(func() { _ = server.Close() })
+	for _, scenario := range []string{"populated", "empty", "offline"} {
+		t.Run(scenario, func(t *testing.T) {
+			m := teamConsoleFixture()
+			m.tab, m.target, m.selected = 0, 2, 1
+			if scenario == "empty" {
+				m.agents, m.data.teams = nil, nil
+				m.target, m.teamMemberIndex, m.selected = 0, 0, 0
+			}
+			if scenario == "offline" {
+				m.offline, m.data.teamsErr = true, errors.New("offline fixture")
+			}
+			wantTarget, wantMember, wantSelected := m.target, m.teamMemberIndex, m.selected
+			m.client = managed.NewClient(managed.Credential{AgentID: "navigation-test", Socket: socket})
+			for _, direction := range []struct {
+				key  tea.KeyType
+				step int
+			}{{tea.KeyRight, 1}, {tea.KeyLeft, -1}} {
+				// Keep the same model across repeated full laps: isolated
+				// single-hop checks can miss a view that consumes the next arrow.
+				for i := 0; i < 16; i++ {
+					want := (m.tab + direction.step + 8) % 8
+					var cmd tea.Cmd
+					m, cmd = consolePress(m, tea.KeyMsg{Type: direction.key})
+					if m.tab != want || m.target != wantTarget || m.teamMemberIndex != wantMember || m.selected != wantSelected {
+						t.Fatalf("%s step %d reached view %d, want %d, or changed an action target", tea.KeyMsg{Type: direction.key}.String(), i, m.tab, want)
+					}
+					if m.busy || m.composer != "" || m.teamAction != nil {
+						t.Fatal("view navigation opened an editor or prepared a mutation")
+					}
+					if (cmd != nil) != (want == 4) {
+						t.Fatalf("view %d returned an unexpected command", want)
+					}
+					if cmd != nil {
+						if _, ok := cmd().(consoleData); !ok {
+							t.Fatal("Tasks entry issued an action instead of a read refresh")
+						}
+					}
+				}
+			}
+		})
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(operations) != 12 {
+		t.Fatalf("unexpected refresh count: %v", operations)
+	}
+	for _, operation := range operations {
+		if operation != "agent.list" {
+			t.Fatalf("view arrows issued a coordination action: %s", operation)
+		}
+	}
+}
+
+func TestConsoleTargetKeysAreLocalToConnectionsAndTeams(t *testing.T) {
+	for tab := 0; tab < 8; tab++ {
+		for _, direction := range []struct {
+			key  tea.KeyMsg
+			step int
+		}{
+			{tea.KeyMsg{Type: tea.KeyLeft, Alt: true}, -1},
+			{tea.KeyMsg{Type: tea.KeyRight, Alt: true}, 1},
+			{tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}}, -1},
+			{tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}}, 1},
+		} {
+			m := teamConsoleFixture()
+			m.tab, m.target = tab, 1
+			next, cmd := consolePress(m, direction.key)
+			wantTarget, wantMember := m.target, m.teamMemberIndex
+			if tab == 2 {
+				wantTarget = (wantTarget + direction.step + len(m.agents)) % len(m.agents)
+			}
+			if tab == 6 {
+				wantMember = (wantMember + direction.step + len(m.agents)) % len(m.agents)
+			}
+			if cmd != nil || next.tab != tab || next.target != wantTarget || next.teamMemberIndex != wantMember || next.selected != m.selected {
+				t.Fatalf("%s from view %d changed the wrong target or switched view", direction.key.String(), tab)
+			}
 		}
 	}
 }
@@ -140,15 +247,23 @@ func TestConsoleViewArrowsStayInsideDraftsReadersAndReviews(t *testing.T) {
 			t.Fatal("view arrows escaped or retargeted an explicit action review")
 		}
 	}
+
+	m = console{tab: 6, target: 1, teamMemberIndex: 2, workspacePicker: &consoleWorkspacePicker{rows: []workspaceListing{{State: "/tmp/first"}, {State: "/tmp/second"}}, selected: 1}}
+	for _, key := range []tea.KeyMsg{
+		{Type: tea.KeyLeft}, {Type: tea.KeyRight}, {Type: tea.KeyCtrlLeft}, {Type: tea.KeyCtrlRight},
+		{Type: tea.KeyLeft, Alt: true}, {Type: tea.KeyRight, Alt: true},
+	} {
+		next, cmd := consolePress(m, key)
+		if cmd != nil || next.tab != 6 || next.workspacePicker == nil || next.workspacePicker.selected != 1 || next.target != 1 || next.teamMemberIndex != 2 {
+			t.Fatal("horizontal navigation escaped the workspace picker or changed its selection")
+		}
+	}
 }
 
 func TestConsoleArrowHintsMatchActiveView(t *testing.T) {
 	for tab := 0; tab < 8; tab++ {
 		m := console{tab: tab}
 		want := "←/→ views"
-		if tab == 2 || tab == 6 {
-			want = "Ctrl+←/→ views"
-		}
 		if !strings.Contains(m.contextualKeys(), want) {
 			t.Fatalf("view %d hides its arrow navigation cue", tab)
 		}

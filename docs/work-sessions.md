@@ -333,9 +333,9 @@ Keys are case-sensitive: `N`, `L`, `V`, and `P` mean Shift plus that letter. For
 `Ctrl-b b`, press Ctrl-b, release both keys, then press b. The same two-step
 prefix applies to the other Ctrl-b bindings. Shortcuts below depend on the
 active view and selected record; the footer shows the actions available there.
-Use Left/Right, Tab or a view number to switch views. Connections and Teams
-use Left/Right for their recipient/target instead; Ctrl-Left/Ctrl-Right switches
-views from either one. In an editor, printable characters are text;
+Use Left/Right, Tab or a view number to switch between all eight views.
+Connections and Teams use h/l or Alt-Left/Alt-Right for their recipient/target.
+In an editor, printable characters are text;
 use **Ctrl-G** for help and **Esc** to cancel before using navigation shortcuts.
 
 | Key | Action |
@@ -351,8 +351,8 @@ use **Ctrl-G** for help and **Esc** to cancel before using navigation shortcuts.
 | Ctrl-b, then b / Shift+P / m / t in a native session | Open Board / Connections / Memory / Tasks in a popup |
 | Ctrl-b, then Shift+D | Choose read-only Broker or Supervisor logs without leaving the current terminal |
 | Tab / Shift-Tab or 1–8 | Switch Board, Agents, Connections, Memory, Tasks, Sessions, Teams, Events |
-| ←/→ outside Connections/Teams; Ctrl+←/→ in every view | Switch views; editors, readers and reviews keep their own arrow keys |
-| [ / ] in Teams; ← / → | Choose a team; choose an exact agent for a membership action |
+| ←/→ or Ctrl+←/→ in every view | Switch views; editors, readers and reviews keep their own arrow keys |
+| [ / ] in Teams; h/l or Alt+←/→ | Choose a team; choose an exact agent for a membership action |
 | i / r / d in Teams | Review invite / remove or revoke invitation / dissolve with the current version; hints follow target membership |
 | e / t in Teams | Edit team name/mission / propose the selected member as owner; acceptance is separate |
 | b / v in Teams | Compose to its board / inspect its shared memory as owner |
@@ -366,7 +366,7 @@ use **Ctrl-G** for help and **Esc** to cancel before using navigation shortcuts.
 | ←/→ / Home / End in composer | Edit the draft without changing its recipient |
 | f in Board | Filter all coordination, team board, or selected agent inbox |
 | [ / ] then r in Board | Select a message and reply |
-| ←/→ in Connections | Select the recipient for the selected sender |
+| h/l or Alt+←/→ in Connections | Select the recipient for the selected sender |
 | c / d in Connections | Connect selected sender/recipient in a group / make sender independent |
 | c in Sessions | Prepare a bridge for the selected observed terminal; paste setup manually |
 | m / p / i in Connections | Toggle messages / pings / commands |
@@ -391,8 +391,8 @@ use **Ctrl-G** for help and **Esc** to cancel before using navigation shortcuts.
 
 The **Teams** view is for consent-based teams created by permitted agents. An
 empty Teams view does not mean your native sessions are missing. For everyday
-pairing, press **3** for Connections, choose a recipient with **←/→**, then
-**c**. Those owner collaboration groups share a scoped board and memory.
+pairing, press **3** for Connections, choose a recipient with **h/l** or
+**Alt+←/→**, then **c**. Those owner collaboration groups share a scoped board and memory.
 
 The roster keeps process state visible even with long project names. A native
 CLI marked `exited` can still have an active coordination identity; it does not

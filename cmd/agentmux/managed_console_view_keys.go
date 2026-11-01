@@ -16,5 +16,3 @@ func (m *console) selectView(index int) tea.Cmd {
 	}
 	return nil
 }
-
-func (m console) arrowsSelectTarget() bool { return m.tab == 2 || m.tab == 6 }

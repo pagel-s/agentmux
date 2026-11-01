@@ -437,7 +437,7 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.closeMemory()
 			return m, m.fetch
 		}
-	case "tab", "ctrl+right":
+	case "tab", "right", "ctrl+right":
 		cmd := m.selectView(m.tab + 1)
 		return m, cmd
 	case "pgdown":
@@ -454,7 +454,7 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.task = 0
 			return m, m.fetch
 		}
-	case "shift+tab", "ctrl+left":
+	case "shift+tab", "left", "ctrl+left":
 		cmd := m.selectView(m.tab - 1)
 		return m, cmd
 	case "1", "2", "3", "4", "5", "6", "7", "8":
@@ -571,28 +571,20 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.stepContent(1)
 	case "[":
 		m.stepContent(-1)
-	case "right", "l":
-		if key == "right" && !m.arrowsSelectTarget() {
-			cmd := m.selectView(m.tab + 1)
-			return m, cmd
-		}
+	case "alt+right", "l":
 		if m.tab == 6 && len(m.agents) > 0 {
 			m.teamMemberIndex = (m.teamMemberIndex + 1) % len(m.agents)
 			return m, nil
 		}
-		if len(m.agents) > 0 {
+		if m.tab == 2 && len(m.agents) > 0 {
 			m.target = (m.target + 1) % len(m.agents)
 		}
-	case "left", "h":
-		if key == "left" && !m.arrowsSelectTarget() {
-			cmd := m.selectView(m.tab - 1)
-			return m, cmd
-		}
+	case "alt+left", "h":
 		if m.tab == 6 && len(m.agents) > 0 {
 			m.teamMemberIndex = (m.teamMemberIndex + len(m.agents) - 1) % len(m.agents)
 			return m, nil
 		}
-		if len(m.agents) > 0 {
+		if m.tab == 2 && len(m.agents) > 0 {
 			m.target = (m.target + len(m.agents) - 1) % len(m.agents)
 		}
 	case "r":
@@ -718,7 +710,7 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.tab == 2 && !m.busy && len(m.agents) > 0 {
 			from, to := m.selectedID(), m.agents[m.target%len(m.agents)].ID
 			if from == to {
-				m.message = "Choose another recipient with ←/→ before connecting."
+				m.message = "Choose another recipient with h/l or Alt+←/→ before connecting."
 				return m, nil
 			}
 			if m.reviewLegacyCollaboration([]string{from, to}) {

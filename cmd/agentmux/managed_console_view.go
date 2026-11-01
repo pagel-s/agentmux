@@ -81,7 +81,7 @@ func (m console) roster(width, height int) string {
 	}
 	hint := "↑/↓ select · / find\n" + m.nativeEntryHint()
 	if m.tab == 6 {
-		hint = "←/→ team action target\n2 Agents: native terminals"
+		hint = "h/l team action target\n2 Agents: native terminals"
 	} else if m.tab == 5 {
 		hint = "↑/↓ observed terminal\nEnter details · c bridge"
 	}
@@ -201,7 +201,7 @@ func (m console) panel(width, height int) string {
 		out.WriteString(consoleAccent.Render("Connections") + consoleMuted.Render(fmt.Sprintf("  revision %d", m.data.boundaries.Version)) + "\n\n")
 		if len(m.agents) > 0 {
 			target := m.agents[m.target%len(m.agents)].ID
-			fmt.Fprintf(&out, "%s  →  %s\n%s\n\n", consoleAccent.Render(consoleContent(m.agentLabel(m.selectedID()), 150)), consoleAccent.Render(consoleContent(m.agentLabel(target), 150)), consoleMuted.Render("←/→ recipient · ↑/↓ sender"))
+			fmt.Fprintf(&out, "%s  →  %s\n%s\n\n", consoleAccent.Render(consoleContent(m.agentLabel(m.selectedID()), 150)), consoleAccent.Render(consoleContent(m.agentLabel(target), 150)), consoleMuted.Render("h/l or Alt+←/→ recipient · ↑/↓ sender"))
 			for _, row := range []struct{ key, action, label string }{{"m", "message.send", "Messages"}, {"p", "ping.send", "Pings"}, {"i", "instruct", "Commands"}} {
 				enabled := boundaryAllows(m.data.boundaries, target, row.action)
 				value := "○  denied"
