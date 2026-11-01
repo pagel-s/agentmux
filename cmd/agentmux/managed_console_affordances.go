@@ -112,7 +112,7 @@ func (m console) teamActionReason(operation string) string {
 	}
 	target := m.teamTarget()
 	if target == nil {
-		return "Choose an agent with ←/→."
+		return "Choose an agent with h/l or Alt+←/→."
 	}
 	switch operation {
 	case "team.invite":
@@ -141,7 +141,7 @@ func (m console) teamKeyHints() string {
 	if m.selectedTeam() == nil || m.data.teamsErr != nil {
 		return "3 Connections: connect existing sessions · ? team help"
 	}
-	keys := []string{"[/] team", "←/→ target", "o full team"}
+	keys := []string{"[/] team", "h/l target", "o full team"}
 	for _, action := range []struct{ operation, hint string }{
 		{"team.invite", "i invite"}, {"team.remove", "r remove"}, {"team.transfer", "t owner"},
 		{"team.update", "e edit"}, {"team.dissolve", "d dissolve"}, {"board", "b board"}, {"memory", "v memory"},
@@ -161,9 +161,6 @@ func (m console) teamKeyHints() string {
 // shortcuts are spelled Shift+... so they cannot look like lowercase no-ops.
 func (m console) contextualKeys() string {
 	common := "←/→ views · Tab/1–8 · / find · Shift+W workspaces · ? help · q detach/close"
-	if m.arrowsSelectTarget() {
-		common = "Ctrl+←/→ views · Tab/1–8 · / find · Shift+W workspaces · ? help · q detach/close"
-	}
 	if m.workspacePicker != nil {
 		return "↑/↓ workspace · Enter opens observer · Esc/q back"
 	}
@@ -194,7 +191,7 @@ func (m console) contextualKeys() string {
 		}
 	case 2:
 		if m.selectedID() != "" {
-			context = "↑/↓ sender · ←/→ recipient · c connect · d isolate"
+			context = "↑/↓ sender · h/l recipient · c connect · d isolate"
 			if !m.offline && m.data.boundaries.Agent == m.selectedID() {
 				context += "\nm/p/i note/ping/task · Shift+M/P/I reset override · o details"
 			}

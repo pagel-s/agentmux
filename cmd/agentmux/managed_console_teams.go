@@ -225,7 +225,7 @@ func (m console) teamsPanel(width, height int) string {
 		return consoleClip(out.String()+"Teams unavailable: "+consoleContent(m.data.teamsErr.Error(), 200), width, height)
 	}
 	if len(m.data.teams) == 0 {
-		out.WriteString(consoleMuted.Render("No agent-created teams.\n\nFor everyday collaboration: press 3 for Connections, choose a recipient\nwith ←/→, then c to connect the selected pair.\n\nDynamic teams appear when a permitted agent creates one.\nInvitations require that agent's own acceptance; they grant no access alone."))
+		out.WriteString(consoleMuted.Render("No agent-created teams.\n\nFor everyday collaboration: press 3 for Connections, choose a recipient\nwith h/l or Alt+←/→, then c to connect the selected pair.\n\nDynamic teams appear when a permitted agent creates one.\nInvitations require that agent's own acceptance; they grant no access alone."))
 		return consoleClip(out.String(), width, height)
 	}
 	selected := m.teamIndex % len(m.data.teams)

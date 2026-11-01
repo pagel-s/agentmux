@@ -82,16 +82,16 @@ Press **F1** (or **Ctrl-b**, release, then **g**) to return to the workbench.
 
 Try **/** to search, **Shift+L** to edit its title, **Shift+V** to edit its role,
 **Shift+N** to add a session, **?** for context help, and **←/→**, **Tab** or
-**1–8** to change views. In Connections and Teams, arrows choose the recipient
-or target; use **Ctrl+←/→** to change views there. The footer follows the current
-view and selection; uppercase
-letters mean hold Shift. Titles can change or repeat;
+**1–8** to change views. Left/right works across all eight views. In Connections
+and Teams, use **h/l** or **Alt+←/→** to choose the recipient or action target.
+The footer follows the current view and selection; uppercase letters mean hold
+Shift. Titles can change or repeat;
 commands still use the stable IDs. A role update changes future managed turns
 and sends a native inbox notice; it does not inject a new user turn.
 
 For pairing existing sessions, use **3 Connections**, choose a recipient with
-**←/→**, then **c**. **7 Teams** is for consent-based teams created by agents
-with permission; an empty Teams view is normal for this everyday preset.
+**h/l** or **Alt+←/→**, then **c**. **7 Teams** is for consent-based teams created
+by agents with permission; an empty Teams view is normal for this everyday preset.
 
 Detach with **Ctrl-b**, release, then **d**. The sessions keep running.
 Runtime services are separate from the agent windows. To inspect their logs,
