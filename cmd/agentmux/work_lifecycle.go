@@ -18,7 +18,7 @@ import (
 
 func runWorkRelaunch(args []string, out, diagnostics io.Writer) int {
 	if workHelpRequested(args) {
-		fmt.Fprintln(out, "Usage: agentmux relaunch ID [--resume ID|last|picker] [--session NAME | --state DIR]\nRelaunch one exited native session with its stable ID, preserving healthy peers.\nDefault: fresh native conversation. --resume explicitly selects native history; no conversation is guessed.")
+		fmt.Fprintln(out, "Usage: agentmux relaunch ID [--resume ID|last|picker] [--native-launcher ABSOLUTE_PATH] [--session NAME | --state DIR]\nRelaunch one exited native session with its stable ID, preserving healthy peers.\nDefault: fresh native conversation. --resume explicitly selects native history; no conversation is guessed.\n--native-launcher explicitly recovers a trusted-local interactive session using the selected public executable for this attempt only. Configured trailing arguments and saved definitions are preserved; the running controller must support this option.")
 		return exitSuccess
 	}
 	o, err := parseWorkOptions(args)
@@ -36,7 +36,7 @@ func runWorkRelaunch(args []string, out, diagnostics io.Writer) int {
 	}
 	launcher, err := managedlaunch.New(managedlaunch.Options{StateDir: o.state, Executable: exe})
 	if err == nil {
-		_, err = launcher.Relaunch(context.Background(), o.args[0], o.resume)
+		_, err = launcher.RelaunchWithLauncher(context.Background(), o.args[0], o.resume, o.nativeLauncher)
 	}
 	if err != nil {
 		fmt.Fprintln(diagnostics, "error:", err)
@@ -47,6 +47,9 @@ func runWorkRelaunch(args []string, out, diagnostics io.Writer) int {
 		mode = "native history " + o.resume
 	}
 	fmt.Fprintf(out, "Relaunched %s in %s (%s). Peers remain running.\n", consoleContent(o.args[0], 100), consoleContent(o.state, 300), consoleContent(mode, 200))
+	if o.nativeLauncher != "" {
+		fmt.Fprintln(out, "This attempt uses launcher", consoleContent(o.nativeLauncher, 400)+"; the saved definition is unchanged.")
+	}
 	fmt.Fprintln(out, "Open:", managedlaunch.ShellCommand([]string{"agentmux", "attach", o.args[0], "--state", o.state}))
 	return exitSuccess
 }

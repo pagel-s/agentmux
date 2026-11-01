@@ -48,8 +48,30 @@ func (l *Launcher) pinController(cfg managedconfig.Config) error {
 	}
 	digest := sha256.Sum256(data)
 	path := filepath.Join(root, hex.EncodeToString(digest[:])+".agentmux")
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0700)
-	if os.IsExist(err) {
+	// Publish only a complete copy. Attachments may pin the same new observer
+	// concurrently, without the lifecycle lock held by the running supervisor.
+	f, err := os.CreateTemp(root, ".pin-*")
+	if err != nil {
+		return err
+	}
+	temporary := f.Name()
+	defer os.Remove(temporary)
+	if err := f.Chmod(0700); err != nil {
+		f.Close()
+		return err
+	}
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	if err := os.Link(temporary, path); os.IsExist(err) {
 		info, e := os.Lstat(path)
 		if e != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 || info.Mode().Perm()&0100 == 0 {
 			return errors.New("existing pinned controller is not a private regular executable")
@@ -60,16 +82,6 @@ func (l *Launcher) pinController(cfg managedconfig.Config) error {
 		}
 	} else if err != nil {
 		return err
-	} else {
-		if _, err = f.Write(data); err != nil {
-			f.Close()
-			os.Remove(path)
-			return err
-		}
-		if err = f.Close(); err != nil {
-			os.Remove(path)
-			return err
-		}
 	}
 	l.options.Executable = path
 	return nil

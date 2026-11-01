@@ -17,6 +17,7 @@ import (
 type consoleReader struct {
 	title, body  string
 	offset       int
+	help         bool
 	memoryReview *consoleMemoryVersionReview
 	roleReview   *consoleRoleReview
 }
@@ -111,7 +112,7 @@ func (m console) readerPageRows() int {
 	footer := ""
 	if m.busy {
 		footer = "Applying…\n"
-	} else if m.message != "" {
+	} else if m.message != "" && !m.reader.help {
 		footer = consoleClip(consoleContent(m.message, 500), width, 2) + "\n"
 	}
 	footer += m.readerHelp()
@@ -226,9 +227,9 @@ func (m *console) openReader() {
 
 func (m console) readerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	page := m.readerPageRows()
-	lines := strings.Split(ansi.Hardwrap(m.reader.body, max(1, m.width), true), "\n")
+	lines := strings.Split(ansi.Wrap(m.reader.body, max(1, m.width), ""), "\n")
 	limit := max(0, len(lines)-page)
-	m.reader = &consoleReader{title: m.reader.title, body: m.reader.body, offset: min(m.reader.offset, limit), memoryReview: m.reader.memoryReview, roleReview: m.reader.roleReview}
+	m.reader = &consoleReader{title: m.reader.title, body: m.reader.body, offset: min(m.reader.offset, limit), help: m.reader.help, memoryReview: m.reader.memoryReview, roleReview: m.reader.roleReview}
 	switch msg.String() {
 	case "enter":
 		if review := m.reader.roleReview; review != nil {
@@ -271,11 +272,15 @@ func (m console) readerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m console) readerPanel(width, height int) string {
-	lines := strings.Split(ansi.Hardwrap(m.reader.body, max(1, width), true), "\n")
+	lines := strings.Split(ansi.Wrap(m.reader.body, max(1, width), ""), "\n")
 	rows := max(1, height-3)
 	first := min(m.reader.offset, max(0, len(lines)-rows))
 	last := min(len(lines), first+rows)
-	header := consoleAccent.Render(consoleClip(m.reader.title, width, 1)) + "\n" + consoleMuted.Render(consoleClip(fmt.Sprintf("Saved selection · lines %d–%d / %d · PgUp/PgDn · Esc back", first+1, last, len(lines)), width, 1)) + "\n\n"
+	label := "Saved selection"
+	if m.reader.help {
+		label = "Help"
+	}
+	header := consoleAccent.Render(consoleClip(m.reader.title, width, 1)) + "\n" + consoleMuted.Render(consoleClip(fmt.Sprintf("%s · lines %d–%d / %d · PgUp/PgDn · Esc back", label, first+1, last, len(lines)), width, 1)) + "\n\n"
 	return consoleClip(header+strings.Join(lines[first:last], "\n"), width, height)
 }
 

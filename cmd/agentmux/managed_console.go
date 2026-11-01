@@ -364,15 +364,18 @@ func (m console) attach() tea.Cmd {
 		}
 	}
 	return func() tea.Msg {
-		exe := runtime.Controller
-		if exe == "" {
-			var err error
-			exe, err = os.Executable()
-			if err != nil {
-				return consoleAction{err: err}
-			}
+		// The observer can be newer than the running lifecycle controller.
+		// Reuse this observer for presentation; never downgrade attachment UI
+		// through the workspace's deliberately frozen supervisor executable.
+		exe, err := os.Executable()
+		if err != nil {
+			return consoleAction{err: err}
 		}
-		if !strings.HasPrefix(os.Getenv("TMUX"), managedlaunch.SocketPath(state)+",") {
+		hostTMUX := os.Getenv("TMUX")
+		if hostTMUX != "" && !strings.HasPrefix(hostTMUX, managedlaunch.SocketPath(state)+",") {
+			return consoleAttachGuidance{command: managedlaunch.ShellCommand([]string{"agentmux", "attach", id, "--state", state})}
+		}
+		if hostTMUX == "" {
 			return consoleAttach{state: state, agent: id, controller: exe}
 		}
 		launcher, err := managedlaunch.New(managedlaunch.Options{StateDir: state, Executable: exe})
@@ -387,6 +390,7 @@ func (m console) attach() tea.Cmd {
 }
 
 type consoleAttach struct{ state, agent, controller string }
+type consoleAttachGuidance struct{ command string }
 
 func (m console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -403,6 +407,10 @@ func (m console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.receiveMemoryReview(msg)
 	case consoleRoleReview:
 		m.receiveRoleReview(msg)
+	case consoleAttachGuidance:
+		m.reader = &consoleReader{title: "Open native session in another terminal", body: "This observer is inside a different tmux workspace.\n\nRun this command in a separate terminal:\n\n" + consoleContent(msg.command, 4000) + "\n\nThis keeps the current workspace, other clients and observer drafts unchanged.\nYou can continue observing and controlling this workspace here.\nEsc returns to this observer."}
+		m.message = "Native attachment needs a separate terminal; the exact command is shown above."
+		return m, nil
 	case consoleMemory:
 		if msg.request != m.memoryRequest || msg.agent != m.selectedID() || m.tab != 3 || !m.memoryLoading {
 			return m, nil

@@ -55,7 +55,7 @@ Use the same `--session NAME` on later commands when you start a named workspace
 Give sessions task titles such as “Fix login redirect”; the title can change
 while its ID and native conversation stay the same. The overview shows project,
 provider and ID, with creation/start time and terminal location in session details.
-Press **/** to find a session and **L** to edit its title. The web app has the same
+Press **/** to find a session and **Shift+L** to edit its title. The web app has the same
 search and title controls. New sessions can generate their IDs automatically:
 
 ```sh
@@ -65,7 +65,7 @@ agentmux role SESSION_ID "Review the authentication changes"
 agentmux workspaces
 ```
 
-Press **V** to edit the selected session's role with version checking and **W**
+Press **Shift+V** to edit the selected session's role with version checking and **Shift+W**
 to inspect other workspaces. Native sessions receive role changes as inbox
 notices; managed workers use the current role at their next task claim. For a
 prompt-free launch, use `add --native-only`; it appends no Agentmux context or
@@ -75,7 +75,11 @@ Select an agent with ↑/↓ and press **Enter** for its native CLI. **F1** retu
 the workbench; **Ctrl-b b** opens the board as a popup; **Ctrl-b d** detaches.
 For a Ctrl-b shortcut, press Ctrl-b, release both keys, then press the final key.
 Open another terminal window with `attach`: each attachment switches agents
-independently while sharing the same underlying sessions.
+independently and has its own dashboard and drafts, while sharing the same
+underlying agent terminals. **Ctrl-b**, release, then **Shift+D** opens read-only
+runtime service logs.
+In the workbench itself, use **1–8** to switch views; popup shortcuts show the
+corresponding view key instead of opening a second dashboard over it.
 
 ```sh
 agentmux add billing --harness claude --project ~/projects/billing

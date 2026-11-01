@@ -19,6 +19,11 @@ func runInteractiveAgent(ctx context.Context, opts WorkerOptions, cfg managedcon
 	if opts.Once {
 		return errors.New("interactive sessions do not consume queued tasks; attach to their native terminal")
 	}
+	var err error
+	agent, err = interactiveLauncher(agent, opts.NativeLauncher)
+	if err != nil {
+		return err
+	}
 	unlock, err := acquireLock(filepath.Join(dir, "worker-"+opts.AgentID+".lock"))
 	if err != nil {
 		return errors.New("agent already has an active worker or terminal")
@@ -106,8 +111,33 @@ func runInteractiveAgent(ctx context.Context, opts WorkerOptions, cfg managedcon
 			StateDir: dir, CredentialFile: credentialPath, SocketPath: credential.Socket, ReadOnlyPaths: paths, HomeFiles: files,
 			Limits: sandbox.Limits{MemoryBytes: agent.Resources.MemoryBytes, CPUPercent: agent.Resources.CPUPercent, Processes: agent.Resources.Processes, OpenFiles: agent.Resources.OpenFiles, CPUSeconds: agent.Resources.CPUSeconds, AddressSpaceBytes: agent.Resources.AddressSpaceBytes}})
 	}
-	fmt.Fprintf(os.Stdout, "Agentmux %s | native interactive session | %s sandbox\nDirect input stays in this terminal. Board/inbox access uses the broker. Detach: Ctrl-b d.\n", opts.AgentID, agent.Sandbox)
+	fmt.Fprintf(os.Stdout, "Agentmux %s | native interactive session | %s sandbox\nDirect input stays in this terminal. F1: control center. Detach: Ctrl-b d.\n", opts.AgentID, agent.Sandbox)
 	return harness.RunInteractive(ctx, req, os.Stdin, os.Stdout, os.Stderr)
+}
+
+// interactiveLauncher is an explicit recovery for one native invocation. It
+// preserves configured argument prefixes and mount declarations, never mutates
+// the saved definition, and never changes sandboxed or managed execution.
+func interactiveLauncher(agent managedconfig.Agent, launcher string) (managedconfig.Agent, error) {
+	if launcher == "" {
+		return agent, nil
+	}
+	if agent.Interaction != "interactive" || agent.Sandbox != "local" {
+		return agent, errors.New("native launcher override is only available for trusted-local interactive sessions")
+	}
+	if !filepath.IsAbs(launcher) {
+		return agent, errors.New("native launcher override requires an absolute executable path")
+	}
+	binary, err := workerExecutable(launcher, "", nil)
+	if err != nil {
+		return agent, errors.New("native launcher override is not an executable regular file")
+	}
+	command := []string{binary}
+	if len(agent.Command) > 0 {
+		command = append(command, agent.Command[1:]...)
+	}
+	agent.Command = command
+	return agent, nil
 }
 
 // Native-only workspaces have no synthetic lifetime. Explicit parent or broker

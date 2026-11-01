@@ -22,7 +22,7 @@ default workspace `work` and opens its workbench.
 | `agentmux add --harness antigravity --native-only --project DIR` | Start native Antigravity without an injected Agentmux prompt |
 | `agentmux sessions` | List registered sessions and separately observed external terminals |
 | `agentmux workspaces [--register DIR]` | Find named and remembered custom workspaces; register an older custom location |
-| `agentmux relaunch AGENT_ID [--resume ID\|last\|picker]` | Relaunch one exited native session, retaining its stable ID and healthy peers |
+| `agentmux relaunch AGENT_ID [--resume ID\|last\|picker] [--native-launcher ABSOLUTE_PATH]` | Relaunch one exited native session, retaining its stable ID and healthy peers; optional launcher recovery applies only to trusted-local interactive sessions |
 | `agentmux connect OBSERVED_ID --title "Task"` | Prepare a helper for an existing external session; paste the printed setup into its original terminal |
 | `agentmux label AGENT_ID "Task"` | Rename its display title while keeping its ID and conversation |
 | `agentmux role AGENT_ID "Role"` | Change the owner role with CAS; managed workers use it at their next claim, native agents receive an inbox notice |

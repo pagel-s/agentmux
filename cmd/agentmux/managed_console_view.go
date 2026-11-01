@@ -74,12 +74,17 @@ func (m console) roster(width, height int) string {
 		if i == m.selected {
 			name = consoleSelected.Render("› " + consoleContent(sessionTitle(a), 150))
 		}
-		out.WriteString(consoleClip(name, width, 1) + "\n" + consoleMuted.Render(consoleClip("  "+a.ID+" · "+a.Config.Harness, width, 1)) + "\n" + consoleMuted.Render(consoleClip(consoleContent("  "+sessionProject(a.Config.Workdir)+" · "+mode+" · "+status, 300), width, 1)) + "\n\n")
+		out.WriteString(consoleClip(name, width, 1) + "\n" + consoleMuted.Render(consoleClip("  "+status+" · "+a.ID+" · "+a.Config.Harness, width, 1)) + "\n" + consoleMuted.Render(consoleClip(consoleContent("  "+sessionProject(a.Config.Workdir)+" · "+mode, 300), width, 1)) + "\n\n")
 		if lipgloss.Height(out.String()) >= height-2 {
 			break
 		}
 	}
-	hint := "↑/↓ select · / find\nEnter native CLI · L title"
+	hint := "↑/↓ select · / find\n" + m.nativeEntryHint()
+	if m.tab == 6 {
+		hint = "←/→ team action target\n2 Agents: native terminals"
+	} else if m.tab == 5 {
+		hint = "↑/↓ observed terminal\nEnter details · c bridge"
+	}
 	if m.data.headless {
 		hint = "↑/↓ select · / find\nTasks output · Events state"
 	}
@@ -110,9 +115,22 @@ func (m console) panel(width, height int) string {
 		}
 		filters := []string{"All coordination", boardLabel, m.selectedID() + " inbox"}
 		messages := m.boardMessages()
-		fmt.Fprintf(&out, "%s  %s\n\n", consoleAccent.Render(filters[m.boardFilter%3]), consoleMuted.Render(fmt.Sprintf("%d recent · f filter · [/] select · r reply · o read all", len(messages))))
+		boardHints := fmt.Sprintf("%d recent · f filter", len(messages))
+		if len(messages) > 0 {
+			boardHints += " · [/] select · r reply · o read all"
+		}
+		fmt.Fprintf(&out, "%s  %s\n\n", consoleAccent.Render(filters[m.boardFilter%3]), consoleMuted.Render(boardHints))
 		if len(messages) == 0 {
-			out.WriteString(consoleMuted.Render("No messages here yet.\n\nPress b to post to a shared board; +/- chooses the board.\nPress s to send to the selected agent.\nEnter opens its full native terminal.\nConnections → c enables a scoped collaboration group."))
+			empty := "No messages here yet."
+			if m.selectedID() != "" {
+				empty += "\n\nPress s to send to the selected agent.\n" + m.nativeEntryHint() + "."
+			}
+			if board != "" {
+				empty += "\nPress b to post; +/- chooses a shared board."
+			} else {
+				empty += "\nPress 3 for Connections, then c to connect a pair and share a board."
+			}
+			out.WriteString(consoleMuted.Render(empty))
 		}
 		if len(messages) > 0 {
 			start := m.messageIndex % len(messages)
@@ -135,12 +153,9 @@ func (m console) panel(width, height int) string {
 			}
 		}
 	case 1:
-		hint := "Enter worker console · Tasks output · o details · L title"
+		hint := m.nativeEntryHint() + " · o details · Shift+L title"
 		if m.data.headless {
-			hint = "Headless managed worker · Tasks output · Events lifecycle · o details · L title"
-		}
-		if len(m.agents) > 0 && m.agents[m.selected%len(m.agents)].Config.Interaction == "interactive" {
-			hint = "Enter native terminal · o session details · L edit title"
+			hint = "Headless managed worker · 5 Tasks output · 8 Events · o details"
 		}
 		fmt.Fprintf(&out, "%s\n%s\n\n", consoleAccent.Render(consoleClip(consoleContent(m.agentLabel(m.selectedID()), 200), width, 1)), consoleMuted.Render(hint))
 		if len(m.agents) > 0 {
@@ -163,10 +178,19 @@ func (m console) panel(width, height int) string {
 			}
 			break
 		}
-		out.WriteString(consoleMuted.Render("LIVE TERMINAL PREVIEW") + "\n")
+		previewLabel := "LIVE TERMINAL PREVIEW"
+		if m.nativeNeedsRelaunch() {
+			previewLabel = "LAST TERMINAL OUTPUT · native CLI " + m.data.runtime.Agents[m.selectedID()].State
+		} else if m.offline {
+			previewLabel = "SAVED TERMINAL PREVIEW · current process state unknown"
+		}
+		out.WriteString(consoleMuted.Render(previewLabel) + "\n")
 		preview := strings.TrimSpace(m.data.preview)
 		if preview == "" {
 			preview = "Waiting for terminal output…"
+			if m.nativeNeedsRelaunch() {
+				preview = "No captured output. Enter opens a deliberate same-ID relaunch review."
+			}
 		}
 		out.WriteString(consoleContent(preview, 6000))
 	case 2:
@@ -243,8 +267,18 @@ func (m console) panel(width, height int) string {
 				out.WriteString("\n" + consoleContent(v.Value, 4000))
 			}
 		} else {
-			out.WriteString(consoleAccent.Render("Shared boundaries") + consoleMuted.Render("  [/] select · r/w access · R reset · v memory · o details") + "\n\n")
 			scopes := append(append([]managed.BoundaryScope{}, m.data.boundaries.Boards...), m.data.boundaries.Memory...)
+			hints := ""
+			if len(scopes) > 0 {
+				hints = "  [/] select · r/w access · Shift+R reset · o details"
+				if len(m.data.boundaries.Memory) > 0 {
+					hints += " · v memory"
+				}
+			}
+			out.WriteString(consoleAccent.Render("Shared boundaries") + consoleMuted.Render(hints) + "\n\n")
+			if len(scopes) == 0 {
+				out.WriteString(consoleMuted.Render("No shared namespaces. Press 3 for Connections, then c to connect a pair.\n\n"))
+			}
 			selected := 0
 			if len(scopes) > 0 {
 				selected = m.scope % len(scopes)
@@ -274,8 +308,19 @@ func (m console) panel(width, height int) string {
 			out.WriteString("\n" + consoleMuted.Render("Private memory is separate for every agent.\nRevocation prevents future reads; past knowledge remains."))
 		}
 	case 4:
-		out.WriteString(consoleAccent.Render("Tasks & results") + consoleMuted.Render("  [/] select · o read all · r follow up · c cancel") + "\n\n")
-		out.WriteString(consoleMuted.Render(fmt.Sprintf("History page %d · newest first · PgDn older / PgUp newer · f search", len(m.taskBack)+1)) + "\n")
+		taskHints := ""
+		if len(m.data.activity.Tasks) > 0 {
+			taskHints = "  [/] select · o read all · r follow up · c cancel"
+		}
+		out.WriteString(consoleAccent.Render("Tasks & results") + consoleMuted.Render(taskHints) + "\n\n")
+		historyHint := fmt.Sprintf("History page %d · newest first · f search", len(m.taskBack)+1)
+		if m.taskMore {
+			historyHint += " · PgDn older"
+		}
+		if len(m.taskBack) > 0 {
+			historyHint += " · PgUp newer"
+		}
+		out.WriteString(consoleMuted.Render(historyHint) + "\n")
 		if m.taskQuery != "" {
 			out.WriteString("Search: " + consoleContent(m.taskQuery, 200) + "\n")
 		}
@@ -305,10 +350,14 @@ func (m console) panel(width, height int) string {
 		}
 	case 5:
 		observations := m.observedSessions()
-		out.WriteString(consoleAccent.Render("Existing sessions") + consoleMuted.Render("  ↑/↓ select · Enter details · c prepare bridge") + "\n\n")
+		sessionHints := ""
+		if len(observations) > 0 {
+			sessionHints = "  ↑/↓ select · Enter details · c prepare bridge"
+		}
+		out.WriteString(consoleAccent.Render("Existing sessions") + consoleMuted.Render(sessionHints) + "\n\n")
 		out.WriteString(consoleMuted.Render("Observed live terminals keep their native conversation and tools.\nObservation grants no communication rights and sends no input.") + "\n\n")
 		if len(observations) == 0 {
-			out.WriteString(consoleMuted.Render("No unregistered live TTY sessions found.\nRegistered bridges appear in Agents under their assigned names.\nN creates a native session. Generic interpreter wrappers may not be identifiable.\nDiscovery is local and best effort; custom tmux servers may be absent."))
+			out.WriteString(consoleMuted.Render("No unregistered live TTY sessions found.\nRegistered bridges appear in Agents under their assigned names.\nShift+N creates a native session. Generic wrappers may not be identifiable.\nDiscovery is local and best effort; custom tmux servers may be absent."))
 		}
 		first, count := max(0, m.observedSelected-4), 5
 		if m.details != "" {
@@ -408,16 +457,10 @@ func (m console) View() string {
 	}
 	if m.busy {
 		footer.WriteString(consoleMuted.Render("Applying…") + "\n")
-	} else if m.message != "" {
+	} else if m.message != "" && (m.reader == nil || !m.reader.help) {
 		footer.WriteString(consoleClip(consoleContent(m.message, 500), width, 2) + "\n")
 	}
-	help := "↑/↓ select · Enter native CLI · / find · L title · V role · Tab views\nN new · s send · b board · x revoke + descendants · q detach/close\nW workspaces · U relaunch · ? help · F1 workbench"
-	if m.data.headless {
-		help = "↑/↓ agent · / find · L title · Tab views · 7 Teams · 8 Events\nTasks: output/cancel · Events: lifecycle · x revoke tree · q close observer"
-		if m.data.research != nil {
-			help += " · P/R/S/T phase controls"
-		}
-	}
+	help := m.contextualKeys()
 	if m.reader != nil {
 		help = m.readerHelp()
 	}

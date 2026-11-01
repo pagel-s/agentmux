@@ -353,20 +353,7 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return consoleWorkspaceList{rows: rows, err: err, request: request}
 		}
 	case "U":
-		if !m.busy && m.selectedID() != "" {
-			a := m.agents[m.selected%len(m.agents)]
-			pane, owned := m.data.runtime.Agents[a.ID]
-			if a.State != "active" || a.External || a.Config.Interaction != "interactive" || !owned {
-				m.message = "Only active workspace-owned native sessions can be relaunched."
-			} else if m.data.runtime.RelaunchVersion != 1 {
-				m.message = "Restart this workspace once with the updated CLI to enable individual relaunch."
-			} else if pane.State == "running" {
-				m.message = "Exit the selected native CLI before relaunching it."
-			} else {
-				m.compose("relaunch", m.selectedID(), "", "")
-				m.message = "Review stable ID above. Enter starts fresh; or type last, picker, or an exact native history ID. Healthy peers remain running."
-			}
-		}
+		m.reviewNativeRelaunch()
 	case "?":
 		m.openContextHelp()
 	case "ctrl+r":
@@ -482,31 +469,54 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.fetch
 		}
 	case "enter":
-		if m.tab == 6 && len(m.agents) > 0 {
+		if m.tab == 6 {
+			if m.selectedTeam() == nil || m.data.teamsErr != nil {
+				m.message = "No team target is selected. Press 2 for Agents to open a native terminal, or 3 for Connections."
+				return m, nil
+			}
+			if len(m.agents) == 0 {
+				m.message = "No registered agent is available as the team's terminal target."
+				return m, nil
+			}
 			m.selected = m.teamMemberIndex % len(m.agents)
 			m.closeMemory()
 			a := m.agents[m.selected]
 			m.data.headless = !a.External && m.data.runtime.Agents[a.ID].PaneID == "" && (m.data.research != nil || m.data.runtime.AttemptID == "" && a.Config.Interaction != "interactive")
+			if m.nativeNeedsRelaunch() {
+				m.reviewNativeRelaunch()
+				return m, nil
+			}
 			return m, m.attach()
 		}
 		if m.tab == 5 {
 			if observations := m.observedSessions(); len(observations) > 0 {
 				v := observations[m.observedSelected%len(observations)]
 				m.details = observedTitle(v) + "\nObserved ID: " + v.ID + "\nProject: " + v.Project + "\nStarted: " + sessionAdded(v.StartedAt) + "\nOriginal terminal: " + v.TTY + "\nTmux: " + v.TmuxSession + "\n" + v.AttachCommand + "\nConnect bridge: press c, then copy the displayed setup into the existing native conversation. No terminal input is injected."
+			} else {
+				m.message = "No unregistered terminal is selected. Press 2 for registered Agents, or Shift+N to start one."
 			}
 			return m, nil
 		}
 		if m.selectedID() != "" {
+			if m.nativeNeedsRelaunch() {
+				m.reviewNativeRelaunch()
+				return m, nil
+			}
 			return m, m.attach()
 		}
+		m.message = "No session is selected. Press Shift+N to add a native session."
 	case "s":
 		if m.selectedID() != "" {
 			m.compose("send", m.selectedID(), "", "")
+		} else {
+			m.message = "Select a registered agent before sending a message. Press Shift+N to add one."
 		}
 	case "b":
 		if m.tab == 6 {
-			if team := m.selectedTeam(); team != nil && team.State == "active" {
-				m.compose("board", team.Board, "", "")
+			if reason := m.teamActionReason("board"); reason != "" {
+				m.message = reason
+			} else {
+				m.compose("board", m.selectedTeam().Board, "", "")
 			}
 			return m, nil
 		}
@@ -593,6 +603,8 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.tab == 4 && len(m.data.activity.Tasks) > 0 {
 			v := m.data.activity.Tasks[m.task%len(m.data.activity.Tasks)]
 			m.compose("reply", v.To, v.ID, "")
+		} else if m.tab == 4 {
+			m.message = "No task is selected. Native conversations stay in each provider's terminal."
 		}
 		if m.tab == 0 && len(m.boardMessages()) > 0 {
 			v := m.boardMessages()[m.messageIndex%len(m.boardMessages())]
@@ -602,7 +614,11 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.compose("reply", v.From, v.ID, "")
 			} else if len(v.To) == 1 {
 				m.compose("reply", v.To[0], v.ID, "")
+			} else {
+				m.message = "This note has multiple recipients. Press s to choose an explicit direct recipient."
 			}
+		} else if m.tab == 0 {
+			m.message = "No message is selected to reply to. Press s for a direct note, or b for a shared board."
 		}
 		if m.tab == 3 && !m.memoryOpen {
 			cmd := m.toggleScope(false)
@@ -614,11 +630,13 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 	case "v":
-		if m.tab == 6 && !m.busy {
-			if team := m.selectedTeam(); team != nil {
-				m.tab = 3
-				return m, m.loadMemory(team.Memory)
+		if m.tab == 6 {
+			if reason := m.teamActionReason("memory"); reason != "" {
+				m.message = reason
+				return m, nil
 			}
+			m.tab = 3
+			return m, m.loadMemory(m.selectedTeam().Memory)
 		}
 		if m.tab == 3 && !m.busy {
 			if m.data.boundaries.Agent != m.selectedID() {
@@ -637,6 +655,8 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					return m, cmd
 				}
 				m.message = "Select a memory namespace, then v. Board notes are in Board."
+			} else {
+				m.message = "No shared memory namespace. Press 3 for Connections, then c to connect a pair."
 			}
 		}
 	case "t":
@@ -659,6 +679,8 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.memoryKey = v.Key
 			m.memoryVersion = v.Version
 			m.compose("memory-value", m.memoryNamespace+"/"+v.Key, "", v.Value)
+		} else if m.tab == 3 {
+			m.message = "Open a memory namespace with v, then select an entry to edit. Press n inside an empty namespace to create one."
 		}
 	case "n":
 		if m.tab == 3 && m.memoryOpen {
@@ -721,6 +743,11 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			v := m.data.activity.Tasks[m.task%len(m.data.activity.Tasks)]
 			m.busy = true
 			return m, m.mutate("task.cancel", map[string]any{"id": v.ID, "version": v.Version}, "Cancellation requested. Check delivery acknowledgement.")
+		}
+		if m.tab == 5 {
+			m.message = "No unregistered terminal is selected for a bridge. Registered sessions are in Agents (2)."
+		} else if m.tab == 4 {
+			m.message = "No managed task is selected to cancel. Native work is controlled in its own terminal."
 		}
 	case "d":
 		if m.offline {

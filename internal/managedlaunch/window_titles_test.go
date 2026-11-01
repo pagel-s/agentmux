@@ -80,8 +80,8 @@ func TestWindowTitleStatusUsesLiteralDataAndKeepsWindowIdentity(t *testing.T) {
 	if err := l.syncWindowTitle(ctx, runtime, pane, "opaque-id", ""); err != nil {
 		t.Fatal(err)
 	}
-	if got := tmux("display-message", "-p", "-t", pane, workbenchWindowFormat); got != "0:agent-opaque-id" {
-		t.Fatalf("cleared title did not restore native window-name fallback: %q", got)
+	if got := tmux("display-message", "-p", "-t", pane, workbenchWindowFormat); got != "opaque-id" {
+		t.Fatalf("cleared title did not restore stable agent ID fallback: %q", got)
 	}
 	tmux("set-option", "-p", "-t", pane, "@agentmux_runtime", "foreign-attempt")
 	if err := l.syncWindowTitle(ctx, runtime, pane, "opaque-id", "must not overwrite foreign window"); err == nil {
