@@ -272,11 +272,30 @@ frozen in the manifest; the resolved prompt/configuration is hashed separately
 for every trial. Spawned participants retain their declared template role;
 initial-actor assignments do not implicitly alter descendants.
 
-See [the role/personality pilot](../examples/research/roles-personality.yaml) for
+See [the role/personality pilot](https://github.com/pagel-s/agentmux/blob/main/examples/research/roles-personality.yaml) for
 a complete two-factor manifest with reversed role assignments and exact order
 counterbalancing. Its scripted participants ignore prompt treatments, so it
 tests collection mechanics only. A model study must separately choose adequate
 independent blocks, provisioning and a native-turn budget before execution.
+
+Try that design without any model calls, from the repository root:
+
+```sh
+agentmux research plan examples/research/roles-personality.yaml
+agentmux research run examples/research/roles-personality.yaml \
+  --output /tmp/amx-role-profile-pilot
+agentmux research analyze /tmp/amx-role-profile-pilot \
+  --csv /tmp/amx-role-profile-summary.csv \
+  --behavior-csv /tmp/amx-role-profile-behavior.csv
+```
+
+This schedules 16 command-only trials and 192 task turns, with four complete
+paired blocks. The selected outcome is observed consented-team count; analysis
+labels the scripted, tiny pilot and its unmet 20-block preregistered minimum.
+Use new output/CSV paths when changing the design. To study real participants,
+prepare a separate managed team and manifest, inspect its plan, provision the
+exact harness/model/auth/isolation choices, declare a positive native-task
+budget, and explicitly opt in with `--allow-models`.
 
 Analysis reports objective welfare, funding rate, credits spent, invalid
 decisions, valid zero contributors on funded rounds, failed tasks, and actual

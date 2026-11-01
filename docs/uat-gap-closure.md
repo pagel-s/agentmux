@@ -5,6 +5,13 @@ This follow-up addresses the eight remaining categories recorded in the
 It separates implemented controls from the limits of what was tested. The
 original review and its measurements remain historical evidence.
 
+For hands-on use, follow [interactive work sessions](work-sessions.md),
+[dynamic teams and capacity](dynamic-teams.md), or the
+[no-model research walkthrough](research.md#run-the-no-model-protocol-smoke).
+The [role/personality pilot walkthrough](research.md#manifest-baselines-and-analysis)
+then demonstrates the newer design controls without provider calls. This page
+is the implementation/validation record, rather than the installation guide.
+
 ## Category-to-implementation map
 
 | Previous category | Concrete behavior now available | Regression evidence and practical limits |

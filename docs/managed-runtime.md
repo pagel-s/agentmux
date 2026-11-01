@@ -14,8 +14,12 @@ The existing `load`, `render`, pane launchers, and v1 workspace YAML remain avai
 - Optional bubblewrap worker and broker isolation that fails closed when unavailable, plus explicitly trusted local execution.
 - One-command tmux startup, preflight diagnostics, an owner workbench, ordered shutdown, and explicit restart.
 - Bounded spawning from owner-approved sandbox templates and consent-based dynamic teams with private team boards/memory.
+- Audience-checked reply threads, live owner role updates, independently removable collaboration groups, and versioned admission controls.
+- Bounded local event traces and portable bundles verified against an explicitly pinned owner signing key.
 
 Agents can run as native interactive terminals (`interaction: interactive`) or serialized managed task workers (the default). Human input and native approvals stay in tmux; broker inbox messages never inject keystrokes. See [work sessions](work-sessions.md).
+
+Interactive `native_only: true` sessions require an empty role and omit Agentmux prompt injection. They retain broker coordination access, but tasks and role-change notices never become native terminal input. Managed-only conversation leases, automatic wakeups, traces, disk capsules and allowlist egress are rejected for interactive agents.
 
 [Persistent conversations and bounded wakeups](autonomous-workflows.md) support multi-turn workflows from one goal. Notes and pings are observations unless an explicitly authorized `instruct` creates a command task. Configured subscriptions can wake workers without injecting text into an interactive terminal. The finite [pilot runner](experiments.md) and [repeated-round research environment](research.md) support controlled comparisons separately from tmux supervision. Coordination history and native transcripts are useful evidence, but do not constitute a complete immutable trace of every model-visible input and tool execution.
 
@@ -101,6 +105,8 @@ Use `managed activity --state DIRECTORY` for a content-sensitive owner JSON snap
 
 `down` interrupts owned worker processes first, waits for their terminal processes to exit, and then stops the broker and supervisor. It removes only the attempt's tracked session. If termination or ownership cannot be confirmed, it reports attention and leaves the broker available for inspection. A stale stop request cannot stop a new attempt. Durable tasks and memory remain on disk. `restart` performs an explicit ordered stop/start; it does not silently retry uncertain deliveries or reset the persisted runtime budget. After a run's budget expires, start a new state directory for a new run.
 
+For one exited workspace-owned interactive session, use `agentmux relaunch AGENT_ID --state DIRECTORY`. Healthy peers keep running and the stable agent identity is retained. The default starts a fresh native conversation; `--resume last`, `--resume picker`, or an explicit native ID selects history through the supported harness. A live or revoked session cannot be relaunched, and no deadline is renewed. Older running controllers require one deliberate workspace restart before individual relaunch is available. See [recovery](traces-and-recovery.md) for the distinction from retrying a broker task.
+
 The lower-level commands remain useful without automatic tmux management:
 
 ```bash
@@ -126,6 +132,9 @@ For a manual worker, `--once` handles one queued task or exits if none is waitin
 | `task.list` / `task.get` | Optional state / task `id` | Sender, recipient, or owner |
 | `task.cancel` | Task `id`, current `version` | Sender or owner |
 | `task.verify` | Task `id`, current `version` | Owner, after submission |
+| `agent.role` | Agent `id`, `role`, current role `version` | Owner only |
+| `capacity.get` / `budget.status` | Optional `agent` | Own capacity/usage, or owner inspection |
+| `capacity.update` | Current resource `version`, budget/deadline fields | Owner only |
 | `memory.get` | `namespace`, `key` | Namespace readers |
 | `memory.list` | `namespace` | Namespace readers |
 | `memory.put` | `namespace`, `key`, `value`, `version` | Namespace writers |
@@ -150,9 +159,15 @@ export AGENTMUX_CREDENTIAL_FILE="$PWD/.agentmux-state/demo/credentials/lead.json
 
 Roles describe responsibilities. They grant no authority. Policy defaults to deny; explicit grants control messaging and instruction relationships, while board and memory ACLs are configured separately. A literal `"*"` covers configured agents only. It does not create identities or authorize future operation types.
 
+`agent.role` updates a role with its own `role_version` compare-and-swap check. Roles accept up to 16384 UTF-8 bytes without Unicode control characters except newlines/tabs; an empty role clears it. Managed workers capture the current role at the next task claim; in-flight input stays unchanged. Native sessions receive an inbox notice and can read the current role through `identity`; no keystrokes are injected. A nonempty role is rejected for `native_only` sessions.
+
+`board.post`, `message.send`, `ping.send` and `instruct` accept optional `reply_to` for a visible message or instruction task. The broker derives `thread_id`; callers cannot choose a root. A board reply retains the original board, while each direct recipient must already be able to read the referenced message. A reply adds no authority or ancestor access. `task.list` supports `state`, `to`, `query`, `order`, `after` and `limit`, with a returned `has_more` flag; use `task.get` for an exact task. Native provider-only chat turns are outside this broker history.
+
+Owner collaboration groups, explicit overrides and consented teams remain separate permission sources. See [live permissions](live-permissions.md) for overlapping groups, isolation overlays, explicit legacy-state review, reset semantics and live admission edits. [Memory lifecycle](memory-lifecycle.md) covers retention, retrieval and archive provenance.
+
 ## Bounded spawning and dynamic teams
 
-[The bounded team example](../examples/managed/bounded-teams.yaml) enables these features explicitly. It uses command harnesses, so inspecting the API makes no model calls. The command fixtures echo their instructions; they do not decide to spawn or cooperate by themselves.
+[The bounded team example](https://github.com/pagel-s/agentmux/blob/main/examples/managed/bounded-teams.yaml) enables these features explicitly. It uses command harnesses, so inspecting the API makes no model calls. The command fixtures echo their instructions; they do not decide to spawn or cooperate by themselves.
 
 ```bash
 ./bin/agentmux managed up examples/managed/bounded-teams.yaml --state .agentmux-state/teams
@@ -181,6 +196,8 @@ Team creation is separately enabled and restricted to configured creators or exp
 
 Use the returned team ID and version for `team.invite` (`id`, `agent`, `version`). The invitee must accept through its own credential using `team.join` (`id`, `version`); membership is not silently forced. `team.list` supplies current versions. Members receive the team's dedicated board and shared-memory namespace named in its response. Team membership does not grant instruction authority or access to unrelated namespaces. Board history defaults to messages written since joining; `teams.history: all` explicitly enables earlier history. Shared memory contains current values rather than a history of messages. Leaving removes future access but cannot erase information already read. `team.remove`, `team.leave`, and owner/creator `team.dissolve` update versioned membership. Lifetime team and member counts are bounded. See the [dynamic-team guide](dynamic-teams.md) for complete commands and consent rules.
 
+Managers can change team name/description and propose ownership transfer. Only the proposed owner can accept, under current delegated authority. `team.move` is a non-owner member's own consent to join a pending destination invitation and leave the source atomically; it requires both current team versions. `team.list` gives participants their own `self_access` explanation when ancestry or other current requirements block access.
+
 ## Model harnesses and local endpoints
 
 | Harness | Managed transport | Endpoint support |
@@ -195,10 +212,10 @@ The local setup was checked with Claude Code **2.1.316** and Pi **1.4.0** from t
 
 The examples include:
 
-- [Mixed Claude/Codex/Antigravity/Pi team](../examples/managed/mixed-team.yaml).
-- [Claude coder and Codex reviewer](../examples/managed/claude-codex.yaml), with an explicit Claude tool allowlist and Git workspace setup.
-- [Pi with local Ollama](../examples/managed/pi-ollama.yaml), using exactly `http://127.0.0.1:11434/v1`.
-- [Pi with vLLM](../examples/managed/pi-vllm.yaml), using exactly `http://127.0.0.1:8000/v1`.
+- [Mixed Claude/Codex/Antigravity/Pi team](https://github.com/pagel-s/agentmux/blob/main/examples/managed/mixed-team.yaml).
+- [Claude coder and Codex reviewer](https://github.com/pagel-s/agentmux/blob/main/examples/managed/claude-codex.yaml), with an explicit Claude tool allowlist and Git workspace setup.
+- [Pi with local Ollama](https://github.com/pagel-s/agentmux/blob/main/examples/managed/pi-ollama.yaml), using exactly `http://127.0.0.1:11434/v1`.
+- [Pi with vLLM](https://github.com/pagel-s/agentmux/blob/main/examples/managed/pi-vllm.yaml), using exactly `http://127.0.0.1:8000/v1`.
 
 Replace each model placeholder with a model already served by that endpoint. For an unauthenticated vLLM server, remove the example's `api_key_env` line. For an authenticated server, export the named variable in the worker's environment. Keep actual credentials out of YAML, argv, role text, and task messages.
 
@@ -214,7 +231,7 @@ protocol fixture is distinct from a successful real model turn.
 
 Claude managed turns retain `--safe-mode` and `--permission-mode dontAsk`. Configure an explicit owner-approved `--allowedTools` prefix for coding tools, as shown in the Claude/Codex example; a role description does not grant native permissions. Tool denials fail the task rather than count as successful submission. Codex `exec` requires its working directory to be a Git repository with the current adapter. Default managed workspaces start empty, so initialize the example's state and run `git init` in its workspaces before `managed up`. Startup queues no tasks and makes no model-generation call; submit a bounded instruction explicitly when ready.
 
-The adapter uses the configured API base exactly; it does not append `/v1` or switch to Ollama's `/api/generate`. See the official [Ollama compatibility documentation](https://docs.ollama.com/api/openai-compatibility) and [vLLM server documentation](https://docs.vllm.ai/en/latest/serving/openai_compatible_server/). Pi receives a private temporary `models.json`, rather than changes to the user's configuration. Initial endpoint metadata is deliberately conservative: text input, 8192 context tokens, and 2048 output tokens. Model metadata negotiation and capability discovery remain future work.
+The adapter uses the configured API base exactly; it does not append `/v1` or switch to Ollama's `/api/generate`. See the official [Ollama compatibility documentation](https://docs.ollama.com/api/openai-compatibility) and [vLLM server documentation](https://docs.vllm.ai/en/latest/serving/openai_compatible_server/). Pi receives a private temporary `models.json`, rather than changes to the user's configuration. Setup and doctor perform bounded metadata discovery for explicitly configured local/private endpoints, including exact model records and Ollama `/api/show` metadata. Explicit `model_metadata` fields override discovery; setup saves the selection, while doctor leaves hand-authored YAML unchanged. Missing fields use conservative defaults, not a claim about the engine's actual capacity. See [compatible endpoint metadata](managed-setup.md#compatible-endpoint-metadata) for context/output limits, capability declarations and validation scope.
 
 ## Isolation and state ownership
 
@@ -252,7 +269,7 @@ The original must be a owned private regular file (`0600` or `0400`) without har
 
 Each worker creates a filtered private temporary snapshot and mounts it read-only at its harness's fixed location inside the private home. The model can read its own credential; this feature separates workers and does not hide credentials from their owning model. Host settings and original credential files are not mounted. Snapshot values never enter normalized configuration or status. Exact known values are also redacted from worker-published results and usage on a best-effort basis.
 
-Snapshots last for the worker lifetime and are removed on normal or handled-error exit. A hard kill or host crash can leave a private temporary directory requiring owner cleanup. Read-only snapshots cannot persist native token refreshes, and changes to the host cache require a worker restart. Refresh or sign in outside the run if necessary; expiry fails the task rather than falling back to host access. `managed doctor` checks native readiness inside the actual filesystem boundary when initialized state and its broker socket are available, with provider networking disabled.
+Managed workers reload and replace their filtered snapshot between turns, before claiming new work. Refresh or sign in through the selected owner-side source; a healthy worker sees its next valid contents without a restart. Interactive sessions retain their prepared snapshot for that native process, so relaunch them after a source change when needed. Read-only snapshots cannot write a token refresh back to the source. Normal and handled-error cleanup removes snapshots; a hard kill or host crash can leave a private temporary directory for owner cleanup. An unavailable source prevents new managed claims rather than falling back to host access. `managed doctor` checks native readiness inside the actual filesystem boundary when initialized state and its broker socket are available, with provider networking disabled.
 
 ### Enforced worker resources
 
@@ -287,6 +304,10 @@ Configured limits bound message sizes, stored work, runtime, and durable storage
 
 ## Validation scope
 
+The acceptances below describe their recorded fixtures. Later provider and UAT
+checks are tracked separately; their versions and networking choices are not
+requirements or capability limits for every current deployment.
+
 The real three-sandbox handoff smoke test passed: a network-isolated broker and two separately isolated agents exchanged board messages and shared memory, enforced instruction hierarchy, hid peer/owner credentials, and produced two owner-verified task results. Reproduce it on a Linux host with working bubblewrap and a built binary:
 
 ```bash
@@ -307,7 +328,7 @@ The [mixed-harness sandbox acceptance](mixed-harness-acceptance.md) also passed 
 
 The acceptance explicitly uses `codex_sandbox: external` because this host forbids nested user namespaces. Native login originals, peer credentials, owner state, and unrelated owner environment values were absent from each model sandbox. Actual native auth readiness was checked with networking disabled. A real installed-Pi/local-fake-endpoint regression now checks prompt-time credential-store writes, full RPC completion, and generated configuration cleanup inside Bubblewrap; help alone had missed that runtime requirement. Known standalone Codex companion binaries are also checked before startup.
 
-These checks establish the bounded execution and coordination paths above. They do not establish production Ollama/vLLM deployment support, broad model quality, a complete native-input trace, or a comprehensive sandbox security audit. Provider networking remains `host`, and the local inference server is a separately trusted provider outside worker resource groups. No Antigravity model turn was used for validation.
+Those coding and mixed-harness acceptances used `network: host`; the local inference server remained a separately trusted provider outside worker resource groups, and that mixed-harness run included no Antigravity turn. Later bounded Ollama/vLLM and Antigravity acceptances are recorded separately in [provider validation](provider-validation.md). They establish their measured paths, not broad model quality, production engine support, complete hidden-model context coverage, or a comprehensive sandbox security audit. Current destination controls and trace guarantees are described in [hardening](hardening.md) and [traces and recovery](traces-and-recovery.md).
 
 The opt-in real tmux lifecycle test also covers startup, a durable command task, ordered shutdown, idempotent shutdown, and another attempt preserving submitted work:
 

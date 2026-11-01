@@ -94,6 +94,15 @@ restarts, failed tasks, cancellation, and missing/untrusted usage reports. There
 is no automatic budget renewal or usage-based refund. `budget.status` exposes
 the caller's own subtree, or the full session to the owner.
 
+The owner can update effective session/agent admission budgets with versioned
+`capacity.update`; readiness and transactional claims use the same effective
+limits. Edits cannot lower a ceiling below permanently reserved usage. A live
+admission deadline can only shorten the existing deadline and does not kill an
+already-running native process. These overlays survive restart without changing
+the launch definition. `capacity.get` reports current capacity without reserving
+it. See [live admission controls](live-permissions.md#capacity-and-live-admission-budgets)
+for replacement semantics and CAS versions.
+
 These limits bound **declared admissions**, not provider billing or actual
 native-model token generation. Native CLIs can make multiple requests, and
 their usage reports do not provide an authoritative pre-spend enforcement
@@ -101,6 +110,9 @@ point. Configuration requesting `enforcement: hard` is rejected. A provider
 account's own spending controls, or a separately enforceable credential-holding
 gateway, are necessary for a hard external bill ceiling. Do not treat a reported
 usage observation or `max_tokens` on one request as a total-turn bill cap.
+Reservations govern managed task claims in either local or isolated mode;
+human-driven inference inside an interactive native CLI does not claim broker
+tasks and is outside these turn allowances.
 
 ## Capped workspaces and history
 
@@ -117,6 +129,7 @@ agents:
 ```
 
 Every size is required, between 1 MiB and 1 TiB. Entry limits are 1–100000.
+Disk capsules apply to managed turns; interactive sessions reject this setting.
 Disk capsules require a canonical, private, state-owned workspace at exactly
 `state/workspaces/<agent>`. External/shared workdirs are rejected. Use scoped
 messages and explicit owner-controlled artifact handoffs between workspaces.

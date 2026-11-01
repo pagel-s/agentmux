@@ -42,8 +42,9 @@ type SessionDir struct{ Source, Target string }
 // Request selects a harness and supplies a single fresh turn. Command is an
 // owner-controlled executable and prefix argv override, never model-authored
 // input. For the command harness it is the complete argv. Prompts use stdin.
-// BaseURL is an Anthropic-compatible base for Claude, or an OpenAI-compatible
-// API base (including /v1 when required) for Pi. No global settings are changed.
+// BaseURL is an Anthropic-compatible base for Claude, a Responses API base for
+// Codex, or a Chat Completions API base for Pi (including /v1 when required).
+// No global settings are changed.
 // APIKeyEnv names a credential in Env or the worker's environment; its value is
 // never placed on the command line. Env overlays the worker environment, so a
 // parent environment is reduced to runtime paths and locale variables; other

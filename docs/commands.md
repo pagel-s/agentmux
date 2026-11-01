@@ -19,6 +19,7 @@ default workspace `work` and opens its workbench.
 | `agentmux dashboard` | Return to the owner workbench |
 | `agentmux web --open` | Open the local owner app |
 | `agentmux add --harness claude --project DIR --title "Task"` | Start another native session; copy its printed stable ID |
+| `agentmux add --harness antigravity --native-only --project DIR` | Start native Antigravity without an injected Agentmux prompt |
 | `agentmux sessions` | List registered sessions and separately observed external terminals |
 | `agentmux workspaces [--register DIR]` | Find named and remembered custom workspaces; register an older custom location |
 | `agentmux relaunch AGENT_ID [--resume ID\|last\|picker]` | Relaunch one exited native session, retaining its stable ID and healthy peers |
@@ -29,7 +30,7 @@ default workspace `work` and opens its workbench.
 | `agentmux send AGENT_ID "Message" [--mode note\|instruction\|auto]` | Choose an informational inbox note or an instruction task; auto follows the agent's interaction mode |
 | `agentmux inbox` | Inspect recent coordination and task activity as the owner |
 | `agentmux board "Note" --group GROUP_ID` | Post to a particular collaboration group's board |
-| `agentmux reply TASK_OR_MESSAGE_ID "Follow-up" [--mode note\|instruction]` | Follow up with broker-validated structured ancestry; shared board posts require `--board NAMESPACE` or `--to AGENT_ID` |
+| `agentmux reply TASK_OR_MESSAGE_ID "Follow-up" [--mode auto\|note\|instruction]` | Follow up with broker-validated structured ancestry; shared board posts require `--board NAMESPACE` or `--to AGENT_ID` |
 | `agentmux isolate AGENT_ID` | Revoke its peer coordination and memberships across groups; native input stays open |
 | `agentmux remove AGENT_ID` | Close an owned terminal or disconnect an external bridge; retain saved history |
 | `agentmux down` | Stop the workspace's owned processes while keeping saved data |
@@ -37,6 +38,9 @@ default workspace `work` and opens its workbench.
 Replace uppercase placeholders with actual paths or IDs. `DIR` must already
 exist. `--harness` chooses the native CLI (`claude`, `codex`, `pi`, or native-only `antigravity`);
 `--title` is a display label and `--role` supplies optional agent instructions.
+Choose `--native-only` to append no Agentmux prompt; it cannot be combined with
+a nonempty role. Native Antigravity requires this option. Roles never grant
+coordination permissions. Use `role ID ""` to clear a coordinated session's role.
 Session titles can repeat; commands address the stable ID shown under the title.
 An observed terminal must be connected before its registered ID can be used for
 collaboration. A prepared bridge does not mean the agent read the pasted setup;
@@ -59,9 +63,68 @@ native model turn. Use `attach` to talk directly. With several groups, copy the
 group ID printed by `collaborate` or shown under **Teams → Owner collaboration
 groups** in the web app. `board` can choose the only active group automatically;
 with multiple groups select `--group ID` or `--board NAMESPACE` explicitly.
+Board replies use `reply ID "Text" --board NAMESPACE`; a private follow-up uses
+`--to AGENT_ID`. Direct recipients must already be able to read the referenced
+message. Broker-inferred `thread_id` and `reply_to` retain ancestry without
+adding a prose prefix. There is no user-supplied thread-root override.
 For terminal shortcuts, recovery and native history, see [work
 sessions](work-sessions.md). For bounded headless studies see
 [research](research.md).
+
+## Consented teams and admission controls
+
+Owner collaboration groups created by `collaborate` are distinct from dynamic
+consented teams. The latter require `teams.enabled` and delegated capabilities
+in the selected managed configuration; the everyday coding preset leaves them
+disabled. Use `agentmux team --help` for the complete command syntax:
+
+| Command | Behavior |
+| --- | --- |
+| `agentmux team list`, `agentmux team create NAME` | Inspect visible teams or create one within configured authority and lifetime limits |
+| `agentmux team edit ID --name NAME --description TEXT` | Change live metadata, retaining the team's ID and namespaces |
+| `agentmux team invite ID AGENT`, `agentmux team remove ID AGENT`, `agentmux team dissolve ID` | Review membership invitations, revocation or closure as a manager |
+| `agentmux team transfer ID AGENT` | Propose ownership; the proposed owner must accept separately |
+| `agentmux team join ID`, `agentmux team leave ID`, `agentmux team accept-owner ID` | Decide using `--credential-file FILE` for the actual acting participant |
+| `agentmux team move SOURCE DESTINATION` | Use the participant's credential and an existing destination invitation to move atomically |
+
+Add `--session NAME` or `--state DIR` to select the workspace. `--version N`
+pins a reviewed version; moves also accept `--to-version N`. Omitted versions
+are read once, never retried after a conflict or uncertain response. A human
+owner cannot impersonate an agent's consent. See [dynamic teams](dynamic-teams.md).
+
+`managed call` exposes effective boundaries and capacity through the selected
+credential. For example, an agent's own shell can run:
+
+```sh
+"$AGENTMUX_CLI" managed call boundaries.get --json '{}'
+"$AGENTMUX_CLI" managed call capacity.get --json '{}'
+"$AGENTMUX_CLI" managed call budget.status --json '{}'
+```
+
+These bridge variables are supplied to workspace-native agents. An owner outside
+their terminal selects `--credential-file STATE/owner.json` explicitly and can
+inspect a particular agent with `capacity.get --json '{"agent":"AGENT_ID"}'`.
+`capacity.update` is an owner-only CAS edit of complete admission-budget objects
+and a shorter admission deadline; it does not rewrite launch configuration,
+refund past reservations or impose a hard provider bill cap. The terminal
+**B** editor and web capacity controls use the same broker rules. See [live
+permissions and resources](live-permissions.md) for fields and constraints.
+
+## Memory transfers and portable traces
+
+Use `managed memory export|import|search|index|prune` for explicitly credential-
+scoped memory operations; [memory lifecycle](memory-lifecycle.md) covers CAS,
+TTL, replacement and asserted import provenance. These are separate from native
+conversation history.
+
+`managed trace list|verify|show` inspects owner-accessible local traces.
+`managed trace export --state STATE --agent ID --id TRACE_ID --output NEW_FILE`
+signs a locally verified trace without exporting secret keys. On another machine,
+`managed trace verify-bundle --input FILE --trust OWNER_PUBLIC_KEY_SHA256`
+requires an independently obtained trust fingerprint and no broker state.
+Use `--mac TASK_MAC` during local verification/export to pin an existing task
+anchor. These are owner-exporter attestations, not provider attestations; see
+[traces and recovery](traces-and-recovery.md).
 
 ## Existing workspace commands
 

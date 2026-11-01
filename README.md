@@ -27,6 +27,11 @@ compatible repo-local Go toolchain when available. See
 [installation](docs/getting-started/installation.md) for binary releases and PATH
 setup. Remote `go install …@latest` is currently unsupported by this module.
 
+For the complete first-run test, follow the [fresh-install
+walkthrough](docs/getting-started/quickstart.md). It uses a separate workspace
+and covers direct native interaction, opt-in collaboration, shared memory,
+revocation, web controls and cleanup with expected results at each step.
+
 ## Start a work session
 
 Install and log in to Claude Code and Codex first, then run this from your

@@ -1,6 +1,13 @@
 # Preregistered native feasibility pilot
 
-The concrete design is [factorial-pilot.yaml](../examples/research/factorial-pilot.yaml).
+This page describes the specific 31 October 2026 feasibility design and its
+reproduction, rather than the full current design schema. Current research
+supports [behavioral primary outcomes, role/personality prompt profiles,
+one-to-six-factor designs and Latin-square scheduling](research.md#manifest-baselines-and-analysis).
+The [command-only role/personality example](https://github.com/pagel-s/agentmux/blob/main/examples/research/roles-personality.yaml)
+is a starting point for inspecting those controls without provider calls.
+
+The concrete design is [factorial-pilot.yaml](https://github.com/pagel-s/agentmux/blob/main/examples/research/factorial-pilot.yaml).
 The [2026-10-31 collection and its measurement caveat](research-pilot-results.md)
 are recorded separately; its original scores were preserved.
 It holds the mixed-model population fixed and crosses two binary factors:

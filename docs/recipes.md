@@ -96,8 +96,8 @@ Good runtime loop:
 
 Related files:
 
-- [`testdata/examples/ai-dev.yaml`](../testdata/examples/ai-dev.yaml)
-- [`dogfood.yaml`](../dogfood.yaml)
+- [`testdata/examples/ai-dev.yaml`](https://github.com/pagel-s/agentmux/blob/main/testdata/examples/ai-dev.yaml)
+- [`dogfood.yaml`](https://github.com/pagel-s/agentmux/blob/main/dogfood.yaml)
 
 ## Review Session
 
@@ -129,8 +129,8 @@ Typical next steps:
 
 What to customize first:
 
-- `params.review_model`: set the review model you actually want
-- `agents.reviewer.env.OPENAI_API_KEY`: keep this as `${OPENAI_API_KEY}` so the shell resolves it at runtime
+- `agents.reviewer.provider`: choose an installed native CLI such as `codex`
+- `agents.reviewer.model`: optionally select a model supported by that native CLI/account
 - the checks pane command: swap `npm test` for the command your repo actually uses
 
 Typical shape:
@@ -141,15 +141,11 @@ session: review
 
 params:
   project_dir: "."
-  review_model: "gpt-5-mini"
 
 agents:
   reviewer:
-    provider: command
-    command: "openai api chat.completions.create -m {{review_model}}"
+    provider: codex
     cwd: "{{project_dir}}"
-    env:
-      OPENAI_API_KEY: "${OPENAI_API_KEY}"
 
 layout:
   - window: review
@@ -175,7 +171,7 @@ Good runtime loop:
 
 Related files:
 
-- [`testdata/examples/review-loop.yaml`](../testdata/examples/review-loop.yaml)
+- [`testdata/examples/review-loop.yaml`](https://github.com/pagel-s/agentmux/blob/main/testdata/examples/review-loop.yaml)
 
 ## Remote Ops Session
 
@@ -236,7 +232,7 @@ Good runtime loop:
 
 Related files:
 
-- [`testdata/examples/ssh-ops.yaml`](../testdata/examples/ssh-ops.yaml)
+- [`testdata/examples/ssh-ops.yaml`](https://github.com/pagel-s/agentmux/blob/main/testdata/examples/ssh-ops.yaml)
 
 ## Watcher Session
 
@@ -266,7 +262,7 @@ Useful commands while testing it:
 
 Related files:
 
-- [`testdata/examples/on-exit.yaml`](../testdata/examples/on-exit.yaml)
+- [`testdata/examples/on-exit.yaml`](https://github.com/pagel-s/agentmux/blob/main/testdata/examples/on-exit.yaml)
 
 ## Coordinated Team
 
@@ -306,11 +302,13 @@ Key coordination commands:
 
 Related files:
 
-- [`testdata/examples/research-team.yaml`](../testdata/examples/research-team.yaml)
+- [`testdata/examples/research-team.yaml`](https://github.com/pagel-s/agentmux/blob/main/testdata/examples/research-team.yaml)
 
 ## Choosing A Starter
 
-If you are unsure where to begin:
+For authenticated native conversations and opt-in collaboration, begin with
+`agentmux start` and the [fresh-install walkthrough](getting-started/quickstart.md).
+If you specifically want a v1 custom layout:
 
 - use `default` for day-to-day coding
 - use `review-loop` for dedicated code review

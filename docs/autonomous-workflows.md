@@ -39,6 +39,11 @@ read-only snapshots. Peer histories and the controller state directory are not
 mounted. Antigravity and the generic command harness reject persistent mode;
 their managed turns remain explicitly fresh.
 
+This managed-history contract is separate from interactive native sessions.
+Those keep their normal provider terminal/history and can be deliberately
+[relaunched with an explicit native history choice](work-sessions.md) after
+exit. No managed conversation reference is guessed from a native task title.
+
 The worker reintroduces the role, current task and authenticated provenance on
 every turn. Previous conversation text does not create broker permissions.
 Only a confirmed successful native turn and atomic task completion commit a
@@ -94,7 +99,21 @@ Pausing prevents further launches; cancellation of already running work uses
 `task.cancel` and its process-stopped acknowledgement. Do not infer that a pause
 has stopped an in-flight native tool. There is no automatic budget renewal.
 
+Read-only `capacity.get` exposes remaining lifetime allocations, delegated
+templates, admission state and reasons. Owner `capacity.update` can explicitly
+change future token/cost admission allowances or shorten admission runtime with
+a resource version; it does not replenish lifetime autonomy turns or extend the
+process deadline. [Live permissions](live-permissions.md) describes that separate
+control. Role edits are also explicit owner CAS operations: managed workers
+capture the current role at their next task claim; an active native terminal
+receives a broker notice instead of injected input.
+
 ## Acceptance
+
+The dated result below is the 31 October 2026 autonomous workflow acceptance.
+The [1 November provider matrix](provider-acceptance.md) records later bounded
+connectivity/startup/endpoint checks separately; those do not rerun this complete
+five-turn workflow or establish a reliability rate.
 
 `scripts/smoke-managed-autonomy.py --binary bin/agentmux --allow-models` runs a
 bounded five-turn Claude/Codex workflow. It requires installed authenticated

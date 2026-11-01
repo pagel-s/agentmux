@@ -62,8 +62,9 @@ unmodifiable execution environment, or the truth of agent output. An owner
 with the signing key can issue another bundle. Retain the fingerprint outside
 the state directory, protect/back up the signing key, and compare task anchors
 independently when that stronger comparison matters. Bundle creation refuses an
-existing output path; bundles are bounded to 128 MiB and contain no executable
-archive paths. Offline verification does not contact providers or read local
+existing output path; captured input to an export is bounded to 64 MiB and the
+encoded bundle to 128 MiB. Verification never extracts or executes files.
+Offline verification does not contact providers or read local
 broker state.
 
 Native/provider hidden state, internal prompts, undeclared file reads and
@@ -73,11 +74,13 @@ turn; this is not a claim of full hidden-model context or every filesystem read.
 
 ## Credentials, interruption and upgrades
 
-Workers reload the selected, filtered native credential source between turns.
+Managed workers reload the selected, filtered native credential source between turns.
 An external native login/refresh can atomically update the owner's source file;
 the next turn sees it without restarting a healthy worker. Snapshots remain
 read-only in sandboxes. Automatic provider OAuth renewal and writes back from
 an agent are not performed. A missing/invalid source stops new claims.
+An interactive native process retains its prepared snapshot until exit;
+relaunch it when a refreshed source must be loaded.
 
 Use `managed activity`, `managed status`, `task.list`, `task.get` and
 `conversation.get` to inspect state. Delivery uncertainty is preserved after a
@@ -85,11 +88,20 @@ broker crash or transport loss. Stop old workers before any owner resolution:
 
 ```bash
 agentmux managed down --state STATE
-# Restart the broker under owner control for API inspection/resolution.
+# In one terminal, run the broker in the foreground:
 agentmux managed serve --state STATE --sandbox bubblewrap
+```
+
+In another terminal, inspect the exact task and resolve its current version:
+
+```bash
+agentmux managed call task.get --credential-file STATE/owner.json \
+  --json '{"id":"TASK_ID"}'
 agentmux managed call task.resolve --credential-file STATE/owner.json \
   --json '{"id":"TASK_ID","version":CURRENT_VERSION,"resolution":"fail"}'
 ```
+
+Replace `TASK_ID` and `CURRENT_VERSION` with the returned task identity/version.
 
 Use `resolution: retry` only after checking side effects and deciding to execute
 again. It is a new charged attempt. Workers validate the exact current lease
@@ -102,6 +114,14 @@ Persistent native conversations can remain
 blocked after interrupted execution; `conversation.reset` explicitly starts a
 new generation after task delivery is resolved. Old history is retained, not
 silently resumed as confirmed work.
+
+For an exited workspace-owned interactive terminal, `agentmux relaunch AGENT_ID
+--state STATE` keeps its identity and healthy peers, and starts a fresh native
+conversation by default. Select `--resume last`, `--resume picker`, or a native
+conversation ID explicitly when supported by that harness. This does not retry
+a broker task, reset a managed conversation fence, renew runtime, or revive a
+revoked agent. A live terminal must exit before relaunch. See [work sessions](work-sessions.md)
+for the CLI and dashboard workflow.
 
 Disk capsule quarantine has separate owner inspection and digest-fenced
 recovery controls; see [hardening](hardening.md). Do not remove journals or
@@ -116,3 +136,7 @@ published SHA256 and uses an atomic destination replacement with explicit
 `--replace`; checksum verification is not an independent publisher signature.
 Restore a matching binary plus complete state backup together if rollback is
 needed. No live schema migration or zero-downtime upgrade guarantee is made.
+Older collaboration records remain readable but require an explicit owner
+`legacy_policy` choice before group edits; see [live permissions](live-permissions.md).
+Keep recovery digests and their matching records together. Removing lifecycle
+or live-resource records is not a supported way to clear a pause or budget.

@@ -48,16 +48,17 @@ nav:
       - Installation: getting-started/installation.md
       - Quickstart: getting-started/quickstart.md
   - Tutorials:
-      - Your First AI Team: tutorials/hello-team.md
+      - Legacy Layout Handoff: tutorials/hello-team.md
       - Portable Bundles: tutorials/portable-bundles.md
   - Core Concepts:
-      - Architecture: architecture/mental-model.md
-      - Agentic Coordination: architecture/coordination.md
+      - Layout Compiler (v1): architecture/mental-model.md
+      - Pane Coordination (v1): architecture/coordination.md
   - Managed Teams:
       - Work Sessions: work-sessions.md
       - Runtime: managed-runtime.md
       - Setup: managed-setup.md
       - Persistent Workflows: autonomous-workflows.md
+      - Autonomous Wakeup Policies: autonomy.md
       - Antigravity Bridge: antigravity-bridge.md
       - Hardening: hardening.md
       - Trust Boundaries: security-model.md
@@ -67,16 +68,20 @@ nav:
       - Traces and Recovery: traces-and-recovery.md
       - SSH and Scale: remote-workers.md
       - Research: research.md
+      - Pilot Runner: experiments.md
       - Controlled Studies: research-study.md
       - Pilot Results: research-pilot-results.md
       - Provider Validation: provider-validation.md
       - Provider Acceptance: provider-acceptance.md
+      - Mixed Harness Acceptance: mixed-harness-acceptance.md
       - Preview Validation: release-validation.md
       - Usability and Failure Sweep: uat-sweep.md
+      - Twenty-Angle UAT (Historical): uat-20-angles.md
       - UAT Gap Closure: uat-gap-closure.md
       - Environments: research-environments.md
   - Reference:
-      - Configuration Guide: config-guide.md
+      - Layout Configuration (v1): config-guide.md
+      - Pane Harnesses (v1): harnesses.md
       - CLI Commands: commands.md
       - Recipes: recipes.md
-      - Runtime Guide: runtime.md
+      - Pane Runtime (v1): runtime.md

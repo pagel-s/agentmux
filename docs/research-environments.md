@@ -47,6 +47,14 @@ repayment metrics. Scripted baselines are all-defect, seeded random choices, and
 an informed cooperative strategy that invests with a productive partner and
 returns escrow. These are explicit comparators, not a proof of optimal strategy.
 
+`preregistration.primary_outcome: escrow_return_fraction` selects the run's
+returned/received-escrow fraction for paired and factorial estimates. A run
+with no received escrow has no return-fraction observation; it is excluded
+rather than treated as zero. Analysis reports the resulting metric-specific
+sample sizes and warns that treatment can change this denominator. Public-goods
+funding outcomes are rejected for this environment. See the complete
+[outcome definitions and design controls](research.md#manifest-baselines-and-analysis).
+
 The example's deterministic participants exercise real broker invitation,
 voluntary acceptance, private channels, and objective transfers. Their chosen
 50% repayment policy tests mechanics; it is not language-model behavior.
@@ -118,3 +126,11 @@ the environment seed. Baselines currently use the initial fixed population;
 they do not model endogenous birth/retirement strategies. Comparing different
 population paths therefore requires a separately declared analysis and resource
 normalization.
+
+The same owner console exposes current population, phase tasks, teams and
+capacity. [Phase pause/step/stop and explicit steering](research.md#observe-and-intervene-live)
+remain available; interventions are recorded and assisted runs are excluded
+from default estimates. Team metadata edits, ownership proposals and participant
+moves use the ordinary [consent and version rules](dynamic-teams.md). They do
+not override research phase barriers or turn a child into a funded participant
+before its declared admission boundary.

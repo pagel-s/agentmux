@@ -7,6 +7,13 @@ Setup and doctor perform nongenerative checks; model acceptance tests require
 explicit opt-in. Private credentials, native transcripts, raw prompts and
 machine identifiers are excluded from this summary.
 
+This is the historical 31 October matrix. The later
+[1 November provider acceptance](provider-acceptance.md) records fresh bounded
+Claude/Codex/Antigravity/Pi checks, native PTY startups and installed-Codex custom
+Responses endpoint conformance. It explicitly distinguishes genuine local
+Transformers/Ollama inference from the earlier vLLM-specific evidence below.
+Neither table is a guarantee for an untested account, tool/MCP or model version.
+
 | Harness or service | Measured version | Structured protocol | Persistence evidence | Tool evidence and boundary |
 | --- | --- | --- | --- | --- |
 | Claude Code | 2.1.316 | Print mode, stream-JSON input/output; result/permission-denial inspection | Three confirmed turns in one private native conversation, across worker processes and a broker restart | Real coding and authenticated team coordination inside Bubblewrap; explicit `Read,Write,Edit,Bash` allowlist, `safe-mode`, `dontAsk`; independent owner verification |

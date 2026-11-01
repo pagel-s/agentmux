@@ -1,6 +1,9 @@
-# Your First AI Team
+# Legacy layout handoff tutorial
 
-Agentmux is more than just a window manager; it's a platform for building coordinated teams of AI agents. In this tutorial, we will build a simple "Assembly Line" team.
+For your first native Claude/Codex team with scoped communication, use the
+[fresh-install walkthrough](../getting-started/quickstart.md). This separate
+tutorial demonstrates the original v1 layout compiler with two shell commands;
+it makes no model calls and provides no per-agent broker ACLs or sandboxes.
 
 We will create a **Planner** agent that writes a task, and a **Worker** agent that waits for the task to be ready before starting.
 
@@ -71,8 +74,10 @@ In the dashboard, you will see your two agents running. Look at the **Blackboard
 
 ## Summary
 
-You have just orchestrated two isolated terminal processes using:
+You have coordinated two tmux pane processes using:
 1. **Synchronization (`wait`)**: Blocking execution based on another pane's output.
 2. **Shared Memory (`kv-set`)**: Storing state that outlives the script execution.
 
-These are the building blocks of massive, self-organizing agent teams.
+For bounded spawning, consented membership and permission-controlled shared
+knowledge, continue with [dynamic teams](../dynamic-teams.md). V1 KV and output
+polling do not establish those controls.

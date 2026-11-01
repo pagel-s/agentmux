@@ -54,6 +54,16 @@ An exact Pi endpoint model must be advertised; Anthropic aliases remain an
 honest warning when metadata cannot establish their mapping. Metadata success
 does not prove tool use or inference quality.
 
+Pi context/output/capability discovery is implemented, rather than deferred to
+a model turn. It reads exact `/models` records and, for an Ollama connection,
+can use metadata-only `POST /api/show` at the server root. Explicit
+`model_metadata` fields override discovered fields, including explicit `false`.
+Missing fields use conservative defaults. Pi contexts at or below 4096 tokens
+are rejected because the supported runtime reserves that space before output
+selection. Doctor reports its discovered selection without rewriting YAML;
+setup persists the selected metadata in newly generated configuration. These
+checks do not establish inference, tool or modality compatibility.
+
 Workdir/read-only paths must already be resolved against the configuration
 file location by the caller. Missing workspaces before initialization are
 warnings. Existing declared dependencies must be accessible and contain no
@@ -69,8 +79,16 @@ those resources exist, exact mount execution is explicitly deferred; Node
 dependency closure is still checked statically. Native HTTP model harnesses
 with `network: none` are reported as unrunnable. Trusted `local` execution is
 always labeled as providing no isolation.
+Allowlist configuration receives a warning explaining that help runs with
+`network: none`; the worker validates per-turn destination DNS/proxy/socket
+enforcement before execution. A namespace probe or successful help alone does
+not prove a provider turn can use that proxy.
 
 Preflight checks the selected interaction mode. Native interactive agents require
 the root CLI role/context flags; managed workers require the headless turn flags.
 Help-cache identity includes the interaction mode. A successful headless check
 does not establish that an interactive adapter is ready, or vice versa.
+Interactive `native_only` configuration requires an empty role and omits
+Agentmux role/context injection at execution. It still uses native CLI
+capability preflight and does not enable managed conversation, trace, disk,
+autonomy or allowlist settings in an interactive process.

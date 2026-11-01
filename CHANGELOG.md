@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased
+
+Changes on `main` after the tagged `v0.10.0-rc.1` preview:
+
+- Terminal-first workspaces with native interactive sessions, recognizable
+  titles and stable IDs, existing-session discovery/bridges, prompt-free
+  additions, versioned roles, workspace inventory and individual relaunch.
+- A black/purple local web workbench for observation and reviewed live control,
+  with searchable task history, scoped memory and a navigable interaction graph.
+- Independent contributions from overlapping collaboration groups, explicit
+  historical-policy migration, effective-boundary explanations and override resets.
+- Explicit note/instruction intent, audience-checked reply ancestry, imported
+  memory source claims and owner-signed portable trace bundles.
+- Consented dynamic-team ownership/moves, capacity explanations, live admission
+  controls, observable research steering, role/profile treatments and supported
+  primary outcomes/counterbalancing.
+- Worker/native-completion, recovery, scale and asynchronous-editor fixes from
+  bounded UAT. See the [closure record](docs/uat-gap-closure.md) and
+  [dated provider acceptance](docs/provider-acceptance.md) for measured evidence
+  and limits. Published preview binaries do not include these later main changes.
+- A complete fresh-install acceptance walkthrough, synchronized command help,
+  current sample launches, and strict documentation builds in CI.
+
+For installation and a complete first-run test, use the
+[fresh-install walkthrough](docs/getting-started/quickstart.md).
+
 ## v0.9.0 - 2026-03-31
 
 Ninth private release, introducing **Native LLM Providers** and the **JIT Shell Compiler**.

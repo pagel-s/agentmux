@@ -7,7 +7,9 @@ remote deployments were isolated from everyday user workspaces.
 
 The later [twenty-angle acceptance pass](uat-20-angles.md) records twenty
 additional bounded reviews, the fixes included from those findings, and
-capability proposals that remain unimplemented.
+capability proposals recorded at that time. The subsequent
+[gap-closure record](uat-gap-closure.md) maps their implementations and current
+validation limits. Findings below describe the dated sweep, not an open backlog.
 
 ## Coverage
 

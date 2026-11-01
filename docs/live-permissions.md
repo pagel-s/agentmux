@@ -4,6 +4,9 @@ A workspace combines immutable launch configuration, explicit owner overrides,
 owner collaboration groups and consented teams. `boundaries.get` is the current
 authority snapshot. `control.get` is stored owner intent and group membership;
 a stored `true` is never proof that required membership or ancestry still holds.
+Use the selected agent's credential for its own `boundaries.get`; only the owner
+may inspect another agent or read/update complete owner controls. Roles describe
+responsibilities and titles label sessions; neither adds a permission source.
 
 ## Independent group contributions
 
@@ -67,6 +70,9 @@ membership or control changes, until the owner explicitly chooses one policy:
 Neither choice guesses which old allows were manually intended. Review
 `control.get` and the exact pair first. The choice, requested membership/state,
 control revision, event and receipt commit atomically; rejection changes nothing.
+An unreviewed legacy group adds no new implicit pair grants; its historical
+controls remain the authority until review. A stale permission revision cannot
+apply a migration choice against changed owner intent.
 For the everyday CLI:
 
 ```sh
@@ -118,3 +124,8 @@ These controls bound conservative broker admissions, not hard external provider
 billing. Direct interactive CLI inference remains governed by that native CLI.
 Saved resource overlays use recovery digests; missing or damaged persisted state
 fails closed rather than restoring larger defaults.
+
+Role changes use a separate owner `agent.role {id,role,version}` operation and
+`role_version`, rather than the resource or permission revision. They apply at
+the next managed claim or through a native session's broker notice; they never
+alter native terminal input or the permission sources above. See [managed runtime](managed-runtime.md#boards-messages-instructions-and-memory).

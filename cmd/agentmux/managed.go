@@ -406,21 +406,27 @@ func parseManagedCLI(operation string, args []string) (managedCLIOptions, error)
 
 func printManagedUsage(out io.Writer) {
 	fmt.Fprintln(out, `Managed runtime (opt-in v2 configuration):
-  agentmux managed setup [--spec FILE] [--output FILE] [--init-git]
+  agentmux managed setup [--preset coding|reviewer-pair|research-team | --spec FILE]
+      [--output FILE] [--session NAME] [--project DIR] [--sandbox local|bubblewrap]
+      [--init-git]
   agentmux managed up <config> [--state <private-dir>]
       [--broker-sandbox local|bubblewrap] [--attach]
   agentmux managed down --state <private-dir>
-  agentmux managed restart --state <private-dir> [--attach]
+  agentmux managed restart --state <private-dir> [--broker-sandbox local|bubblewrap] [--attach]
   agentmux managed doctor <config> [--state <private-dir>]
   agentmux managed init <config> --state <private-dir>
   agentmux managed serve --state <private-dir> [--sandbox local|bubblewrap]
   agentmux managed call <operation> [--credential-file <path>] [--socket <path>]
       [--json <object> | --stdin] [--request-id <id>]
   agentmux managed worker --state <private-dir> --agent <id> [--once] [--definition FILE]
+      [--native-resume ID|last|picker]
   agentmux managed remote --state DIR --agent ID --host SSH_ALIAS --remote-dir DIR
       [--layout FILE] [--binary FILE] [--once] [--resume]
   agentmux managed memory export|import|search|index|prune [--help]
   agentmux managed trace list|verify|show --state DIR --agent ID [--id ID] [--mac MAC]
+  agentmux managed trace export --state DIR --agent ID --id TRACE_ID
+      [--mac TASK_MAC] --output NEW_PRIVATE_FILE
+  agentmux managed trace verify-bundle --input FILE --trust OWNER_PUBLIC_KEY_SHA256
   agentmux managed capsule inspect|recover --state DIR --agent ID [--help]
   agentmux managed status --state <private-dir> [--watch]
   agentmux managed activity --state <private-dir> [--watch]
@@ -429,5 +435,9 @@ func printManagedUsage(out io.Writer) {
 Call credentials may come from AGENTMUX_CREDENTIAL_FILE; AGENTMUX_SOCKET
 overrides the credential's socket when --socket is omitted. Credentials are
 never printed. Local workers are trusted processes, not sandbox isolation.
+Useful broker calls: identity, boundaries.get, capacity.get, budget.status,
+task.list, agent.role and capacity.update. Owner edits use current CAS versions;
+resource controls govern admissions, not hard provider billing. Consented team
+controls are also available through agentmux team --help.
 See docs/managed-runtime.md for setup, permissions, and examples.`)
 }

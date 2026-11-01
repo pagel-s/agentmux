@@ -1,3 +1,4 @@
+# Original v1 layout mode. For the interactive workbench, use agentmux start.
 version: 1
 name: AI Dev Workspace
 session: ai-dev
@@ -17,11 +18,8 @@ agents:
     title: "Coder"
 
   reviewer:
-    provider: command
-    command: "openai api chat.completions.create -m gpt-5"
+    provider: codex
     cwd: "{{project_dir}}"
-    env:
-      OPENAI_API_KEY: "${OPENAI_API_KEY}"
     title: "Reviewer"
 
 layout:

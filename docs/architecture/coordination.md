@@ -1,8 +1,16 @@
-# Agentic Coordination
+# Coordination primitives
 
-The transition from a "Terminal Window Manager" to an "Agentic Platform" requires primitives that allow isolated terminal processes to talk to each other.
+For current interactive and managed teams, coordination goes through an
+authenticated broker: scoped messages/boards, queued instructions, private and
+shared memory, versioned permissions and consented teams. Start with
+[work sessions](../work-sessions.md), [live permissions](../live-permissions.md)
+and the [managed runtime](../managed-runtime.md). Those controls are independent
+of native tool approvals and filesystem sandboxing.
 
-Agentmux achieves this using two native primitives: **The Blackboard** and **The Wait**.
+The remainder of this page describes the original v1 layout mode's tmux KV,
+output polling and raw pane scaling. These remain available, but do not enforce
+the broker's agent identities, hierarchy or per-agent access rules. They do not
+create process/filesystem isolation.
 
 ## 1. The Blackboard (KV-Store)
 
@@ -20,7 +28,7 @@ graph TD;
 Any pane can run `agentmux kv-set my-session key "value"` to write, and any other pane can run `agentmux kv-get my-session key` to read. 
 
 *   **Stateless:** If Agentmux crashes, the data survives in tmux.
-*   **Inspectable:** You can run `agentmux kv-list` to see exactly what the team is thinking.
+*   **Inspectable:** `agentmux kv-list SESSION` shows the values that participants explicitly stored, not their private reasoning.
 
 ## 2. Synchronization (Wait)
 
@@ -47,11 +55,14 @@ graph TD;
     Agentmux -->|tmux split-window| NewPane2[Worker 3]
 ```
 
-The `scale` command safely injects new panes into the running session, using the original configuration context, and automatically handles re-applying the window layout.
+The legacy `scale SESSION AGENT COUNT` command adds/removes panes using the
+original configuration and reapplies the window layout. Managed delegated
+spawning instead requires approved templates, admission limits and broker
+authority; see [dynamic teams](../dynamic-teams.md).
 
 ## 4. LLM Native Awareness
 
-For an LLM to coordinate effectively, it must "know" about these primitives and the session context. Agentmux provides five mechanisms for this:
+The legacy pane launcher provides these context-delivery mechanisms:
 
 1.  **Environment Injection:** Every pane automatically receives `$AGENTMUX_SESSION` and `$AGENTMUX_PANE` environment variables.
 2.  **CLI Tool Bridge:** Models call real coordination actions through `agentmux tool-call`, using `--from-stdin`, `--from-file`, or `--from-json`, which wraps the existing Agentmux CLI in a machine-stable JSON envelope.

@@ -1,15 +1,17 @@
 # Agentmux
 
 Run agent teams in tmux with explicit communication and memory permissions.
-Use native Claude/Codex/Pi terminals for human-led work, managed workers for
+Use native Claude/Codex/Pi/Antigravity terminals for human-led work, managed workers for
 bounded autonomous workflows, or the research runners for controlled experiments.
 
 ## Start here
 
 1. [Build and install](getting-started/installation.md).
-2. [Start an interactive work session](work-sessions.md).
-3. Use the terminal dashboard for attachment and the local web app for activity,
-   tasks, shared-memory editing and live permission controls.
+2. [Try the fresh-install walkthrough](getting-started/quickstart.md): use two
+   native sessions, connect them, exchange context, and disconnect them again.
+3. Keep [work sessions](work-sessions.md) open for terminal keys, session
+   discovery, workspace switching and individual-session recovery. Use the local
+   web app for activity, tasks, shared-memory editing and permission controls.
 
 Keep the [everyday command reference](commands.md#everyday-work-sessions) handy
 for selecting named workspaces, adding or connecting sessions, and choosing a
@@ -28,11 +30,14 @@ describe measured coverage and limits.
 - [Persistent conversations and autonomous wakeups](autonomous-workflows.md)
 - [Dynamic teams and bounded spawning](dynamic-teams.md)
 - [Private/shared memory](memory-lifecycle.md)
+- [Live permissions and admission controls](live-permissions.md)
 - [Hardening](hardening.md)
 - [Trace inspection and recovery](traces-and-recovery.md)
 - [Remote workers](remote-workers.md)
 - [Provider validation](provider-validation.md)
+- [Dated provider acceptance](provider-acceptance.md)
 - [Research](research.md) and [controlled studies](research-study.md)
+- [UAT gap closure and limits](uat-gap-closure.md)
 
 ## Existing workspace mode
 

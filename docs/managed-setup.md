@@ -24,7 +24,7 @@ choice, which belongs to the launcher rather than the agent YAML.
 
 The specification has `session`, `workspace_root`, `sandbox`, `broker_sandbox`,
 `shared_board`, `init_git`, and an `agents` array. Agent fields include `id`,
-`role`, `harness`, `model`, optional `binary`, `conversation`, `coding_tools`, `network`, `egress`,
+`role`, `harness`, `model`, optional `binary`, `interaction`, `native_only`, `workdir`, `conversation`, `coding_tools`, `network`, `egress`,
 `codex_sandbox`, and explicit authentication/endpoint fields. Relative workspace
 and executable selections resolve from the invocation directory. Native auth
 paths must reference private files; their contents are never embedded in YAML.
@@ -35,7 +35,7 @@ Authentication choices are explicit:
 | Choice | Meaning |
 | --- | --- |
 | `file` | Select `auth_file` for a supported Bubblewrap worker. Pi also needs exact `auth_provider`. Only the selected filtered credentials reach its fresh home. |
-| `api-env` | Select `api_key_env`, a variable name. Add `base_url` for a custom Pi/Claude endpoint. Its value remains outside argv/YAML. |
+| `api-env` | Select `api_key_env`, a variable name. Add `base_url` for a custom Pi/Claude endpoint or Codex Responses endpoint. Its value remains outside argv/YAML. |
 | `native-local` | Explicitly reuse the native host login in trusted local mode. This does not isolate files, tools, or peer credentials. |
 | `none` | No selected auth; useful for a private unauthenticated compatible endpoint. Native local harnesses require `native-local` because they may discover host login. |
 
@@ -45,6 +45,28 @@ review the YAML before granting coding access. Bubblewrap Codex defaults to its
 native workspace sandbox. An explicit `codex_sandbox: external` relies on the
 required outer boundary when nested native user namespaces are unavailable.
 Setup never changes a host policy or silently falls back to this mode.
+
+Choose `interaction: interactive` for a human-controlled native terminal, or
+omit it for a managed task worker. Interactive `native_only: true` requires an
+empty role and omits Agentmux prompt injection. Native approvals, customizations
+and history remain in the selected CLI; broker messages never become terminal
+keystrokes. Managed persistent conversations, wakeups, traces, disk capsules and
+allowlist egress are unavailable in interactive mode.
+
+Preset setup is also available:
+
+```sh
+agentmux managed setup --preset coding --session work --project /path/to/project --output coding.yaml
+agentmux managed setup --preset reviewer-pair --session review --output review.yaml
+agentmux managed setup --preset research-team --session study --output study.yaml
+```
+
+`coding` creates native Claude/Codex terminals with peer/shared access disabled
+until the owner enables collaboration. `reviewer-pair` and `research-team`
+create idle managed workers with preset responsibilities; setup queues no task.
+Presets default to explicitly trusted local execution; `--sandbox bubblewrap`
+selects isolated agent and broker setup and requires its selected private auth
+files. Review the resulting paths, roles and permissions before starting.
 
 For npm Pi, discovery writes a canonical Node executable plus real JavaScript
 entrypoint and explicit package/optional native dependency paths. For known
@@ -61,11 +83,15 @@ commits and does not set a Git identity. To use an existing project, review
 or a whole home. In a multi-agent coding team, use separate checkouts/worktrees
 and an explicit integration process for changes.
 
-Generated ACLs default to deny. The optional `team` board and `project` memory
+Spec-based ACLs default to deny. With `shared_board: true`, the `team` board and `project` memory
 are shared read/write among the selected agents. Private memory remains scoped
 per agent. Setup does not grant cross-agent instructions, spawn rights, or
 autonomy implicitly; add reviewed hierarchy, wakeup and template settings using
 the [managed runtime](managed-runtime.md) and [dynamic team guide](dynamic-teams.md).
+The `coding` preset instead leaves those scopes ungranted until owner
+collaboration is enabled. [Live role edits](managed-runtime.md#boards-messages-instructions-and-memory)
+and [live permissions/admission controls](live-permissions.md) are separate
+versioned overlays; they do not rewrite the saved launch definition.
 
 ## Compatible endpoint metadata
 
@@ -113,8 +139,9 @@ engine limit. Use a verified larger engine context or a compatible runtime.
 
 ## Provider coverage limits
 
-Claude, Codex and Pi support private persistent conversations through their
-verified native stores. Antigravity 1.4.12 advertises structured turns and
+Managed Claude, Codex and Pi support private persistent conversations through
+their verified native stores. Interactive sessions use provider-native history
+selection instead. In the recorded acceptance, Antigravity 1.4.12 advertised structured turns and
 `--conversation`, and its local model catalog was successfully queried without
 generation. A subsequent explicitly authorized, 45-second bounded trusted-local
 turn with `gemini-3.8-flash-low` returned the exact acceptance reply successfully
@@ -125,9 +152,11 @@ isolated authentication or transcript boundary. Its [authentication documentatio
 uses the OS secure keyring/DBus for native login, while its
 [conversation guide](https://antigravity.google/docs/cli/conversations) describes
 workspace scoping without a verified independent private storage-root contract.
-Direct managed Antigravity therefore supports fresh trusted-local turns; setup
+Direct managed Antigravity supports fresh trusted-local turns; setup
 rejects isolated native auth and persistent conversation claims rather than
-exposing a whole host `.gemini` tree or session bus. For isolated persistent
+exposing a whole host `.gemini` tree or session bus. Direct interactive
+Antigravity requires `native_only: true` and an empty role because its native
+role-injection interface is unsupported. For isolated persistent
 agents using Antigravity inference, choose `harness: antigravity-bridge` in setup
 and follow the [authenticated local bridge guide](antigravity-bridge.md). Pi
 provides their isolated tools/history while native authentication remains in

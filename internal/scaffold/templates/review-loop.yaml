@@ -1,10 +1,10 @@
+# Original v1 layout mode. For the interactive workbench, use agentmux start.
 version: 1
 name: Review Loop
 session: review-loop
 
 params:
   project_dir: "."
-  review_model: "gpt-5-mini"
 
 env:
   PROJECT_DIR: "{{project_dir}}"
@@ -17,11 +17,8 @@ agents:
     title: "Coder"
 
   reviewer:
-    provider: command
-    command: "openai api chat.completions.create -m {{review_model}}"
+    provider: codex
     cwd: "{{project_dir}}"
-    env:
-      OPENAI_API_KEY: "${OPENAI_API_KEY}"
     title: "Reviewer"
 
 layout:

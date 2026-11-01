@@ -4,7 +4,17 @@ Agentmux can let an authorized agent request a child worker, create a team, and
 invite collaborators. These features are off unless explicitly configured.
 Roles and self-declared leadership never grant runtime authority.
 
-Start with [the bounded team configuration](../examples/managed/bounded-teams.yaml):
+Agent-created teams use invitations and participant consent. They are separate
+from owner-created collaboration groups configured with `collaborate`/Graph;
+see [live permissions](live-permissions.md). Both expose scoped boards/memory,
+but joining a team never grants instruction authority. Everyday interactive
+sessions can keep their native terminals throughout; [work sessions](work-sessions.md)
+cover launching and attaching them.
+
+Start with [the bounded team configuration](https://github.com/pagel-s/agentmux/blob/main/examples/managed/bounded-teams.yaml):
+
+From the repository root, build with `make build` first. This fixture uses a
+custom state path, so keep `--state /tmp/amx-teams` on subsequent owner commands:
 
 ```sh
 ./bin/agentmux managed up examples/managed/bounded-teams.yaml --state /tmp/amx-teams --broker-sandbox bubblewrap
@@ -176,13 +186,19 @@ agent behavior, not an administrative privilege grant.
 ## Everyday control and live inspection
 
 ```sh
-agentmux team list --session work
-agentmux team create "API investigation" --description "Temporary joint review"
-agentmux team edit TEAM_ID --name "API review" --description "Owner-approved scope"
-agentmux team invite TEAM_ID bob
-agentmux team transfer TEAM_ID bob
-# Run in Bob's agent environment with its own credential:
+agentmux team list --state /tmp/amx-teams
+agentmux team create "API investigation" --description "Temporary joint review" --state /tmp/amx-teams
+# Replace TEAM_ID below with the ID returned by create:
+agentmux team edit TEAM_ID --name "API review" --description "Owner-approved scope" --state /tmp/amx-teams
+agentmux team invite TEAM_ID lead --state /tmp/amx-teams
+agentmux team invite TEAM_ID peer --state /tmp/amx-teams
+# Each invited agent runs this with its own credential, if it consents:
+agentmux team join TEAM_ID --credential-file "$AGENTMUX_CREDENTIAL_FILE"
+# After lead has joined, the owner proposes a transfer:
+agentmux team transfer TEAM_ID lead --state /tmp/amx-teams
+# Lead, as the proposed new owner, separately accepts:
 agentmux team accept-owner TEAM_ID --credential-file "$AGENTMUX_CREDENTIAL_FILE"
+# A non-owner member may move only after a separate destination invitation:
 agentmux team move SOURCE_ID DESTINATION_ID --credential-file "$AGENTMUX_CREDENTIAL_FILE"
 ```
 
@@ -201,6 +217,11 @@ Owner inspection includes each member's effective access; each participant sees
 only its own `self_access` reason and blocking ancestor. Recorded membership
 alone never asserts effective authority.
 
+The web **Teams** view edits names/purposes, reviews invitations and ownership
+proposals, and accepts an ownership proposal addressed to the human `$owner`.
+It never accepts on an agent's behalf. Drafts retain their original version;
+concurrent edits require explicit version review or discard before saving.
+
 `capacity.get {}` and `identity.capacity` report remaining **lifetime** spawn/team
 counts, spawn depth, available template names, current team slots (including
 reserved invitations), admission deadline and inherited admission denials. These
@@ -208,6 +229,19 @@ are read-only snapshots, not reservations: concurrent decisions may consume a
 slot before the next mutation. Revoking an agent or dissolving a team does not
 refund lifetime counts. [Live permissions and resource controls](live-permissions.md)
 describes owner CAS admission-budget edits and effective-versus-stored access.
+
+Inspect the fixture's lead capacity without reserving anything:
+
+```sh
+agentmux managed call capacity.get --credential-file /tmp/amx-teams/owner.json \
+  --json '{"agent":"lead"}'
+```
+
+The web **Agent** view exposes these values and separately reviews changes to
+effective session/agent admission budgets and a shorter admission deadline.
+The owner response for `capacity.get {}` includes the effective session budget;
+an inspected agent response includes its effective agent budget. All edits use
+`resource_version`; stale reviews cannot adopt another client's new version.
 
 ## History, memory, and departure
 
@@ -253,6 +287,7 @@ is observational; these limits do not imply a hard token/dollar cap. All of thes
 features remain optional, and their security depends on the chosen sandbox:
 local participants retain trusted host access.
 
-For controlled comparisons, see [repeatable research pilots](experiments.md).
-The initial experiment runner disables dynamic spawning and teams so that
-population changes and membership history do not become accidental treatments.
+For repeated controlled comparisons, use the [research runner](research.md)
+and its [dynamic population admission rules](research-environments.md#declared-dynamic-populations).
+The separate [single-task experiment runner](experiments.md) disables dynamic
+spawning and teams; its simpler schema does not model those treatments.

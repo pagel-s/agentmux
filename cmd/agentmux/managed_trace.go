@@ -15,12 +15,30 @@ import (
 )
 
 func runManagedTrace(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	usage := func() {
+		fmt.Fprintln(stdout, `Usage:
+  agentmux managed trace list --state DIR --agent ID
+  agentmux managed trace verify|show --state DIR --agent ID --id TRACE_ID [--mac TASK_MAC]
+  agentmux managed trace export --state DIR --agent ID --id TRACE_ID
+      [--mac TASK_MAC] --output NEW_PRIVATE_FILE
+  agentmux managed trace verify-bundle --input FILE --trust OWNER_PUBLIC_KEY_SHA256
+
+Local list/verify/show/export require owner state access. Export signs a locally
+verified trace without exporting credentials or secret keys. Offline verify-bundle
+requires an independently obtained owner-key fingerprint; an embedded key alone
+is not trusted. This authenticates an owner exporter, not a model provider.`)
+	}
+	if len(args) > 0 && (helpArgument(args[0]) || args[0] == "help") {
+		usage()
+		return exitSuccess
+	}
 	if len(args) == 0 {
 		return managedCLIError(stdout, "trace", "", exitValidation, errors.New("trace list|verify|show|export|verify-bundle required"))
 	}
 	operation := args[0]
 	f := flag.NewFlagSet("trace", flag.ContinueOnError)
 	f.SetOutput(stderr)
+	f.Usage = usage
 	state := f.String("state", "", "private local broker state")
 	agent := f.String("agent", "", "agent ID")
 	id := f.String("id", "", "trace ID")
@@ -29,6 +47,9 @@ func runManagedTrace(ctx context.Context, args []string, stdout, stderr io.Write
 	input := f.String("input", "", "portable signed trace bundle")
 	trust := f.String("trust", "", "independently obtained owner signing-key SHA256 fingerprint")
 	if err := f.Parse(args[1:]); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return exitSuccess
+		}
 		return exitValidation
 	}
 	if operation == "verify-bundle" {

@@ -1,9 +1,16 @@
-# Repeatable research pilots
+# Single-task experiment pilots
 
 `agentmux experiment` runs finite, auditable comparisons on the managed runtime.
 It creates a fresh broker, credentials, workspaces, homes, and private/shared
 memory for every trial. Agents within a trial run concurrently; trials run
 serially. Tmux is not required.
+
+Use this runner for a finite instruction/assertion matrix. Use
+[`agentmux research`](research.md) for repeated-round decisions, private
+observations, scarce resources, dynamic populations, declared behavioral
+outcomes, role/personality treatments and counterbalanced factorial designs.
+Those are distinct manifest schemas; research fields are not accepted by an
+`experiment` manifest.
 
 The included command fixtures validate orchestration and scoring. They do not
 produce evidence about agent cooperation, competition, or personality.
@@ -142,13 +149,16 @@ automatically repeated.
 
 Replace the command fixtures with supported managed harnesses and connections.
 `run` additionally requires `--allow-models` because it can incur provider
-charges. Use explicit API credential references; fresh trial homes intentionally
-do not reuse native login/history directories automatically. Authentication
+charges. Declare native credential files or explicit API-key references; fresh
+trial homes intentionally do not inherit native login/history directories
+automatically. Authentication
 availability is validated before accepting tasks.
 
 Use `sandbox: bubblewrap` for supported Linux filesystem/process isolation.
-Provider calls require explicit `network: host`; that grants unrestricted
-network access and is not an endpoint allowlist. `local` remains a trusted host
+Provider calls require an explicit network policy: `network: host` grants
+unrestricted network access, while supported Bubblewrap managed harnesses may
+use `network: allowlist` with exact allowed origins/IP pins. See
+[managed runtime network boundaries](managed-runtime.md). `local` remains a trusted host
 process. Separate state/homes in local mode do not prevent a hostile agent from
 reading other trials or other host files. Isolation and information boundaries
 must be part of the experiment's declared conditions.
