@@ -46,7 +46,7 @@ type AgentInfo struct {
 	Deadline     string              `json:"deadline,omitempty"`
 }
 
-func (s *Store) agent(ctx context.Context, q queryer, id string) (AgentInfo, error) {
+func (s *Store) readAgent(ctx context.Context, q queryer, id string) (AgentInfo, error) {
 	var info AgentInfo
 	err := get(ctx, q, "agent", "agent_"+id, &info)
 	if err == nil {
@@ -172,6 +172,18 @@ func (s *Store) namespace(ctx context.Context, q queryer, id, name string, memor
 }
 
 func teamNamespace(ctx context.Context, q queryer, name string, memory bool) (bool, error) {
+	if boundaryReadState(ctx) != nil {
+		teams, err := boundaryTeams(ctx, q)
+		if err != nil {
+			return false, err
+		}
+		for _, team := range teams {
+			if memory && team.Memory == name || !memory && team.Board == name {
+				return true, nil
+			}
+		}
+		return false, nil
+	}
 	field := "$.board"
 	if memory {
 		field = "$.memory"

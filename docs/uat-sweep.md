@@ -188,9 +188,18 @@ available browser connection. Team access presentation has backend, terminal and
 DOM regression coverage with real broker metadata; it was not manually retested
 in a browser after the fix. All final observer processes and tabs were closed.
 
-Dense selected-session snapshots in the 225-definition/205-team fixture took
-1.72–2.23 seconds and contained about 444 KB on this host. They completed, but
-this is a profiling target rather than a large-team responsiveness guarantee.
+Dense selected-session snapshots in the 225-definition/205-team fixture initially
+took 1.72–2.23 seconds and contained about 444 KB on this host. CI then caught a
+timeout in the unchanged four-second 225-session snapshot regression. Boundary
+evaluation repeatedly loaded the same agent, control, team and group inputs.
+Those reads are now reused within one authenticated, read-only evaluation;
+mutations remain uncached and each later request reads fresh state. Permission
+parity, revocation across requests, cached failures and a linear SQL-query bound
+have regression coverage. Independent review found no authorization regression.
+Three snapshots against the same retained fixture, with no reseeding or user
+mutations, then took 80.2, 62.8 and 70.3 ms with the same counts and selected ID.
+These are bounded local observations, not a production capacity guarantee.
+
 The research reviewer also suggested printing a direct analysis command after
 an owner stop; existing analysis commands remain available. Neither observation
 is evidence of model collaboration quality or multi-day provider reliability.

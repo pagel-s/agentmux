@@ -23,6 +23,13 @@ type WorkspaceGroup struct {
 }
 
 func workspaceGroups(ctx context.Context, q queryer) ([]WorkspaceGroup, error) {
+	if state := boundaryReadState(ctx); state != nil {
+		if !state.groupsLoaded {
+			state.groups, state.groupsErr = list[WorkspaceGroup](ctx, q, "workspace_group", "ORDER BY seq")
+			state.groupsLoaded = true
+		}
+		return state.groups, state.groupsErr
+	}
 	return list[WorkspaceGroup](ctx, q, "workspace_group", "ORDER BY seq")
 }
 
@@ -105,6 +112,18 @@ func removeWorkspaceGroupMembers(ctx context.Context, q queryer, a actor, chosen
 }
 
 func workspaceGroupNamespace(ctx context.Context, q queryer, namespace string, memory bool) (*WorkspaceGroup, error) {
+	if boundaryReadState(ctx) != nil {
+		groups, err := workspaceGroups(ctx, q)
+		if err != nil {
+			return nil, err
+		}
+		for _, group := range groups {
+			if memory && group.Memory == namespace || !memory && group.Board == namespace {
+				return &group, nil
+			}
+		}
+		return nil, nil
+	}
 	field := "board"
 	if memory {
 		field = "memory"

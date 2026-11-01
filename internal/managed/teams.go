@@ -90,7 +90,7 @@ func (s *Store) teamMemberAccess(ctx context.Context, q queryer, t Team, id stri
 }
 
 func (s *Store) teamAccess(ctx context.Context, q queryer, id, name string, memory bool) bool {
-	teams, err := list[Team](ctx, q, "team", "AND json_extract(data,'$.state')='active'")
+	teams, err := activeTeams(ctx, q)
 	if err != nil {
 		return false
 	}
