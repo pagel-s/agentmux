@@ -16,7 +16,7 @@ import (
 
 func runManagedTrace(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		return managedCLIError(stdout, "trace", "", exitValidation, errors.New("trace list|verify|show required"))
+		return managedCLIError(stdout, "trace", "", exitValidation, errors.New("trace list|verify|show|export|verify-bundle required"))
 	}
 	operation := args[0]
 	f := flag.NewFlagSet("trace", flag.ContinueOnError)
@@ -25,8 +25,21 @@ func runManagedTrace(ctx context.Context, args []string, stdout, stderr io.Write
 	agent := f.String("agent", "", "agent ID")
 	id := f.String("id", "", "trace ID")
 	anchor := f.String("mac", "", "optional task-completion anchor")
+	output := f.String("output", "", "new private signed trace bundle")
+	input := f.String("input", "", "portable signed trace bundle")
+	trust := f.String("trust", "", "independently obtained owner signing-key SHA256 fingerprint")
 	if err := f.Parse(args[1:]); err != nil {
 		return exitValidation
+	}
+	if operation == "verify-bundle" {
+		if f.NArg() != 0 || *input == "" || *trust == "" || *state != "" || *agent != "" || *id != "" || *anchor != "" || *output != "" {
+			return managedCLIError(stdout, "trace.verify-bundle", "", exitValidation, errors.New("verify-bundle requires --input and --trust only; it never reads local state or secrets"))
+		}
+		verified, err := managed.VerifyTraceBundle(expandUserPath(*input), *trust)
+		if err != nil {
+			return managedCLIError(stdout, "trace.verify-bundle", "", exitRuntime, err)
+		}
+		return writeManagedEnvelope(stdout, managedEnvelope{Operation: "trace.verify-bundle", OK: true, Result: verified})
 	}
 	if f.NArg() != 0 || *state == "" || !managedconfig.ValidID(*agent) {
 		return managedCLIError(stdout, "trace", "", exitValidation, errors.New("--state and valid --agent are required"))
@@ -68,8 +81,18 @@ func runManagedTrace(ctx context.Context, args []string, stdout, stderr io.Write
 		}
 		return writeManagedEnvelope(stdout, managedEnvelope{Operation: "trace.list", OK: true, Result: out})
 	}
+	if operation == "export" {
+		if *output == "" {
+			return managedCLIError(stdout, "trace.export", "", exitValidation, errors.New("trace export requires --output for a new private bundle"))
+		}
+		verified, err := managed.ExportTraceBundle(*state, *agent, *id, *anchor, expandUserPath(*output))
+		if err != nil {
+			return managedCLIError(stdout, "trace.export", "", exitRuntime, err)
+		}
+		return writeManagedEnvelope(stdout, managedEnvelope{Operation: "trace.export", OK: true, Result: verified})
+	}
 	if operation != "verify" && operation != "show" {
-		return managedCLIError(stdout, "trace", "", exitValidation, errors.New("trace list|verify|show required"))
+		return managedCLIError(stdout, "trace", "", exitValidation, errors.New("trace list|verify|show|export|verify-bundle required"))
 	}
 	sum, err := managed.VerifyTrace(*state, *agent, *id, *anchor)
 	if err != nil {

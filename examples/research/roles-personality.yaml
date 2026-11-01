@@ -1,0 +1,59 @@
+version: 1
+id: role-personality-protocol-pilot
+team: team.yaml
+trials: 1
+seeds: [11, 22, 33, 44]
+randomization_seed: 741
+counterbalancing: latin_square
+timeout_seconds: 120
+phase_timeout_seconds: 15
+broker_sandbox: bubblewrap
+
+game:
+  kind: public-goods-v1
+  rounds: 2
+  credits: 8
+  per_round_cap: 2
+  threshold: 4
+  dividend: 3
+
+# This command team ignores role/personality text: the example validates the
+# design/collection protocol, not a hypothesis about model behavior or traits.
+# Replace participants with properly provisioned model harnesses and declare a
+# positive max_model_tasks budget before an actual, separately registered study.
+role_assignments:
+  forward:
+    alice: Analyze available evidence.
+    bob: Critique proposed plans.
+  reverse:
+    alice: Critique proposed plans.
+    bob: Analyze available evidence.
+personality_profiles:
+  consultative:
+    alice: Seek peer input before choosing your own action.
+    bob: Seek peer input before choosing your own action.
+    charlie: Seek peer input before choosing your own action.
+  independent:
+    alice: Form an independent judgment before considering peer advice.
+    bob: Form an independent judgment before considering peer advice.
+    charlie: Form an independent judgment before considering peer advice.
+
+preregistration:
+  question: Do declared prompt treatments change observed consented team counts?
+  primary_outcome: teams_with_multiple_members
+  hypotheses:
+    - Prompt treatments may change observed team formation in model participants.
+  factors:
+    role_assignment: [forward, reverse]
+    personality: [consultative, independent]
+  fixed_controls:
+    - Same actors, models, tools, permissions, reward rule, worlds and phase budgets.
+    - Personality labels denote requested prompt behavior, not measured traits.
+  minimum_blocks: 20
+  analysis: Paired factorial run-level team counts. This four-block command fixture is an underpowered protocol pilot, not confirmatory model evidence.
+
+conditions:
+  - {id: forward-consultative, reward_mode: individual, visibility: direct, teams: true, role_assignment: forward, personality: consultative}
+  - {id: forward-independent, reward_mode: individual, visibility: direct, teams: true, role_assignment: forward, personality: independent}
+  - {id: reverse-consultative, reward_mode: individual, visibility: direct, teams: true, role_assignment: reverse, personality: consultative}
+  - {id: reverse-independent, reward_mode: individual, visibility: direct, teams: true, role_assignment: reverse, personality: independent}

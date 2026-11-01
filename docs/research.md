@@ -240,7 +240,7 @@ Manifests require `version: 1`, a conservative `id`, a managed `team` path, boun
 `trials` / `seeds`, `randomization_seed`, trial and phase timeouts, game options,
 and explicit conditions. Unknown nested fields and multiple YAML documents fail.
 Planning makes no participant/provider calls. Every condition appears once in
-each seed/repetition block, in a deterministic randomized order. Runs execute
+each seed/repetition block, in a deterministic randomized order by default. Runs execute
 serially; participants within a phase execute concurrently. The sample varies
 both visibility and reward to cover implementation paths. It is not a causal
 comparison: use a declared factorial or vary one factor at a time for a study.
@@ -253,14 +253,76 @@ not a proof of optimal long-horizon planning. Its choices are never supplied to
 participants. The generic `Scenario` / `Episode` contracts allow additional
 versioned environments without delegating ground-truth scoring to a model.
 
+Optional `counterbalancing: latin_square` assigns cyclic condition orders over
+the seeded, shuffled seed/repetition blocks. Every condition occupies every
+serial position equally; `trials * len(seeds)` must be divisible by the condition
+count, so a partial cycle is rejected. The base condition permutation is seeded,
+and the exact schedule is frozen in `plan.json`. This balances serial positions;
+it does not promise first-order carryover balance or seed native model sampling.
+Omitting the field retains the historical randomized plan and manifest hashes.
+
+Named `role_assignments` replace the source role for the specified initial actor
+IDs in that condition. Unspecified actors retain their source roles. Named
+`personality_profiles` append a declared behavioral prompt to the specified
+actors. Select profiles with condition fields `role_assignment` and
+`personality`; unknown profiles/actors and empty prompts fail validation.
+The controlled-game protocol remains appended to every role. These are prompt
+treatments, not personality measurements. Profile labels and exact text are
+frozen in the manifest; the resolved prompt/configuration is hashed separately
+for every trial. Spawned participants retain their declared template role;
+initial-actor assignments do not implicitly alter descendants.
+
+See [the role/personality pilot](../examples/research/roles-personality.yaml) for
+a complete two-factor manifest with reversed role assignments and exact order
+counterbalancing. Its scripted participants ignore prompt treatments, so it
+tests collection mechanics only. A model study must separately choose adequate
+independent blocks, provisioning and a native-turn budget before execution.
+
 Analysis reports objective welfare, funding rate, credits spent, invalid
 decisions, valid zero contributors on funded rounds, failed tasks, and actual
 teams with multiple members, plus baseline welfare. Pairwise contrasts align
-condition runs by seed and repetition. Preregistered one-/two-factor binary
-designs additionally report paired main effects and interaction. Per-decision
+condition runs by seed and repetition. Preregistered designs support one to six
+binary factors and require every factorial cell exactly once per block (at most
+64 conditions). Factors are `reward_mode`, `visibility`, `teams`, `team_rewards`,
+`role_assignment` and `personality`. Undeclared changes to any of these factors
+or extra condition instructions are rejected. Main effects and every declared
+interaction use complete paired blocks, averaged over other factor levels.
+Per-decision
 behavior IDs, model/harness labels, and separate validity/execution-failure
 fields support reproducible behavioral coding. Per-agent uncertainty uses
 run-level means rather than treating rounds as independent samples.
+
+`preregistration.primary_outcome` selects the metric for condition
+`primary_outcome_estimate`, `paired_primary_outcome_difference_to_minus_from`
+and all factorial `paired_effect` estimates. Each effect names its `outcome`.
+Legacy welfare summary/contrast fields retain their original meaning. An
+unregistered exploratory manifest can select top-level `primary_outcome`;
+conflicting top-level and preregistered choices are rejected. The default remains
+`total_social_welfare`. Supported run-level outcomes are:
+
+| Primary outcome | Definition |
+| --- | --- |
+| `total_social_welfare` | Sum of objective round welfare. |
+| `productive_project_funding_rate` | Fraction of rounds funding the productive project; public-goods only. |
+| `total_credits_spent` | Sum of objective round credit costs. |
+| `invalid_action_count` | Sum of invalid decisions across rounds. |
+| `funded_zero_contributors` | Sum of valid zero contributors on funded rounds; public-goods only. |
+| `teams_with_multiple_members` | Distinct active teams with at least two members observed at phase barriers; repeated snapshots count once. Teams created and dissolved between snapshots are not counted. |
+| `failed_task_count` | Phase tasks not submitted or verified. Infrastructure uncertainty still interrupts collection. |
+| `escrow_return_fraction` | Total escrow returned / total escrow received over the run; trust-exchange only. Runs with zero escrow are unavailable, not zero, and are excluded from this metric and its paired contrasts. |
+
+The escrow denominator can be affected by treatment; analysis explicitly warns
+about this selection and reports metric-specific sample sizes. It must be read
+alongside investment/escrow activity. Research CSV keeps its original leading
+columns and appends primary outcome, mean and sample size; `analysis_json`
+retains all contrasts, uncertainty, preregistration and evidence warnings.
+
+Every unregistered collection is labeled exploratory. Analysis flags any
+scripted command participants, incomplete evidence coverage, owner intervention,
+and fewer than eight complete paired blocks. Eight is an explicit descriptive
+disclosure threshold, not a power calculation or a claim that eight is enough.
+Preregistered minimum-block shortfalls also retain their dedicated warning;
+meeting that minimum does not establish adequate statistical power.
 
 Sample standard errors and unadjusted 95% Student-t intervals are descriptive
 and assume independent runs; repeated worlds, provider dependence, order, and

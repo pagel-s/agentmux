@@ -469,11 +469,15 @@ type Message struct {
 	Text       string      `json:"text"`
 	CreatedAt  string      `json:"created_at"`
 	TaskID     string      `json:"task_id,omitempty"`
+	ReplyTo    string      `json:"reply_to,omitempty"`
+	ThreadID   string      `json:"thread_id,omitempty"`
 	Provenance *Provenance `json:"provenance,omitempty"`
 }
 type Task struct {
 	ID        string          `json:"id"`
 	MessageID string          `json:"message_id"`
+	ReplyTo   string          `json:"reply_to,omitempty"`
+	ThreadID  string          `json:"thread_id,omitempty"`
 	From      string          `json:"from"`
 	To        string          `json:"to"`
 	Text      string          `json:"text"`

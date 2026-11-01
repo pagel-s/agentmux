@@ -18,11 +18,15 @@ type consoleReader struct {
 	title, body  string
 	offset       int
 	memoryReview *consoleMemoryVersionReview
+	roleReview   *consoleRoleReview
 }
 
 const consoleReaderHelp = "↑/↓ or j/k scroll · PgUp/PgDn page · Home/End · Esc/q back"
 
 func (m console) readerHelp() string {
+	if m.reader != nil && m.reader.roleReview != nil {
+		return "↑/↓ scroll · Enter adopts reviewed role version (no save)\nEsc/q keeps original version and draft"
+	}
 	if m.reader != nil && m.reader.memoryReview != nil {
 		return "↑/↓ scroll · PgUp/PgDn · Home/End · Enter adopts reviewed version (no save)\nEsc/q keeps original version and draft"
 	}
@@ -115,9 +119,10 @@ func (m console) readerPageRows() int {
 }
 
 type consoleDraft struct {
-	kind, target, reference, text, namespace, key string
-	version                                       int
-	native                                        *consoleNativeDraft
+	kind, target, reference, text, namespace, key, mode string
+	version                                             int
+	roleVersion                                         int
+	native                                              *consoleNativeDraft
 }
 
 func (m *console) restoreDraft() {
@@ -130,7 +135,13 @@ func (m *console) restoreDraft() {
 		m.newNative = *d.native
 	}
 	m.memoryNamespace, m.memoryKey, m.memoryVersion = d.namespace, d.key, d.version
+	if d.kind == "role" {
+		m.roleVersion = d.roleVersion
+	}
 	m.compose(d.kind, d.target, d.reference, d.text)
+	if d.mode != "" {
+		m.composeMode = d.mode
+	}
 	m.failedDraft = nil
 	m.message = "Draft restored for its original target. Review delivery before submitting again."
 }
@@ -145,7 +156,7 @@ func (m *console) openReader() {
 		}
 		v := messages[m.messageIndex%len(messages)]
 		title = "Message " + v.ID
-		body = v.Text + fmt.Sprintf("\n\nFrom: %s\nTo: %s\nBoard: %s", v.From, strings.Join(v.To, ", "), v.Board)
+		body = v.Text + fmt.Sprintf("\n\nFrom: %s\nTo: %s\nBoard: %s\nReply to: %s\nThread: %s", v.From, strings.Join(v.To, ", "), v.Board, v.ReplyTo, v.ThreadID)
 	case 1:
 		if len(m.agents) == 0 {
 			break
@@ -159,11 +170,18 @@ func (m *console) openReader() {
 		} else if m.data.selected == a.ID && m.data.preview != "" {
 			body += "\n\nObserved terminal preview\n" + m.data.preview
 		}
+	case 2:
+		title = "Effective boundaries and stored owner intent"
+		data, _ := json.MarshalIndent(map[string]any{"effective": m.data.boundaries, "stored_controls": m.data.controls}, "", "  ")
+		body = "Effective permissions include membership, isolation and lineage. Stored allow values are intent, not proof of current access.\n\n" + string(data)
 	case 3:
 		if m.memoryOpen && len(m.memoryEntries) > 0 {
 			v := m.memoryEntries[m.memoryEntry%len(m.memoryEntries)]
 			title = fmt.Sprintf("Memory %s / %s · v%d", m.memoryNamespace, v.Key, v.Version)
 			body = v.Value
+			v.Value, v.Embedding = "", nil
+			metadata, _ := json.MarshalIndent(v, "", "  ")
+			body += "\n\nMemory metadata / asserted source claims\n" + string(metadata)
 		} else if m.data.boundaries.Agent == m.selectedID() {
 			scopes := append(append([]managed.BoundaryScope{}, m.data.boundaries.Boards...), m.data.boundaries.Memory...)
 			if len(scopes) > 0 {
@@ -210,9 +228,19 @@ func (m console) readerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	page := m.readerPageRows()
 	lines := strings.Split(ansi.Hardwrap(m.reader.body, max(1, m.width), true), "\n")
 	limit := max(0, len(lines)-page)
-	m.reader = &consoleReader{title: m.reader.title, body: m.reader.body, offset: min(m.reader.offset, limit), memoryReview: m.reader.memoryReview}
+	m.reader = &consoleReader{title: m.reader.title, body: m.reader.body, offset: min(m.reader.offset, limit), memoryReview: m.reader.memoryReview, roleReview: m.reader.roleReview}
 	switch msg.String() {
 	case "enter":
+		if review := m.reader.roleReview; review != nil {
+			if m.composer == "role" && m.composeTarget == review.id && string(m.text) == review.draft && m.roleVersion == review.oldVersion {
+				m.roleVersion = review.version
+				m.message = "Reviewed role version adopted; draft retained. Enter in the editor saves with CAS checking."
+			} else {
+				m.message = "Role draft changed; review the current draft again."
+			}
+			m.reader = nil
+			return m, nil
+		}
 		if review := m.reader.memoryReview; review != nil {
 			if m.composer == "memory-value" && m.memoryNamespace == review.namespace && m.memoryKey == review.key && string(m.text) == review.draft && m.memoryVersion == review.oldVersion {
 				m.memoryVersion = review.version

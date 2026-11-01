@@ -142,7 +142,7 @@ func runManagedIO(args []string, stdin io.Reader, stdout, stderr io.Writer) int 
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 		defer stop()
 		fmt.Fprintf(stderr, "Agentmux agent %s: starting the configured terminal or managed worker.\n", options.values["agent"])
-		if err := managed.RunWorker(ctx, managed.WorkerOptions{StateDir: state, AgentID: options.values["agent"], Once: options.once, Executable: executable, DefinitionFile: options.values["definition"]}); err != nil && !errors.Is(err, context.Canceled) {
+		if err := managed.RunWorker(ctx, managed.WorkerOptions{StateDir: state, AgentID: options.values["agent"], Once: options.once, Executable: executable, DefinitionFile: options.values["definition"], NativeResume: options.values["native-resume"]}); err != nil && !errors.Is(err, context.Canceled) {
 			return managedCLIError(stdout, operation, "", exitRuntime, err)
 		}
 		return writeManagedEnvelope(stdout, managedEnvelope{Operation: operation, OK: true, Result: map[string]any{"agent_id": options.values["agent"], "stopped": true}})
@@ -326,6 +326,7 @@ func parseManagedCLI(operation string, args []string) (managedCLIOptions, error)
 	case "worker":
 		allowed["state"], allowed["agent"], allowed["once"] = true, true, true
 		allowed["definition"] = true
+		allowed["native-resume"] = true
 	case "rotate":
 		allowed["state"], allowed["agent"] = true, true
 	case "call":

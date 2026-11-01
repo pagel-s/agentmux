@@ -9,7 +9,7 @@ func workHelpRequested(args []string) bool {
 			return false
 		case "--help", "-h":
 			return true
-		case "--state", "--session", "--config", "--project", "--sandbox", "--view", "--group", "--board":
+		case "--state", "--session", "--config", "--project", "--sandbox", "--view", "--group", "--board", "--legacy-policy":
 			i++
 		}
 	}

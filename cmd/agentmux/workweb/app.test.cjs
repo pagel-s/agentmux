@@ -7,10 +7,21 @@ const vm = require("node:vm");
 const { domFixture } = require("./dom-fixture.cjs");
 const source = fs.readFileSync(path.join(__dirname, "app.js"), "utf8");
 
+function createTestContext(values) {
+  return vm.createContext({
+    tab: "activity", relaunchReview: null, teamEditDrafts: new Map(), roleDrafts: new Map(), resourceDrafts: new Map(), resourceReview: null, researchSavedOffline: false, legacyGroupChoices: new Map(), legacyGroupReview: null, memoryMetadataSelection: "",
+    sessionTitle: agent => agent?.title || agent?.id || "Session",
+    taskHistory: {tasks:null,cursor:"",hasMore:false,query:"",to:"",state:"",loading:false,epoch:0,updatedAt:0,error:""},
+    workspaceLoadedAt: 0, workspaceLoading: false, workspaceListings: [],
+    loadTaskHistory() {}, loadWorkspaces() {}, loadCapacity() {},
+    ...values,
+  });
+}
+
 // Execute the production identity helpers and submit callback as ordinary
 // JavaScript units. This starts no browser, server, terminal or model.
 function identityContext() {
-  const context = vm.createContext({ snapshot: null, sessionQuery: "" });
+  const context = createTestContext({ snapshot: null, sessionQuery: "" });
   vm.runInContext(
     source.slice(
       source.indexOf("const providerName ="),
@@ -98,7 +109,7 @@ function renameContext() {
   const requests = [];
   let pending;
   let closed = 0;
-  const context = vm.createContext({
+  const context = createTestContext({
     $: (id) => elements[id],
     titleEditor: { id: "native-a", version: 3 },
     titleEditorEpoch: 10,
@@ -208,7 +219,7 @@ function connectionContext() {
       });
     return nodes.get(id);
   };
-  const context = vm.createContext({
+  const context = createTestContext({
     token: "fixture",
     AbortController,
     snapshot: {
@@ -244,7 +255,7 @@ function connectionContext() {
     researchHeadless: () => false,
     nativeHeadless: () => false,
     researchReview: null,
-    researchSavedOffline: false,
+    researchSavedOffline: false, legacyGroupChoices: new Map(), legacyGroupReview: null, memoryMetadataSelection: "",
     setTimeout(fn) {
       const id = timers.size + 1;
       timers.set(id, fn);
@@ -356,7 +367,7 @@ test("large graph keeps selected session and recipient visible without overlap",
     id: "agent-" + i,
     state: "active",
   }));
-  const context = vm.createContext({
+  const context = createTestContext({
     snapshot: { agents },
     selected: "agent-199",
     peer: "agent-180",
@@ -395,7 +406,7 @@ test("title conflicts preserve draft and require explicit review of current vers
     if (!elements.has(id)) elements.set(id, {});
     return elements.get(id);
   };
-  const context = vm.createContext({
+  const context = createTestContext({
     $: element,
     selected: "a",
     mutating: false,
@@ -474,7 +485,7 @@ function replyContext(interaction) {
     ];
   let release, pending;
   const requests = [];
-  const context = vm.createContext({
+  const context = createTestContext({
     $: node,
     snapshot: {
       selected: "a",
@@ -692,7 +703,7 @@ function teamControlContext() {
       invited: ["invited"],
     };
   let release;
-  const context = vm.createContext({
+  const context = createTestContext({
     snapshot: { teams: [team], agents: [{ id: "candidate", state: "active" }] },
     selectionReady: () => true,
     teamReview: null,
@@ -799,7 +810,7 @@ test("research intervention freezes attempt, CAS and reason without overwriting 
     },
     requests = [];
   let release;
-  const context = vm.createContext({
+  const context = createTestContext({
     snapshot: {
       research: {
         progress: { trial: "trial-1", attempt: 2, state: "running" },
@@ -1055,7 +1066,7 @@ test("first legacy headless snapshot opens Tasks and disables fake terminal acti
 });
 
 test("runner heartbeat distinguishes fresh, stale and unknown without inferring task state", () => {
-  const c = vm.createContext({});
+  const c = createTestContext({});
   vm.runInContext(
     source.slice(
       source.indexOf("function runnerHeartbeat("),
@@ -1071,7 +1082,7 @@ test("runner heartbeat distinguishes fresh, stale and unknown without inferring 
 });
 
 test("delegated joining limitation is explained without changing eligibility or stored grants", () => {
-  const c = vm.createContext({});
+  const c = createTestContext({});
   vm.runInContext(
     source.slice(
       source.indexOf("function teamJoiningHint("),
@@ -1375,7 +1386,7 @@ test("saved metadata roster and task count stay unknown, including after a searc
         });
       return nodes.get(id);
     };
-  const c = vm.createContext({
+  const c = createTestContext({
     snapshot: { agents: [] },
     researchSavedOffline: true,
     sessionQuery: "",
@@ -1431,7 +1442,7 @@ function pollingContext() {
     "research-population",
   ])
     view.append(dom.node(id));
-  const context = vm.createContext({
+  const context = createTestContext({
     document: dom.document,
     $: dom.node,
     el: dom.el,
@@ -2461,7 +2472,7 @@ function rosterAccessibilityContext() {
     el: dom.el,
     selected: "alpha",
     agentSignature: "",
-    researchSavedOffline: false,
+    researchSavedOffline: false, legacyGroupChoices: new Map(), legacyGroupReview: null, memoryMetadataSelection: "",
     renderObserved() {},
     selectAgent() {},
     snapshot: {
@@ -2543,7 +2554,7 @@ test("workspace view buttons expose one active state without moving activation f
       const view = dom.node("view-" + name, "view");
       return { button, view };
     }),
-    context = vm.createContext({
+    context = createTestContext({
       document: dom.document, $: dom.node, tab: "activity", renderGlobalHeading() {},
     });
   vm.runInContext(source.slice(source.indexOf("function activateTab("), source.indexOf('$("board-filter").onchange')), context);
@@ -2563,11 +2574,297 @@ test("workspace view buttons expose one active state without moving activation f
   assert.match(html, /id="session-search-status"[^>]*role="status"[^>]*aria-atomic="true"/);
 });
 
-test("recent task view describes its bounded window and avoids implying empty history", () => {
+test("task view distinguishes the snapshot from complete searchable history", () => {
   const f = pollingContext();
   f.context.renderTasks();
-  assert.match(f.node("tasks").children[0].textContent, /^No recent tasks\./);
+  assert.match(f.node("tasks").children[0].textContent, /^No tasks in the recent snapshot\./);
   const html = fs.readFileSync(path.join(__dirname, "index.html"), "utf8");
-  assert.match(html, /Recent tasks <span id="task-count">/);
-  assert.match(html, /latest 40 tasks.*older tasks may exist/);
+  assert.match(html, /Tasks <span id="task-count">/);
+  assert.match(html, /id="task-history-filter"/);
+  assert.match(html, /id="load-more-tasks"/);
+});
+
+const historyTask = (id, result="") => ({id,from:"$owner",to:"a",text:"Task "+id,result,state:"submitted",delivery:"done",version:1});
+test("complete task history follows short byte-limited pages, loads older tasks and preserves unrelated drafts", async () => {
+  const f=pollingContext(), requests=[];
+  f.node("message").value="Unsent message";
+  f.node("role-draft").value="Unsent role";
+  f.context.call=async(operation,args)=>{
+    requests.push({operation,args});
+    if (!args.after) return {tasks:Array.from({length:7},(_,i)=>historyTask("t"+(100-i))),cursor:"t94",has_more:true};
+    if (args.after==="t94") return {tasks:Array.from({length:43},(_,i)=>historyTask("t"+(93-i))),cursor:"t51",has_more:true};
+    return {tasks:[historyTask("t50"),historyTask("t49")],cursor:"t49",has_more:false};
+  };
+  await f.context.loadTaskHistory();
+  assert.equal(f.context.taskHistory.tasks.length,50);
+  assert.equal(requests.length,2,"a short broker page does not mean end of history");
+  assert.equal(requests[0].args.order,"desc");
+  assert.equal(f.context.taskHistory.hasMore,true);
+  await f.context.loadTaskHistory("more");
+  assert.equal(f.context.taskHistory.tasks.length,52);
+  assert.equal(f.context.taskHistory.tasks[51].id,"t49");
+  assert.equal(f.context.taskHistory.hasMore,false);
+  assert.equal(f.node("message").value,"Unsent message");
+  assert.equal(f.node("role-draft").value,"Unsent role");
+  assert.match(f.node("task-history-status").textContent,/end of history/);
+});
+
+test("late history results cannot replace a newer query or leave its controls loading",async()=>{
+  const f=pollingContext(); let release;
+  f.context.call=async(_op,args)=>args.query==="new" ? {tasks:[historyTask("new-task")],cursor:"new-task",has_more:false} : await new Promise(resolve=>{release=resolve;});
+  const old=f.context.loadTaskHistory();
+  f.context.taskHistory.query="new";
+  await f.context.loadTaskHistory("reset");
+  release({tasks:[historyTask("old-task")],cursor:"old-task",has_more:false});
+  await old;
+  assert.deepEqual([...f.context.taskHistory.tasks].map(t=>t.id),["new-task"]);
+  assert.equal(f.context.taskHistory.loading,false);
+  assert.match(f.node("task-history-status").textContent,/filters applied/);
+});
+
+test("failed history pagination publishes no partial refresh and retains the prior result",async()=>{
+  const f=pollingContext();
+  f.context.taskHistory.tasks=[historyTask("retained")];
+  f.context.call=async(_op,args)=>{if(args.after) throw new Error("page interrupted"); return {tasks:[historyTask("partial")],cursor:"partial",has_more:true};};
+  await f.context.loadTaskHistory();
+  assert.equal(f.context.taskHistory.tasks[0].id,"retained");
+  assert.equal(f.context.taskHistory.loading,false);
+  assert.match(f.node("task-history-status").textContent,/page interrupted.*Last results retained/);
+});
+
+test("explicit note versus instruction remains tied to the reviewed recipient during a send",async()=>{
+  const f=replyContext("managed");
+  f.context.setReply("message-b");
+  f.coherent();
+  f.node("message-mode").value="note";
+  f.context.renderComposer();
+  assert.match(f.node("delivery-hint").textContent,/Inbox message/);
+  f.node("message").value="A private note, not a task";
+  f.submit();
+  assert.equal(f.requests[0].args.mode,"note");
+  assert.equal(f.requests[0].args.target,"b");
+  f.context.selectAgent("a"); f.node("message").value="Another draft";
+  f.release({kind:"Message",target:"b"}); await f.settled();
+  assert.equal(f.node("message").value,"Another draft");
+});
+
+test("board replies preserve their original shared audience and structured parent",async()=>{
+  const f=replyContext("interactive");
+  f.context.snapshot.activity.messages.push({id:"board-parent",board:"shared",from:"b",text:"shared context"});
+  f.context.snapshot.boundaries.boards=[{name:"shared",read:true,write:true}];
+  f.context.setReply("board-parent");f.coherent();
+  assert.equal(f.node("message-kind").value,"board:shared");
+  assert.equal(f.node("message-mode").disabled,true);
+  f.node("message").value="Shared follow-up"; f.submit();
+  assert.equal(f.requests[0].path,"/api/send");
+  assert.equal(f.requests[0].args.board,"shared");
+  assert.equal(f.requests[0].args.reply_to,"board-parent");
+  assert.equal(f.requests[0].args.mode,"note");
+  assert.equal(f.requests[0].args.target,undefined);
+  f.release({kind:"Message"});await f.settled();
+});
+
+test("graph zoom and fit work by keyboard without provider writes or mandatory wide mobile canvas",()=>{
+  const f=graphKeyboardContext();
+  f.context.drawGraph();
+  const svg=f.node("interaction-graph"), before=svg.getAttribute("viewBox");
+  f.node("graph-zoom-in").click();
+  assert.equal(f.node("graph-zoom").textContent,"125%");
+  assert.notEqual(svg.getAttribute("viewBox"),before);
+  svg.listeners.keydown({target:svg,key:"ArrowRight",preventDefault(){}});
+  assert.notEqual(svg.getAttribute("viewBox"),before);
+  svg.listeners.keydown({target:svg,key:"0",preventDefault(){}});
+  assert.equal(svg.getAttribute("viewBox"),before);
+  assert.equal(f.node("graph-zoom").textContent,"100%");
+  assert.equal(svg.style.minWidth,"0");
+  assert.equal(f.writes.length,0);
+});
+
+test("role editor preserves drafts on CAS conflict and requires reviewing the current version",()=>{
+  const f=pollingContext(); f.context.roleEditingID="";
+  vm.runInContext(source.slice(source.indexOf("function renderRoleEditor("),source.indexOf('$("copy-bridge").onclick')),f.context);
+  f.context.snapshot.agents[0].role_version=2;f.context.snapshot.agents[0].config.role="Original";
+  f.context.renderRoleEditor();f.node("role-draft").value="My edited role";f.node("role-draft").oninput();
+  f.context.snapshot.agents[0].role_version=3;f.context.snapshot.agents[0].config.role="Peer edit";
+  f.context.renderRoleEditor();
+  assert.equal(f.node("role-draft").value,"My edited role");
+  assert.equal(f.node("save-role").disabled,true);
+  assert.match(f.node("role-current").textContent,/Peer edit/);
+  f.node("rebase-role").click();
+  assert.equal(f.node("save-role").disabled,false);
+  assert.equal(f.context.roleDrafts.get("a").version,3);
+  assert.equal(f.node("role-draft").value,"My edited role");
+  assert.equal(f.writes.length,0,"reviewing a version is not saving a role");
+});
+
+test("team ownership proposals are reviewed and never impersonate an agent accepting",()=>{
+  const f=pollingContext();
+  vm.runInContext(source.slice(source.indexOf("function teamOperationReady("),source.indexOf("function renderTeams()")),f.context);
+  f.context.snapshot.teams=[{id:"team1",state:"active",version:4,owner:"a",members:["a","b"],pending_owner:"b"}];
+  assert.equal(f.context.teamOperationReady({operation:"team.transfer",id:"team1",version:4,agent:"b"}),true);
+  assert.equal(f.context.teamOperationReady({operation:"team.accept-owner",id:"team1",version:4}),false);
+  f.context.snapshot.teams[0].pending_owner="$owner";
+  assert.equal(f.context.teamOperationReady({operation:"team.accept-owner",id:"team1",version:4}),true);
+  assert.equal(f.context.teamOperationReady({operation:"team.transfer",id:"team1",version:3,agent:"b"}),false);
+});
+
+test("partial group instruction controls cannot silently reconnect isolated members and keep reviewed CAS",()=>{
+  const f=pollingContext();
+  vm.runInContext(source.slice(source.indexOf("function renderTeams()"),source.indexOf("function renderWorkerRuntime(")),f.context);
+  f.context.snapshot.boundaries.version=7;
+  f.context.snapshot.groups=[{id:"pair",agents:["a","b"],members:["a"],state:"active",version:3,contributions_version:1,commands:false,board:"b_pair",memory:"m_pair"}];
+  f.context.renderTeams();
+  const controls=f.node("owner-groups").querySelectorAll("button"),commands=controls.find(button=>button.textContent==="Allow mutual instructions"),reconnect=controls.find(button=>button.textContent==="Reconnect original members");
+  assert.equal(commands.disabled,true);
+  commands.click();assert.equal(f.writes.length,0);
+  f.context.snapshot.boundaries.version=8;
+  reconnect.click();
+  assert.equal(f.writes[0].args.version,7,"a rendered control cannot silently adopt a newer policy version");
+  assert.equal(f.writes[0].args.enabled,true);
+});
+
+test("team metadata drafts freeze their first-edit version until explicit review or discard",()=>{
+  const f=pollingContext();
+  f.context.teamJoiningHint=()=>"";
+  f.context.notice=()=>{};
+  vm.runInContext(source.slice(source.indexOf("function teamOperationReady("),source.indexOf("function renderWorkerRuntime(")),f.context);
+  f.context.snapshot.teams=[{id:"team1",name:"Original",description:"Purpose",state:"active",version:2,owner:"a",members:["a","b"],invited:[]}];
+  f.context.renderTeams();
+  const find=key=>f.node("consented-teams").querySelectorAll("[data-focus-key]").find(node=>node.dataset.focusKey===key);
+  find("name:team1").value="My draft";find("name:team1").oninput();
+  assert.equal(f.context.teamEditDrafts.get("team1").version,2);
+  f.context.snapshot.teams[0]={...f.context.snapshot.teams[0],version:3,name:"Concurrent edit"};
+  f.context.renderTeams();
+  assert.equal(find("name:team1").value,"My draft");
+  let editForm=find("name:team1").parentNode;
+  assert.equal(editForm.querySelectorAll("button").find(button=>button.textContent==="Review changes").disabled,true);
+  editForm.onsubmit({preventDefault(){}});
+  assert.equal(f.context.teamReview,null,"stale pre-review draft cannot adopt current CAS automatically");
+  find("rebase-edit:team1").click();
+  assert.equal(f.context.teamEditDrafts.get("team1").version,3);
+  editForm=find("name:team1").parentNode;
+  editForm.onsubmit({preventDefault(){}});
+  assert.equal(f.context.teamReview.version,3);
+  assert.equal(f.context.teamReview.name,"My draft");
+  assert.equal(f.writes.length,0,"reviewing a version is not writing metadata");
+  find("discard-edit:team1").click();
+  assert.equal(f.context.teamEditDrafts.has("team1"),false);
+  assert.equal(f.context.teamReview,null,"discarding metadata also cancels its unsubmitted review");
+  assert.equal(find("name:team1").value,"Concurrent edit");
+});
+
+test("suspended historical scope keeps owner-intent reset available without granting membership",()=>{
+  const f=pollingContext();
+  f.context.snapshot.boundaries.memory=[{name:"old_group_memory",source:"group",read:false,write:false,stored_read:true,stored_write:true,suspended:true,reason:"collaboration group inactive"}];
+  f.context.renderBoundaries();
+  const row=f.node("scope-controls").children[0],toggles=row.querySelectorAll(".toggle"),reset=row.querySelectorAll("button").find(button=>button.textContent==="Reset owner override");
+  assert.equal(toggles.length,2);
+  assert.ok(toggles.every(button=>button.disabled));
+  assert.ok(reset,"cleaning stored intent must not require reconnecting first");
+  reset.click();
+  assert.equal(f.writes[0].operation,"control.update");
+  assert.equal(f.writes[0].args.reset,true);
+  assert.equal(f.writes[0].args.namespace,"old_group_memory");
+  assert.equal(f.writes[0].args.read,undefined,"reset does not grant effective scope access");
+});
+
+test("legacy group migration requires an explicit policy and a fresh frozen membership/permission review",async()=>{
+  const f=pollingContext();f.context.notice=()=>{};
+  vm.runInContext(source.slice(source.indexOf("function renderTeams()"),source.indexOf("function renderWorkerRuntime(")),f.context);
+  f.context.snapshot.boundaries.version=7;
+  f.context.snapshot.groups=[{id:"legacy",agents:["a","b"],members:["a","b"],state:"active",version:2,commands:false,board:"legacy_board",memory:"legacy_memory"}];
+  f.context.snapshot.legacy_group_edges={legacy:[{from:"a",to:"b",action:"message.send",allow:true},{from:"b",to:"a",action:"instruct",allow:false}]};
+  f.context.renderTeams();
+  const controls=()=>f.node("owner-groups").querySelectorAll("button"),choice=()=>f.node("owner-groups").querySelectorAll("select")[0],reviewButton=()=>controls().find(button=>button.textContent.includes("Review legacy policy &") && !button.textContent.includes("instructions"));
+  assert.equal(choice().value,"");
+  assert.equal(reviewButton().disabled,true);reviewButton().click();
+  assert.equal(f.writes.length,0);
+  assert.ok(f.node("owner-groups").querySelectorAll("li").some(item=>item.textContent.includes("DENY (retained)")));
+  choice().value="preserve";choice().onchange();
+  reviewButton().click();
+  assert.equal(f.writes.length,0,"choosing/reviewing never migrates policy");
+  assert.equal(f.context.legacyGroupReview.policy,"preserve");
+  const frozen=f.context.legacyGroupReview;
+  f.context.snapshot.groups[0]={...f.context.snapshot.groups[0],members:["a"],version:3};
+  f.context.snapshot.boundaries.version=8;f.context.renderTeams();
+  assert.equal(f.context.legacyGroupReviewReady(frozen),false);
+  const staleConfirm=controls().find(button=>button.textContent==="Apply reviewed legacy policy");
+  assert.equal(staleConfirm.disabled,true);await f.context.applyLegacyGroupReview();
+  assert.equal(f.writes.length,0,"membership/policy polling cannot adopt newer CAS");
+  controls().find(button=>button.textContent==="Cancel review").click();
+  choice().value="group";choice().onchange();reviewButton().click();
+  assert.equal(f.context.legacyGroupReview.version,8);
+  const reviewedAgents=[...f.context.legacyGroupReview.agents];
+  await f.context.applyLegacyGroupReview();
+  assert.equal(f.writes.length,1);
+  assert.equal(f.writes[0].operation,"control.update");
+  assert.equal(f.writes[0].args.legacy_policy,"group");
+  assert.equal(f.writes[0].args.version,8);
+  assert.deepEqual([...f.writes[0].args.agents],reviewedAgents);
+  assert.equal(f.writes[0].args.allow,undefined,"migration never resets a DENY through a hidden edge write");
+});
+
+test("graph reconnect routes legacy pairs to explicit policy review without writing",()=>{
+  const f=pollingContext(),tabs=[];f.context.activateTab=name=>tabs.push(name);f.context.notice=()=>{};
+  f.context.snapshot.groups=[{id:"old-pair",agents:["a","b"],members:[],state:"inactive",version:1}];
+  vm.runInContext(source.slice(source.indexOf('$("connect-pair").onclick ='),source.indexOf('$("isolate-agent").onclick =')),f.context);
+  f.node("connect-pair").onclick();
+  assert.deepEqual(tabs,["teams"]);
+  assert.equal(f.writes.length,0);
+});
+
+test("saved memory source claims stay read-only and identify exact namespace key version and destination author",async()=>{
+  const f=memoryContext(),entry=f.entries.get("team")[0];
+  Object.assign(entry,{author:"$owner",sha256:"saved-sha",sources:[{kind:"import",source_session:"source-study",source_agent:"alice",source_author:"original-writer",source_namespace:"private",source_key:"plan",source_version:9,archive_sha256:"archive-sha"}]});
+  await f.context.loadMemory();f.entry("plan").click();f.type("Unsaved local draft");
+  const panel=f.node("memory-metadata");
+  assert.equal(panel.hidden,false);
+  assert.match(panel.children[0].textContent,/team \/ plan · version 4/);
+  assert.ok(panel.querySelectorAll("code").some(node=>node.textContent.includes("saved-sha")));
+  assert.ok(panel.querySelectorAll("p").some(node=>node.textContent==="Destination author: $owner"));
+  assert.ok(panel.querySelectorAll("p").some(node=>node.textContent.includes("claims, not verified origin")));
+  const claims=JSON.parse(panel.querySelectorAll("pre")[0].textContent);
+  assert.equal(claims[0].source_author,"original-writer");
+  assert.equal(claims[0].source_namespace,"private");
+  assert.equal(f.node("memory-value").value,"Unsaved local draft");
+  assert.equal(f.context.memoryVersion,4);
+  assert.equal(f.requests.filter(request=>request.operation==="memory.put").length,0);
+  f.context.connected=false;f.context.renderMemoryReview();assert.equal(panel.hidden,true);
+  f.context.connected=true;f.context.selected="b";f.context.snapshot.selected="b";f.context.renderMemoryReview();assert.equal(panel.hidden,true,"switching session cannot label the previous selection's metadata as current");
+});
+
+test("late memory pages cannot replace source claims from another namespace or selected session",async()=>{
+  const f=memoryContext(),normalCall=f.context.call;let release;
+  Object.assign(f.entries.get("pair")[0],{author:"pair-writer",sha256:"pair-sha",sources:[{kind:"import",source_session:"pair-origin"}]});
+  f.context.call=async(operation,args)=>{
+    if(operation==="memory.list" && args.namespace==="team") {
+      if(!args.after) return {entries:[{key:"plan",value:"Old team",version:4,author:"old-team"}],cursor:"page-two"};
+      return await new Promise(resolve=>{release=resolve;});
+    }
+    return normalCall(operation,args);
+  };
+  const late=f.context.loadMemory();while(!release) await Promise.resolve();
+  await f.namespace("pair");f.entry("plan").click();f.type("Pair draft");
+  release({entries:[{key:"plan",value:"Poisoned late team",version:99,author:"late-author",sources:[{kind:"import",source_session:"wrong-origin"}]}],cursor:"end"});await late;
+  assert.match(f.node("memory-metadata").children[0].textContent,/pair \/ plan · version 1/);
+  assert.equal(JSON.parse(f.node("memory-metadata").querySelectorAll("pre")[0].textContent)[0].source_session,"pair-origin");
+  assert.equal(f.node("memory-value").value,"Pair draft");
+  const before=f.context.memoryEntries.get("pair");let releaseSelection;
+  f.context.call=async()=>await new Promise(resolve=>{releaseSelection=resolve;});
+  const changedSelection=f.context.loadMemory();
+  f.context.selected="b";f.context.snapshot.selected="b";f.context.renderMemoryReview();
+  releaseSelection({entries:[{key:"plan",value:"Wrong selected session",version:100,author:"wrong-session"}]});await changedSelection;
+  assert.equal(f.context.memoryEntries.get("pair"),before);
+  assert.equal(f.node("memory-metadata").hidden,true);
+});
+
+test("root and reply ancestry remain inspectable in collapsed stable conversation details",()=>{
+  const f=pollingContext(),node=f.el("article");
+  f.context.appendThreadMetadata(node,{id:"message-root",thread_id:"machine-root-id"});
+  const root=node.children[0];assert.equal(root.open,false);assert.equal(root.children[0].textContent,"Conversation details");
+  assert.equal(root.dataset.disclosureKey,"thread:message-root");
+  assert.equal(root.querySelectorAll("code")[0].textContent,"machine-root-id");
+  f.context.appendThreadMetadata(node,{id:"message-reply",reply_to:"machine-parent-id",thread_id:"machine-root-id"});
+  const reply=node.children[1];assert.equal(reply.open,false);assert.equal(reply.children[0].textContent,"Reply details");
+  assert.deepEqual(reply.querySelectorAll("code").map(code=>code.textContent),["machine-parent-id","machine-root-id"]);
 });

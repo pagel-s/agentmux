@@ -62,14 +62,18 @@ nav:
       - Hardening: hardening.md
       - Trust Boundaries: security-model.md
       - Memory: memory-lifecycle.md
+      - Live Permissions: live-permissions.md
+      - Dynamic Teams: dynamic-teams.md
       - Traces and Recovery: traces-and-recovery.md
       - SSH and Scale: remote-workers.md
       - Research: research.md
       - Controlled Studies: research-study.md
       - Pilot Results: research-pilot-results.md
       - Provider Validation: provider-validation.md
+      - Provider Acceptance: provider-acceptance.md
       - Preview Validation: release-validation.md
       - Usability and Failure Sweep: uat-sweep.md
+      - UAT Gap Closure: uat-gap-closure.md
       - Environments: research-environments.md
   - Reference:
       - Configuration Guide: config-guide.md

@@ -19,30 +19,36 @@ import (
 )
 
 type Manifest struct {
-	Version             int                  `yaml:"version" json:"version"`
-	ID                  string               `yaml:"id" json:"id"`
-	Team                string               `yaml:"team" json:"team"`
-	Trials              int                  `yaml:"trials" json:"trials"`
-	Seeds               []int64              `yaml:"seeds" json:"seeds"`
-	RandomizationSeed   int64                `yaml:"randomization_seed" json:"randomization_seed"`
-	TimeoutSeconds      int                  `yaml:"timeout_seconds" json:"timeout_seconds"`
-	PhaseTimeoutSeconds int                  `yaml:"phase_timeout_seconds" json:"phase_timeout_seconds"`
-	BrokerSandbox       string               `yaml:"broker_sandbox" json:"broker_sandbox"`
-	Game                GameOptions          `yaml:"game" json:"game"`
-	Conditions          []Condition          `yaml:"conditions" json:"conditions"`
-	Budget              Budget               `yaml:"budget" json:"budget"`
-	Population          Population           `yaml:"population" json:"population"`
-	Preregistration     *Preregistration     `yaml:"preregistration" json:"preregistration,omitempty"`
-	Config              managedconfig.Config `yaml:"-" json:"resolved_team"`
+	Version             int                          `yaml:"version" json:"version"`
+	ID                  string                       `yaml:"id" json:"id"`
+	Team                string                       `yaml:"team" json:"team"`
+	Trials              int                          `yaml:"trials" json:"trials"`
+	Seeds               []int64                      `yaml:"seeds" json:"seeds"`
+	RandomizationSeed   int64                        `yaml:"randomization_seed" json:"randomization_seed"`
+	TimeoutSeconds      int                          `yaml:"timeout_seconds" json:"timeout_seconds"`
+	PhaseTimeoutSeconds int                          `yaml:"phase_timeout_seconds" json:"phase_timeout_seconds"`
+	BrokerSandbox       string                       `yaml:"broker_sandbox" json:"broker_sandbox"`
+	Game                GameOptions                  `yaml:"game" json:"game"`
+	Conditions          []Condition                  `yaml:"conditions" json:"conditions"`
+	Budget              Budget                       `yaml:"budget" json:"budget"`
+	Population          Population                   `yaml:"population" json:"population"`
+	Preregistration     *Preregistration             `yaml:"preregistration" json:"preregistration,omitempty"`
+	PrimaryOutcome      string                       `yaml:"primary_outcome" json:"primary_outcome,omitempty"`
+	Counterbalancing    string                       `yaml:"counterbalancing" json:"counterbalancing,omitempty"`
+	RoleAssignments     map[string]map[string]string `yaml:"role_assignments" json:"role_assignments,omitempty"`
+	PersonalityProfiles map[string]map[string]string `yaml:"personality_profiles" json:"personality_profiles,omitempty"`
+	Config              managedconfig.Config         `yaml:"-" json:"resolved_team"`
 }
 
 type Condition struct {
-	ID           string `yaml:"id" json:"id"`
-	RewardMode   string `yaml:"reward_mode" json:"reward_mode"`
-	Visibility   string `yaml:"visibility" json:"visibility"`
-	Teams        bool   `yaml:"teams" json:"teams"`
-	Instructions string `yaml:"instructions" json:"instructions,omitempty"`
-	TeamRewards  string `yaml:"team_rewards" json:"team_rewards"`
+	ID             string `yaml:"id" json:"id"`
+	RewardMode     string `yaml:"reward_mode" json:"reward_mode"`
+	Visibility     string `yaml:"visibility" json:"visibility"`
+	Teams          bool   `yaml:"teams" json:"teams"`
+	Instructions   string `yaml:"instructions" json:"instructions,omitempty"`
+	TeamRewards    string `yaml:"team_rewards" json:"team_rewards"`
+	RoleAssignment string `yaml:"role_assignment" json:"role_assignment,omitempty"`
+	Personality    string `yaml:"personality" json:"personality,omitempty"`
 }
 
 type Trial struct {
@@ -54,13 +60,14 @@ type Trial struct {
 }
 
 type PlanResult struct {
-	Trials        []Trial  `json:"trials"`
-	Participants  []string `json:"participants"`
-	TasksPerTrial int      `json:"tasks_per_trial"`
-	TotalTasks    int      `json:"total_tasks"`
-	Environment   string   `json:"environment"`
-	SeedScope     string   `json:"seed_scope"`
-	ModelTasks    int      `json:"max_model_tasks_in_plan"`
+	Trials           []Trial  `json:"trials"`
+	Participants     []string `json:"participants"`
+	TasksPerTrial    int      `json:"tasks_per_trial"`
+	TotalTasks       int      `json:"total_tasks"`
+	Environment      string   `json:"environment"`
+	SeedScope        string   `json:"seed_scope"`
+	ModelTasks       int      `json:"max_model_tasks_in_plan"`
+	Counterbalancing string   `json:"counterbalancing,omitempty"`
 }
 
 var identifier = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]{0,63}$`)
@@ -145,6 +152,8 @@ func normalize(m Manifest) Manifest {
 	m.Config = m.Config.Normalized()
 	m.Seeds = append([]int64(nil), m.Seeds...)
 	m.Conditions = append([]Condition(nil), m.Conditions...)
+	m.RoleAssignments = cloneProfiles(m.RoleAssignments)
+	m.PersonalityProfiles = cloneProfiles(m.PersonalityProfiles)
 	if m.Preregistration != nil {
 		p := *m.Preregistration
 		p.Hypotheses = append([]string(nil), p.Hypotheses...)
@@ -234,6 +243,9 @@ func (m Manifest) Validate() error {
 	if m.Budget.MaxModelTasks < 0 || m.Budget.MaxModelTasks > 100000 {
 		return errors.New("budget.max_model_tasks must be between 0 and 100000")
 	}
+	if err := validateDesign(m); err != nil {
+		return err
+	}
 	if m.Preregistration != nil {
 		if err := m.Preregistration.validate(m); err != nil {
 			return err
@@ -312,8 +324,21 @@ func Plan(m Manifest) (PlanResult, error) {
 	rng := rand.New(rand.NewSource(m.RandomizationSeed))
 	rng.Shuffle(len(blocks), func(i, j int) { blocks[i], blocks[j] = blocks[j], blocks[i] })
 	plan := PlanResult{Participants: actors(m.Config), TasksPerTrial: 2 * m.Game.Rounds * m.Population.MaxAgents, Environment: m.Game.Kind, SeedScope: "paired environment cases and scheduling; native model sampling is not seeded"}
-	for _, b := range blocks {
-		for _, i := range rng.Perm(len(m.Conditions)) {
+	base := []int(nil)
+	if m.Counterbalancing == "latin_square" {
+		base = rng.Perm(len(m.Conditions))
+		plan.Counterbalancing = "latin_square"
+	}
+	for blockIndex, b := range blocks {
+		order := []int(nil)
+		if base != nil {
+			for position := range base {
+				order = append(order, base[(position+blockIndex)%len(base)])
+			}
+		} else {
+			order = rng.Perm(len(m.Conditions))
+		}
+		for _, i := range order {
 			plan.Trials = append(plan.Trials, Trial{ID: fmt.Sprintf("run-%05d", len(plan.Trials)+1), Condition: m.Conditions[i].ID, Seed: b.seed, Repetition: b.repetition, Order: len(plan.Trials) + 1})
 		}
 	}

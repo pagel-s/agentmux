@@ -108,18 +108,20 @@ func TestWorkspaceGroupMutationIsAtomicIdempotentAndVersioned(t *testing.T) {
 	call(t, s, "", "control.update", map[string]any{"version": 3, "kind": "memory", "agent": "alice", "namespace": c.Group.Memory, "read": false, "write": false})
 	expectFault(t, s, "alice", "memory.list", "forbidden", map[string]any{"namespace": c.Group.Memory})
 	connectWorkspaceGroup(t, s, 4, "alice", "bob")
+	expectFault(t, s, "alice", "memory.list", "forbidden", map[string]any{"namespace": c.Group.Memory}) // reconnect preserves explicit denies
+	call(t, s, "", "control.update", map[string]any{"version": 5, "kind": "memory", "agent": "alice", "namespace": c.Group.Memory, "reset": true})
 	call(t, s, "alice", "memory.list", map[string]any{"namespace": c.Group.Memory})
-	call(t, s, "", "control.update", map[string]any{"version": 5, "kind": "collaboration", "agents": []string{"bob", "alice"}, "enabled": false})
+	call(t, s, "", "control.update", map[string]any{"version": 6, "kind": "collaboration", "agents": []string{"bob", "alice"}, "enabled": false})
 	expectFault(t, s, "bob", "memory.list", "forbidden", map[string]any{"namespace": c.Group.Memory})
 	// Exhaustion after dispatch must roll the new scope and edges back together.
 	s.cfg.Limits.MaxRecords = 1
-	expectFault(t, s, "", "control.update", "limit", map[string]any{"version": 6, "kind": "collaboration", "agents": []string{"eve", "dave"}, "enabled": true})
+	expectFault(t, s, "", "control.update", "limit", map[string]any{"version": 7, "kind": "collaboration", "agents": []string{"eve", "dave"}, "enabled": true})
 	groups, err = workspaceGroups(context.Background(), s.db)
 	if err != nil || len(groups) != 1 {
 		t.Fatalf("failed transaction left a workspace group: %+v %v", groups, err)
 	}
 	current, err := controls(context.Background(), s.db)
-	if err != nil || current.Version != 6 {
+	if err != nil || current.Version != 7 {
 		t.Fatalf("failed group mutation changed live permissions: %+v %v", current, err)
 	}
 }

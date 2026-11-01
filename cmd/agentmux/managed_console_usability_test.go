@@ -180,7 +180,7 @@ func TestConsoleFailedNativeSetupRetainsProviderProjectAndRole(t *testing.T) {
 	next, _ := m.Update(consoleAction{err: errors.New("provider not installed"), draft: &consoleDraft{kind: "new-title", target: "task", text: draft.title, native: &draft}})
 	m = next.(console)
 	m, _ = consolePress(m, tea.KeyMsg{Type: tea.KeyCtrlR})
-	for range 3 {
+	for range 4 {
 		m, _ = consolePress(m, tea.KeyMsg{Type: tea.KeyEnter})
 	}
 	if m.composer != "new-role" || m.newNative.provider != "pi" || m.newNative.project != "/project/original" || string(m.text) != "Reviewer" {

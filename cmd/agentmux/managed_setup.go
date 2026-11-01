@@ -28,7 +28,7 @@ func runManagedSetupIO(ctx context.Context, args []string, input io.Reader, stdo
 	output := flags.String("output", "agentmux-managed.yaml", "new private YAML file (never overwritten)")
 	specFile := flags.String("spec", "", "noninteractive JSON setup specification; - reads stdin")
 	initGit := flags.Bool("init-git", false, "initialize Git only in newly created dedicated workspaces")
-	preset := flags.String("preset", "", "coding: interactive Claude and Codex, with shared board/memory and no autonomous wakeups")
+	preset := flags.String("preset", "", "coding (native terminals), reviewer-pair or research-team (idle managed workers)")
 	session := flags.String("session", "work", "session name for a preset")
 	project := flags.String("project", "", "existing shared project directory for a preset; omitted creates separate workspaces")
 	sandboxMode := flags.String("sandbox", "local", "preset agent and broker isolation: bubblewrap or explicitly trusted local")
@@ -48,14 +48,14 @@ func runManagedSetupIO(ctx context.Context, args []string, input io.Reader, stdo
 	var spec managedsetup.Spec
 	var err error
 	if *preset != "" {
-		if *preset != "coding" || *specFile != "" {
-			return managedCLIError(stdout, "setup", "", exitValidation, errors.New("use --preset coding or --spec, not both"))
+		if *specFile != "" {
+			return managedCLIError(stdout, "setup", "", exitValidation, errors.New("use --preset or --spec, not both"))
 		}
 		home, homeErr := os.UserHomeDir()
 		if homeErr != nil {
 			return managedCLIError(stdout, "setup", "", exitRuntime, homeErr)
 		}
-		spec = managedsetup.CodingPreset(*session, filepath.Join("agentmux-workspaces", *session), *project, *sandboxMode, home)
+		spec, err = managedsetup.Preset(*preset, *session, filepath.Join("agentmux-workspaces", *session), *project, *sandboxMode, home)
 	} else if *specFile != "" {
 		reader := input
 		if *specFile != "-" {

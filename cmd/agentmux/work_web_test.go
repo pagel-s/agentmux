@@ -5,6 +5,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"agentmux/internal/managed"
 )
 
 func TestWebOwnerCapabilityHostAndOriginAreRequired(t *testing.T) {
@@ -45,6 +47,26 @@ func TestWebOwnerCapabilityHostAndOriginAreRequired(t *testing.T) {
 				t.Fatal("owner API enabled CORS")
 			}
 		})
+	}
+}
+
+func TestWebLegacyGroupReviewExposesOnlyExactAmbiguousDirectControls(t *testing.T) {
+	c := managed.ControlState{Groups: []managed.WorkspaceGroup{{ID: "legacy", Agents: []string{"a", "b"}}, {ID: "empty", Agents: []string{"c", "d"}}, {ID: "modern", Agents: []string{"a", "b"}, ContributionsVersion: 1}}, Edges: []managed.EdgeControl{
+		{From: "a", To: "b", Action: "message.send", Allow: true},
+		{From: "b", To: "a", Action: "instruct", Allow: false},
+		{From: "a", To: "outside", Action: "message.send", Allow: true},
+		{From: "a", To: "a", Action: "message.send", Allow: true},
+		{From: "a", To: "b", Action: "ping.send", Allow: false, Source: "isolation"},
+	}}
+	result := workLegacyGroupEdges(c)
+	if len(result) != 2 || len(result["legacy"]) != 2 || result["empty"] == nil {
+		t.Fatalf("wrong legacy review coverage: %+v", result)
+	}
+	if _, ok := result["modern"]; ok {
+		t.Fatal("modern group incorrectly labeled legacy")
+	}
+	if !result["legacy"][0].Allow || result["legacy"][1].Allow {
+		t.Fatal("ambiguous allows and explicit denies were not both preserved for review")
 	}
 }
 

@@ -100,12 +100,25 @@ func (m *console) compose(kind, target, reference, text string) {
 	m.composer = kind
 	m.composeTarget = target
 	m.replyID = reference
+	m.composeMode = "note"
+	if kind == "send" || kind == "reply" || kind == "message" {
+		m.composeMode = "auto"
+		for _, agent := range m.agents {
+			if agent.ID == target {
+				m.composeMode = "instruction"
+				if agent.Config.Interaction == "interactive" || agent.External {
+					m.composeMode = "note"
+				}
+				break
+			}
+		}
+	}
 	m.text = []rune(text)
 	m.textCursor = len(m.text)
 	m.textColumnValid = false
 }
 func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if msg.Paste && m.composer == "" && (m.teamAction == nil || m.teamAction.researchAction == "" || m.teamAction.reasonReady) {
+	if msg.Paste && m.composer == "" && (m.teamAction == nil || m.teamAction.editKind == "" && (m.teamAction.researchAction == "" || m.teamAction.reasonReady)) {
 		// Even a one-character clipboard paste is text, never a control key.
 		return m, nil
 	}
@@ -135,6 +148,13 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.reader != nil {
 		return m.readerKey(msg)
 	}
+	if m.workspacePicker != nil {
+		return m.workspaceKey(msg)
+	}
+	if key == "ctrl+g" {
+		m.openContextHelp()
+		return m, nil
+	}
 	if m.teamAction != nil {
 		return m.teamReviewKey(msg)
 	}
@@ -143,6 +163,14 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.textColumnValid = false
 		}
 		switch key {
+		case "ctrl+t":
+			if m.composer == "send" || m.composer == "reply" || m.composer == "message" {
+				if m.composeMode == "note" {
+					m.composeMode = "instruction"
+				} else {
+					m.composeMode = "note"
+				}
+			}
 		case "esc":
 			m.composer = ""
 			m.text = nil
@@ -197,6 +225,14 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.text = append(m.text[:m.textCursor], m.text[m.textCursor+1:]...)
 			}
 		case "ctrl+r":
+			if m.composer == "role" && !m.busy {
+				if m.offline {
+					m.message = "Broker offline; role draft kept."
+					return m, nil
+				}
+				m.busy = true
+				return m, m.reviewRoleVersion()
+			}
 			if m.composer == "memory-value" && !m.busy {
 				if m.offline {
 					m.message = "Broker offline; draft kept. Review the latest memory version after reconnecting."
@@ -206,6 +242,28 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, m.reviewMemoryVersion()
 			}
 		case "enter":
+			if m.composer == "relaunch" {
+				state, id, resume := m.state, m.composeTarget, strings.TrimSpace(string(m.text))
+				m.composer = ""
+				m.text = nil
+				m.busy = true
+				return m, func() tea.Msg {
+					exe, err := os.Executable()
+					if err != nil {
+						return consoleAction{err: err}
+					}
+					launcher, err := managedlaunch.New(managedlaunch.Options{StateDir: state, Executable: exe})
+					if err == nil {
+						_, err = launcher.Relaunch(context.Background(), id, resume)
+					}
+					return consoleAction{message: "Relaunched " + id + ". Enter opens its native terminal; peers remain running.", err: err}
+				}
+			}
+			if m.composer == "task-search" {
+				m.taskQuery, m.taskAfter, m.taskBack, m.task = string(m.text), "", nil, 0
+				m.composer, m.text = "", nil
+				return m, m.fetch
+			}
 			if m.composer == "find" {
 				matches := m.sessionMatches()
 				if len(matches) == 0 {
@@ -223,7 +281,7 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.observedSelected, m.tab = match.observation, 5
 				return m, nil
 			}
-			if m.busy || strings.TrimSpace(string(m.text)) == "" && m.composer != "new-role" && m.composer != "new-title" && m.composer != "label" {
+			if m.busy || strings.TrimSpace(string(m.text)) == "" && m.composer != "new-role" && m.composer != "new-title" && m.composer != "label" && m.composer != "role" {
 				return m, nil
 			}
 			if m.offline {
@@ -238,18 +296,20 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.compose("memory-value", m.memoryNamespace+"/"+m.memoryKey, "", "")
 				return m, nil
 			}
-			text, target, kind, reference := string(m.text), m.composeTarget, m.composer, m.replyID
-			draft := &consoleDraft{kind: kind, target: target, reference: reference, text: text, namespace: m.memoryNamespace, key: m.memoryKey, version: m.memoryVersion}
-			if reference != "" {
-				text = "Follow-up to " + reference + ":\n" + text
-			}
+			text, target, kind, reference, mode := string(m.text), m.composeTarget, m.composer, m.replyID, m.composeMode
+			draft := &consoleDraft{kind: kind, target: target, reference: reference, text: text, mode: mode, namespace: m.memoryNamespace, key: m.memoryKey, version: m.memoryVersion, roleVersion: m.roleVersion}
 			namespace, memoryKey, version := m.memoryNamespace, m.memoryKey, m.memoryVersion
 			labelVersion := m.labelVersion
+			roleVersion := m.roleVersion
 			m.composer = ""
 			m.text = nil
 			m.textCursor = 0
 			m.busy = true
 			return m, func() tea.Msg {
+				if kind == "role" {
+					_, err := workCall(context.Background(), m.client, "agent.role", map[string]any{"id": target, "role": text, "version": roleVersion})
+					return consoleAction{message: "Role saved. Native inbox notice queued; managed workers use it at their next claim.", err: err, draft: draft}
+				}
 				if kind == "label" {
 					_, err := workCall(context.Background(), m.client, "agent.label", map[string]any{"id": target, "title": text, "version": labelVersion})
 					return consoleAction{message: "Session title saved; permanent ID and native conversation unchanged.", labelID: target, labelText: text, err: err}
@@ -259,10 +319,10 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					return consoleAction{message: "Memory saved with version checking. Press v to refresh.", err: err, draft: draft}
 				}
 				if kind == "board" {
-					_, err := workCall(context.Background(), m.client, "board.post", map[string]string{"board": target, "text": text})
+					_, err := workCall(context.Background(), m.client, "board.post", map[string]string{"board": target, "text": text, "reply_to": reference})
 					return consoleAction{message: "Posted to #" + target + ".", err: err, draft: draft}
 				}
-				id, label, err := workSend(context.Background(), m.client, m.state, target, text)
+				id, label, err := workSendIntent(context.Background(), m.client, m.state, target, text, mode, reference)
 				return consoleAction{message: label + " queued for " + target + ": " + id, err: err, draft: draft}
 			}
 		default:
@@ -285,11 +345,44 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	switch key {
+	case "W":
+		m.workspaceRequest++
+		request := m.workspaceRequest
+		return m, func() tea.Msg {
+			rows, err := workspaceInventory("")
+			return consoleWorkspaceList{rows: rows, err: err, request: request}
+		}
+	case "U":
+		if !m.busy && m.selectedID() != "" {
+			a := m.agents[m.selected%len(m.agents)]
+			pane, owned := m.data.runtime.Agents[a.ID]
+			if a.State != "active" || a.External || a.Config.Interaction != "interactive" || !owned {
+				m.message = "Only active workspace-owned native sessions can be relaunched."
+			} else if m.data.runtime.RelaunchVersion != 1 {
+				m.message = "Restart this workspace once with the updated CLI to enable individual relaunch."
+			} else if pane.State == "running" {
+				m.message = "Exit the selected native CLI before relaunching it."
+			} else {
+				m.compose("relaunch", m.selectedID(), "", "")
+				m.message = "Review stable ID above. Enter starts fresh; or type last, picker, or an exact native history ID. Healthy peers remain running."
+			}
+		}
+	case "?":
+		m.openContextHelp()
 	case "ctrl+r":
 		m.restoreDraft()
 	case "o":
 		m.openReader()
-	case "P", "R", "S", "T":
+	case "M", "I", "P", "R", "S", "T":
+		if m.tab == 2 && (key == "M" || key == "P" || key == "I") && !m.busy && len(m.agents) > 0 && m.data.boundaries.Agent == m.selectedID() {
+			action := map[string]string{"M": "message.send", "P": "ping.send", "I": "instruct"}[key]
+			target := m.agents[m.target%len(m.agents)].ID
+			m.busy = true
+			return m, m.mutate("control.update", map[string]any{"version": m.data.boundaries.Version, "kind": "edge", "from": m.selectedID(), "to": target, "action": action, "reset": true}, "Override removed; effective access follows active groups, configuration and isolation.")
+		}
+		if m.tab == 3 && key == "R" && !m.memoryOpen {
+			return m, m.resetScope()
+		}
 		if m.tab == 7 {
 			action := map[string]string{"P": "pause", "R": "resume", "S": "step", "T": "stop"}[key]
 			m.reviewResearchAction(action)
@@ -310,9 +403,20 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			// The submitted target must be the ID alone, not its display hint.
 			m.composeTarget = a.ID
 		}
+	case "V":
+		if !m.busy && m.selectedID() != "" && m.tab != 5 {
+			a := m.agents[m.selected%len(m.agents)]
+			if a.Config.NativeOnly {
+				m.message = "Prompt-free native session: injected roles are disabled. Add a coordinated session to use a role."
+				return m, nil
+			}
+			m.roleVersion = a.RoleVersion
+			m.compose("role", a.ID, "", a.Config.Role)
+		}
 	case "q", "ctrl+c":
 		return m, m.close()
 	case "esc":
+		m.workspaceRequest++
 		m.closeMemory()
 	case "home":
 		if m.tab == 7 {
@@ -349,6 +453,23 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "tab":
 		m.closeMemory()
 		m.tab = (m.tab + 1) % 8
+		if m.tab == 4 {
+			return m, m.fetch
+		}
+	case "pgdown":
+		if m.tab == 4 && m.taskMore && m.taskCursor != "" && m.data.taskPage != nil && m.data.taskPage.After == m.taskAfter && m.data.taskPage.Query == m.taskQuery {
+			m.taskBack = append(m.taskBack, m.taskAfter)
+			m.taskAfter = m.taskCursor
+			m.task = 0
+			return m, m.fetch
+		}
+	case "pgup":
+		if m.tab == 4 && len(m.taskBack) > 0 {
+			m.taskAfter = m.taskBack[len(m.taskBack)-1]
+			m.taskBack = m.taskBack[:len(m.taskBack)-1]
+			m.task = 0
+			return m, m.fetch
+		}
 	case "shift+tab":
 		m.closeMemory()
 		m.tab = (m.tab + 7) % 8
@@ -357,6 +478,9 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.closeMemory()
 		}
 		m.tab = int(key[0] - '1')
+		if m.tab == 4 {
+			return m, m.fetch
+		}
 	case "enter":
 		if m.tab == 6 && len(m.agents) > 0 {
 			m.selected = m.teamMemberIndex % len(m.agents)
@@ -433,6 +557,10 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 	case "f":
+		if m.tab == 4 {
+			m.compose("task-search", "Search all task instructions, results or IDs", "", m.taskQuery)
+			return m, nil
+		}
 		if m.tab == 0 {
 			m.boardFilter = (m.boardFilter + 1) % 3
 			m.messageIndex = 0
@@ -511,7 +639,21 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.message = "Select a memory namespace, then v. Board notes are in Board."
 			}
 		}
+	case "t":
+		if m.tab == 6 {
+			m.reviewTeamAction("team.transfer")
+			return m, nil
+		}
+	case "B":
+		if m.tab == 0 || m.tab == 1 {
+			m.reviewBudget()
+			return m, nil
+		}
 	case "e":
+		if m.tab == 6 {
+			m.reviewTeamAction("team.update")
+			return m, nil
+		}
 		if m.tab == 3 && m.memoryOpen && len(m.memoryEntries) > 0 {
 			v := m.memoryEntries[m.memoryEntry%len(m.memoryEntries)]
 			m.memoryKey = v.Key
@@ -555,6 +697,9 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			from, to := m.selectedID(), m.agents[m.target%len(m.agents)].ID
 			if from == to {
 				m.message = "Choose another recipient with ←/→ before connecting."
+				return m, nil
+			}
+			if m.reviewLegacyCollaboration([]string{from, to}) {
 				return m, nil
 			}
 			client := m.client
@@ -676,7 +821,7 @@ func (m console) nativeDraftNext() (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.newNative.title = text
-		m.compose("new-provider", "claude / codex / pi", "", m.newNative.provider)
+		m.compose("new-provider", "claude / codex / pi / antigravity", "", m.newNative.provider)
 	case "new-id":
 		if !managedconfig.ValidID(text) {
 			m.message = "Use an ID starting with a letter, followed by letters, digits, - or _."
@@ -689,16 +834,39 @@ func (m console) nativeDraftNext() (tea.Model, tea.Cmd) {
 			}
 		}
 		m.newNative.id = text
-		m.compose("new-provider", "claude / codex / pi", "", m.newNative.provider)
+		m.compose("new-provider", "claude / codex / pi / antigravity", "", m.newNative.provider)
 	case "new-provider":
-		if text != "claude" && text != "codex" && text != "pi" {
-			m.message = "Choose claude, codex or pi."
+		if text != "claude" && text != "codex" && text != "pi" && text != "antigravity" {
+			m.message = "Choose claude, codex, pi or antigravity."
 			return m, nil
 		}
 		m.newNative.provider = text
 		m.compose("new-project", "project directory", "", m.newNative.project)
 	case "new-project":
 		m.newNative.project = text
+		profile := "coordinated"
+		if m.newNative.nativeOnly || m.newNative.provider == "antigravity" {
+			profile = "native-only"
+		}
+		m.compose("new-profile", "coordinated / native-only (no Agentmux prompt)", "", profile)
+	case "new-profile":
+		if text != "coordinated" && text != "native-only" {
+			m.message = "Choose coordinated (broker context and optional role) or native-only (no injected prompt)."
+			return m, nil
+		}
+		if m.newNative.provider == "antigravity" && text != "native-only" {
+			m.message = "Native Antigravity requires native-only; use Pi for injected coordination context."
+			return m, nil
+		}
+		m.newNative.nativeOnly = text == "native-only"
+		if m.newNative.nativeOnly {
+			m.newNative.role = ""
+			draft := m.newNative
+			m.composer = ""
+			m.text = nil
+			m.busy = true
+			return m, m.addNative(draft)
+		}
 		m.compose("new-role", "optional role (Enter to leave empty)", "", m.newNative.role)
 	case "new-role":
 		m.newNative.role = string(m.text)

@@ -37,26 +37,28 @@ type Options struct {
 }
 
 type AgentPane struct {
-	PaneID string `json:"pane_id"`
-	State  string `json:"state"`
+	PaneID   string `json:"pane_id"`
+	State    string `json:"state"`
+	Launches int    `json:"launches,omitempty"`
 }
 
 // Runtime is presentation/lifecycle metadata only. No configuration, task text,
 // environment values, tokens, or model output enters the launch manifest.
 type Runtime struct {
-	Controller     string               `json:"controller,omitempty"`
-	Version        int                  `json:"version"`
-	AttemptID      string               `json:"attempt_id"`
-	Session        string               `json:"session"`
-	State          string               `json:"state"`
-	BrokerSandbox  string               `json:"broker_sandbox"`
-	SupervisorPane string               `json:"supervisor_pane,omitempty"`
-	BrokerPane     string               `json:"broker_pane,omitempty"`
-	DashboardPane  string               `json:"dashboard_pane,omitempty"`
-	Agents         map[string]AgentPane `json:"agents"`
-	UpdatedAt      string               `json:"updated_at"`
-	Problem        string               `json:"problem,omitempty"`
-	AttachCommand  string               `json:"attach_command,omitempty"`
+	RelaunchVersion int                  `json:"relaunch_version,omitempty"`
+	Controller      string               `json:"controller,omitempty"`
+	Version         int                  `json:"version"`
+	AttemptID       string               `json:"attempt_id"`
+	Session         string               `json:"session"`
+	State           string               `json:"state"`
+	BrokerSandbox   string               `json:"broker_sandbox"`
+	SupervisorPane  string               `json:"supervisor_pane,omitempty"`
+	BrokerPane      string               `json:"broker_pane,omitempty"`
+	DashboardPane   string               `json:"dashboard_pane,omitempty"`
+	Agents          map[string]AgentPane `json:"agents"`
+	UpdatedAt       string               `json:"updated_at"`
+	Problem         string               `json:"problem,omitempty"`
+	AttachCommand   string               `json:"attach_command,omitempty"`
 }
 
 type Launcher struct {
@@ -151,7 +153,7 @@ func (l *Launcher) Up(ctx context.Context, cfg managedconfig.Config) (Runtime, e
 	if err != nil {
 		return Runtime{}, err
 	}
-	runtime := Runtime{Controller: l.options.Executable, Version: 1, AttemptID: attempt, Session: cfg.Session, State: "starting", BrokerSandbox: l.options.BrokerSandbox, Agents: map[string]AgentPane{}}
+	runtime := Runtime{RelaunchVersion: 1, Controller: l.options.Executable, Version: 1, AttemptID: attempt, Session: cfg.Session, State: "starting", BrokerSandbox: l.options.BrokerSandbox, Agents: map[string]AgentPane{}}
 	runtime.AttachCommand = ShellCommand([]string{"tmux", "-S", SocketPath(l.options.StateDir), "attach-session", "-t", runtime.Session})
 	if err := writeRuntime(l.options.StateDir, runtime); err != nil {
 		return runtime, err

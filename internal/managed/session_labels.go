@@ -48,7 +48,7 @@ func sessionPresentation(ctx context.Context, q queryer, info AgentInfo) (AgentI
 			return info, err
 		}
 	}
-	return info, nil
+	return liveSessionRole(ctx, q, info)
 }
 
 func (s *Store) labelSession(ctx context.Context, q queryer, a actor, raw json.RawMessage) (any, *Fault) {

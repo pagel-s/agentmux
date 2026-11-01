@@ -35,6 +35,37 @@ truncation, data after the footer and mismatched anchors. `show` emits verified
 JSONL. Copy traces together with their task anchors to owner-controlled archive
 storage before intentionally freeing capacity; never delete active turn files.
 
+## Portable authenticated bundles
+
+An owner can export a completed trace as a private signed bundle. Export first
+checks the exact captured JSONL against the local HMAC chain and optional task
+anchor, then signs that content, its SHA256, session, agent, coverage and summary
+with an Ed25519 owner-exporter key. The key is created once at
+`STATE/traces/portable-signing.key` with mode 0600 and is never included in a
+bundle. Neither the HMAC key nor broker credentials or environment snapshots
+are exported. The bundle contains the trace's task/tool content, so it remains
+sensitive even when known credential values were redacted during capture.
+
+```sh
+agentmux managed trace export --state STATE --agent coder --id TRACE_ID \
+  --mac TASK_MAC --output /private/trace-bundle.json
+# Copy the printed fingerprint through an independently trusted channel.
+# Verification works on another machine with no state directory or secret key:
+agentmux managed trace verify-bundle --input /private/trace-bundle.json \
+  --trust OWNER_PUBLIC_KEY_SHA256
+```
+
+The trust fingerprint is mandatory: an embedded public key alone does not
+establish who exported a file. Verification authenticates the pinned owner
+exporter's signed attestation of local verification, not a model provider,
+unmodifiable execution environment, or the truth of agent output. An owner
+with the signing key can issue another bundle. Retain the fingerprint outside
+the state directory, protect/back up the signing key, and compare task anchors
+independently when that stronger comparison matters. Bundle creation refuses an
+existing output path; bundles are bounded to 128 MiB and contain no executable
+archive paths. Offline verification does not contact providers or read local
+broker state.
+
 Native/provider hidden state, internal prompts, undeclared file reads and
 unreported tool/network activity are outside this adapter's coverage. A native
 CLI may condense or omit event details. The prepared input is exact for that

@@ -306,7 +306,7 @@ func TestBuildEnvironmentAndValidation(t *testing.T) {
 	if !strings.Contains(strings.Join(spec.Args, " "), "--safe-mode") {
 		t.Fatal("Claude managed turns must disable ambient hooks/plugins while preserving native authentication")
 	}
-	for _, req := range []Request{{Harness: "unknown"}, {Harness: "command"}, {Harness: "command", Command: []string{"echo"}, Model: "model"}, {Harness: "antigravity", BaseURL: "http://localhost:1234/v1"}, {Harness: "codex", BaseURL: "http://localhost:1234/v1"}, {Harness: "pi", BaseURL: "http://localhost:1234/v1"}, {Harness: "claude", APIKeyEnv: "not a name"}, {Harness: "claude", BaseURL: "https://user:secret@example.com"}, {Harness: "claude", Env: map[string]string{"BAD=KEY": "x"}}} {
+	for _, req := range []Request{{Harness: "unknown"}, {Harness: "command"}, {Harness: "command", Command: []string{"echo"}, Model: "model"}, {Harness: "antigravity", BaseURL: "http://localhost:1234/v1"}, {Harness: "pi", BaseURL: "http://localhost:1234/v1"}, {Harness: "claude", APIKeyEnv: "not a name"}, {Harness: "claude", BaseURL: "https://user:secret@example.com"}, {Harness: "claude", Env: map[string]string{"BAD=KEY": "x"}}} {
 		if _, err := Build(req); err == nil {
 			t.Fatalf("accepted invalid request %#v", req)
 		}

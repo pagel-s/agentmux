@@ -1,13 +1,12 @@
 package managed
 
 import (
+	"agentmux/internal/managedconfig"
 	"context"
 	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
-
-	"agentmux/internal/managedconfig"
 )
 
 func TestWorkspaceGroupOverlappingWritesBoundAuthorizationReads(t *testing.T) {
@@ -38,14 +37,12 @@ func TestWorkspaceGroupOverlappingWritesBoundAuthorizationReads(t *testing.T) {
 			t.Fatal(err)
 		}
 		c := result.(ControlState)
-		// Each shifted member set adds one new member's directed message/ping
-		// edges to the21shared members, plus44new namespace grants.
-		if len(c.Edges) != 924+84*n || len(c.Scopes) != 44*(n+1) {
-			t.Fatalf("group%d controls: edges%d scopes%d", n+1, len(c.Edges), len(c.Scopes))
+		if len(c.Edges) != 0 || len(c.Scopes) != 0 {
+			t.Fatal("groups expanded into global overrides")
 		}
-		t.Logf("group%d: %s, %dreads, %doverrides", n+1, time.Since(start), q.reads, len(c.Edges)+len(c.Scopes))
+		t.Logf("group%d: %s, %dreads", n+1, time.Since(start), q.reads)
 		if q.reads > 800 {
-			t.Errorf("group%d repeated immutable authorization inputs: %dreads", n+1, q.reads)
+			t.Errorf("group%d repeated authorization reads: %d", n+1, q.reads)
 		}
 	}
 	for _, action := range []string{"message.send", "ping.send"} {
@@ -58,31 +55,23 @@ func TestWorkspaceGroupOverlappingWritesBoundAuthorizationReads(t *testing.T) {
 	}
 }
 
-func TestWorkspaceGroupEdgePreflightTracksDenyTransitionsAndLimitRollback(t *testing.T) {
+func TestWorkspaceGroupContributionsRespectExplicitOverridesAndIsolation(t *testing.T) {
 	s := workspaceGroupStore(t)
 	c := connectWorkspaceGroup(t, s, 1, "alice", "bob")
 	call(t, s, "", "control.update", map[string]any{"version": c.Version, "kind": "edge", "from": "alice", "to": "bob", "action": "instruct", "allow": true})
 	c = connectWorkspaceGroup(t, s, 3, "alice", "bob")
-	if s.can(context.Background(), s.db, "alice", "instruct", "bob") {
-		t.Fatal("collaboration retained a stale command allow")
+	if !s.can(context.Background(), s.db, "alice", "instruct", "bob") {
+		t.Fatal("group overwrote explicit owner grant")
 	}
-	call(t, s, "", "control.update", map[string]any{"version": c.Version, "kind": "edge", "from": "alice", "to": "bob", "action": "instruct", "allow": true})
-	call(t, s, "", "control.update", map[string]any{"version": 5, "kind": "independent", "agents": []string{"alice"}})
+	call(t, s, "", "control.update", map[string]any{"version": c.Version, "kind": "independent", "agents": []string{"alice"}})
 	for _, action := range []string{"message.send", "ping.send", "instruct"} {
 		if s.can(context.Background(), s.db, "alice", action, "bob") {
-			t.Fatalf("independence retained stale%s allow", action)
+			t.Fatalf("isolation retained%s", action)
 		}
 	}
-	// A phase cache must agree with uncached authorization after every new call.
-	ctx := boundaryReadContext(context.Background())
-	for _, from := range []string{"alice", "bob", "eve", "dave"} {
-		for _, to := range []string{"alice", "bob", "eve", "dave"} {
-			for _, action := range []string{"message.send", "ping.send", "instruct"} {
-				if s.can(ctx, s.db, from, action, to) != s.can(context.Background(), s.db, from, action, to) {
-					t.Fatal("immutable edge preflight differs from live policy")
-				}
-			}
-		}
+	c = connectWorkspaceGroup(t, s, 5, "alice", "bob")
+	if !s.can(context.Background(), s.db, "alice", "instruct", "bob") {
+		t.Fatal("reconnect did not restore suspended explicit intent")
 	}
 	current, err := readControls(context.Background(), s.db)
 	if err != nil {
@@ -94,54 +83,26 @@ func TestWorkspaceGroupEdgePreflightTracksDenyTransitionsAndLimitRollback(t *tes
 	if err = saveControls(context.Background(), s.db, current); err != nil {
 		t.Fatal(err)
 	}
-	before, _ := workspaceGroups(context.Background(), s.db)
-	expectFault(t, s, "", "control.update", "limit", map[string]any{"version": current.Version, "kind": "collaboration", "agents": []string{"eve", "dave"}, "enabled": true})
-	after, _ := workspaceGroups(context.Background(), s.db)
+	expectFault(t, s, "", "control.update", "limit", map[string]any{"version": current.Version, "kind": "edge", "from": "eve", "to": "dave", "action": "instruct", "allow": true})
 	saved, err := readControls(context.Background(), s.db)
-	if err != nil || len(after) != len(before) || saved.Version != current.Version || len(saved.Edges)+len(saved.Scopes) != 4096 {
-		t.Fatalf("limit rejection partially persisted group or permissions: groups%d/%d version%d/%d error%v", len(after), len(before), saved.Version, current.Version, err)
+	if err != nil || saved.Version != current.Version || len(saved.Edges)+len(saved.Scopes) != 4096 {
+		t.Fatal("limit rejection partially persisted overrides")
 	}
 }
 
-func TestWorkspaceGroupEdgePreflightMatchesUncachedPolicy(t *testing.T) {
-	s := testStore(t, testConfig())
-	ids := []string{"alice", "bob", "eve"}
-	expected := map[EdgeControl]bool{}
-	// Compute the existing algorithm's decisions against uncached policy before
-	// the mutation; creating a namespace group does not change messaging rights.
-	for _, from := range ids {
-		for _, to := range ids {
-			if from == to {
-				continue
-			}
-			for _, action := range []string{"message.send", "ping.send", "instruct"} {
-				allow := action != "instruct"
-				if allow || s.can(context.Background(), s.db, from, action, to) {
-					expected[EdgeControl{From: from, To: to, Action: action, Allow: allow}] = true
-				}
-			}
-		}
+func TestWorkspaceGroupOverlapDisconnectRemovesOnlyOneContribution(t *testing.T) {
+	s := workspaceGroupStore(t)
+	one := connectWorkspaceGroup(t, s, 1, "alice", "bob")
+	two := connectWorkspaceGroup(t, s, 2, "alice", "bob", "eve")
+	call(t, s, "", "control.update", map[string]any{"version": 3, "kind": "collaboration", "agents": []string{"alice", "bob"}, "enabled": false})
+	for _, action := range []string{"message.send", "ping.send"} {
+		call(t, s, "alice", action, map[string]any{"to": []string{"bob"}, "text": "other group remains"})
 	}
-	c := connectWorkspaceGroup(t, s, 1, ids...)
-	if len(c.Edges) != len(expected) {
-		t.Fatalf("edge count%d want%d", len(c.Edges), len(expected))
-	}
-	for _, edge := range c.Edges {
-		if !expected[edge] {
-			t.Fatalf("edge differs from uncached policy: %+v", edge)
-		}
-	}
-	if len(c.Scopes) != 2*len(ids) {
-		t.Fatalf("scope count%d", len(c.Scopes))
-	}
-	seen := map[string]bool{}
-	for _, scope := range c.Scopes {
-		if !contains(ids, scope.Agent) || !scope.Read || !scope.Write || scope.Kind == "board" && scope.Namespace != c.Group.Board || scope.Kind == "memory" && scope.Namespace != c.Group.Memory {
-			t.Fatalf("unexpected scope: %+v", scope)
-		}
-		seen[scope.Agent+":"+scope.Kind] = true
-	}
-	if len(seen) != 2*len(ids) {
-		t.Fatal("missing or duplicated scope grants")
-	}
+	expectFault(t, s, "alice", "board.post", "forbidden", map[string]any{"board": one.Group.Board, "text": "closed"})
+	call(t, s, "alice", "board.post", map[string]any{"board": two.Group.Board, "text": "open"})
+	call(t, s, "", "control.update", map[string]any{"version": 4, "kind": "edge", "from": "alice", "to": "bob", "action": "message.send", "allow": false})
+	connectWorkspaceGroup(t, s, 5, "alice", "bob")
+	expectFault(t, s, "alice", "message.send", "forbidden", map[string]any{"to": []string{"bob"}, "text": "explicit deny wins over both groups"})
+	call(t, s, "", "control.update", map[string]any{"version": 6, "kind": "edge", "from": "alice", "to": "bob", "action": "message.send", "reset": true})
+	call(t, s, "alice", "message.send", map[string]any{"to": []string{"bob"}, "text": "reset reveals group grant"})
 }

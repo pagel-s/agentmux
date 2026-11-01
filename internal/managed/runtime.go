@@ -33,6 +33,7 @@ type AgentInfo struct {
 	ID           string              `json:"id"`
 	Title        string              `json:"title"`
 	TitleVersion int                 `json:"title_version"`
+	RoleVersion  int                 `json:"role_version"`
 	External     bool                `json:"external,omitempty"`
 	ExternalRef  string              `json:"external_ref,omitempty"`
 	OwnerManaged bool                `json:"owner_managed,omitempty"`
@@ -94,6 +95,9 @@ func (s *Store) can(ctx context.Context, q queryer, from, action, to string) boo
 	}
 	if independent(ctx, q, from) || independent(ctx, q, to) {
 		return false
+	}
+	if from != to && workspaceGroupCan(ctx, q, from, action, to) {
+		return true
 	}
 	// Creating a worker grants only a control edge to that worker. A child
 	// may report back, but cannot command its parent through this edge.
@@ -347,6 +351,8 @@ func (s *Store) agents(ctx context.Context, q queryer, a actor, r Request) (any,
 		return s.addWorkspaceAgent(ctx, q, a, r.Args)
 	case "agent.label":
 		return s.labelSession(ctx, q, a, r.Args)
+	case "agent.role":
+		return s.updateSessionRole(ctx, q, a, r.Args)
 	case "agent.spawn":
 		return s.spawn(ctx, q, a, r.Args)
 	case "agent.stop":

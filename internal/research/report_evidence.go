@@ -12,6 +12,15 @@ import (
 // the same paired block in the contrast calculation. Legacy reports may omit
 // identifiers/evidence, but cannot contradict the identifiers they do declare.
 func validateReportEntries(report Report) error {
+	if report.PrimaryOutcome != "" && !primaryOutcomes[report.PrimaryOutcome] {
+		return errors.New("unsupported saved primary outcome")
+	}
+	if report.Counterbalancing != "" && report.Counterbalancing != "latin_square" {
+		return errors.New("unsupported saved counterbalancing")
+	}
+	if report.Preregistration != nil && report.PrimaryOutcome != "" && report.PrimaryOutcome != report.Preregistration.PrimaryOutcome {
+		return errors.New("saved primary outcome conflicts with preregistration")
+	}
 	conditions := map[string]bool{}
 	for _, condition := range report.Conditions {
 		if condition.ID == "" || conditions[condition.ID] {
@@ -78,7 +87,7 @@ func verifyReportEvidence(dir string, report Report) error {
 	if err := privateJSON(filepath.Join(dir, "manifest.json"), &stored); err != nil {
 		return err
 	}
-	if report.Research != stored.Manifest.ID || !reflect.DeepEqual(report.Conditions, stored.Manifest.Conditions) || !reflect.DeepEqual(report.Preregistration, stored.Manifest.Preregistration) {
+	if report.Research != stored.Manifest.ID || report.PrimaryOutcome != stored.Manifest.PrimaryOutcome || report.Counterbalancing != stored.Manifest.Counterbalancing || !reflect.DeepEqual(report.Conditions, stored.Manifest.Conditions) || !reflect.DeepEqual(report.Preregistration, stored.Manifest.Preregistration) {
 		return errors.New("research report metadata differs from its frozen manifest")
 	}
 	plan, err := Plan(stored.Manifest)

@@ -30,6 +30,7 @@ type FactorialEffect struct {
 	OrderedLevels map[string][]string `json:"ordered_levels"`
 	Difference    Estimate            `json:"paired_effect"`
 	Definition    string              `json:"definition"`
+	Outcome       string              `json:"outcome"`
 }
 
 func factorialEffects(report Report) []FactorialEffect {
@@ -55,8 +56,9 @@ func factorialEffects(report Report) []FactorialEffect {
 		if blocks[key] == nil {
 			blocks[key] = map[string]float64{}
 		}
-		w, _, _, _, _ := roundMetrics(r.Rounds)
-		blocks[key][r.Trial.Condition] = w
+		if value, available := outcomeValue(r, selectedOutcome(report)); available {
+			blocks[key][r.Trial.Condition] = value
+		}
 	}
 	blockKeys := []string{}
 	for key := range blocks {
@@ -65,10 +67,17 @@ func factorialEffects(report Report) []FactorialEffect {
 	sort.Strings(blockKeys)
 	var effects []FactorialEffect
 	for i, first := range names {
-		sets := [][]string{{first}}
-		for _, second := range names[i+1:] {
-			sets = append(sets, []string{first, second})
+		// Enumerate every interaction without changing historical one-/two-
+		// factor output ordering. Six binary factors remain bounded at 63.
+		sets := [][]string{}
+		var extend func([]string, int)
+		extend = func(set []string, start int) {
+			sets = append(sets, append([]string(nil), set...))
+			for next := start; next < len(names); next++ {
+				extend(append(append([]string(nil), set...), names[next]), next+1)
+			}
 		}
+		extend([]string{first}, i+1)
 		for _, set := range sets {
 			values := []float64{}
 			for _, key := range blockKeys {
@@ -101,7 +110,10 @@ func factorialEffects(report Report) []FactorialEffect {
 			if len(set) > 1 {
 				definition = "paired difference of differences, averaged over remaining factor levels"
 			}
-			effects = append(effects, FactorialEffect{set, levels, estimate(values), definition})
+			if len(set) > 2 {
+				definition = fmt.Sprintf("paired %d-factor alternating cell contrast, averaged over remaining factor levels", len(set))
+			}
+			effects = append(effects, FactorialEffect{Factors: set, OrderedLevels: levels, Difference: estimate(values), Definition: definition, Outcome: selectedOutcome(report)})
 		}
 	}
 	return effects

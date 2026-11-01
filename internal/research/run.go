@@ -60,12 +60,14 @@ type Result struct {
 	OwnerMutations       int                            `json:"owner_mutations,omitempty"`
 }
 type Report struct {
-	Research        string             `json:"research"`
-	ManifestHash    string             `json:"manifest_sha256"`
-	Results         []Result           `json:"results"`
-	Preregistration *Preregistration   `json:"preregistration,omitempty"`
-	Conditions      []Condition        `json:"conditions,omitempty"`
-	Execution       *ExecutionEvidence `json:"execution_evidence,omitempty"`
+	Research         string             `json:"research"`
+	ManifestHash     string             `json:"manifest_sha256"`
+	Results          []Result           `json:"results"`
+	Preregistration  *Preregistration   `json:"preregistration,omitempty"`
+	Conditions       []Condition        `json:"conditions,omitempty"`
+	Execution        *ExecutionEvidence `json:"execution_evidence,omitempty"`
+	PrimaryOutcome   string             `json:"primary_outcome,omitempty"`
+	Counterbalancing string             `json:"counterbalancing,omitempty"`
 }
 
 func Run(ctx context.Context, m Manifest, opts RunOptions) (Report, error) {
@@ -111,7 +113,7 @@ func Run(ctx context.Context, m Manifest, opts RunOptions) (Report, error) {
 		return Report{}, errors.New("research output lock unavailable")
 	}
 	defer unlock()
-	report := Report{Research: m.ID, ManifestHash: digest(m), Results: []Result{}, Preregistration: m.Preregistration, Conditions: m.Conditions}
+	report := Report{Research: m.ID, ManifestHash: digest(m), Results: []Result{}, Preregistration: m.Preregistration, Conditions: m.Conditions, PrimaryOutcome: m.PrimaryOutcome, Counterbalancing: m.Counterbalancing}
 	var prior struct {
 		SHA256 string `json:"sha256"`
 	}
@@ -884,6 +886,12 @@ func trialConfig(m Manifest, c Condition, state string) managedconfig.Config {
 		cfg.Limits.MaxRuntimeSeconds = m.TimeoutSeconds
 	}
 	for id, a := range cfg.Agents {
+		if role, ok := m.RoleAssignments[c.RoleAssignment][id]; ok {
+			a.Role = role
+		}
+		if personality, ok := m.PersonalityProfiles[c.Personality][id]; ok {
+			a.Role += "\nResearch personality prompt treatment (a requested behavior, not an inferred trait):\n" + personality
+		}
 		a.Autonomy = managedconfig.Autonomy{}
 		a.Workdir = filepath.Join(state, "workspaces", id)
 		if a.Env == nil {

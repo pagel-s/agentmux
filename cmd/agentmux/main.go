@@ -65,12 +65,20 @@ func run(args []string) int {
 	switch args[0] {
 	case "start", "attach", "reply", "inbox", "board", "down", "remove", "collaborate", "isolate", "label":
 		return runWorkSession(args[0], args[1:], os.Stdin, os.Stdout, os.Stderr)
+	case "team":
+		return runWorkTeam(args[1:], os.Stdout, os.Stderr)
 	case "sessions":
 		return runWorkInventory(args[1:], os.Stdout, os.Stderr)
+	case "workspaces":
+		return runWorkspaceInventory(args[1:], os.Stdout, os.Stderr)
+	case "relaunch":
+		return runWorkRelaunch(args[1:], os.Stdout, os.Stderr)
 	case "connect":
 		return runWorkConnect(args[1:], os.Stdout, os.Stderr)
 	case "add":
 		return runWorkAdd(args[1:], os.Stdout, os.Stderr)
+	case "role":
+		return runWorkRole(args[1:], os.Stdout, os.Stderr)
 	case "web":
 		return runWorkWeb(args[1:], os.Stdout, os.Stderr)
 	case "load":
@@ -2131,9 +2139,12 @@ the legacy list/status commands below address the default tmux socket.
 
 Usage:
   agentmux start [--project DIR] [--session work] [--detach]
-  agentmux add [NAME] --harness claude|codex|pi --project DIR [--title "..."] [--role "..."]
+  agentmux add [NAME] --harness claude|codex|pi|antigravity --project DIR [--title "..."] [--role "..." | --native-only]
   agentmux label ID "Fix login redirect" [--session work | --state DIR]
+  agentmux role ID "Current owner role" [--session work | --state DIR]
   agentmux sessions [--session work | --state DIR]
+  agentmux workspaces [--json] [--register DIR]
+  agentmux relaunch ID [--resume ID|last|picker] [--session work | --state DIR]
   agentmux connect OBSERVED_ID --name NAME [--session work | --state DIR]
   agentmux collaborate AGENT AGENT [...] [--session work | --state DIR]
   agentmux isolate AGENT [...] [--session work | --state DIR]
@@ -2141,7 +2152,7 @@ Usage:
   agentmux attach [AGENT] [--session work | --state DIR]
   agentmux dashboard [--session work | --state DIR]
   agentmux web [--session work | --state DIR] [--open]
-  agentmux send AGENT "message" [--session work | --state DIR]
+  agentmux send AGENT "message" [--mode auto|note|instruction] [--session work | --state DIR]
   agentmux reply TASK_OR_MESSAGE_ID "message" [--session work | --state DIR]
   agentmux inbox [--session work | --state DIR]
   agentmux board "note" [--session work | --state DIR]

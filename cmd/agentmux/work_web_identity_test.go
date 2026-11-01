@@ -74,6 +74,49 @@ func ownerWebRequest(t *testing.T, state string, client *managed.Client, path st
 	return result
 }
 
+func TestWebExplicitDeliveryAndBoardReplyPreserveScopeAndThread(t *testing.T) {
+	state, client, _ := inventoryBroker(t)
+	response := ownerWebRequest(t, state, client, "/api/send", map[string]any{"target": "peer", "text": "Information only", "mode": "note"})
+	if response.Code != http.StatusOK {
+		t.Fatalf("note: %s", response.Body.String())
+	}
+	before := uat20Activity(t, client)
+	if len(before.Tasks) != 0 || len(before.Messages) != 1 {
+		t.Fatal("explicit note queued instruction")
+	}
+	parent := before.Messages[0].ID
+	response = ownerWebRequest(t, state, client, "/api/send", map[string]any{"target": "peer", "text": "Now act", "mode": "instruction", "reply_to": parent})
+	if response.Code != http.StatusOK {
+		t.Fatalf("instruction: %s", response.Body.String())
+	}
+	after := uat20Activity(t, client)
+	if len(after.Tasks) != 1 || after.Tasks[0].ReplyTo != parent || after.Tasks[0].ThreadID != parent || after.Tasks[0].Text != "Now act" {
+		t.Fatal("explicit instruction lost structured ancestry")
+	}
+	raw, err := workCall(context.Background(), client, "board.post", map[string]any{"board": "team", "text": "shared root"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var shared struct {
+		Message managed.Message `json:"message"`
+	}
+	if err := json.Unmarshal(raw, &shared); err != nil {
+		t.Fatal(err)
+	}
+	response = ownerWebRequest(t, state, client, "/api/send", map[string]any{"board": "team", "text": "shared follow-up", "mode": "note", "reply_to": shared.Message.ID})
+	if response.Code != http.StatusOK {
+		t.Fatalf("shared reply: %s", response.Body.String())
+	}
+	after = uat20Activity(t, client)
+	if after.Messages[0].Board != "team" || after.Messages[0].ReplyTo != shared.Message.ID || len(after.Tasks) != 1 {
+		t.Fatal("board reply became private or lost ancestry")
+	}
+	response = ownerWebRequest(t, state, client, "/api/send", map[string]any{"board": "team", "text": "cannot command a board", "mode": "instruction"})
+	if response.Code != http.StatusBadRequest {
+		t.Fatal("board instruction ambiguity accepted")
+	}
+}
+
 func TestWebTaskTitleUpdatesKeepIdentityAndCheckVersion(t *testing.T) {
 	state, client, _ := inventoryBroker(t)
 	title := "Fix <sign-in> & API"

@@ -300,7 +300,7 @@ func (s *Store) autonomyStatus(ctx context.Context, q queryer, id string) (Auton
 				return status, nil
 			}
 		}
-		deadline, e := s.deadline(ctx, q)
+		deadline, e := s.admissionDeadline(ctx, q)
 		if e != nil {
 			return status, e
 		}

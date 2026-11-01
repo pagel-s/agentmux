@@ -265,7 +265,11 @@ func VerifyTrace(state, agent, id, expectedMAC string) (TraceSummary, error) {
 		return TraceSummary{}, err
 	}
 	defer f.Close()
-	reader := bufio.NewReaderSize(f, 8<<20+1)
+	return verifyTraceReader(f, key, agent, id, expectedMAC)
+}
+
+func verifyTraceReader(input io.Reader, key []byte, agent, id, expectedMAC string) (TraceSummary, error) {
+	reader := bufio.NewReaderSize(input, 8<<20+1)
 	summary := TraceSummary{ID: id, Coverage: traceCoverage}
 	previous := ""
 	ended := false

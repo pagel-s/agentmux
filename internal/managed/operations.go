@@ -37,9 +37,11 @@ func internal(err error) *Fault {
 
 func isWrite(op string) bool {
 	switch op {
-	case "research.publish", "research.control", "control.update", "worker.next", "autonomy.control", "autonomy.ack", "memory.delete", "memory.prune", "memory.index":
+	case "agent.role":
 		return true
-	case "board.post", "message.send", "ping.send", "instruct", "task.claim", "task.complete", "task.stopped", "task.cancel", "task.verify", "task.resolve", "memory.put", "agent.add", "agent.label", "agent.spawn", "agent.stop", "team.create", "team.invite", "team.join", "team.leave", "team.remove", "team.dissolve", "conversation.begin", "conversation.reset":
+	case "capacity.update", "research.publish", "research.control", "control.update", "worker.next", "autonomy.control", "autonomy.ack", "memory.delete", "memory.prune", "memory.index":
+		return true
+	case "board.post", "message.send", "ping.send", "instruct", "task.claim", "task.complete", "task.stopped", "task.cancel", "task.verify", "task.resolve", "memory.put", "agent.add", "agent.label", "agent.spawn", "agent.stop", "team.create", "team.invite", "team.join", "team.leave", "team.remove", "team.dissolve", "team.update", "team.transfer", "team.accept-owner", "team.move", "conversation.begin", "conversation.reset":
 		return true
 	}
 	return false
@@ -132,7 +134,7 @@ func (s *Store) Call(ctx context.Context, token string, r Request) (json.RawMess
 		if !errors.Is(err, sql.ErrNoRows) {
 			return nil, internal(err)
 		}
-		deadline, e := s.deadline(ctx, q)
+		deadline, e := s.admissionDeadline(ctx, q)
 		if e != nil {
 			return nil, internal(e)
 		}
@@ -217,6 +219,10 @@ func (s *Store) dispatch(ctx context.Context, q queryer, a actor, r Request) (an
 	switch r.Operation {
 	case "research.status", "research.publish", "research.control", "research.heartbeat":
 		return s.researchControl(ctx, q, a, r)
+	case "capacity.update":
+		return s.updateCapacity(ctx, q, a, r.Args)
+	case "capacity.get":
+		return s.capacity(ctx, q, a, r.Args)
 	case "budget.status":
 		return s.budgetStatus(ctx, q, a, r.Args)
 	case "worker.next", "autonomy.status", "autonomy.control", "autonomy.ack", "wake.read":
@@ -247,6 +253,11 @@ func (s *Store) dispatch(ctx context.Context, q queryer, a actor, r Request) (an
 		}
 		result["boundaries_version"] = control.Version
 		if !a.owner() {
+			info, err := s.agent(ctx, q, a.ID)
+			if err != nil {
+				return nil, internal(err)
+			}
+			result["role"], result["role_version"], result["native_only"] = info.Config.Role, info.RoleVersion, info.Config.NativeOnly
 			result["boards_read"] = s.readableBoards(ctx, q, a.ID)
 			result["spawn_templates"] = s.spawnTemplates(ctx, q, a.ID)
 			result["can_create_teams"] = s.canCreateTeams(ctx, q, a.ID)
@@ -257,6 +268,11 @@ func (s *Store) dispatch(ctx context.Context, q queryer, a actor, r Request) (an
 			return nil, internal(err)
 		}
 		result["runtime_deadline"] = deadline
+		capacity, problem := s.capacityFor(ctx, q, a.ID)
+		if problem != nil {
+			return nil, problem
+		}
+		result["capacity"] = capacity
 		return result, nil
 	case "board.post", "message.send", "ping.send", "instruct":
 		return s.send(ctx, q, a, r)
@@ -266,9 +282,9 @@ func (s *Store) dispatch(ctx context.Context, q queryer, a actor, r Request) (an
 		return s.tasks(ctx, q, a, r)
 	case "memory.get", "memory.list", "memory.put", "memory.head", "memory.search", "memory.delete", "memory.prune", "memory.index":
 		return s.memory(ctx, q, a, r)
-	case "agent.list", "agent.add", "agent.label", "agent.spawn", "agent.stop":
+	case "agent.list", "agent.add", "agent.label", "agent.role", "agent.spawn", "agent.stop":
 		return s.agents(ctx, q, a, r)
-	case "team.create", "team.list", "team.invite", "team.join", "team.leave", "team.remove", "team.dissolve":
+	case "team.create", "team.list", "team.invite", "team.join", "team.leave", "team.remove", "team.dissolve", "team.update", "team.transfer", "team.accept-owner", "team.move":
 		return s.teams(ctx, q, a, r)
 	case "export":
 		if !a.owner() {
@@ -416,9 +432,10 @@ func (s *Store) dispatch(ctx context.Context, q queryer, a actor, r Request) (an
 
 func (s *Store) send(ctx context.Context, q queryer, a actor, r Request) (any, *Fault) {
 	var in struct {
-		To    []string `json:"to"`
-		Board string   `json:"board"`
-		Text  string   `json:"text"`
+		To      []string `json:"to"`
+		Board   string   `json:"board"`
+		Text    string   `json:"text"`
+		ReplyTo string   `json:"reply_to"`
 	}
 	if err := strictJSON(r.Args, &in); err != nil {
 		return nil, invalid(err)
@@ -467,6 +484,15 @@ func (s *Store) send(ctx context.Context, q queryer, a actor, r Request) (any, *
 		m.Kind = "instruction"
 		m.TaskID = randomID("task")
 	}
+	if in.ReplyTo != "" {
+		thread, problem := s.replyThread(ctx, q, a, in.ReplyTo, m)
+		if problem != nil {
+			return nil, problem
+		}
+		m.ReplyTo, m.ThreadID = in.ReplyTo, thread
+	} else {
+		m.ThreadID = m.ID
+	}
 	n, err := count(ctx, q, "message")
 	if err != nil {
 		return nil, internal(err)
@@ -491,6 +517,7 @@ func (s *Store) send(ctx context.Context, q queryer, a actor, r Request) (any, *
 			return nil, fault("limit", "stored task limit reached")
 		}
 		record := taskRecord{Task: Task{ID: m.TaskID, MessageID: m.ID, From: a.ID, To: m.To[0], Text: m.Text, State: "proposed", Delivery: "pending", Version: 1, CreatedAt: m.CreatedAt, UpdatedAt: m.CreatedAt}}
+		record.ReplyTo, record.ThreadID = m.ReplyTo, m.ThreadID
 		record.Origin = &TaskOrigin{Kind: "instruction", Provenance: *m.Provenance}
 		if err = saveTask(ctx, q, record); err != nil {
 			return nil, internal(err)
@@ -586,12 +613,18 @@ func (s *Store) tasks(ctx context.Context, q queryer, a actor, r Request) (any, 
 			State string `json:"state"`
 			Limit int    `json:"limit"`
 			After string `json:"after"`
+			Query string `json:"query"`
+			To    string `json:"to"`
+			Order string `json:"order"`
 		}
 		if err := strictJSON(r.Args, &in); err != nil {
 			return nil, invalid(err)
 		}
 		if in.Limit <= 0 || in.Limit > 200 {
 			in.Limit = 100
+		}
+		if len(in.Query) > 512 || (in.Order != "" && in.Order != "asc" && in.Order != "desc") {
+			return nil, fault("invalid", "task query is limited to 512 bytes; order must be asc or desc")
 		}
 		var after int64
 		if in.After != "" {
@@ -605,6 +638,14 @@ func (s *Store) tasks(ctx context.Context, q queryer, a actor, r Request) (any, 
 		}
 		condition := "AND seq>?"
 		values := []any{after}
+		if in.Order == "desc" {
+			condition = ""
+			values = nil
+			if in.After != "" {
+				condition = "AND seq<?"
+				values = []any{after}
+			}
+		}
 		if !a.owner() {
 			condition += " AND (actor=? OR target=?)"
 			values = append(values, a.ID, a.ID)
@@ -613,8 +654,20 @@ func (s *Store) tasks(ctx context.Context, q queryer, a actor, r Request) (any, 
 			condition += " AND json_extract(data,'$.state')=?"
 			values = append(values, in.State)
 		}
-		condition += " ORDER BY seq LIMIT ?"
-		values = append(values, in.Limit)
+		if in.To != "" {
+			condition += " AND target=?"
+			values = append(values, in.To)
+		}
+		if in.Query != "" {
+			condition += " AND (instr(lower(id),lower(?))>0 OR instr(lower(coalesce(json_extract(data,'$.text'),'')),lower(?))>0 OR instr(lower(coalesce(json_extract(data,'$.result'),'')),lower(?))>0)"
+			values = append(values, in.Query, in.Query, in.Query)
+		}
+		if in.Order == "desc" {
+			condition += " ORDER BY seq DESC LIMIT ?"
+		} else {
+			condition += " ORDER BY seq LIMIT ?"
+		}
+		values = append(values, in.Limit+1)
 		all, err := list[taskRecord](ctx, q, "task", condition, values...)
 		if err != nil {
 			return nil, internal(err)
@@ -623,6 +676,9 @@ func (s *Store) tasks(ctx context.Context, q queryer, a actor, r Request) (any, 
 		cursor := in.After
 		size := 0
 		for _, t := range all {
+			if len(visible) >= in.Limit {
+				break
+			}
 			raw, _ := json.Marshal(t.Task)
 			if size+len(raw) > maxWireBytes/2 {
 				break
@@ -631,7 +687,10 @@ func (s *Store) tasks(ctx context.Context, q queryer, a actor, r Request) (any, 
 			visible = append(visible, t.Task)
 			cursor = t.ID
 		}
-		return map[string]any{"tasks": visible, "cursor": cursor}, nil
+		if len(visible) == 0 && len(all) > 0 {
+			return nil, fault("limit", "task exceeds list response size; use task.get for the exact task")
+		}
+		return map[string]any{"tasks": visible, "cursor": cursor, "has_more": len(all) > len(visible)}, nil
 	}
 	if r.Operation == "task.claim" {
 		if a.owner() {
@@ -689,7 +748,7 @@ func (s *Store) tasks(ctx context.Context, q queryer, a actor, r Request) (any, 
 		t.LeaseToken = randomID("lease")
 		t.Instance = a.Instance
 		t.Expires = time.Now().Add(time.Duration(s.cfg.Limits.MaxRuntimeSeconds+15) * time.Second).Unix()
-		deadline, e := s.deadline(ctx, q)
+		deadline, e := s.admissionDeadline(ctx, q)
 		if e != nil {
 			return nil, internal(e)
 		}
@@ -705,7 +764,7 @@ func (s *Store) tasks(ctx context.Context, q queryer, a actor, r Request) (any, 
 		if err = event(ctx, q, a, "task.claimed", t.ID, nil); err != nil {
 			return nil, internal(err)
 		}
-		return map[string]any{"task": t.Task, "lease": t.LeaseToken, "lease_expires": t.Expires}, nil
+		return map[string]any{"task": t.Task, "lease": t.LeaseToken, "lease_expires": t.Expires, "role": info.Config.Role, "role_version": info.RoleVersion}, nil
 	}
 	var in struct {
 		ID         string          `json:"id"`

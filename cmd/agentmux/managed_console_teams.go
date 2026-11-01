@@ -8,6 +8,7 @@ import (
 	"unicode"
 
 	"agentmux/internal/managed"
+	"agentmux/internal/managedconfig"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 )
@@ -15,17 +16,32 @@ import (
 // Review metadata is immutable while its modal is open. Registry or team polls
 // must never redirect a pending owner action to a different agent/team/version.
 type consoleTeamAction struct {
-	operation, teamID, teamName, agentID string
-	version                              int
-	researchAction, reason               string
-	reasonReady                          bool
+	operation, teamID, teamName, agentID   string
+	version                                int
+	researchAction, reason                 string
+	reasonReady                            bool
+	editKind, editValue, name, description string
+	editStep                               int
+	budget                                 managedconfig.AgentBudget
+	legacyPolicy                           string
+	groupAgents                            []string
+	legacyEdges                            []managed.EdgeControl
 }
 
 func (a consoleTeamAction) args() map[string]any {
+	if a.operation == "control.update" {
+		return map[string]any{"version": a.version, "kind": "collaboration", "agents": a.groupAgents, "enabled": true, "legacy_policy": a.legacyPolicy}
+	}
+	if a.operation == "capacity.update" {
+		return map[string]any{"version": a.version, "agent": a.agentID, "agent_budget": a.budget}
+	}
 	if a.researchAction != "" {
 		return map[string]any{"version": a.version, "action": a.researchAction, "reason": a.reason}
 	}
 	args := map[string]any{"id": a.teamID, "version": a.version}
+	if a.operation == "team.update" {
+		args["name"], args["description"] = a.name, a.description
+	}
 	if a.agentID != "" {
 		args["agent"] = a.agentID
 	}
@@ -75,13 +91,23 @@ func (m *console) reviewTeamAction(operation string) {
 		return
 	}
 	action := consoleTeamAction{operation: operation, teamID: team.ID, teamName: team.Name, version: team.Version}
-	if operation != "team.dissolve" {
+	if operation != "team.dissolve" && operation != "team.update" {
 		target := m.teamTarget()
 		if target == nil {
 			m.message = "Choose an agent with ←/→."
 			return
 		}
 		action.agentID = target.ID
+		if operation == "team.transfer" {
+			if target.State != "active" || target.ID == team.Owner || !teamContains(team.Members, target.ID) {
+				m.message = "Propose an active current member as the new owner. They must accept using their own credential."
+				return
+			}
+			if access, ok := team.MemberAccess[target.ID]; ok && !access.Allowed {
+				m.message = "The proposed owner must have current effective team access: " + access.Reason
+				return
+			}
+		}
 		if operation == "team.invite" && (target.State != "active" || teamContains(team.Members, target.ID) || teamContains(team.Invited, target.ID)) {
 			m.message = "Invite a distinct active nonmember. Existing invitations require the agent's own acceptance."
 			return
@@ -97,11 +123,21 @@ func (m *console) reviewTeamAction(operation string) {
 			}
 		}
 	}
+	if operation == "team.update" {
+		action.name, action.description = team.Name, team.Description
+		action.editKind, action.editValue = "Team name", team.Name
+	}
 	m.teamAction = &action
 }
 
 func (m console) teamReviewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
+	if m.teamAction.operation == "control.update" {
+		return m.legacyCollaborationKey(msg)
+	}
+	if m.teamAction.editKind != "" {
+		return m.teamEditorKey(msg)
+	}
 	if m.teamAction.researchAction != "" && !m.teamAction.reasonReady {
 		action := *m.teamAction
 		switch key {
@@ -160,6 +196,12 @@ func (m console) teamReviewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if action.operation == "team.invite" {
 			label = "Invited " + action.agentID + " to " + action.teamName + ". The agent must accept using its own credential."
 		}
+		if action.operation == "team.transfer" {
+			label = "Ownership proposed to " + action.agentID + ". Current owner keeps authority until the proposed agent accepts."
+		}
+		if action.operation == "capacity.update" {
+			label = "Admission reservations updated for " + action.agentID + ". Existing charges remain; native provider billing is not capped."
+		}
 		if action.researchAction != "" {
 			label = "Research " + action.researchAction + " requested with an audited reason. Applies at the next phase barrier; current finite-phase work may still execute."
 		}
@@ -170,6 +212,15 @@ func (m console) teamReviewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m console) teamReviewPanel(width, height int) string {
 	a := m.teamAction
+	if a.operation == "control.update" {
+		return m.legacyCollaborationPanel(width, height)
+	}
+	if a.editKind != "" {
+		return m.teamEditorPanel(width, height)
+	}
+	if a.operation == "capacity.update" {
+		return m.budgetReviewPanel(width, height)
+	}
 	var out strings.Builder
 	if a.researchAction != "" {
 		instruction := "Type a reason · Enter reviews · Ctrl-U clears · Esc cancels"
@@ -194,6 +245,10 @@ func (m console) teamReviewPanel(width, height int) string {
 	}
 	if a.operation == "team.invite" {
 		out.WriteString("\nThis sends an invitation. Only the invited agent can consent to join.\n")
+	} else if a.operation == "team.transfer" {
+		out.WriteString("\nThis proposes ownership. Only the proposed member can accept.\nCurrent owner keeps authority until that separate consent.\n")
+	} else if a.operation == "team.update" {
+		fmt.Fprintf(&out, "\nName: %s\nDescription: %s\n", consoleContent(a.name, 128), consoleContent(a.description, 4096))
 	} else {
 		out.WriteString("\nThis revokes future team access. Previously read knowledge remains.\n")
 	}
@@ -205,7 +260,7 @@ func (m console) teamsPanel(width, height int) string {
 	var out strings.Builder
 	out.WriteString(consoleAccent.Render("Consented teams") + "\n")
 	out.WriteString(consoleMuted.Render(consoleClip("[/] team · ←/→ target · i invite · r remove · d dissolve", width, 1)) + "\n")
-	out.WriteString(consoleMuted.Render(consoleClip("v memory · b board · o full team · Enter opens target", width, 1)) + "\n\n")
+	out.WriteString(consoleMuted.Render(consoleClip("v memory · b board · e edit · t owner · o full team", width, 1)) + "\n\n")
 	if m.data.teamsErr != nil {
 		return consoleClip(out.String()+"Teams unavailable: "+consoleContent(m.data.teamsErr.Error(), 200), width, height)
 	}
@@ -215,6 +270,7 @@ func (m console) teamsPanel(width, height int) string {
 	}
 	selected := m.teamIndex % len(m.data.teams)
 	t := m.data.teams[selected]
+
 	fmt.Fprintf(&out, "%s · %s · %d/%d\n%s · v%d\n", consoleSelected.Render(ansi.Truncate(consoleContent(t.Name, 90), max(1, width-22), "…")), t.State, selected+1, len(m.data.teams), consoleMuted.Render(consoleContent(t.ID, 80)), t.Version)
 	if target := m.teamTarget(); target != nil {
 		fmt.Fprintf(&out, "Action target: %s\n", consoleAccent.Render(consoleClip(consoleContent(target.ID+" · "+m.agentLabel(target.ID), 200), width-15, 1)))
@@ -245,6 +301,9 @@ func (m console) teamsPanel(width, height int) string {
 			}
 		}
 	}
+	if t.PendingOwner != "" {
+		fmt.Fprintf(&out, "Owner proposal: %s · awaiting that agent's consent\n", consoleContent(t.PendingOwner, 100))
+	}
 	blocked := []string{}
 	for _, id := range t.Members {
 		if access, ok := t.MemberAccess[id]; ok && !access.Allowed {
@@ -255,6 +314,9 @@ func (m console) teamsPanel(width, height int) string {
 		fmt.Fprintf(&out, "Blocked members (%d): %s\n", len(blocked), consoleClip(consoleContent(strings.Join(blocked, ", "), 500), max(1, width-22), 1))
 	}
 	fmt.Fprintf(&out, "%s\n%s\n%s\nBoard: %s\nMemory: %s\n", consoleClip("Owner: "+consoleContent(m.agentLabel(t.Owner), 160), width, 1), consoleClip(fmt.Sprintf("Members (%d): %s", len(t.Members), consoleContent(m.teamAgentLabels(t.Members), 500)), width, 1), consoleClip(fmt.Sprintf("Awaiting consent: %d · %s", len(t.Invited), consoleContent(m.teamAgentLabels(t.Invited), 500)), width, 1), consoleContent(t.Board, 100), consoleContent(t.Memory, 100))
+	if m.data.capacityErr == nil && m.data.capacity.Agent != "" {
+		fmt.Fprintf(&out, "Lifetime teams remaining: %d · team slots left: %d\n", m.data.capacity.TeamsRemaining, max(0, m.data.capacity.TeamMemberLimit-len(t.Members)-len(t.Invited)))
+	}
 	out.WriteString(consoleMuted.Render("Owner controls membership; invitation acceptance stays with the agent.\nRemoving/dissolving a team does not close native terminals."))
 	return consoleClip(out.String(), width, height)
 }
@@ -391,11 +453,12 @@ func (m console) agentRuntimePanel(width int) string {
 	} else {
 		out.WriteString("Managed runtime status loading or unavailable; execution is unknown.\n")
 	}
+	out.WriteString(m.capacityPanel(width))
 	for _, t := range m.data.activity.Tasks {
 		if t.To == a.ID && (t.State == "running" || t.Delivery == "uncertain" || t.Delivery == "cancel_requested" || t.Delivery == "cancel_uncertain") {
 			fmt.Fprintf(&out, "Current task: %s · %s / %s\n", consoleContent(t.ID, 80), t.State, t.Delivery)
 			break
 		}
 	}
-	return consoleClip(out.String(), width, 12)
+	return consoleClip(out.String(), width, 17)
 }
