@@ -34,7 +34,9 @@ jobs:
         run: node --test cmd/agentmux/workweb/app.test.cjs
 
       - name: Build the CLI for lifecycle tests
-        run: go build -o bin/agentmux ./cmd/agentmux
+        run: |
+          go build -o bin/amx ./cmd/agentmux
+          ln -sfn amx bin/agentmux
 
       - name: Run test suite
         env:
