@@ -5,8 +5,8 @@ conversations when useful, and grow into bounded automation or controlled
 multiagent studies. The terminal is the place to work directly with agents;
 the web app provides a larger view of relationships, shared context and evidence.
 
-The managed runtime and workbench are experimental. This guide follows the
-current source build. [Install Agentmux](getting-started/installation.md)
+The managed runtime and workbench are experimental. This guide follows
+Agentmux v0.10.0. [Install Agentmux](getting-started/installation.md)
 to get both `agentmux` and its shorter name, `amx`. Native providers must be
 installed and authenticated separately. A new installation does not replace
 an existing workspace's pinned controller; use a fresh workspace for all current

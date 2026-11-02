@@ -2,8 +2,9 @@
 
 ## Prerequisites
 
-Agentmux requires **tmux 3.2 or newer**. Building the current source also needs
-Git, Make and **Go 1.24 or newer**. Python 3 runs `make install`, the acceptance
+Agentmux requires **tmux 3.2 or newer**. Published binaries need no Go toolchain.
+Building the current source also needs Git, Make and **Go 1.24 or newer**.
+Python 3 runs `make install`, the acceptance
 scripts and the optional release installer. Native model sessions require their respective
 CLIs to be installed and logged in separately.
 
@@ -19,10 +20,50 @@ sudo apt install git make tmux python3
 
 ## Installing Agentmux
 
-### Build the current source (recommended for the managed preview)
+### Install a published binary (recommended)
 
-To try the current managed runtime, build from the repository. You need Git,
-Make and Go 1.24 or newer, in addition to tmux:
+The current release is **[v0.10.0](https://github.com/pagel-s/agentmux/releases/tag/v0.10.0)**.
+It includes the terminal and web workbench, `amx` shortcuts, native collaboration
+and the workflows in the [visual guide](../visual-guide.md). The managed runtime
+and workbench remain experimental.
+
+On Linux or macOS, with Python 3 and `curl` installed:
+
+```bash
+mkdir -p "$HOME/.local/bin"
+amx_installer="$(mktemp)"
+curl --fail --location --output "$amx_installer" \
+  https://raw.githubusercontent.com/pagel-s/agentmux/v0.10.0/scripts/install-release.py
+python3 "$amx_installer" --version v0.10.0 \
+  --destination "$HOME/.local/bin/agentmux"
+rm "$amx_installer"
+export PATH="$HOME/.local/bin:$PATH"
+amx version
+amx doctor
+```
+
+To upgrade an existing installation, add `--replace` to the `python3` command.
+The installer downloads the selected platform's archive, verifies its published
+SHA256, checks the executable version and creates the sibling `amx → agentmux`
+shortcut. Replacing an executable retains an `agentmux.backup-*` recovery copy.
+An unrelated existing `amx` command blocks installation even with `--replace`.
+The destination parent must exist. Release archives themselves contain the
+canonical `agentmux` executable and bundled documentation, examples and scripts.
+
+The installer supports Linux/macOS x86-64 and ARM64. Strict Bubblewrap isolation
+requires Linux with working user namespaces; macOS supports native tmux sessions
+and explicitly trusted local execution. A checksum checks consistency with the
+release manifest, not an independent signature.
+
+Installing a binary does not restart native sessions or replace a running
+workspace's pinned controller. Start a fresh workspace for the current features,
+or follow the [upgrade/recovery guide](../traces-and-recovery.md) when ready to
+upgrade an existing workspace.
+
+### Build the current source
+
+Use a source build for later changes on `main` or local development. You need
+Git, Make and Go 1.24 or newer, in addition to tmux and Python 3:
 
 ```bash
 git clone https://github.com/pagel-s/agentmux.git
@@ -77,7 +118,7 @@ using the [recovery guide](../traces-and-recovery.md).
 Remote `go install github.com/pagel-s/agentmux/cmd/agentmux@latest` is currently
 unsupported: `go.mod` declares the module path as `agentmux`, so Go rejects the
 GitHub module path. An `@latest` release selection also does not mean the latest
-commit on `main`. Use the source build for the workbench described in these docs.
+commit on `main`. Use the published installer above or build from source.
 
 ### Install a specific published binary
 
@@ -85,23 +126,12 @@ From a repository checkout, use Python 3 to install a specific release with its
 published SHA256 checked:
 
 ```bash
-python3 scripts/install-release.py --version v0.10.0-rc.1 \
+python3 scripts/install-release.py --version v0.10.0 \
   --destination /your/existing/bin/agentmux
 ```
 
-This example installs the tagged v0.10.0-rc.1 preview; it does not include later
-changes on `main`. Use the source build above for the current hardening changes.
-
-The destination parent must exist. The installer creates the sibling
-`amx → agentmux` shortcut; release archives themselves contain the canonical
-`agentmux` executable. Replacing an existing executable requires `--replace`
-and retains an `agentmux.backup-*` recovery copy. An unrelated `amx` shortcut
-blocks installation even with `--replace`. Installing does not restart live
-workspaces; follow the [upgrade/recovery guide](../traces-and-recovery.md)
-when ready to update those separately. The installer supports published Linux/macOS
-amd64/arm64 archives. Strict Bubblewrap isolation requires Linux; macOS retains
-the existing tmux workflow and explicitly trusted local execution. A checksum
-checks consistency with the release manifest, not an independent signature.
+Choose an explicit published tag. Add `--replace` when upgrading; the same backup,
+alias and live-workspace behavior described above applies.
 
 ## Verifying Installation
 
