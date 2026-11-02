@@ -132,6 +132,12 @@ func run(ctx context.Context, req Request, spec Spec) (Result, error) {
 		}
 	}
 	waitErr := cmd.Wait()
+	var cleanupErr error
+	if req.ReapDescendants {
+		if err := reapDescendants(cmd); err != nil {
+			cleanupErr = fmt.Errorf("terminate remaining harness process-group members: %w", err)
+		}
+	}
 	var inputErr error
 	if inputDone != nil {
 		if err := <-inputDone; err != nil {
@@ -140,6 +146,9 @@ func run(ctx context.Context, req Request, spec Spec) (Result, error) {
 	}
 	if shutdownTimer != nil {
 		shutdownTimer.Stop()
+	}
+	if cleanupErr != nil {
+		return state.result, errors.Join(cleanupErr, waitErr, runCtx.Err())
 	}
 	if ctx.Err() != nil {
 		return state.result, ctx.Err()

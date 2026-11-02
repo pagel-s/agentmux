@@ -21,3 +21,16 @@ func configureProcess(cmd *exec.Cmd) {
 		return err
 	}
 }
+
+func supportsDescendantReaping() bool { return true }
+
+func reapDescendants(cmd *exec.Cmd) error {
+	if cmd.Process == nil || cmd.Process.Pid <= 0 {
+		return errors.New("cannot reap an unstarted harness process")
+	}
+	err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+	if errors.Is(err, syscall.ESRCH) {
+		return nil
+	}
+	return err
+}

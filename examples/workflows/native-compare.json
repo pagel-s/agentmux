@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "repository": ".",
+  "execution": "local",
+  "mode": "compare",
+  "goal": "Create tag_normalizer.py exporting normalize_tags(tags). Accept a finite iterable of strings, trim whitespace, lowercase, remove empty strings and duplicates, and return a fresh sorted list. Do not mutate the input. Raise TypeError if any element is not a string. Implement the function using your native file tools and report the changes and unresolved questions. Do not modify unrelated files or the acceptance checks.",
+  "timeout_seconds": 600,
+  "max_attempts": 1,
+  "max_parallel": 2,
+  "candidates": [
+    {
+      "id": "antigravity",
+      "harness": "antigravity",
+      "timeout_seconds": 240,
+      "model": "gemini-3.8-flash-low",
+      "command": [
+        "agy",
+        "--mode",
+        "accept-edits",
+        "--print-timeout",
+        "90s"
+      ],
+      "prompt": "This session approves native read_file/write_file tools. Do not use terminal commands or RunCommand, including ls or pwd. Use native file tools directly in the current working directory for the current task; no directory listing is needed."
+    },
+    {
+      "id": "codex",
+      "harness": "codex",
+      "timeout_seconds": 240,
+      "model": "gpt-6.1-sol"
+    }
+  ],
+  "checks": [
+    {
+      "name": "external-normalization-contract",
+      "command": [
+        "python3",
+        "-B",
+        "-c",
+        "import importlib.util; spec = importlib.util.spec_from_file_location('candidate', 'tag_normalizer.py'); module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module); f = module.normalize_tags; original = [' B ', 'a', 'A', '', ' b ']; assert f(original) == ['a', 'b']; assert original == [' B ', 'a', 'A', '', ' b ']; assert f(x for x in ['Z', ' z ', 'A']) == ['a', 'z']; a = f(['x']); b = f(['x']); assert a == b and a is not b;\nfor bad in [[None], [1], ['a', object()]]:\n try:\n  f(bad)\n except TypeError:\n  pass\n else:\n  raise AssertionError('Expected TypeError for non-string item')\nprint('External normalization assertions passed')"
+      ],
+      "timeout_seconds": 10
+    }
+  ]
+}

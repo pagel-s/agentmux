@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "repository": ".",
+  "goal": "Implement a checked answer, inspect it, and retain the final patch for human review.",
+  "execution": "local",
+  "mode": "mission",
+  "timeout_seconds": 60,
+  "max_attempts": 2,
+  "candidates": [
+    {
+      "id": "writer",
+      "harness": "command",
+      "command": [
+        "python3",
+        "-c",
+        "from pathlib import Path; Path('answer.txt').write_bytes(bytes([52, 50, 10])); print('Implementation ready')"
+      ]
+    },
+    {
+      "id": "reviewer",
+      "harness": "command",
+      "command": [
+        "python3",
+        "-c",
+        "from pathlib import Path; value = Path('answer.txt').read_bytes(); print('Reviewed answer:', repr(value)); assert value == bytes([52, 50, 10])"
+      ]
+    }
+  ],
+  "checks": [
+    {
+      "name": "exact-answer",
+      "command": [
+        "python3",
+        "-c",
+        "from pathlib import Path; assert Path('answer.txt').read_bytes() == bytes([52, 50, 10]); print('Exact answer passed')"
+      ],
+      "timeout_seconds": 5
+    }
+  ],
+  "steps": [
+    {
+      "id": "implement",
+      "candidate": "writer",
+      "verify": true
+    },
+    {
+      "id": "review",
+      "candidate": "reviewer",
+      "depends_on": [
+        "implement"
+      ],
+      "goal": "Inspect the exact answer; report findings."
+    },
+    {
+      "id": "verify",
+      "verify": true,
+      "depends_on": [
+        "review"
+      ]
+    }
+  ]
+}

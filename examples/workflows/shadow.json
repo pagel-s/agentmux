@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "repository": ".",
+  "goal": "Inspect each stable changed snapshot and report whether README is empty. Leave the source unchanged.",
+  "execution": "local",
+  "mode": "compare",
+  "timeout_seconds": 30,
+  "max_attempts": 1,
+  "candidates": [
+    {
+      "id": "reviewer",
+      "harness": "command",
+      "command": ["python3", "-c", "from pathlib import Path; p = Path('README'); print('README bytes:', p.stat().st_size if p.exists() else 'absent'); print('Inspection complete')"]
+    }
+  ],
+  "checks": [
+    {
+      "name": "review-did-not-edit",
+      "command": ["python3", "-c", "import subprocess; assert not subprocess.check_output(['git', 'status', '--porcelain']).strip(); print('Review left the snapshot clean')"],
+      "timeout_seconds": 5
+    }
+  ]
+}

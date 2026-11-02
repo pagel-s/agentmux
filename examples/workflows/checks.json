@@ -1,0 +1,11 @@
+[
+  {
+    "name": "exact-answer",
+    "command": [
+      "python3",
+      "-c",
+      "from pathlib import Path; assert Path('answer.txt').read_bytes() == bytes([52, 50, 10]); print('Exact answer passed')"
+    ],
+    "timeout_seconds": 5
+  }
+]

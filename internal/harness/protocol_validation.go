@@ -151,6 +151,17 @@ func (s *streamState) validateEvent(e object) error {
 		}
 		if kind == "result" {
 			result := objectField(e, "result")
+			if raw, present := result["denied_actions"]; present {
+				var actions []object
+				if !isArray(raw) || json.Unmarshal(raw, &actions) != nil {
+					return s.protocolError("denied_actions must be an array of action objects")
+				}
+				for _, action := range actions {
+					if name, ok := requiredString(action, "action"); !ok || name == "" {
+						return s.protocolError("denied action must identify its action")
+					}
+				}
+			}
 			if result == nil || stringField(result, "status") == "" {
 				return s.protocolError("result must contain its status")
 			}

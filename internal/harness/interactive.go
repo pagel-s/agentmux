@@ -13,6 +13,9 @@ import (
 // BuildInteractive preserves a native terminal interface and native approval
 // prompts. It never converts messages or broker tasks into terminal keystrokes.
 func BuildInteractive(req Request) (Spec, error) {
+	if req.ReapDescendants {
+		return Spec{}, errors.New("bounded turn descendant cleanup is supported only by headless Run")
+	}
 	if req.Conversation != nil {
 		return Spec{}, errors.New("interactive sessions use native history, not managed conversation leases")
 	}

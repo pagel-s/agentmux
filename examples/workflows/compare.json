@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "repository": ".",
+  "goal": "Create answer.txt containing exactly 42 followed by a newline. Compare two independent implementations under the same check.",
+  "execution": "local",
+  "mode": "compare",
+  "timeout_seconds": 60,
+  "max_attempts": 1,
+  "candidates": [
+    {
+      "id": "literal",
+      "harness": "command",
+      "command": [
+        "python3",
+        "-c",
+        "from pathlib import Path; Path('answer.txt').write_bytes(bytes([52, 50, 10])); print('Implementation ready')"
+      ]
+    },
+    {
+      "id": "calculated",
+      "harness": "command",
+      "command": [
+        "python3",
+        "-c",
+        "from pathlib import Path; Path('answer.txt').write_text(str(6 * 7) + chr(10)); print('Calculated the answer')"
+      ]
+    }
+  ],
+  "checks": [
+    {
+      "name": "exact-answer",
+      "command": [
+        "python3",
+        "-c",
+        "from pathlib import Path; assert Path('answer.txt').read_bytes() == bytes([52, 50, 10]); print('Exact answer passed')"
+      ],
+      "timeout_seconds": 5
+    }
+  ]
+}

@@ -29,6 +29,9 @@ func (s *streamState) consume(raw []byte) error {
 		return fmt.Errorf("invalid %s JSON event", s.name)
 	}
 	s.result.Events = append(s.result.Events, append(json.RawMessage(nil), raw...))
+	if err := validateEventJSON(raw); err != nil {
+		return s.protocolError(err.Error())
+	}
 	// Subagent output is evidence, not the main Claude turn's answer or ID.
 	if s.name == "claude" && (stringField(event, "type") == "assistant" || stringField(event, "type") == "result") && (stringField(event, "parent_tool_use_id") != "" || stringField(event, "agent_id") != "") {
 		return nil
@@ -144,6 +147,10 @@ func (s *streamState) antigravity(e object) {
 		s.result.Text = stringField(result, "response")
 		s.answerSeen = true
 		s.result.Usage = cloneJSON(result["usage"])
+		var denied []json.RawMessage
+		if json.Unmarshal(result["denied_actions"], &denied) == nil && len(denied) > 0 {
+			s.denied = true
+		}
 		if stringField(result, "status") != "SUCCESS" {
 			s.err = terminalError(s.name, stringField(result, "status"), errorText(result["error"]))
 		}

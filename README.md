@@ -8,6 +8,19 @@ queued tasks and bounded autonomous workflows, or a mixture of both. Terminal
 and local web dashboards expose activity and the same live permission controls.
 The managed runtime and workbench are experimental.
 
+For an everyday coding-and-review journey, try
+`amx work "Fix the login redirect" -- go test ./...`. It previews Codex
+implementation, Antigravity review and checked results without starting models.
+Add `--allow-models` to run, then inspect with `amx work status` and explicitly
+apply with `amx work apply latest`. See [working on a task](docs/working.md).
+
+For revision-bound comparisons, checks, handoffs, snapshot review, missions and
+repeated team trials, see [the workflow guide](docs/workflows.md). Start with the
+command-only examples: `amx flow --help`.
+
+The new `work` and `flow` commands require the current source build until the
+next release. Run `make install` from this checkout to update your local `amx`.
+
 ## Install
 
 Download **[v0.11.0](https://github.com/pagel-s/agentmux/releases/tag/v0.11.0)**

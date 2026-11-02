@@ -45,6 +45,18 @@ jobs:
           AGENTMUX_TMUX_DEBUG: '1'
         run: go test -race -count=1 ./...
 
+      - name: Verify workflow CLI journeys without provider calls
+        run: python3 scripts/validate-workflows.py --binary bin/amx --output "$RUNNER_TEMP/agentmux-workflow-validation"
+
+      - name: Verify guided work journey with protocol fixtures
+        run: python3 scripts/validate-workflows.py --binary bin/amx --output "$RUNNER_TEMP/agentmux-guided-validation" --guided
+
+      - name: Verify workflow acceptance evidence cannot report false success
+        run: python3 scripts/test-validate-workflows.py
+
+      - name: Fuzz the workflow configuration boundary
+        run: go test ./internal/workflow -run '^$' -fuzz '^FuzzWorkflowPlanRoundTrip$' -fuzztime=20s -parallel=2
+
       - name: Preserve failed tmux client-view diagnostics
         if: failure()
         uses: actions/upload-artifact@v7
@@ -120,6 +132,9 @@ jobs:
         env:
           AGENTMUX_TMUX_DEBUG: '1'
         run: make test-sandbox
+
+      - name: Verify guided workflow with required PID containment
+        run: python3 scripts/validate-workflows.py --binary bin/amx --output "$RUNNER_TEMP/agentmux-guided-pid-validation" --guided --containment pid-namespace
 
       - name: Preserve failed sandbox tmux client-view diagnostics
         if: failure()

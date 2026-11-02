@@ -38,7 +38,7 @@ test-managed: build
 
 # Requires Linux with working Bubblewrap namespaces; no isolation fallback.
 test-sandbox: build
-	GOCACHE=$(GOCACHE) AGENTMUX_MANAGED_INTEGRATION=1 AGENTMUX_SANDBOX_INTEGRATION=1 AGENTMUX_INTEGRATION_BINARY="$(CURDIR)/$(BINARY)" $(GO) test -race -count=1 ./internal/managed ./internal/managedlaunch ./internal/capsule ./internal/egress ./internal/sandbox
+	GOCACHE=$(GOCACHE) AGENTMUX_MANAGED_INTEGRATION=1 AGENTMUX_SANDBOX_INTEGRATION=1 AGENTMUX_INTEGRATION_BINARY="$(CURDIR)/$(BINARY)" $(GO) test -race -count=1 ./internal/managed ./internal/managedlaunch ./internal/capsule ./internal/egress ./internal/sandbox ./internal/workflow
 	python3 scripts/smoke-managed.py
 	python3 scripts/smoke-managed-team.py
 	python3 scripts/smoke-managed-interactive.py

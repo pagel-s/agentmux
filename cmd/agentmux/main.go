@@ -132,6 +132,10 @@ func run(args []string) int {
 		return runInternalCapsule(args[1:])
 	case "experiment":
 		return runExperiment(args[1:])
+	case "flow":
+		return runWorkflow(args[1:])
+	case "work":
+		return runGuidedWork(args[1:])
 	case "research":
 		return runResearch(args[1:])
 	case "provider":
@@ -2218,6 +2222,9 @@ Usage:
   amx mcp-server
   amx managed <setup|up|down|restart|doctor|status|activity|init|serve|call|worker|remote|memory|trace|capsule|rotate> [options]
   amx experiment <plan|run> <manifest> [options]
+  amx flow <run|mission|watch|lab|check|status|explain|handoff|report|apply> [options]
+  amx work "Describe the change" [--allow-models] [--repo DIR] -- CHECK [ARG...]
+  amx work <status|list|show|apply> [RUN_DIR|latest] [--repo DIR]
   amx research <plan|run|analyze|status|watch|pause|resume|step|stop> <manifest-output-or-state> [options]
   amx load <config> [--param key=value] [--attach|--no-attach] [--dry-run] [--replace] [--strict] [--verbose]
   amx reload <config> [--param key=value] [--attach|--no-attach] [--dry-run] [--strict] [--verbose]

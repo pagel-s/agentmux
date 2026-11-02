@@ -67,6 +67,12 @@ type Request struct {
 	// on the caller's outer isolation boundary. It requires Wrap and is never
 	// automatically selected after a native sandbox failure.
 	ExternalSandbox bool
+	// ReapDescendants makes a headless turn terminate remaining members of its
+	// Unix process group after the direct child exits. It is opt-in so ordinary
+	// native/interactive lifecycles retain their existing behavior. It cannot
+	// contain descendants that deliberately create another session or group.
+	// Unsupported platforms reject the request before execution.
+	ReapDescendants bool
 	// InheritEnvironment is only honored by native interactive sessions explicitly
 	// running with trusted host authority. Managed turns keep filtered environments.
 	InheritEnvironment bool
@@ -104,6 +110,9 @@ var (
 // Build validates a request and constructs argv. It does not create files or
 // launch a process. Pi endpoint configuration is prepared privately by Run.
 func Build(req Request) (Spec, error) {
+	if req.ReapDescendants && !supportsDescendantReaping() {
+		return Spec{}, errors.New("bounded turn descendant cleanup requires Unix process groups on this platform")
+	}
 	if err := req.ModelMetadata.Validate(); err != nil {
 		return Spec{}, err
 	}
