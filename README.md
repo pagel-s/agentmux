@@ -14,7 +14,8 @@ Download **[v0.10.0](https://github.com/pagel-s/agentmux/releases/tag/v0.10.0)**
 for Linux or macOS, on x86-64 or ARM64. The
 [installation guide](docs/getting-started/installation.md#install-a-published-binary-recommended)
 provides a checksum-verified installer for both `agentmux` and `amx`; no Go
-toolchain is needed for the published binaries.
+toolchain is needed for the published binaries. This private repository requires
+authenticated GitHub access; the guide uses `gh` to download the release assets.
 
 ### Build from source
 

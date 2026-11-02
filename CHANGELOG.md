@@ -52,7 +52,8 @@ availability guarantee.
   [dated provider acceptance](docs/provider-acceptance.md) for measured evidence
   and limits.
 - A complete fresh-install acceptance walkthrough, synchronized command help,
-  current sample launches, and strict documentation builds in CI.
+  current sample launches, authenticated private-release installation, and strict
+  documentation builds in CI.
 
 For installation and a complete first-run test, use the
 [fresh-install walkthrough](docs/getting-started/quickstart.md).

@@ -27,24 +27,31 @@ It includes the terminal and web workbench, `amx` shortcuts, native collaboratio
 and the workflows in the [visual guide](../visual-guide.md). The managed runtime
 and workbench remain experimental.
 
-On Linux or macOS, with Python 3 and `curl` installed:
+This repository is private. Use the GitHub CLI (`gh`) authenticated with an
+account that has repository access; anonymous download links return 404.
+On Linux or macOS, with Python 3 and `gh` installed, run `gh auth login` if
+needed, then:
 
 ```bash
 mkdir -p "$HOME/.local/bin"
-amx_installer="$(mktemp)"
-curl --fail --location --output "$amx_installer" \
-  https://raw.githubusercontent.com/pagel-s/agentmux/v0.10.0/scripts/install-release.py
-python3 "$amx_installer" --version v0.10.0 \
-  --destination "$HOME/.local/bin/agentmux"
-rm "$amx_installer"
+amx_release_dir="$(mktemp -d)"
+gh release download v0.10.0 --repo pagel-s/agentmux \
+  --dir "$amx_release_dir" --pattern 'agentmux_*.tar.gz' --pattern checksums.txt
+gh api repos/pagel-s/agentmux/contents/scripts/install-release.py \
+  --method GET -f ref=v0.10.0 --header 'Accept: application/vnd.github.raw+json' \
+  > "$amx_release_dir/install-release.py"
+python3 "$amx_release_dir/install-release.py" --version v0.10.0 \
+  --artifact-dir "$amx_release_dir" --destination "$HOME/.local/bin/agentmux"
+rm -r "$amx_release_dir"
 export PATH="$HOME/.local/bin:$PATH"
 amx version
 amx doctor
 ```
 
 To upgrade an existing installation, add `--replace` to the `python3` command.
-The installer downloads the selected platform's archive, verifies its published
-SHA256, checks the executable version and creates the sibling `amx → agentmux`
+GitHub CLI downloads the four platform archives and checksum manifest with your
+normal repository access. The installer selects the current platform's archive,
+verifies its published SHA256, checks the executable version and creates the sibling `amx → agentmux`
 shortcut. Replacing an executable retains an `agentmux.backup-*` recovery copy.
 An unrelated existing `amx` command blocks installation even with `--replace`.
 The destination parent must exist. Release archives themselves contain the
@@ -122,16 +129,23 @@ commit on `main`. Use the published installer above or build from source.
 
 ### Install a specific published binary
 
-From a repository checkout, use Python 3 to install a specific release with its
-published SHA256 checked:
+From a repository checkout, download the assets with your authenticated GitHub
+CLI, then use Python 3 to install the selected platform with its published SHA256
+checked:
 
 ```bash
+amx_release_dir="$(mktemp -d)"
+gh release download v0.10.0 --repo pagel-s/agentmux \
+  --dir "$amx_release_dir" --pattern 'agentmux_*.tar.gz' --pattern checksums.txt
 python3 scripts/install-release.py --version v0.10.0 \
-  --destination /your/existing/bin/agentmux
+  --artifact-dir "$amx_release_dir" --destination /your/existing/bin/agentmux
+rm -r "$amx_release_dir"
 ```
 
 Choose an explicit published tag. Add `--replace` when upgrading; the same backup,
-alias and live-workspace behavior described above applies.
+alias and live-workspace behavior described above applies. The installer's direct
+HTTPS download mode is only suitable for public release assets; it does not
+read your GitHub credentials. Use `--artifact-dir` for this private repository.
 
 ## Verifying Installation
 
