@@ -154,7 +154,7 @@ func (l *Launcher) configureWorkbenchHooks(ctx context.Context, runtime Runtime)
 	}
 	// tmux has no after-break-pane hook. Anchor the resulting window as part
 	// of the normal breakout binding, after break-pane selects its new window.
-	if _, err := l.tmux(ctx, "bind-key", "!", "break-pane; "+ShellCommand([]string{"run-shell", "-C", persist})); err != nil {
+	if _, err := l.tmux(ctx, "bind-key", "!", "break-pane; "+hook); err != nil {
 		return err
 	}
 	menu := []string{"display-menu", "-T", "Runtime services (read-only)"}

@@ -129,7 +129,7 @@ def main():
         until(lambda: first.poll() is not None, 'normal detach cleans private view')
         assert scratch in tmux('list-windows', '-t', runtime['session'], '-F', '#{window_id}').splitlines()
         assert helper_window in tmux('list-windows', '-t', runtime['session'], '-F', '#{window_id}').splitlines()
-        resumed, resumed_view, _ = attach(selector=False)
+        resumed, resumed_view, resumed_master = attach(selector=False)
         assert tmux('display-message', '-p', '-t', resumed_view, '#{pane_id}') == panes['alice']
         assert scratch in tmux('list-windows', '-t', resumed_view, '-F', '#{window_id}').splitlines()
         dashboard = tmux('show-options', '-v', '-t', resumed_view, '@agentmux_dashboard')
@@ -138,6 +138,18 @@ def main():
         rejected_env.update(TMUX=context, TMUX_PANE=dashboard)
         rejected = subprocess.run([binary, 'split', 'bob', '--state', str(state)], env=rejected_env, text=True, capture_output=True, timeout=10)
         assert rejected.returncode != 0 and 'dashboard' in rejected.stderr, rejected.stderr
+        # A dashboard may be rearranged locally but must never become a shared
+        # native/scratch window or leak into the lifecycle-owning core session.
+        dashboard_window = tmux('display-message', '-p', '-t', dashboard, '#{window_id}')
+        tmux('split-window', '-d', '-h', '-t', dashboard, 'exec sleep 120')
+        tmux('select-window', '-t', resumed_view + ':' + tmux('display-message', '-p', '-t', dashboard, '#{window_index}'))
+        tmux('select-pane', '-t', dashboard)
+        os.write(resumed_master, b'\x02!')
+        private_window = until(lambda: (w if (w := tmux('display-message', '-p', '-t', dashboard, '#{window_id}')) != dashboard_window else ''), 'dashboard pane breaks out locally')
+        # The binding runs the guard in tmux's command queue after break-pane.
+        time.sleep(.15)
+        assert private_window not in tmux('list-windows', '-t', runtime['session'], '-F', '#{window_id}').splitlines()
+        assert tmux('display-message', '-p', '-t', dashboard, '#{@agentmux_scratch}') == ''
         for actor, pane in panes.items():
             assert tmux('display-message', '-p', '-t', pane, '#{pane_pid}') == pids[actor]
             assert 'INPUT:' not in tmux('capture-pane', '-p', '-t', pane)
@@ -147,6 +159,7 @@ def main():
             'scratch-breakout-survives-detach',
             'scratch-window-survives-detach', 'scratch-window-visible-on-reattach',
             'last-native-session-restored', 'dashboard-split-rejected',
+            'dashboard-breakout-stays-private',
             'unchanged-native-pids', 'no-native-input-injection']}))
         succeeded = True
     finally:

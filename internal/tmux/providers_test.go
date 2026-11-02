@@ -171,8 +171,8 @@ func TestClaudePersonaAppendPreservesArgumentsAndNativeInstructions(t *testing.T
 		t.Fatal(err)
 	}
 	for name, script := range map[string]string{
-		"claude":   "#!/bin/sh\nprintf '%s\\000' \"$@\"\n",
-		"amx": "#!/bin/sh\nprintf '%s' 'Agentmux coordination instructions.'\n",
+		"claude": "#!/bin/sh\nprintf '%s\\000' \"$@\"\n",
+		"amx":    "#!/bin/sh\nprintf '%s' 'Agentmux coordination instructions.'\n",
 	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(script), 0o700); err != nil {
 			t.Fatal(err)

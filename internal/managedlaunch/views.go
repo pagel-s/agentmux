@@ -30,7 +30,7 @@ func (l *Launcher) workerWindows(ctx context.Context, runtime Runtime) ([]worker
 		}
 		tracked, ok := runtime.Agents[fields[4]]
 		worker := ok && tracked.PaneID == fields[0] && fields[2] == runtime.AttemptID && fields[3] == "worker"
-		scratch := len(fields) == 6 && fields[5] == runtime.AttemptID
+		scratch := len(fields) == 6 && fields[5] == runtime.AttemptID && fields[3] == "" && fields[4] == "" && (fields[2] == "" || fields[2] == runtime.AttemptID)
 		if !worker && !scratch {
 			continue
 		}
