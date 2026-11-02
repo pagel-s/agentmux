@@ -6,9 +6,15 @@ collaboration while keeping both terminals usable. It uses a separate workspace
 named `try-agentmux`. Every owner command below selects that same workspace,
 regardless of the current directory.
 
-## 1. Build and check the installation
+## 1. Install and check Agentmux
 
-Install Git, Make, tmux 3.2+ and Go 1.24+. On a new checkout:
+Install **v0.10.0** using the
+[published binary instructions](installation.md#install-a-published-binary-recommended)
+for `agentmux` and `amx` without a Go toolchain. Then skip the source-build commands
+below and continue with the native CLI checks in this step.
+
+Alternatively, build from source with Git, Make, Python 3, tmux 3.2+ and Go 1.24+.
+On a new checkout:
 
 ```sh
 git clone https://github.com/pagel-s/agentmux.git

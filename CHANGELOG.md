@@ -1,8 +1,16 @@
 # Changelog
 
-## Unreleased
+## v0.10.0 - 2026-11-02
 
-Changes on `main` after the tagged `v0.10.0-rc.1` preview:
+Terminal-first workspaces, native collaboration and an observable control center.
+This release includes the managed runtime introduced in `v0.10.0-rc.1` and all
+subsequent workbench and hardening changes. The managed runtime and workbench
+remain experimental; this version does not imply a production security or
+availability guarantee.
+
+- Managed roles and provider adapters for Claude, Codex, Pi and Antigravity,
+  scoped boards and memory, hierarchy, bounded spawning, opt-in Linux Bubblewrap
+  isolation, explicit SSH workers and controlled research workflows.
 
 - Illustrated workflow guide with terminal and web screenshots, everyday session
   navigation, a worked poem collaboration, dynamic teams, research and scaling.
@@ -42,7 +50,7 @@ Changes on `main` after the tagged `v0.10.0-rc.1` preview:
 - Worker/native-completion, recovery, scale and asynchronous-editor fixes from
   bounded UAT. See the [closure record](docs/uat-gap-closure.md) and
   [dated provider acceptance](docs/provider-acceptance.md) for measured evidence
-  and limits. Published preview binaries do not include these later main changes.
+  and limits.
 - A complete fresh-install acceptance walkthrough, synchronized command help,
   current sample launches, and strict documentation builds in CI.
 

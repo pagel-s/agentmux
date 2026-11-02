@@ -8,9 +8,17 @@ queued tasks and bounded autonomous workflows, or a mixture of both. Terminal
 and local web dashboards expose activity and the same live permission controls.
 The managed runtime and workbench are experimental.
 
-## Build
+## Install
 
-Requirements: Go 1.24+, Make and tmux 3.2+. Isolated agents and an isolated broker
+Download **[v0.10.0](https://github.com/pagel-s/agentmux/releases/tag/v0.10.0)**
+for Linux or macOS, on x86-64 or ARM64. The
+[installation guide](docs/getting-started/installation.md#install-a-published-binary-recommended)
+provides a checksum-verified installer for both `agentmux` and `amx`; no Go
+toolchain is needed for the published binaries.
+
+### Build from source
+
+Requirements: Go 1.24+, Make, Python 3 and tmux 3.2+. Isolated agents and an isolated broker
 require Linux with working Bubblewrap namespaces. Everyday native sessions use trusted local execution to preserve your normal
 configuration; it provides no filesystem isolation. Isolated profiles are opt-in.
 

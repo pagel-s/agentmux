@@ -93,8 +93,11 @@ try:
  tmux('select-window','-t',dashboard)
  until(lambda:'Session session_09 selected' in screen(),'neutral workbench return message')
  assert 'Native terminal selected.' not in screen()
- key('3');key('C-p');text('Problem 02')
- until(lambda:'session_02' in screen() and 'Switch session' in screen(),'second filtered selection')
+ key('3');until(lambda:'SENDER' in screen(),'connections ready after native focus')
+ key('C-p');text('Problem 02')
+ # An unfiltered picker can already contain session_02. Wait for the exact
+ # visible query and single result before treating the search as complete.
+ until(lambda:'Search: Problem 02' in (s:=screen()) and 'Switch session 1/1' in s and 'session_02' in s,'second filtered selection')
  key('Tab')
  until(lambda:'SENDER' in screen() and 'Problem 02 [session_02]' in screen(),'Tab selects sender in current view')
  assert tmux('display-message','-p','-t',runtime['session'],'#{pane_id}')==dashboard
@@ -104,7 +107,7 @@ try:
  assert 'RECIPIENT' in narrow and '↑/↓' in narrow,narrow
  key('Right');until(lambda:'4 Memory' in screen() and 'Shared boundaries' in screen(),'global right view navigation')
  key('Left');until(lambda:'SENDER' in screen(),'global left view navigation')
- key('C-p');text('Problem 07');until(lambda:'session_07' in screen(),'cancelable session search');key('Escape')
+ key('C-p');text('Problem 07');until(lambda:'Search: Problem 07' in (s:=screen()) and 'Switch session 1/1' in s and 'session_07' in s,'cancelable session search');key('Escape')
  until(lambda:'Problem 02 [session_02]' in screen() and 'SENDER' in screen(),'Esc preserves sender')
  tmux('resize-window','-t',dashboard,'-x','50','-y','20')
  until(lambda:'Session 3/10' in screen(),'tiny selected-session control')
