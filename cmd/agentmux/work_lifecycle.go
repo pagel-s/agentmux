@@ -18,7 +18,7 @@ import (
 
 func runWorkRelaunch(args []string, out, diagnostics io.Writer) int {
 	if workHelpRequested(args) {
-		fmt.Fprintln(out, "Usage: agentmux relaunch ID [--resume ID|last|picker] [--native-launcher ABSOLUTE_PATH] [--session NAME | --state DIR]\nRelaunch one exited native session with its stable ID, preserving healthy peers.\nDefault: fresh native conversation. --resume explicitly selects native history; no conversation is guessed.\n--native-launcher explicitly recovers a trusted-local interactive session using the selected public executable for this attempt only. Configured trailing arguments and saved definitions are preserved; the running controller must support this option.")
+		fmt.Fprintln(out, "Usage: amx relaunch ID [--resume ID|last|picker] [--native-launcher ABSOLUTE_PATH] [--session NAME | --state DIR]\nRelaunch one exited native session with its stable ID, preserving healthy peers.\nDefault: fresh native conversation. --resume explicitly selects native history; no conversation is guessed.\n--native-launcher explicitly recovers a trusted-local interactive session using the selected public executable for this attempt only. Configured trailing arguments and saved definitions are preserved; the running controller must support this option.")
 		return exitSuccess
 	}
 	if err := validateWorkFlags("relaunch", args); err != nil {
@@ -54,7 +54,7 @@ func runWorkRelaunch(args []string, out, diagnostics io.Writer) int {
 	if o.nativeLauncher != "" {
 		fmt.Fprintln(out, "This attempt uses launcher", consoleContent(o.nativeLauncher, 400)+"; the saved definition is unchanged.")
 	}
-	fmt.Fprintln(out, "Open:", managedlaunch.ShellCommand([]string{"agentmux", "attach", o.args[0], "--state", o.state}))
+	fmt.Fprintln(out, "Open:", managedlaunch.ShellCommand([]string{"amx", "attach", o.args[0], "--state", o.state}))
 	return exitSuccess
 }
 
@@ -212,10 +212,10 @@ func runWorkspaceInventory(args []string, out, diagnostics io.Writer) int {
 		return exitSuccess
 	}
 	if len(rows) == 0 {
-		fmt.Fprintln(out, "No saved workspaces found. Start with agentmux start; register older custom paths with workspaces --register DIR.")
+		fmt.Fprintln(out, "No saved workspaces found. Start with amx start; register older custom paths with workspaces --register DIR.")
 	}
 	for _, row := range rows {
-		fmt.Fprintf(out, "%s · %s · %d registered pane(s)\n  %s\n  %s\n", consoleContent(row.Session, 100), row.Status, row.Agents, consoleContent(row.State, 300), managedlaunch.ShellCommand([]string{"agentmux", "dashboard", "--state", row.State}))
+		fmt.Fprintf(out, "%s · %s · %d registered pane(s)\n  %s\n  %s\n", consoleContent(row.Session, 100), row.Status, row.Agents, consoleContent(row.State, 300), managedlaunch.ShellCommand([]string{"amx", "dashboard", "--state", row.State}))
 		if row.Problem != "" {
 			fmt.Fprintln(out, "  "+consoleContent(row.Problem, 300))
 		}

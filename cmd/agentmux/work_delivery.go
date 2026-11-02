@@ -14,7 +14,7 @@ import (
 
 func runWorkDelivery(args []string, out, diagnostics io.Writer) int {
 	if workHelpRequested(args) {
-		fmt.Fprintln(out, `Usage: agentmux delivery ID [manual|review|auto] [--session NAME | --state DIR]
+		fmt.Fprintln(out, `Usage: amx delivery ID [manual|review|auto] [--session NAME | --state DIR]
        [--approve CANDIDATE] [--max-turns N] [--max-hops N] [--cooldown N]
        [--notes=true|false] [--pings=true|false] [--boards=true|false]
        [--memory-updates=true|false] [--results=true|false] [--json]

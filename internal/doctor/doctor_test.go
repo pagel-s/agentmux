@@ -30,7 +30,7 @@ func TestCollectEnvironmentAndDiagnostics(t *testing.T) {
 				return "/usr/bin/go", nil
 			case "tmux":
 				return "/usr/bin/tmux", nil
-			case "agentmux":
+			case "amx":
 				return "", errors.New("missing")
 			default:
 				return "", errors.New("missing")
@@ -74,7 +74,7 @@ func TestCollectEnvironmentAndDiagnostics(t *testing.T) {
 	if report.Diagnostics[1].Status != StatusWarning || !strings.Contains(report.Diagnostics[1].Message, "Go version") {
 		t.Fatalf("Diagnostics[1] = %#v, want go warning", report.Diagnostics[1])
 	}
-	if report.Diagnostics[2].Status != StatusWarning || !strings.Contains(report.Diagnostics[2].Message, "agentmux is not in your PATH") {
+	if report.Diagnostics[2].Status != StatusWarning || !strings.Contains(report.Diagnostics[2].Message, "amx is not in your PATH") {
 		t.Fatalf("Diagnostics[2] = %#v, want PATH warning", report.Diagnostics[2])
 	}
 }
@@ -113,7 +113,7 @@ func TestCollectConfigReportAndProviderDiagnostics(t *testing.T) {
 				return "/usr/bin/go", nil
 			case "tmux":
 				return "/usr/bin/tmux", nil
-			case "agentmux":
+			case "amx":
 				return "/usr/local/bin/agentmux", nil
 			case "codex":
 				return "/usr/local/bin/codex", nil

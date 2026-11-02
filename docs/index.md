@@ -6,7 +6,7 @@ bounded autonomous workflows, or the research runners for controlled experiments
 
 ## Start here
 
-1. [Install the v0.10.0 release or build from source](getting-started/installation.md).
+1. [Install the v0.11.0 release or build from source](getting-started/installation.md).
 2. [Explore the illustrated workflow guide](visual-guide.md): navigate the
    terminal and web app, connect everyday sessions, and follow teams, automation
    and research with screenshots and examples.

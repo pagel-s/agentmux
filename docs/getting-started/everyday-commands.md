@@ -1,10 +1,10 @@
 # Everyday commands
 
-Install with `make install` to get both `agentmux` and `amx`. `amx` alone opens
-the current terminal dashboard, the sole running workspace, or a workspace
-chooser when several are running; it starts no agents. `agentmux` alone shows help.
-Every example below also
-works with the longer executable name.
+`amx` is the Agentmux command. `amx` alone opens the current terminal dashboard,
+the sole running workspace, or a workspace chooser when several are running; it
+starts no agents. `amx a` restores the last live native terminal in the selected
+workspace. If no terminal has been selected or it has closed, the workbench opens.
+With several running workspaces, choose one or pass `-s NAME`.
 
 ## Open and manage sessions
 
@@ -23,15 +23,21 @@ explicitly with `-s NAME` when switching between several workspaces; `amx ws`
 lists saved workspaces. Attaching opens the normal native terminal so you can
 keep typing, approve tools, and interrupt work yourself.
 Within an owned tmux attachment, an omitted workspace selector uses that exact
-attachment after checking its attempt identity. Outside, commands default to
+attachment after checking its attempt identity. Outside, commands with an explicit agent ID default to
 `work`; there is no global last-used workspace setting. `up` / `start` always
 defaults to `work` when no selector is given, even inside another workspace.
 `amx -s NAME ui` also works.
 
-In the workbench, ↑/↓ chooses a session. Ctrl+P finds sessions by task, stable
+In the workbench, Tab switches between the session sidebar and the current
+view’s content. The purple header shows focus; ↑/↓ navigates that area.
+Left/Right or 1–8 changes views. Esc returns focus to the sidebar after closing
+an open reader or editor. Ctrl+P finds sessions by task, stable
 ID, provider or project: Enter opens the native terminal, Tab selects it in the
-workbench, and Esc returns. In Links, ↑/↓ chooses the sender and h/l chooses
-the recipient. Left/Right switches views; F1 returns from a native terminal.
+workbench, and Esc returns. In Links, use the sidebar to choose the sender, then Tab to choose a recipient
+with ↑/↓; h/l also changes the recipient. F1 returns from a native terminal.
+
+See [terminal folders and layouts](../terminal-workflow.md) for scratch panes,
+multiple agents in one window and reattachment.
 
 ## Connect two agents
 

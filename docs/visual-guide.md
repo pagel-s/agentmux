@@ -6,8 +6,8 @@ multiagent studies. The terminal is the place to work directly with agents;
 the web app provides a larger view of relationships, shared context and evidence.
 
 The managed runtime and workbench are experimental. This guide follows
-Agentmux v0.10.0. [Install Agentmux](getting-started/installation.md)
-to get both `agentmux` and its shorter name, `amx`. Native providers must be
+Agentmux v0.11.0. [Install Agentmux](getting-started/installation.md)
+to get the `amx` command. Native providers must be
 installed and authenticated separately. A new installation does not replace
 an existing workspace's pinned controller; use a fresh workspace for all current
 features, or [upgrade deliberately](traces-and-recovery.md).
@@ -34,18 +34,20 @@ image to see it at full size.
 
 [![Terminal workbench with session identities on the left and coordination on the right](assets/guide/terminal-board.jpg)](assets/guide/terminal-board.jpg)
 
-The left column selects a **session**. Its task title can change; its Agentmux
+The left column selects a **session**. **Tab** moves focus between the sidebar
+and content; the focused header is purple. Its task title can change; its Agentmux
 ID stays stable. The top row selects a **view** of that session or workspace.
 You do not need to unselect a session before choosing another one.
 
 | Action | Terminal control |
 | --- | --- |
-| Select a different session | **Up/Down** in the workbench |
+| Select a different session | **Tab** to the session sidebar, then **Up/Down** |
+| Navigate messages, tasks, memory or teams | **Tab** to content, then **Up/Down**; **Enter** reads a selected item |
 | Find a task, provider, project or ID | **Ctrl+P**, type a query, then **Up/Down** |
-| Enter the selected native CLI | **Enter**; **F1** returns to your workbench |
+| Enter the selected native CLI | **Enter** with the session sidebar focused, or from **Ctrl+P**; **F1** returns |
 | Select a search result without entering its CLI | **Tab** in the session switcher |
 | Leave a search, editor or review | **Esc** |
-| Change views | **Left/Right**, **Tab/Shift+Tab**, or **1–8** outside an editor |
+| Change views | **Left/Right** or **1–8** outside an editor |
 | Find an action without remembering its key | **Ctrl+K** |
 | Add a session or change its title or role | **Shift+N**, **Shift+L**, **Shift+V** |
 | Choose another workspace | **Ctrl+W** or **Shift+W** |
@@ -55,8 +57,8 @@ You do not need to unselect a session before choosing another one.
 
 Uppercase shortcuts mean hold Shift. In an editor, letters and arrows edit the
 draft; cancel or save it before using workbench navigation. The footer always
-describes the current context. In **Connections**, Up/Down changes the sender;
-**h/l** or **Alt+Left/Right** changes the recipient. Left/Right still changes views.
+describes the current context. In **Connections**, the sidebar chooses the sender. Tab focuses recipients;
+Up/Down, **h/l** or **Alt+Left/Right** chooses one. Left/Right still changes views.
 
 [![Searchable terminal session switcher distinguishes two poem sessions by title and stable ID](assets/guide/terminal-switcher.jpg)](assets/guide/terminal-switcher.jpg)
 
@@ -85,6 +87,9 @@ and outcomes. **Session detail** exposes role, native delivery and capacity.
 appears when observing a research attempt. **Focus in tmux** returns native work
 to the terminal. The web owner view can inspect records that an individual
 participant is not authorized to read.
+
+For project folders, shell splits, multiple agents in one tmux window and
+`amx a` reattachment, see [terminal workflow](terminal-workflow.md).
 
 ## Everyday sessions
 
@@ -389,9 +394,9 @@ operations below. It uses an isolated broker, isolated workers `lead` and `peer`
 and a permitted helper template. Working Linux Bubblewrap is required:
 
 ```sh
-./bin/agentmux managed up examples/managed/bounded-teams.yaml \
+./bin/amx managed up examples/managed/bounded-teams.yaml \
   --state /tmp/amx-team-demo --broker-sandbox bubblewrap
-./bin/agentmux dashboard --state /tmp/amx-team-demo
+./bin/amx dashboard --state /tmp/amx-team-demo
 ```
 
 The owner can create a team and invite participants:

@@ -651,7 +651,7 @@ async function api(path, body, attempt, route) {
     } catch {
       const error = new Error(
         response.status === 401
-          ? "The private owner link is missing or expired. Open the full link printed by agentmux web."
+          ? "The private owner link is missing or expired. Open the full link printed by amx web."
           : "The local console is unavailable (HTTP " + response.status + ").",
       );
       if (response.status === 401 || response.status === 403)
@@ -3502,7 +3502,7 @@ async function loadWorkspaces() {
       }
       row.append(details,commands); list.append(row);
     }
-    if (!workspaceListings.length) list.append(el("p","empty","No saved workspace inventory found. Run agentmux workspaces --register DIR for an older custom state directory."));
+    if (!workspaceListings.length) list.append(el("p","empty","No saved workspace inventory found. Run amx workspaces --register DIR for an older custom state directory."));
     restoreViewState(list,view);
   } catch (error) { notice("Workspace inventory: " + error.message,true); }
   finally { workspaceLoading = false; $("refresh-workspaces").disabled = false; }

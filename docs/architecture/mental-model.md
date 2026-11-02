@@ -33,4 +33,4 @@ A configuration breaks down into three core concepts:
 
 To manage these panes without a daemon, Agentmux injects state directly into the tmux processes using **Tmux User Options** (e.g., `@agentmux_name`, `@agentmux_startup_command`). 
 
-When you run `agentmux status`, Agentmux simply asks `tmux` to print these options. These options make legacy layout state inspectable without a separate database.
+When you run `amx status`, Agentmux simply asks `tmux` to print these options. These options make legacy layout state inspectable without a separate database.

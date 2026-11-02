@@ -22,42 +22,42 @@ If you want live control, give panes explicit `name:` fields.
 Status:
 
 ```bash
-./bin/agentmux status my-workflow
-./bin/agentmux status my-workflow --json
-./bin/agentmux status my-workflow --pane review
+./bin/amx status my-workflow
+./bin/amx status my-workflow --json
+./bin/amx status my-workflow --pane review
 ```
 
 Focus:
 
 ```bash
-./bin/agentmux focus my-workflow review
+./bin/amx focus my-workflow review
 ```
 
 Restart and rerun:
 
 ```bash
-./bin/agentmux restart my-workflow review
-./bin/agentmux rerun my-workflow review
+./bin/amx restart my-workflow review
+./bin/amx rerun my-workflow review
 ```
 
 Stop and kill:
 
 ```bash
-./bin/agentmux stop my-workflow review
-./bin/agentmux kill my-workflow build
+./bin/amx stop my-workflow review
+./bin/amx kill my-workflow build
 ```
 
 Capture output:
 
 ```bash
-./bin/agentmux capture my-workflow review --tail 20 --strip-empty
+./bin/amx capture my-workflow review --tail 20 --strip-empty
 ```
 
 Send input:
 
 ```bash
-./bin/agentmux send my-workflow review "git status --short"
-./bin/agentmux send my-workflow review --no-enter "printf 'queued\n'"
+./bin/amx send my-workflow review "git status --short"
+./bin/amx send my-workflow review --no-enter "printf 'queued\n'"
 ```
 
 ## Status Data
@@ -98,14 +98,14 @@ When you `load` or `reload` a config from disk, Agentmux remembers the config pa
 That enables:
 
 ```bash
-./bin/agentmux edit my-workflow
+./bin/amx edit my-workflow
 ```
 
 If a session is older and missing that metadata, backfill it:
 
 ```bash
-./bin/agentmux remember my-workflow ./my-workflow.yaml
-./bin/agentmux edit my-workflow
+./bin/amx remember my-workflow ./my-workflow.yaml
+./bin/amx edit my-workflow
 ```
 
 ## Blackboard (Shared KV-Store)
@@ -115,26 +115,26 @@ The "Blackboard" is a shared memory layer for agent coordination. It uses tmux s
 Set a value:
 
 ```bash
-./bin/agentmux kv-set my-workflow current_task "fixing-auth-bug"
+./bin/amx kv-set my-workflow current_task "fixing-auth-bug"
 ```
 
 Get a value:
 
 ```bash
-./bin/agentmux kv-get my-workflow current_task
+./bin/amx kv-get my-workflow current_task
 ```
 
 List all values:
 
 ```bash
-./bin/agentmux kv-list my-workflow
-./bin/agentmux kv-list my-workflow --json
+./bin/amx kv-list my-workflow
+./bin/amx kv-list my-workflow --json
 ```
 
 Delete a value:
 
 ```bash
-./bin/agentmux kv-del my-workflow current_task
+./bin/amx kv-del my-workflow current_task
 ```
 
 This lets tmux pane processes signal progress and share values without a
@@ -145,7 +145,7 @@ broker. It provides neither per-agent authorization nor filesystem isolation.
 The `wait` command blocks until a specific pattern (regex) appears in a pane's output. This is useful for coordinating handoffs between agents.
 
 ```bash
-./bin/agentmux wait my-workflow reviewer "REVIEW COMPLETE" --timeout 5m
+./bin/amx wait my-workflow reviewer "REVIEW COMPLETE" --timeout 5m
 ```
 
 If the pattern is found, the command exits with code `0`. If the timeout is reached, it exits with code `1`.
@@ -156,7 +156,7 @@ The `scale` command allows you to dynamically adjust the number of instances of 
 
 ```bash
 # Increase or decrease the number of 'researcher' workers to 3
-./bin/agentmux scale my-workflow researcher 3
+./bin/amx scale my-workflow researcher 3
 ```
 
 This command will:
@@ -170,26 +170,26 @@ This command will:
 Missing session:
 
 ```bash
-./bin/agentmux list
-./bin/agentmux load my-workflow.yaml --replace --no-attach
+./bin/amx list
+./bin/amx load my-workflow.yaml --replace --no-attach
 ```
 
 Missing pane:
 
 ```bash
-./bin/agentmux status my-workflow
+./bin/amx status my-workflow
 ```
 
 Missing config-path metadata:
 
 ```bash
-./bin/agentmux remember my-workflow ./my-workflow.yaml
+./bin/amx remember my-workflow ./my-workflow.yaml
 ```
 
 Useful debugging commands:
 
 ```bash
-./bin/agentmux doctor
-./bin/agentmux status my-workflow --json
-./bin/agentmux capture my-workflow review --json --tail 20 --strip-empty
+./bin/amx doctor
+./bin/amx status my-workflow --json
+./bin/amx capture my-workflow review --json --tail 20 --strip-empty
 ```

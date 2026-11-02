@@ -26,6 +26,46 @@ def archive(entries):
 class InstallTests(unittest.TestCase):
     binary=b'#!/bin/sh\nprintf "agentmux fixture\\n"\n'
 
+    def test_canonical_amx_install_creates_only_one_command(self):
+        with tempfile.TemporaryDirectory() as root:
+            root=Path(root);destination=root/'amx'
+            installer.install_binary(b'#!/bin/sh\nprintf "amx fixture\\n"\n',destination)
+            self.assertTrue(destination.is_file())
+            self.assertFalse(destination.is_symlink())
+            self.assertFalse(os.path.lexists(root/'agentmux'))
+
+    def test_canonical_amx_migrates_old_shortcut_and_preserves_binary_inode(self):
+        for absolute in (False,True):
+            with self.subTest(absolute=absolute),tempfile.TemporaryDirectory() as root:
+                root=Path(root);old=root/'agentmux';old.write_bytes(self.binary);old.chmod(0o755)
+                original=old.stat();target=root/'amx';target.symlink_to(old if absolute else 'agentmux')
+                replacement=b'#!/bin/sh\nprintf "amx new\\n"\n'
+                installer.install_binary(replacement,target,True)
+                self.assertFalse(target.is_symlink())
+                self.assertEqual(target.read_bytes(),replacement)
+                backup,=root.glob('amx.backup-*')
+                self.assertEqual(backup.stat().st_ino,original.st_ino)
+                self.assertEqual(backup.read_bytes(),self.binary)
+                self.assertFalse(os.path.lexists(old))
+
+    def test_canonical_archive_and_legacy_archive_are_both_verified(self):
+        for executable,prefix in [('amx','amx'),('agentmux','agentmux')]:
+            with self.subTest(executable=executable),tempfile.TemporaryDirectory() as root:
+                name='agentmux_linux_x86_64.tar.gz'
+                payload=archive([(executable,('#!/bin/sh\nprintf "'+prefix+' 0.11.0\\n"\n').encode())])
+                manifest=(hashlib.sha256(payload).hexdigest()+'  '+name+'\n').encode()
+                installer.install(payload,manifest,name,Path(root)/'amx',False,'v0.11.0')
+
+    def test_canonical_migration_never_replaces_a_foreign_shortcut(self):
+        with tempfile.TemporaryDirectory() as root:
+            root=Path(root);other=root/'other';other.write_bytes(b'untouched')
+            target=root/'amx';target.symlink_to('other')
+            with mock.patch.object(installer,'probe_version') as probe:
+                with self.assertRaisesRegex(ValueError,'refusing a symlink'):
+                    installer.install_binary(self.binary,target,True)
+                probe.assert_not_called()
+            self.assertEqual(other.read_bytes(),b'untouched')
+
     def test_install_creates_relative_executable_shortcut(self):
         with tempfile.TemporaryDirectory() as root:
             root=Path(root);destination=root/'agentmux'

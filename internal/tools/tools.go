@@ -231,13 +231,13 @@ func Prompt(opts PromptOptions) (string, error) {
 	switch mode {
 	case string(prov.LaunchModeNativeMCP):
 		b.WriteString("Agentmux coordination tools are available natively through MCP in this session.\n")
-		b.WriteString("Use the provided tools directly instead of shelling out to `agentmux tool-call`.\n")
+		b.WriteString("Use the provided tools directly instead of shelling out to `amx tool-call`.\n")
 		b.WriteString("If a tool accepts `session`, you may omit it and Agentmux will default to $AGENTMUX_SESSION.\n")
 		b.WriteString("The `wait` tool ignores active input/composer text by default; use `scope=visible` only when you truly want raw screen matching.\n")
 		b.WriteString("Use normal shell commands for work and MCP tools only for coordination.\n\n")
 	default:
 		b.WriteString("Agentmux coordination actions are real CLI operations, not native function calls.\n")
-		b.WriteString("When you need shared state, synchronization, scaling, or cross-pane interaction, call `agentmux tool-call`.\n")
+		b.WriteString("When you need shared state, synchronization, scaling, or cross-pane interaction, call `amx tool-call`.\n")
 		b.WriteString("Use exactly one input mode per call:\n")
 		b.WriteString("  --from-stdin   preferred for most providers and shells\n")
 		b.WriteString("  --from-file    preferred for larger or multiline payloads\n")
@@ -260,9 +260,9 @@ func Prompt(opts PromptOptions) (string, error) {
 	default:
 		b.WriteString("\nExamples:\n")
 		b.WriteString("Small payload via stdin:\n")
-		b.WriteString("printf '%s\\n' \"{\\\"key\\\":\\\"current_task\\\"}\" | agentmux tool-call kv_get --from-stdin\n")
+		b.WriteString("printf '%s\\n' \"{\\\"key\\\":\\\"current_task\\\"}\" | amx tool-call kv_get --from-stdin\n")
 		b.WriteString("\nLarger payload via file:\n")
-		b.WriteString("agentmux tool-call kv_set --from-file /tmp/agentmux-tool.json\n")
+		b.WriteString("amx tool-call kv_set --from-file /tmp/agentmux-tool.json\n")
 	}
 	return b.String(), nil
 }

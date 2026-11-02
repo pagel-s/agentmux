@@ -1,184 +1,130 @@
 # Installation
 
-## Prerequisites
+Agentmux's CLI is **`amx`**. Native sessions require **tmux 3.2+** and the
+respective provider CLIs installed and authenticated separately. Published
+binaries need no Go toolchain. Python 3 runs the installer and acceptance scripts.
 
-Agentmux requires **tmux 3.2 or newer**. Published binaries need no Go toolchain.
-Building the current source also needs Git, Make and **Go 1.24 or newer**.
-Python 3 runs `make install`, the acceptance
-scripts and the optional release installer. Native model sessions require their respective
-CLIs to be installed and logged in separately.
+## Install a published binary (recommended)
 
-If you are building Agentmux from source, use **Go 1.24 or newer**. The repo `Makefile` will prefer a compatible toolchain under `.tools/` when present, then fall back to `go` from your `PATH`.
+The current release is **[v0.11.0](https://github.com/pagel-s/agentmux/releases/tag/v0.11.0)**,
+with Linux/macOS binaries for x86-64 and ARM64. It includes the focused terminal
+workbench, native layouts, last-session attachment and the
+[illustrated workflows](../visual-guide.md). The managed runtime and workbench
+remain experimental.
 
-```bash
+This repository is private: use `gh` authenticated with an account that has
+repository access (`gh auth login` if needed). Anonymous asset links return 404.
+With Python 3 and GitHub CLI installed:
+
+```sh
+mkdir -p "$HOME/.local/bin"
+amx_release_dir="$(mktemp -d)"
+gh release download v0.11.0 --repo pagel-s/agentmux \
+  --dir "$amx_release_dir" --pattern 'agentmux_*.tar.gz' --pattern checksums.txt
+gh api repos/pagel-s/agentmux/contents/scripts/install-release.py \
+  --method GET -f ref=v0.11.0 --header 'Accept: application/vnd.github.raw+json' \
+  > "$amx_release_dir/install-release.py"
+python3 "$amx_release_dir/install-release.py" --version v0.11.0 \
+  --artifact-dir "$amx_release_dir" --destination "$HOME/.local/bin/amx"
+rm -r "$amx_release_dir"
+export PATH="$HOME/.local/bin:$PATH"
+amx version
+amx doctor
+```
+
+**Upgrading:** add `--replace` to the `python3` command. The installer verifies
+SHA256 and the executable version before atomically installing `amx`. A previous
+`amx → agentmux` shortcut is migrated to a real `amx` executable. Its exact old
+executable is retained as an `amx.backup-*` file; the recognized old `agentmux`
+path is retired. Unrelated symlinks and commands are never silently replaced.
+A fresh installation creates only `amx`.
+
+GitHub CLI downloads all four archives and the checksum manifest; the installer
+selects the current platform. Archives retain the `agentmux_OS_ARCH.tar.gz`
+project name and contain `amx`, docs, examples and scripts. The current installer
+also accepts older archives whose executable is named `agentmux`. From a
+checkout, use `python3 scripts/install-release.py` with the same version,
+`--artifact-dir` and destination options.
+
+A checksum checks consistency with the release manifest, not an independent
+signature. The installer's direct HTTPS mode does not read GitHub credentials;
+use authenticated downloads plus `--artifact-dir` for this private repository.
+
+Installation does not restart native sessions or replace a workspace's pinned
+controller. Reattach with the new `amx` for its updated dashboard. Follow the
+[recovery guide](../traces-and-recovery.md) when deliberately upgrading a running
+controller; fresh workspaces use the current controller automatically. Existing
+external bridges that name a retired public executable may need their setup
+printed again with `amx connect`.
+
+Strict Bubblewrap isolation requires Linux with working user namespaces and a
+supported Bubblewrap. macOS supports native tmux sessions and explicitly trusted
+local execution. A shell split beside an isolated agent is a host shell, not a
+new sandbox.
+
+## Build from source
+
+Building needs Git, Make, Python 3, tmux 3.2+ and **Go 1.24+**. The Makefile
+prefers a compatible repo-local toolchain under `.tools/`, then Go from PATH.
+
+```sh
 # macOS
 brew install tmux
 
-# Ubuntu/Debian: install Go 1.24+ separately if your distribution ships an older Go
+# Ubuntu/Debian: install Go 1.24+ separately if needed
 sudo apt install git make tmux python3
-```
 
-## Installing Agentmux
-
-### Install a published binary (recommended)
-
-The current release is **[v0.10.0](https://github.com/pagel-s/agentmux/releases/tag/v0.10.0)**.
-It includes the terminal and web workbench, `amx` shortcuts, native collaboration
-and the workflows in the [visual guide](../visual-guide.md). The managed runtime
-and workbench remain experimental.
-
-This repository is private. Use the GitHub CLI (`gh`) authenticated with an
-account that has repository access; anonymous download links return 404.
-On Linux or macOS, with Python 3 and `gh` installed, run `gh auth login` if
-needed, then:
-
-```bash
-mkdir -p "$HOME/.local/bin"
-amx_release_dir="$(mktemp -d)"
-gh release download v0.10.0 --repo pagel-s/agentmux \
-  --dir "$amx_release_dir" --pattern 'agentmux_*.tar.gz' --pattern checksums.txt
-gh api repos/pagel-s/agentmux/contents/scripts/install-release.py \
-  --method GET -f ref=v0.10.0 --header 'Accept: application/vnd.github.raw+json' \
-  > "$amx_release_dir/install-release.py"
-python3 "$amx_release_dir/install-release.py" --version v0.10.0 \
-  --artifact-dir "$amx_release_dir" --destination "$HOME/.local/bin/agentmux"
-rm -r "$amx_release_dir"
-export PATH="$HOME/.local/bin:$PATH"
-amx version
-amx doctor
-```
-
-To upgrade an existing installation, add `--replace` to the `python3` command.
-GitHub CLI downloads the four platform archives and checksum manifest with your
-normal repository access. The installer selects the current platform's archive,
-verifies its published SHA256, checks the executable version and creates the sibling `amx → agentmux`
-shortcut. Replacing an executable retains an `agentmux.backup-*` recovery copy.
-An unrelated existing `amx` command blocks installation even with `--replace`.
-The destination parent must exist. Release archives themselves contain the
-canonical `agentmux` executable and bundled documentation, examples and scripts.
-
-The installer supports Linux/macOS x86-64 and ARM64. Strict Bubblewrap isolation
-requires Linux with working user namespaces; macOS supports native tmux sessions
-and explicitly trusted local execution. A checksum checks consistency with the
-release manifest, not an independent signature.
-
-Installing a binary does not restart native sessions or replace a running
-workspace's pinned controller. Start a fresh workspace for the current features,
-or follow the [upgrade/recovery guide](../traces-and-recovery.md) when ready to
-upgrade an existing workspace.
-
-### Build the current source
-
-Use a source build for later changes on `main` or local development. You need
-Git, Make and Go 1.24 or newer, in addition to tmux and Python 3:
-
-```bash
 git clone https://github.com/pagel-s/agentmux.git
 cd agentmux
 make build
-./bin/agentmux version
-./bin/agentmux doctor
+./bin/amx version
+./bin/amx doctor
 ```
 
-If you already have a clean checkout on `main`, run `git pull --ff-only` and
-`make build` from its root. The build creates
-`bin/agentmux` with the current Git version, commit and build date embedded.
+In an existing clean checkout on `main`, run `git pull --ff-only` and
+`make build`. For a user-local installation:
 
-To use `agentmux` without the `./bin/` prefix in your current shell:
-
-```bash
-export PATH="$PWD/bin:$PATH"
-```
-
-For a user-local installation that also works outside the checkout:
-
-```bash
+```sh
 make install
 export PATH="$HOME/.local/bin:$PATH"
-command -v agentmux amx
+command -v amx
 amx version
+```
+
+The installer does not edit shell configuration. Add the PATH export to your
+shell's startup file if needed, and check `command -v amx` in each new terminal.
+After later source updates, run `make install` again. Select another prefix with
+`make install PREFIX=/your/prefix`, or use `BINDIR` and optional `DESTDIR` for
+packaging. Existing executable replacements retain their original inode in a
+uniquely named backup.
+
+Remote `go install github.com/pagel-s/agentmux/cmd/agentmux@latest` is unsupported:
+`go.mod` declares module path `agentmux`, so Go rejects the GitHub module path.
+Use the published installer or build from the checkout.
+
+## Check the native providers
+
+```sh
+claude --version
+codex --version
 amx doctor
 ```
 
-Add that last `export PATH=...` line to your shell's startup file if the directory
-is not already on PATH in new terminals (usually `~/.bashrc` for interactive
-Bash). The installer does not edit your shell configuration. Check
-`command -v agentmux amx` in each new terminal to avoid using a different installed
-version. After later source updates, run `make install` again.
+Open each provider once directly and complete its normal login/startup prompts.
+Agentmux reuses those native logins in trusted local mode; it does not install a
+provider or sign you in. `amx doctor CONFIG` also checks configured native CLI
+compatibility.
 
-`make install` builds and installs `agentmux` plus a relative `amx → agentmux`
-symlink in `~/.local/bin`. Both commands expose the same features; `amx` alone
-opens the terminal dashboard, while `agentmux` alone shows help. See the
-[everyday command reference](everyday-commands.md) for shorter commands.
-Choose another prefix with `make install PREFIX=/your/prefix`, or set `BINDIR`
-and optional `DESTDIR` for packaging.
+Continue with the [fresh-install walkthrough](quickstart.md) or
+[terminal folders and layouts](../terminal-workflow.md). The walkthrough covers
+native conversations, opt-in collaboration, shared memory, revocation and web
+controls. From a checkout, Linux operators can verify model-free isolation with:
 
-Upgrades replace the executable atomically and retain its previous inode in a
-uniquely named `agentmux.backup-*` file beside it. An unrelated existing `amx`
-command is never replaced: move it explicitly or select a different installation
-directory. Existing shortcuts directly naming `agentmux` or its exact absolute
-destination are reused, including during upgrades.
-Installing a new binary does not restart your native sessions or replace a
-running workspace's pinned controller. Upgrade a live workspace deliberately
-using the [recovery guide](../traces-and-recovery.md).
-
-Remote `go install github.com/pagel-s/agentmux/cmd/agentmux@latest` is currently
-unsupported: `go.mod` declares the module path as `agentmux`, so Go rejects the
-GitHub module path. An `@latest` release selection also does not mean the latest
-commit on `main`. Use the published installer above or build from source.
-
-### Install a specific published binary
-
-From a repository checkout, download the assets with your authenticated GitHub
-CLI, then use Python 3 to install the selected platform with its published SHA256
-checked:
-
-```bash
-amx_release_dir="$(mktemp -d)"
-gh release download v0.10.0 --repo pagel-s/agentmux \
-  --dir "$amx_release_dir" --pattern 'agentmux_*.tar.gz' --pattern checksums.txt
-python3 scripts/install-release.py --version v0.10.0 \
-  --artifact-dir "$amx_release_dir" --destination /your/existing/bin/agentmux
-rm -r "$amx_release_dir"
-```
-
-Choose an explicit published tag. Add `--replace` when upgrading; the same backup,
-alias and live-workspace behavior described above applies. The installer's direct
-HTTPS download mode is only suitable for public release assets; it does not
-read your GitHub credentials. Use `--artifact-dir` for this private repository.
-
-## Verifying Installation
-
-Run the built-in diagnostic tool to ensure everything is set up correctly:
-
-```bash
-./bin/agentmux doctor
-```
-
-For a binary installed on your `PATH`, use `agentmux doctor` instead. The diagnostic
-reports tmux availability; passing a config path also checks provider CLI
-compatibility for configured native models.
-
-Check the native CLIs you will use, for example `claude --version` and
-`codex --version`, then open each once directly to finish its normal login and
-startup prompts. Agentmux reuses those native logins in trusted local mode; it
-does not install a provider or sign you in.
-
-For the step-by-step native-terminal acceptance journey, continue with the
-[quickstart](quickstart.md). It covers two interactive sessions, opt-in
-collaboration, shared memory, isolation and the web control center.
-
-On Linux with a supported Bubblewrap and working user namespaces, run the
-model-free sandbox smoke tests from the checkout:
-
-```bash
+```sh
 python3 scripts/smoke-managed.py
 python3 scripts/smoke-managed-interactive.py
 ```
 
-It checks communication between isolated agents and an isolated broker, shared
-memory, and instruction permissions. It makes no model calls and cleans up its
-temporary runtime. Bubblewrap must support the flags used by the sandbox,
-including `--size`; an older distribution package or disabled user namespaces
-can fail this check. That failure does not silently select local execution.
-For a configured live team, use the [managed setup wizard](../managed-setup.md).
+A missing Bubblewrap feature such as `--size`, or unavailable user namespaces,
+fails the isolation check; it does not silently select trusted local execution.
+For a configured team, use the [managed setup wizard](../managed-setup.md).

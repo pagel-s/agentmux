@@ -524,6 +524,12 @@ func (l *Launcher) createAttachmentView(ctx context.Context, runtime Runtime, ag
 		if _, err = l.tmux(ctx, "select-window", "-t", view+":"+index); err != nil {
 			return "", err
 		}
+		if _, err = l.tmux(ctx, "select-pane", "-t", pane); err != nil {
+			return "", err
+		}
+		if err = l.rememberAgent(ctx, runtime, view, agent); err != nil {
+			return "", err
+		}
 	}
 	complete = true
 	return view, nil
@@ -544,7 +550,7 @@ func (l *Launcher) liveAgentPane(ctx context.Context, runtime Runtime, agent str
 	for _, p := range panes {
 		if p.ID == pane.PaneID && p.Agent == agent && p.Attempt == runtime.AttemptID && p.Role == "worker" {
 			if p.Dead {
-				return "", errors.New("agent terminal has exited; inspect its last output in the dashboard. For a native session, review a same-ID relaunch with: " + ShellCommand([]string{"agentmux", "relaunch", agent, "--state", l.options.StateDir}))
+				return "", errors.New("agent terminal has exited; inspect its last output in the dashboard. For a native session, review a same-ID relaunch with: " + ShellCommand([]string{"amx", "relaunch", agent, "--state", l.options.StateDir}))
 			}
 			return p.ID, nil
 		}
@@ -563,15 +569,12 @@ func (l *Launcher) Focus(ctx context.Context, runtime Runtime, agent string) err
 	// selected windows. The core session remains the lifecycle owner.
 	target := runtime.Session
 	explicitView := ""
-	contextParts := strings.Split(os.Getenv("TMUX"), ",")
-	if len(contextParts) == 3 && contextParts[0] == SocketPath(l.options.StateDir) {
-		if _, e := strconv.ParseUint(contextParts[2], 10, 64); e == nil {
-			name, _ := l.tmux(ctx, "display-message", "-p", "-t", "$"+contextParts[2], "#{session_name}")
-			name = strings.TrimSpace(name)
-			tag, _ := l.tmux(ctx, "show-options", "-v", "-t", name, "@agentmux_view")
-			if name != "" && strings.TrimSpace(tag) == runtime.AttemptID {
-				explicitView = name
-			}
+	if session := tmuxContextSession(SocketPath(l.options.StateDir), os.Getenv("TMUX")); session != "" {
+		name, _ := l.tmux(ctx, "display-message", "-p", "-t", session, "#{session_name}")
+		name = strings.TrimSpace(name)
+		tag, _ := l.tmux(ctx, "show-options", "-v", "-t", name, "@agentmux_view")
+		if name != "" && strings.TrimSpace(tag) == runtime.AttemptID {
+			explicitView = name
 		}
 	}
 	clients, _ := l.tmux(ctx, "list-clients", "-F", "#{client_session}\t#{client_activity}\t#{pane_id}\t#{client_name}")
@@ -616,8 +619,10 @@ func (l *Launcher) Focus(ctx context.Context, runtime Runtime, agent string) err
 	if _, err = l.tmux(ctx, "set-option", "-t", target, "@agentmux_focus_pending", agent); err != nil {
 		return err
 	}
-	_, err = l.tmux(ctx, "select-pane", "-t", pane)
-	return err
+	if _, err = l.tmux(ctx, "select-pane", "-t", pane); err != nil {
+		return err
+	}
+	return l.rememberAgent(ctx, runtime, target, agent)
 }
 
 func (l *Launcher) tmux(ctx context.Context, args ...string) (string, error) {

@@ -2,7 +2,7 @@
 
 Agentmux now has an opt-in managed mode alongside the existing tmux workspace mode. Managed mode gives each logical agent a separate credential, enforces message and memory permissions in a coordination service, and stores durable tasks in SQLite. It is a developer-first foundation for mixed-harness teams.
 
-The existing `load`, `render`, pane launchers, and v1 workspace YAML remain available. Managed configuration uses `version: 2` and `mode: managed`; use `agentmux managed up` for automatic startup, or `managed init` for manual service control. Do not pass it to `agentmux load`.
+The existing `load`, `render`, pane launchers, and v1 workspace YAML remain available. Managed configuration uses `version: 2` and `mode: managed`; use `amx managed up` for automatic startup, or `managed init` for manual service control. Do not pass it to `amx load`.
 
 ## Implemented capabilities
 
@@ -25,25 +25,25 @@ Interactive `native_only: true` sessions require an empty role and omit Agentmux
 
 ## Try it without a model
 
-Build the executable using the repository's normal build flow, or run `go build -o bin/agentmux ./cmd/agentmux`. These examples use `./bin/agentmux` from the repository root. No provider credentials or model calls are needed for the `/bin/cat` demo.
+Build the executable using the repository's normal build flow, or run `go build -o bin/agentmux ./cmd/agentmux`. These examples use `./bin/amx` from the repository root. No provider credentials or model calls are needed for the `/bin/cat` demo.
 
 Check setup, then start the complete team detached:
 
 ```bash
-./bin/agentmux managed doctor examples/managed/command-demo.yaml
-./bin/agentmux managed up examples/managed/command-demo.yaml --state .agentmux-state/demo
+./bin/amx managed doctor examples/managed/command-demo.yaml
+./bin/amx managed up examples/managed/command-demo.yaml --state .agentmux-state/demo
 ```
 
 `up` returns a dedicated tmux attach command. Add `--attach` to open it immediately, or run `managed status --state .agentmux-state/demo --watch` for a live terminal summary. The broker, supervisor, status view, and each worker have separate named windows. Submit an instruction using the lead's credential:
 
 ```bash
-./bin/agentmux managed call instruct \
+./bin/amx managed call instruct \
   --credential-file .agentmux-state/demo/credentials/lead.json \
   --request-id demo-instruction-1 \
   --json '{"to":["worker"],"text":"Echo this task input so I can inspect the handoff."}'
 
 
-./bin/agentmux managed call task.list \
+./bin/amx managed call task.list \
   --credential-file .agentmux-state/demo/owner.json \
   --json '{}'
 ```
@@ -51,11 +51,11 @@ Check setup, then start the complete team detached:
 The command harness receives the worker's prepared input on stdin, and `/bin/cat` returns that text as its result. The task becomes `submitted`; a successful process exit does not independently verify its work. Copy the task's `id` and current `version` from `task.list` to verify it explicitly:
 
 ```bash
-./bin/agentmux managed call task.verify \
+./bin/amx managed call task.verify \
   --credential-file .agentmux-state/demo/owner.json \
   --json '{"id":"TASK_ID","version":CURRENT_VERSION}'
 
-./bin/agentmux managed status --state .agentmux-state/demo
+./bin/amx managed status --state .agentmux-state/demo
 ```
 
 Replace `TASK_ID` and `CURRENT_VERSION` with the returned values before running verification. Workers started by `up` consume queued tasks automatically. Their windows show managed worker processes executing headless turns; persistent mode resumes an explicit native conversation between tasks. Inspect published results through the broker API.
@@ -63,9 +63,9 @@ Replace `TASK_ID` and `CURRENT_VERSION` with the returned values before running 
 Stop the run without deleting its tasks or memory:
 
 ```bash
-./bin/agentmux managed down --state .agentmux-state/demo
+./bin/amx managed down --state .agentmux-state/demo
 # Explicitly start another runtime attempt using saved configuration:
-./bin/agentmux managed restart --state .agentmux-state/demo
+./bin/amx managed restart --state .agentmux-state/demo
 ```
 
 The example permits `lead` to instruct `worker` and lets the worker send notes or pings back. A worker attempting to instruct the lead receives `forbidden`, even if its role text describes it as a coordinator.
@@ -73,18 +73,18 @@ The example permits `lead` to instruct `worker` and lets the worker send notes o
 ## CLI contract
 
 ```text
-agentmux managed up <config> [--state <directory>] [--broker-sandbox local|bubblewrap] [--attach]
-agentmux managed down --state <directory>
-agentmux managed restart --state <directory> [--broker-sandbox local|bubblewrap] [--attach]
-agentmux managed doctor <config> [--state <directory>] [--broker-sandbox local|bubblewrap]
-agentmux managed init <config> --state <directory>
-agentmux managed serve --state <directory> [--sandbox local|bubblewrap]
-agentmux managed call <operation> [--credential-file <file>] [--socket <path>]
+amx managed up <config> [--state <directory>] [--broker-sandbox local|bubblewrap] [--attach]
+amx managed down --state <directory>
+amx managed restart --state <directory> [--broker-sandbox local|bubblewrap] [--attach]
+amx managed doctor <config> [--state <directory>] [--broker-sandbox local|bubblewrap]
+amx managed init <config> --state <directory>
+amx managed serve --state <directory> [--sandbox local|bubblewrap]
+amx managed call <operation> [--credential-file <file>] [--socket <path>]
     [--json <object> | --stdin] [--request-id <id>]
-agentmux managed worker --state <directory> --agent <id> [--once]
-agentmux managed status --state <directory> [--watch]
-agentmux managed activity --state <directory> [--watch]
-agentmux managed rotate --state <directory> --agent <id|'$owner'>
+amx managed worker --state <directory> --agent <id> [--once]
+amx managed status --state <directory> [--watch]
+amx managed activity --state <directory> [--watch]
+amx managed rotate --state <directory> --agent <id|'$owner'>
 ```
 
 Flags can appear before or after positional arguments. `call` uses `{}` when no arguments are supplied. `--stdin` reads one JSON object with a bounded size. `AGENTMUX_CREDENTIAL_FILE` can supply the credential path, and `AGENTMUX_SOCKET` can override its socket path. An explicit flag takes precedence.
@@ -105,16 +105,16 @@ Use `managed activity --state DIRECTORY` for a content-sensitive owner JSON snap
 
 `down` interrupts owned worker processes first, waits for their terminal processes to exit, and then stops the broker and supervisor. It removes only the attempt's tracked session. If termination or ownership cannot be confirmed, it reports attention and leaves the broker available for inspection. A stale stop request cannot stop a new attempt. Durable tasks and memory remain on disk. `restart` performs an explicit ordered stop/start; it does not silently retry uncertain deliveries or reset the persisted runtime budget. After a run's budget expires, start a new state directory for a new run.
 
-For one exited workspace-owned interactive session, use `agentmux relaunch AGENT_ID --state DIRECTORY`. Healthy peers keep running and the stable agent identity is retained. The default starts a fresh native conversation; `--resume last`, `--resume picker`, or an explicit native ID selects history through the supported harness. A live or revoked session cannot be relaunched, and no deadline is renewed. Older running controllers require one deliberate workspace restart before individual relaunch is available. See [recovery](traces-and-recovery.md) for the distinction from retrying a broker task.
+For one exited workspace-owned interactive session, use `amx relaunch AGENT_ID --state DIRECTORY`. Healthy peers keep running and the stable agent identity is retained. The default starts a fresh native conversation; `--resume last`, `--resume picker`, or an explicit native ID selects history through the supported harness. A live or revoked session cannot be relaunched, and no deadline is renewed. Older running controllers require one deliberate workspace restart before individual relaunch is available. See [recovery](traces-and-recovery.md) for the distinction from retrying a broker task.
 
 The lower-level commands remain useful without automatic tmux management:
 
 ```bash
-./bin/agentmux managed init examples/managed/command-demo.yaml --state .agentmux-state/manual
+./bin/amx managed init examples/managed/command-demo.yaml --state .agentmux-state/manual
 # One shell:
-./bin/agentmux managed serve --state .agentmux-state/manual
+./bin/amx managed serve --state .agentmux-state/manual
 # Another shell:
-./bin/agentmux managed worker --state .agentmux-state/manual --agent worker
+./bin/amx managed worker --state .agentmux-state/manual --agent worker
 ```
 
 For a manual worker, `--once` handles one queued task or exits if none is waiting. Do not launch a second manual worker for an agent already supervised by `up`; its exclusive lock rejects duplicates.
@@ -145,13 +145,13 @@ For example, publish a board note and create private memory:
 ```bash
 export AGENTMUX_CREDENTIAL_FILE="$PWD/.agentmux-state/demo/credentials/lead.json"
 
-./bin/agentmux managed call board.post \
+./bin/amx managed call board.post \
   --json '{"board":"team","text":"Please post evidence with each result."}'
 
-./bin/agentmux managed call memory.put \
+./bin/amx managed call memory.put \
   --json '{"namespace":"private","key":"next_step","value":"Review the worker result","version":0}'
 
-./bin/agentmux managed call memory.put \
+./bin/amx managed call memory.put \
   --json '{"namespace":"project","key":"decision","value":"Require owner verification","version":0}'
 ```
 
@@ -170,8 +170,8 @@ Owner collaboration groups, explicit overrides and consented teams remain separa
 [The bounded team example](https://github.com/pagel-s/agentmux/blob/main/examples/managed/bounded-teams.yaml) enables these features explicitly. It uses command harnesses, so inspecting the API makes no model calls. The command fixtures echo their instructions; they do not decide to spawn or cooperate by themselves.
 
 ```bash
-./bin/agentmux managed up examples/managed/bounded-teams.yaml --state .agentmux-state/teams
-./bin/agentmux managed call agent.spawn \
+./bin/amx managed up examples/managed/bounded-teams.yaml --state .agentmux-state/teams
+./bin/amx managed call agent.spawn \
   --credential-file .agentmux-state/teams/credentials/lead.json \
   --json '{"template":"helper","capabilities":{"boards_read":["team"],"memory_read":["findings"],"join_teams":true}}'
 ```
@@ -189,7 +189,7 @@ tasks explicitly with `task.cancel` when withdrawing the work itself.
 Team creation is separately enabled and restricted to configured creators or explicitly delegated child capabilities:
 
 ```bash
-./bin/agentmux managed call team.create \
+./bin/amx managed call team.create \
   --credential-file .agentmux-state/teams/credentials/lead.json \
   --json '{"name":"Review group"}'
 ```
@@ -239,7 +239,7 @@ The adapter uses the configured API base exactly; it does not append `/v1` or sw
 
 `sandbox: bubblewrap` requests kernel-enforced worker isolation. It must not fall back to local execution when the executable, user namespaces, mounts, or network policy are unavailable. `network: none` isolates networking; `network: host` deliberately allows unrestricted host networking. `network: allowlist` supports exact approved HTTP/HTTPS origins through a private proxy and namespace-local relay, including explicitly approved local inference endpoints. Clients must support the supplied proxy settings; incompatible clients fail to connect without a host-network fallback. See [exact network destinations](hardening.md#exact-network-destinations) for configuration, DNS/IP rules and protocol limits. A real namespace probe passed on the implementation host after running outside the enclosing development sandbox. Validate the complete isolation setup on each deployment machine before relying on it.
 
-The broker is a separate process with a private state directory. Use `agentmux managed serve --state DIRECTORY --sandbox bubblewrap` to isolate the broker with a minimal environment, no network namespace access, its private state mounted for persistence, and the Agentmux binary mounted read-only. It fails when the requested kernel isolation is unavailable. Without that flag, the broker runs as a normal trusted host process. Do not expose its complete state directory, owner credential, host tmux socket, container-management socket, or peer home directories to an isolated agent. A Node-based harness may need an explicit Node executable/CLI path in `command` and narrowly selected package dependencies in `read_only_paths`; do not mount the whole host home merely to make a wrapper work.
+The broker is a separate process with a private state directory. Use `amx managed serve --state DIRECTORY --sandbox bubblewrap` to isolate the broker with a minimal environment, no network namespace access, its private state mounted for persistence, and the Agentmux binary mounted read-only. It fails when the requested kernel isolation is unavailable. Without that flag, the broker runs as a normal trusted host process. Do not expose its complete state directory, owner credential, host tmux socket, container-management socket, or peer home directories to an isolated agent. A Node-based harness may need an explicit Node executable/CLI path in `command` and narrowly selected package dependencies in `read_only_paths`; do not mount the whole host home merely to make a wrapper work.
 
 Initialization creates private default workdirs beneath the state directory for agents without `workdir`. Explicit relative workdirs and `read_only_paths` resolve against the configuration file's directory. The state contains SQLite data and credential files; treat it as sensitive and keep it outside version control. `.agentmux-state/` is ignored by this repository. Restart the service with the same directory to retain tasks and memory; initialization refuses to replace existing nonempty state.
 
@@ -292,8 +292,8 @@ In this mode the adapter passes Codex `--sandbox danger-full-access`: the access
 Task acceptance, dispatch, process completion, and verification are separate facts. Workers serialize turns per logical agent. Completion requires a valid instance-bound lease and the expected task version; credential rotation fences old instances. Rotate an agent credential with its ID, or quote the reserved owner identity:
 
 ```bash
-./bin/agentmux managed rotate --state .agentmux-state/demo --agent worker
-./bin/agentmux managed rotate --state .agentmux-state/demo --agent '$owner'
+./bin/amx managed rotate --state .agentmux-state/demo --agent worker
+./bin/amx managed rotate --state .agentmux-state/demo --agent '$owner'
 ```
 
 The worker should be stopped and restarted after rotation. The owner path is separate from the agent namespace, so an agent named `owner` remains a normal agent.

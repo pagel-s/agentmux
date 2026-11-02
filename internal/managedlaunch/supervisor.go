@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -294,7 +296,22 @@ func observeAgentPaneStates(runtime *Runtime, panes []paneInfo) {
 }
 
 func (l *Launcher) createPane(ctx context.Context, runtime Runtime, name, role, agent string, argv []string) (string, error) {
-	out, err := l.tmux(ctx, "new-window", "-d", "-P", "-F", "#{pane_id}", "-t", runtime.Session, "-n", name, "exec sleep 300")
+	args := []string{"new-window", "-d", "-P", "-F", "#{pane_id}", "-t", runtime.Session, "-n", name}
+	// tmux inspects the worker wrapper's cwd, rather than its nested native
+	// child. Start the wrapper in the project too, so ordinary splits inherit it.
+	if role == "worker" {
+		if store, err := managed.Open(l.options.StateDir); err == nil {
+			definition, problem := store.Agent(agent)
+			_ = store.Close()
+			if problem == nil && filepath.IsAbs(definition.Workdir) {
+				if info, err := os.Stat(definition.Workdir); err == nil && info.IsDir() {
+					args = append(args, "-c", definition.Workdir)
+				}
+			}
+		}
+	}
+	args = append(args, "exec sleep 300")
+	out, err := l.tmux(ctx, args...)
 	if err != nil {
 		return "", err
 	}

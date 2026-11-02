@@ -75,7 +75,7 @@ func workInventoryMode(agent managed.AgentInfo, observations []sessioninventory.
 
 func runWorkInventory(args []string, out, diagnostics io.Writer) int {
 	if workHelpRequested(args) {
-		fmt.Fprintln(out, "Usage: agentmux sessions [--archived] [--session work | --state DIR]\nLists registered Agentmux sessions and recognizable existing native terminals.\nTitles describe tasks; use the stable ID to attach, label or connect.")
+		fmt.Fprintln(out, "Usage: amx sessions [--archived] [--session work | --state DIR]\nLists registered Agentmux sessions and recognizable existing native terminals.\nTitles describe tasks; use the stable ID to attach, label or connect.")
 		return exitSuccess
 	}
 	archived := false
@@ -138,18 +138,18 @@ func runWorkInventory(args []string, out, diagnostics io.Writer) int {
 		fmt.Fprintln(out, "Registered sessions unavailable; workspace session and bridge counts are unknown.")
 		if os.IsNotExist(registryErr) {
 			fmt.Fprintln(diagnostics, "Workspace registry not loaded: no owner credential at", consoleContent(o.state, 300))
-			fmt.Fprintln(diagnostics, "Start this workspace:", managedlaunch.ShellCommand([]string{"agentmux", "start", "--session", o.session, "--state", o.state}))
+			fmt.Fprintln(diagnostics, "Start this workspace:", managedlaunch.ShellCommand([]string{"amx", "start", "--session", o.session, "--state", o.state}))
 			fmt.Fprintln(diagnostics, "Or select an existing --session/--state. Existing native terminals are still listed where recognizable.")
 		} else if credentialErr != nil {
 			fmt.Fprintln(diagnostics, "Workspace owner credential could not be read at", consoleContent(managed.CredentialPath(o.state, ""), 300)+":", consoleContent(credentialErr.Error(), 200))
 			fmt.Fprintln(diagnostics, "Restore a valid saved owner credential before reconnecting. Broker availability has not been established; restarting it does not repair this file.")
 		} else if saved, err := managedlaunch.Snapshot(o.state); err == nil && saved.State == "stopped" {
 			fmt.Fprintln(diagnostics, "Saved workspace is stopped. Registered session and bridge status are unknown until it is restarted.")
-			fmt.Fprintln(diagnostics, "Restart this saved workspace:", managedlaunch.ShellCommand([]string{"agentmux", "managed", "restart", "--state", o.state}))
+			fmt.Fprintln(diagnostics, "Restart this saved workspace:", managedlaunch.ShellCommand([]string{"amx", "managed", "restart", "--state", o.state}))
 		} else {
 			fmt.Fprintln(diagnostics, "Workspace registry unavailable:", consoleContent(registryErr.Error(), 300))
 			fmt.Fprintln(diagnostics, "Registered session and bridge status are unknown. Existing native terminals are listed observationally; refresh after restoring the broker.")
-			fmt.Fprintln(diagnostics, "Inspect launch and worker state:", managedlaunch.ShellCommand([]string{"agentmux", "managed", "status", "--watch", "--state", o.state}))
+			fmt.Fprintln(diagnostics, "Inspect launch and worker state:", managedlaunch.ShellCommand([]string{"amx", "managed", "status", "--watch", "--state", o.state}))
 		}
 	} else if len(registered) == 0 {
 		fmt.Fprintln(out, "No registered Agentmux sessions in this workspace.")
@@ -158,8 +158,8 @@ func runWorkInventory(args []string, out, diagnostics io.Writer) int {
 		fmt.Fprintln(out, "No additional recognizable native terminals observed. Generic wrappers and non-TTY clients may not appear.")
 	}
 	fmt.Fprintln(out, "Titles describe tasks; IDs remain stable. Observed terminals stay in their original application.")
-	fmt.Fprintln(out, "Label:", managedlaunch.ShellCommand([]string{"agentmux", "label", "ID", "Fix login redirect", "--state", o.state}))
-	fmt.Fprintln(out, "Connect:", managedlaunch.ShellCommand([]string{"agentmux", "connect", "OBSERVED_ID", "--title", "Task", "--state", o.state}))
+	fmt.Fprintln(out, "Label:", managedlaunch.ShellCommand([]string{"amx", "label", "ID", "Fix login redirect", "--state", o.state}))
+	fmt.Fprintln(out, "Connect:", managedlaunch.ShellCommand([]string{"amx", "connect", "OBSERVED_ID", "--title", "Task", "--state", o.state}))
 	return 0
 }
 
@@ -184,7 +184,7 @@ func connectObservedSessionWithID(ctx context.Context, state, reference, id stri
 		return "", id, errors.New("observed terminal is no longer live; refresh sessions")
 	}
 	if !filepath.IsAbs(found.Project) {
-		return "", id, errors.New("this platform could not discover its project; launch a new session with agentmux add instead")
+		return "", id, errors.New("this platform could not discover its project; launch a new session with amx add instead")
 	}
 	// Direct Antigravity context injection isn't needed for an external bridge:
 	// the human explicitly pastes the setup into the existing native interface.
@@ -396,11 +396,11 @@ func bridgeInstructions(state, id string) string {
 
 func runWorkConnect(args []string, out, diagnostics io.Writer) int {
 	if len(args) > 0 && helpArgument(args[0]) {
-		fmt.Fprintln(out, "Usage: agentmux connect OBSERVED_ID [--title TASK] [--name ID] [--session work | --state DIR]\nPrepare coordination for an existing native terminal. Run agentmux sessions to find its observation ID.\nThe command prints setup to paste manually; it does not restart the terminal or send input.")
+		fmt.Fprintln(out, "Usage: amx connect OBSERVED_ID [--title TASK] [--name ID] [--session work | --state DIR]\nPrepare coordination for an existing native terminal. Run amx sessions to find its observation ID.\nThe command prints setup to paste manually; it does not restart the terminal or send input.")
 		return exitSuccess
 	}
 	if len(args) == 0 {
-		fmt.Fprintln(diagnostics, "Usage: agentmux connect OBSERVED_ID [--title TASK] [--name ID] [--session work | --state DIR]")
+		fmt.Fprintln(diagnostics, "Usage: amx connect OBSERVED_ID [--title TASK] [--name ID] [--session work | --state DIR]")
 		return exitValidation
 	}
 	reference := args[0]
@@ -417,7 +417,7 @@ func runWorkConnect(args []string, out, diagnostics io.Writer) int {
 		return exitValidation
 	}
 	if flags.NArg() != 0 {
-		fmt.Fprintln(diagnostics, "error: connect accepts one observation ID followed by flags; run agentmux connect --help")
+		fmt.Fprintln(diagnostics, "error: connect accepts one observation ID followed by flags; run amx connect --help")
 		return exitValidation
 	}
 	var values []string

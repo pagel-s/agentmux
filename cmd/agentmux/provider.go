@@ -20,7 +20,7 @@ import (
 
 func runProvider(args []string, stdout, stderr io.Writer) int {
 	if len(args) < 2 || args[0] != "antigravity" || args[1] != "serve" {
-		fmt.Fprintln(stderr, "Usage: agentmux provider antigravity serve --listen 127.0.0.1:8097 --models gemini-3.8-flash-low --key-env AGENTMUX_AGY_BRIDGE_KEY")
+		fmt.Fprintln(stderr, "Usage: amx provider antigravity serve --listen 127.0.0.1:8097 --models gemini-3.8-flash-low --key-env AGENTMUX_AGY_BRIDGE_KEY")
 		return exitValidation
 	}
 	flags := flag.NewFlagSet("provider antigravity serve", flag.ContinueOnError)

@@ -273,7 +273,7 @@ func TestStatusAndFocusNamedPanes(t *testing.T) {
 		if !strings.Contains(message, `available named panes: checks, editor`) {
 			t.Fatalf("missing-pane error %q does not list available panes", message)
 		}
-		if !strings.Contains(message, "agentmux status agentmux-status") {
+		if !strings.Contains(message, "amx status agentmux-status") {
 			t.Fatalf("missing-pane error %q does not include status hint", message)
 		}
 	}
@@ -511,7 +511,7 @@ func TestStatusMissingSessionReturnsHelpfulError(t *testing.T) {
 	if !strings.Contains(err.Error(), `session "missing-session" not found`) {
 		t.Fatalf("missing-session error = %q, want session not found", err)
 	}
-	if !strings.Contains(err.Error(), "agentmux list") {
+	if !strings.Contains(err.Error(), "amx list") {
 		t.Fatalf("missing-session error = %q, want list hint", err)
 	}
 }

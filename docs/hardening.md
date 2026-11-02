@@ -165,8 +165,8 @@ another capsule for that agent. Recovery is an authenticated owner operation
 which also works with the broker offline:
 
 ```sh
-agentmux managed capsule inspect --state /private/run --agent coder
-agentmux managed capsule recover --state /private/run --agent coder \
+amx managed capsule inspect --state /private/run --agent coder
+amx managed capsule recover --state /private/run --agent coder \
   --action restore --expect DIGEST_FROM_INSPECT
 ```
 

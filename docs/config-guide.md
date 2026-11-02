@@ -180,7 +180,7 @@ If two panes reference the same agent, you still get two separate pane processes
 When you select a native pane provider such as `claude`, `antigravity`, `pi`, or
 `codex`, the v1 launcher constructs that CLI's shell command, supplying:
 1. Your `persona` file content through the strongest provider-native surface that CLI actually supports.
-2. The `agentmux prompt` runtime contract, which carries the operational coordination instructions separately from the persona.
+2. The `amx prompt` runtime contract, which carries the operational coordination instructions separately from the persona.
 3. Provider-specific launch wiring so persona lands in the strongest available instruction channel for that CLI without pretending every provider has the same system-prompt model.
 4. Provider-specific coordination details such as resolved integration mode, tool channel, preferred tool-call input mode, and optional reasoning controls.
 
@@ -193,7 +193,7 @@ Current persona delivery defaults:
 - `codex`: bootstrap prompt
 - `gptme`: bootstrap prompt
 
-`agentmux tools --format ...` still exists, but it is now an export/debug surface rather than the primary runtime path.
+`amx tools --format ...` still exists, but it is now an export/debug surface rather than the primary runtime path.
 
 Current integration defaults:
 
@@ -274,16 +274,16 @@ Typical use:
 Create from a starter:
 
 ```bash
-./bin/agentmux init default my-workflow.yaml
+./bin/amx init default my-workflow.yaml
 ```
 
 Then iterate:
 
 ```bash
-./bin/agentmux validate my-workflow.yaml
-./bin/agentmux render my-workflow.yaml
-./bin/agentmux load my-workflow.yaml --replace --no-attach
-./bin/agentmux reload my-workflow.yaml --no-attach
+./bin/amx validate my-workflow.yaml
+./bin/amx render my-workflow.yaml
+./bin/amx load my-workflow.yaml --replace --no-attach
+./bin/amx reload my-workflow.yaml --no-attach
 ```
 
 ## Examples

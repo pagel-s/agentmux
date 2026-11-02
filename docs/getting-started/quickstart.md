@@ -8,9 +8,9 @@ regardless of the current directory.
 
 ## 1. Install and check Agentmux
 
-Install **v0.10.0** using the
+Install **v0.11.0** using the
 [published binary instructions](installation.md#install-a-published-binary-recommended)
-for `agentmux` and `amx` without a Go toolchain. Then skip the source-build commands
+for the `amx` command without a Go toolchain. Then skip the source-build commands
 below and continue with the native CLI checks in this step.
 
 Alternatively, build from source with Git, Make, Python 3, tmux 3.2+ and Go 1.24+.
@@ -20,8 +20,8 @@ On a new checkout:
 git clone https://github.com/pagel-s/agentmux.git
 cd agentmux
 make build
-./bin/agentmux version
-./bin/agentmux doctor
+./bin/amx version
+./bin/amx doctor
 ```
 
 For a user-local executable:
@@ -32,8 +32,8 @@ export PATH="$HOME/.local/bin:$PATH"
 ```
 
 Make that PATH setting available in each new terminal; see
-[installation](installation.md). Check `command -v agentmux amx` and
-`agentmux version` if another installed copy might be selected.
+[installation](installation.md). Check `command -v amx` and
+`amx version` if another installed copy might be selected.
 
 The default team needs both Claude Code and Codex installed and logged in:
 
@@ -57,8 +57,8 @@ git -C "$amx_demo_project" init
 printf '# Agentmux playground\n' > "$amx_demo_project/README.md"
 printf 'Project: %s\n' "$amx_demo_project"
 
-agentmux start --session try-agentmux --project "$amx_demo_project" --detach
-agentmux sessions --session try-agentmux
+amx start --session try-agentmux --project "$amx_demo_project" --detach
+amx sessions --session try-agentmux
 ```
 
 Expected: two registered native sessions with stable IDs `claude` and `codex`.
@@ -76,18 +76,18 @@ silently repointed at a different project.
 ## 3. Use the terminal workbench
 
 ```sh
-agentmux label claude "Explore the project" --session try-agentmux
-agentmux label codex "Review the approach" --session try-agentmux
-agentmux dashboard --session try-agentmux
+amx label claude "Explore the project" --session try-agentmux
+amx label codex "Review the approach" --session try-agentmux
+amx dashboard --session try-agentmux
 ```
 
-Select a session with the arrow keys and press Enter. Ask it to describe the
+Press Tab to focus the session sidebar, select a session with ↑/↓ and press Enter. Ask it to describe the
 playground without changing files. Handle native trust/tool prompts normally.
 Press **F1** (or **Ctrl-b**, release, then **g**) to return to the workbench.
 
 Try **/** to search, **Shift+L** to edit its title, **Shift+V** to edit its role,
-**Shift+N** to add a session, **?** for context help, and **←/→**, **Tab** or
-**1–8** to change views. Left/right works across all eight views. In Connections
+**Shift+N** to add a session, **?** for context help, and **←/→** or **1–8** to change views. **Tab** switches sidebar/content focus;
+↑/↓ navigates that focused area. Left/right works across all eight views. In Connections
 and Teams, use **h/l** or **Alt+←/→** to choose the recipient or action target.
 The footer follows the current view and selection; uppercase letters mean hold
 Shift. Titles can change or repeat;
@@ -109,13 +109,13 @@ opens the Board popup; from the workbench, press **1** for Board directly.
 In one terminal window:
 
 ```sh
-agentmux attach claude --session try-agentmux
+amx attach claude --session try-agentmux
 ```
 
 In another:
 
 ```sh
-agentmux attach codex --session try-agentmux
+amx attach codex --session try-agentmux
 ```
 
 Expected: both are normal native CLI conversations. Switching sessions in one
@@ -136,7 +136,7 @@ Report the broker result. Do not change policy or use files to communicate.
 
 Expected: Claude's agent credential receives `forbidden` for the peer message.
 Use its normal shell tool and approve that specific call if the native CLI asks.
-The owner CLI has broader authority: running `agentmux send` as the owner does
+The owner CLI has broader authority: running `amx send` as the owner does
 not test a peer's permission boundary.
 
 ## 6. Connect only this pair
@@ -144,8 +144,8 @@ not test a peer's permission boundary.
 In the owner shell:
 
 ```sh
-agentmux collaborate claude codex --session try-agentmux
-agentmux board "Test proposal: keep parsing separate from persistence." --session try-agentmux
+amx collaborate claude codex --session try-agentmux
+amx board "Test proposal: keep parsing separate from persistence." --session try-agentmux
 ```
 
 Keep the printed **Group**, **Board** and **Memory** values. This creates a
@@ -180,9 +180,9 @@ automatically type into or wake a native conversation.
 In the owner shell:
 
 ```sh
-agentmux send codex "Informational test note; no task requested." --mode note --session try-agentmux
-agentmux send codex "Test task: summarize the board proposal." --mode instruction --session try-agentmux
-agentmux inbox --session try-agentmux
+amx send codex "Informational test note; no task requested." --mode note --session try-agentmux
+amx send codex "Test task: summarize the board proposal." --mode instruction --session try-agentmux
+amx inbox --session try-agentmux
 ```
 
 Expected: the first creates a message; the second creates a task visible in
@@ -198,15 +198,15 @@ New integrated sessions can also receive attributed instructions directly in
 their native conversation. In the owner shell:
 
 ```sh
-agentmux delivery codex review --session try-agentmux
-agentmux send codex "Reply with one sentence about the board proposal." --mode instruction --session try-agentmux
-agentmux delivery codex --session try-agentmux
+amx delivery codex review --session try-agentmux
+amx send codex "Reply with one sentence about the board proposal." --mode instruction --session try-agentmux
+amx delivery codex --session try-agentmux
 ```
 
 Copy the exact pending candidate ID, then approve it:
 
 ```sh
-agentmux delivery codex --approve CANDIDATE_ID --session try-agentmux
+amx delivery codex --approve CANDIDATE_ID --session try-agentmux
 ```
 
 Expected: Codex receives the attributed turn, and Tasks shows transport progress
@@ -214,7 +214,7 @@ and a correlated result. A queued/submitted item is not yet proof of execution.
 **2 Sessions → Shift+D** edits receiver delivery; **Shift+A** reviews an item.
 Auto removes per-item approval while retaining limits and permissions.
 Peer commands additionally require the sender's directional Commands grant.
-Return to Manual with `agentmux delivery codex manual --session try-agentmux`.
+Return to Manual with `amx delivery codex manual --session try-agentmux`.
 See [native collaboration](../native-delivery.md) for provider differences,
 subscriptions and upgrading a workspace whose controller predates this feature.
 
@@ -224,7 +224,7 @@ Open an additional regular shell for the web server and keep that process open.
 Leave the original owner shell available for steps 9–10:
 
 ```sh
-agentmux web --session try-agentmux --open
+amx web --session try-agentmux --open
 ```
 
 If your desktop does not open it, use the full private URL printed by the
@@ -242,7 +242,7 @@ server only.
 ## 9. End collaboration without ending the conversations
 
 ```sh
-agentmux isolate codex --session try-agentmux
+amx isolate codex --session try-agentmux
 ```
 
 Ask Codex to retry `memory.get` using the **same shared-memory namespace/key**
@@ -256,7 +256,7 @@ it forget. Accepted tasks need separate cancellation.
 Reconnect when wanted:
 
 ```sh
-agentmux collaborate claude codex --session try-agentmux
+amx collaborate claude codex --session try-agentmux
 ```
 
 The same member set reuses its group and saved history. Separate explicit owner
@@ -268,16 +268,16 @@ them during step 8. See [live permissions](../live-permissions.md).
 In the original owner shell, which still has `amx_demo_project` set:
 
 ```sh
-agentmux add review --harness claude --project "$amx_demo_project" \
+amx add review --harness claude --project "$amx_demo_project" \
   --title "Independent second review" --session try-agentmux
-agentmux sessions --session try-agentmux
+amx sessions --session try-agentmux
 ```
 
 The new ID `review` starts independently. Repeat `collaborate` only for the IDs
 you want connected. Use `--native-only` on an addition for a prompt-free native
 launch; coordination then needs explicit manual setup/instructions.
 
-Attach to the new `review` session with `agentmux attach review --session
+Attach to the new `review` session with `amx attach review --session
 try-agentmux`, exit that native CLI normally, then detach with **Ctrl-b**, release,
 then **d** to return to the owner shell. The exited pane can retain its final
 output. Then test a deliberate same-ID relaunch:
@@ -287,8 +287,8 @@ In the workbench, an exited native CLI is marked `exited`; **Enter** or
 You can use the owner shell instead:
 
 ```sh
-agentmux relaunch review --session try-agentmux
-agentmux attach review --session try-agentmux
+amx relaunch review --session try-agentmux
+amx attach review --session try-agentmux
 ```
 
 The first command requires `review` to have exited; it refuses a live session.
@@ -308,8 +308,8 @@ freeze a versioned executable, see the explicit launcher recovery option in
 To observe a native CLI started outside Agentmux:
 
 ```sh
-agentmux sessions --session try-agentmux
-agentmux connect OBSERVED_ID --title "Existing conversation" --session try-agentmux
+amx sessions --session try-agentmux
+amx connect OBSERVED_ID --title "Existing conversation" --session try-agentmux
 ```
 
 Replace `OBSERVED_ID` with a currently observed entry. Paste its printed setup
@@ -317,18 +317,18 @@ into that original native conversation; connecting does not inject it or move
 the external terminal. Some generic interpreter/non-TTY processes cannot be
 identified. Existing external conversations remain under your direct control.
 
-`agentmux workspaces` lists named and remembered custom locations. **Ctrl+W**
+`amx workspaces` lists named and remembered custom locations. **Ctrl+W**
 (also **Shift+W**) opens the chooser. An interactive attachment switches to the
 selected workspace and retains the previous workbench and drafts. A standalone
 observer shows an exact attach command when native input needs another server.
-For an older custom state location, use `agentmux workspaces --register DIRECTORY`.
+For an older custom state location, use `amx workspaces --register DIRECTORY`.
 
 ## 12. Stop the test and try isolated/managed workflows
 
 Stop the web process with Ctrl-C in its shell, then:
 
 ```sh
-agentmux down --session try-agentmux
+amx down --session try-agentmux
 ```
 
 Expected: only the workspace's owned processes stop. Saved state/history and
@@ -366,10 +366,10 @@ Agentmux uses declarative YAML files to define your workspace. You can create on
 
 ```bash
 # See available templates
-agentmux templates
+amx templates
 
 # Initialize a standard AI development workspace
-agentmux init ai-dev my-workflow.yaml
+amx init ai-dev my-workflow.yaml
 ```
 
 ## 2. Review the Plan
@@ -377,7 +377,7 @@ agentmux init ai-dev my-workflow.yaml
 Before launching, you can ask Agentmux to show you exactly what it intends to do:
 
 ```bash
-agentmux render my-workflow.yaml
+amx render my-workflow.yaml
 ```
 
 You'll see a breakdown of the windows, panes, commands, and environment variables that will be created.
@@ -387,7 +387,7 @@ You'll see a breakdown of the windows, panes, commands, and environment variable
 To create the tmux session and attach to it:
 
 ```bash
-agentmux load my-workflow.yaml
+amx load my-workflow.yaml
 ```
 
 Welcome to your new workspace! You should see your editor on the left and a dedicated pane for your AI agent on the right.
@@ -397,11 +397,11 @@ Welcome to your new workspace! You should see your editor on the left and a dedi
 If you realize you want to change the layout or add a new pane, you don't need to kill the session.
 
 1. Detach from tmux (`Prefix + d`).
-2. Edit your configuration file (`agentmux edit my-workflow`).
+2. Edit your configuration file (`amx edit my-workflow`).
 3. Reload the session non-destructively:
 
 ```bash
-agentmux reload my-workflow.yaml
+amx reload my-workflow.yaml
 ```
 
 For supported changes, reload reconciles the layout and updates affected panes.

@@ -10,10 +10,10 @@ The managed runtime and workbench are experimental.
 
 ## Install
 
-Download **[v0.10.0](https://github.com/pagel-s/agentmux/releases/tag/v0.10.0)**
+Download **[v0.11.0](https://github.com/pagel-s/agentmux/releases/tag/v0.11.0)**
 for Linux or macOS, on x86-64 or ARM64. The
 [installation guide](docs/getting-started/installation.md#install-a-published-binary-recommended)
-provides a checksum-verified installer for both `agentmux` and `amx`; no Go
+provides a checksum-verified installer for the `amx` command; no Go
 toolchain is needed for the published binaries. This private repository requires
 authenticated GitHub access; the guide uses `gh` to download the release assets.
 
@@ -27,7 +27,7 @@ configuration; it provides no filesystem isolation. Isolated profiles are opt-in
 git clone https://github.com/pagel-s/agentmux.git
 cd agentmux
 make build
-./bin/agentmux doctor
+./bin/amx doctor
 export PATH="$PWD/bin:$PATH"
 ```
 
@@ -36,8 +36,8 @@ compatible repo-local Go toolchain when available. See
 [installation](docs/getting-started/installation.md) for binary releases and PATH
 setup. Remote `go install …@latest` is currently unsupported by this module.
 
-`make install` installs both `agentmux` and the shorter `amx` command. Use
-`amx` to open the current workspace or choose a running one, `amx a claude -s work`
+`make install` installs `amx`, the Agentmux command. Use
+`amx` to open the workbench, `amx a` to restore the last live terminal, `amx a claude -s work`
 to attach, and `amx link claude codex -s work` to connect a pair. See the
 [everyday command reference](docs/getting-started/everyday-commands.md).
 Use **Ctrl+K** for searchable Actions and **Ctrl+P** for sessions. See the
@@ -59,7 +59,7 @@ Install and log in to Claude Code and Codex first, then run this from your
 project directory:
 
 ```sh
-agentmux start
+amx start
 ```
 
 This creates workspace `work` with native Claude and Codex sessions in your
@@ -83,10 +83,10 @@ Press **Ctrl+P** (or **/**) to find a session: **Enter** opens its native termin
 search and title controls. New sessions can generate their IDs automatically:
 
 ```sh
-agentmux add --harness claude --project ~/projects/api --title "Fix login redirect"
-agentmux label SESSION_ID "Investigate cookie expiry"
-agentmux role SESSION_ID "Review the authentication changes"
-agentmux workspaces
+amx add --harness claude --project ~/projects/api --title "Fix login redirect"
+amx label SESSION_ID "Investigate cookie expiry"
+amx role SESSION_ID "Review the authentication changes"
+amx workspaces
 ```
 
 Press **Shift+V** to edit the selected session's role with version checking and **Shift+W**
@@ -95,7 +95,9 @@ notices; managed workers use the current role at their next task claim. For a
 prompt-free launch, use `add --native-only`; it appends no Agentmux context or
 role. Native Antigravity uses `--harness antigravity --native-only`.
 
-Select an agent with ↑/↓ and press **Enter** for its native CLI. **F1** returns to
+Use **Tab** to focus the session sidebar, select an agent with ↑/↓ and press
+**Enter** for its native CLI. Tab focuses content so ↑/↓ selects messages, tasks,
+memory entries and teams. **F1** returns to
 the workbench; **Ctrl-b b** opens the board as a popup; **Ctrl-b d** detaches.
 For a Ctrl-b shortcut, press Ctrl-b, release both keys, then press the final key.
 Open another terminal window with `attach`: each attachment switches agents
@@ -106,14 +108,14 @@ In the workbench itself, use **←/→** or **1–8** to switch views; popup sho
 corresponding view key instead of opening a second dashboard over it.
 
 ```sh
-agentmux add billing --harness claude --project ~/projects/billing
-agentmux add review --harness codex --project ~/projects/api --role "Review changes"
-agentmux attach billing
-agentmux collaborate claude review
-agentmux send review "Please read the proposal when we discuss it." --mode note
-agentmux isolate review
-agentmux remove billing
-agentmux web --open
+amx add billing --harness claude --project ~/projects/billing
+amx add review --harness codex --project ~/projects/api --role "Review changes"
+amx attach billing
+amx collaborate claude review
+amx send review "Please read the proposal when we discuss it." --mode note
+amx isolate review
+amx remove billing
+amx web --open
 ```
 
 `collaborate` creates a dedicated board and shared memory for the selected IDs.
@@ -121,13 +123,13 @@ Two unrelated groups do not silently share context. `isolate` revokes peer
 coordination and group membership while keeping native interaction running.
 Accepted tasks need separate cancellation; previously read information remains.
 Keep the printed group ID: with several groups, post using
-`agentmux board "Note for this group" --group GROUP_ID`. The web app's Teams view
+`amx board "Note for this group" --group GROUP_ID`. The web app's Teams view
 lists owner collaboration groups and their boards/memory.
 `send` defaults to an inbox note for native sessions and an instruction task for
 managed workers. Choose `--mode note` or `--mode instruction` explicitly; the
 terminal editor uses **Ctrl-T** and the web composer shows the same intent.
 To receive instructions inside a native conversation, also choose receiver
-delivery: `agentmux delivery codex review` or `agentmux delivery codex auto`.
+delivery: `amx delivery codex review` or `amx delivery codex auto`.
 Manual is the default. Command permissions and delivery mode are separate;
 the Agents view exposes both delivery evidence and approvals. See
 [native collaboration](docs/native-delivery.md) for subscriptions, limits,
@@ -135,13 +137,13 @@ provider capabilities and upgrade instructions.
 Replies retain broker-checked ancestry and an explicit shared or private
 audience. Messages never become unsolicited terminal keystrokes. An exited owned
 native session can be relaunched under its existing ID without restarting peers:
-`agentmux relaunch review --resume last` selects native history deliberately.
+`amx relaunch review --resume last` selects native history deliberately.
 
 Existing sessions can join without restarting their conversation:
 
 ```sh
-agentmux sessions
-agentmux connect OBSERVATION_ID --title "Review API changes"
+amx sessions
+amx connect OBSERVATION_ID --title "Review API changes"
 # Paste the printed setup once into that existing native session.
 ```
 
@@ -153,11 +155,15 @@ not be identifiable. Existing external terminals remain under your direct contro
 Use `start --sandbox bubblewrap` for isolated profiles, `--session NAME` for a
 separate workspace, or `start --config team.yaml` for a configured mixed team.
 Configuration and state live under `$XDG_STATE_HOME/agentmux` (default
-`~/.local/state/agentmux`), outside the writable projects. Run `agentmux down` to
+`~/.local/state/agentmux`), outside the writable projects. Run `amx down` to
 stop the workspace's owned processes. External bridged terminals are never killed.
 
 See [work sessions](docs/work-sessions.md) for dashboard keys, mixed teams,
 native history and current limits.
+
+See [terminal folders and layouts](docs/terminal-workflow.md) for per-session
+projects, ordinary shell splits, `amx split A B`, `amx unsplit ID`, scratch-window
+persistence and the exact behavior of `amx a`.
 
 ## Observe and control
 
@@ -168,7 +174,7 @@ help, including **Ctrl-G** while editing without consuming printable text.
 Teams and Events expose consented membership, pending invitations, spawn lineage,
 worker admission state and recent lifecycle changes. Team boards and memory appear
 in the same namespace controls as configured shared knowledge.
-`agentmux web` serves a compact local owner app with the same communication
+`amx web` serves a compact local owner app with the same communication
 controls, shared-memory inspection/editing, session setup/discovery, a relationship
 graph and read-only terminal previews. Native
 terminal input stays in tmux.

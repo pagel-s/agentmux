@@ -6,7 +6,7 @@ control. Both surfaces identify actions by stable session ID.
 
 ## Upgrade an existing workspace
 
-`make install` updates `agentmux` and its `amx` shortcut. New workspaces use the
+`make install` updates the `amx` executable. New workspaces use the
 new controller. Existing workspaces keep their pinned controller and native
 conversations. A new `amx attach -s NAME` upgrades the observer without
 restarting those agents; backend features such as retirement, memory patches

@@ -76,8 +76,8 @@ apply a migration choice against changed owner intent.
 For the everyday CLI:
 
 ```sh
-agentmux collaborate alice bob --legacy-policy preserve --session work
-agentmux collaborate alice bob --legacy-policy group --session work
+amx collaborate alice bob --legacy-policy preserve --session work
+amx collaborate alice bob --legacy-policy group --session work
 ```
 
 The terminal Connections **c** opens a migration review for an exact two-agent

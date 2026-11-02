@@ -35,13 +35,13 @@ Selecting `--state STATE --agent coder` loads that agent's credential from the
 owner-controlled state directory; it does not change its API permissions.
 
 ```bash
-agentmux managed memory export --state STATE --agent coder \
+amx managed memory export --state STATE --agent coder \
   --namespace private --output /private/coder-memory.json
-agentmux managed memory import --state NEW_STATE --agent coder \
+amx managed memory import --state NEW_STATE --agent coder \
   --namespace private --input /private/coder-memory.json
-agentmux managed memory search --state NEW_STATE --agent coder \
+amx managed memory search --state NEW_STATE --agent coder \
   --namespace private --query 'parser architecture'
-agentmux managed memory prune --state STATE
+amx managed memory prune --state STATE
 ```
 
 Exports are exclusive mode-0600 files, bounded to 64 MiB/10000 entries. Imports
@@ -72,10 +72,10 @@ search compares only matching model IDs and vector dimensions. The index and
 search paths enforce the same namespace ACLs as ordinary reads/writes.
 
 ```bash
-agentmux managed memory index --state STATE --agent coder --namespace private \
+amx managed memory index --state STATE --agent coder --namespace private \
   --embedding-base-url http://127.0.0.1:8000/v1 --embedding-model EXACT_MODEL \
   --allow-provider-calls --max-entries 100
-agentmux managed memory search --state STATE --agent coder --namespace private \
+amx managed memory search --state STATE --agent coder --namespace private \
   --query 'parser architecture' --embedding-base-url http://127.0.0.1:8000/v1 \
   --embedding-model EXACT_MODEL --allow-provider-calls
 ```

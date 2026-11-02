@@ -43,8 +43,8 @@ func TestPrepareProviderRuntimeWritesGeminiSettings(t *testing.T) {
 	if !ok {
 		t.Fatalf("agentmux server = %#v, want object", mcpServers["agentmux"])
 	}
-	if got := agentmux["command"]; got != "agentmux" {
-		t.Fatalf("agentmux command = %#v, want %q", got, "agentmux")
+	if got := agentmux["command"]; got != "amx" {
+		t.Fatalf("agentmux command = %#v, want %q", got, "amx")
 	}
 	env, ok := agentmux["env"].(map[string]any)
 	if !ok {

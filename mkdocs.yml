@@ -49,6 +49,7 @@ nav:
       - Visual workflow guide: visual-guide.md
       - Quickstart: getting-started/quickstart.md
       - Everyday commands: getting-started/everyday-commands.md
+      - Terminal folders and layouts: terminal-workflow.md
   - Tutorials:
       - Legacy Layout Handoff: tutorials/hello-team.md
       - Portable Bundles: tutorials/portable-bundles.md

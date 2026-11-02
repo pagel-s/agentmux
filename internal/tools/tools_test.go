@@ -94,7 +94,7 @@ func TestPromptSupportsNativeMCPMode(t *testing.T) {
 	}
 	for _, want := range []string{
 		"Agentmux coordination tools are available natively through MCP in this session.",
-		"Use the provided tools directly instead of shelling out to `agentmux tool-call`.",
+		"Use the provided tools directly instead of shelling out to `amx tool-call`.",
 		"The `wait` tool ignores active input/composer text by default;",
 		"Call `kv_get` directly with `key=current_task`.",
 	} {
@@ -160,7 +160,7 @@ func TestPromptResolvesUnverifiedNativeMCPToCLIBridge(t *testing.T) {
 			if strings.Contains(out, "available natively through MCP") {
 				t.Fatalf("Prompt claims unavailable native MCP: %q", out)
 			}
-			if !strings.Contains(out, "call `agentmux tool-call`") {
+			if !strings.Contains(out, "call `amx tool-call`") {
 				t.Fatalf("Prompt does not explain the CLI bridge: %q", out)
 			}
 		})

@@ -17,11 +17,11 @@ import (
 func runManagedTrace(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	usage := func() {
 		fmt.Fprintln(stdout, `Usage:
-  agentmux managed trace list --state DIR --agent ID
-  agentmux managed trace verify|show --state DIR --agent ID --id TRACE_ID [--mac TASK_MAC]
-  agentmux managed trace export --state DIR --agent ID --id TRACE_ID
+  amx managed trace list --state DIR --agent ID
+  amx managed trace verify|show --state DIR --agent ID --id TRACE_ID [--mac TASK_MAC]
+  amx managed trace export --state DIR --agent ID --id TRACE_ID
       [--mac TASK_MAC] --output NEW_PRIVATE_FILE
-  agentmux managed trace verify-bundle --input FILE --trust OWNER_PUBLIC_KEY_SHA256
+  amx managed trace verify-bundle --input FILE --trust OWNER_PUBLIC_KEY_SHA256
 
 Local list/verify/show/export require owner state access. Export signs a locally
 verified trace without exporting credentials or secret keys. Offline verify-bundle

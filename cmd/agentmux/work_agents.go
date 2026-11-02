@@ -146,14 +146,14 @@ func runWorkAddParsed(args []string, out, diagnostics io.Writer, resolvedID *str
 	}
 	credential, err := managed.LoadCredential(managed.CredentialPath(options.state, ""))
 	if err != nil {
-		return fail(errors.New("workspace not found; use agentmux start first"))
+		return fail(errors.New("workspace not found; use amx start first"))
 	}
 	client := managed.NewClient(credential)
 	if _, err = workCall(context.Background(), client, "agent.add", map[string]any{"id": id, "title": *title, "config": plan.Config.Agents[id]}); err != nil {
 		return fail(err)
 	}
 	fmt.Fprintf(out, "Added %s · %s · %s\n", id, *provider, directory)
-	fmt.Fprintln(out, "Collaboration is off. Open:", managedlaunch.ShellCommand([]string{"agentmux", "attach", id, "--state", options.state}))
+	fmt.Fprintln(out, "Collaboration is off. Open:", managedlaunch.ShellCommand([]string{"amx", "attach", id, "--state", options.state}))
 	if *title != "" {
 		fmt.Fprintln(out, "Title:", *title)
 	}
@@ -246,7 +246,7 @@ func workAgentOperation(operation string, o workOptions, client *managed.Client,
 			if control.Group != nil {
 				fmt.Fprintf(out, "Group %s\nBoard %s\nMemory %s\n", control.Group.ID, control.Group.Board, control.Group.Memory)
 			}
-			fmt.Fprintln(out, "Native delivery follows each recipient's Manual/Review/Auto policy; inspect with agentmux delivery ID. In Manual, ask the agent to read its updated boundaries/inbox.")
+			fmt.Fprintln(out, "Native delivery follows each recipient's Manual/Review/Auto policy; inspect with amx delivery ID. In Manual, ask the agent to read its updated boundaries/inbox.")
 		}
 	}
 	return nil

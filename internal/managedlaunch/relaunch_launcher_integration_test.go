@@ -22,7 +22,7 @@ func TestNativeLauncherPublicCLIRecoversRemovedVersionWithoutRestartingPeer(t *t
 	}
 	exe := os.Getenv("AGENTMUX_TEST_BINARY")
 	if exe == "" {
-		exe = "../../bin/agentmux"
+		exe = "../../bin/amx"
 	}
 	exe, _ = filepath.Abs(exe)
 	root, err := os.MkdirTemp("", "amx-native-updater-")

@@ -23,7 +23,7 @@ func runResearch(args []string) int {
 }
 func runResearchIO(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	usage := func() {
-		fmt.Fprintln(stderr, "Usage: agentmux research plan <manifest.yaml>\n       agentmux research run <manifest.yaml> --output <private-dir> [--allow-models] [--rerun-interrupted] [--start-paused]\n       agentmux research analyze <output-dir> [--csv <new-file>] [--behavior-csv <new-file>]\n       agentmux research status|watch <output-dir-or-state> [--follow]\n       agentmux research study <output-dir>\n       agentmux research history <output-dir> [--actor ID] [--type TYPE] [--query TEXT] [--after CURSOR] [--limit N]\n       agentmux research pause|resume|step|stop <output-dir-or-state> --version N --reason TEXT")
+		fmt.Fprintln(stderr, "Usage: amx research plan <manifest.yaml>\n       amx research run <manifest.yaml> --output <private-dir> [--allow-models] [--rerun-interrupted] [--start-paused]\n       amx research analyze <output-dir> [--csv <new-file>] [--behavior-csv <new-file>]\n       amx research status|watch <output-dir-or-state> [--follow]\n       amx research study <output-dir>\n       amx research history <output-dir> [--actor ID] [--type TYPE] [--query TEXT] [--after CURSOR] [--limit N]\n       amx research pause|resume|step|stop <output-dir-or-state> --version N --reason TEXT")
 	}
 	if len(args) == 1 && (args[0] == "help" || args[0] == "--help" || args[0] == "-h") {
 		usage()
@@ -78,7 +78,7 @@ func runResearchIO(ctx context.Context, args []string, stdout, stderr io.Writer)
 		return exitValidation
 	}
 	if flags.NArg() != 0 {
-		fmt.Fprintln(stderr, "research accepts one manifest/output path followed by flags; run agentmux research --help")
+		fmt.Fprintln(stderr, "research accepts one manifest/output path followed by flags; run amx research --help")
 		return exitValidation
 	}
 	if args[0] == "plan" && (*output != "" || *allow || *rerun || *startPaused || *csvPath != "" || *behaviorCSV != "") {
@@ -126,7 +126,7 @@ func runResearchIO(ctx context.Context, args []string, stdout, stderr io.Writer)
 			} else {
 				var report research.Report
 				report, err = research.Run(ctx, manifest, research.RunOptions{OutputDir: *output, Executable: binary, AllowModels: *allow, RerunInterrupted: *rerun, StartPaused: *startPaused, OnLive: func(state string) {
-					fmt.Fprintf(stderr, "Research live state: %s\nObserve: agentmux research watch %s --follow\nTerminal: agentmux dashboard --state %s --view research\nWeb: agentmux web --state %s\n", state, shellQuote(*output), shellQuote(state), shellQuote(state))
+					fmt.Fprintf(stderr, "Research live state: %s\nObserve: amx research watch %s --follow\nTerminal: amx dashboard --state %s --view research\nWeb: amx web --state %s\n", state, shellQuote(*output), shellQuote(state), shellQuote(state))
 				}})
 				result = research.Analyze(report)
 			}

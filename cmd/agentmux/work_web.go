@@ -429,7 +429,7 @@ func runWorkWeb(args []string, out, diagnostics io.Writer) int {
 			continue
 		}
 		if args[i] == "--help" || args[i] == "-h" {
-			fmt.Fprintln(out, "Usage: agentmux web [--session work | --state DIR] [--port 0] [--open]\nOwner-only local web console. Closing it leaves agents running.")
+			fmt.Fprintln(out, "Usage: amx web [--session work | --state DIR] [--port 0] [--open]\nOwner-only local web console. Closing it leaves agents running.")
 			return exitSuccess
 		}
 		clean = append(clean, args[i])

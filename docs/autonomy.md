@@ -70,9 +70,9 @@ Source permissions are checked again before delivery and while an observation ru
 For a running workspace, inspect the selected agent using its exact state path:
 
 ```sh
-agentmux managed call autonomy.status --credential-file STATE/owner.json \
+amx managed call autonomy.status --credential-file STATE/owner.json \
   --json '{"agent":"reviewer"}'
-agentmux managed call capacity.get --credential-file STATE/owner.json \
+amx managed call capacity.get --credential-file STATE/owner.json \
   --json '{"agent":"reviewer"}'
 ```
 

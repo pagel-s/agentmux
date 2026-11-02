@@ -497,6 +497,10 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.close()
 	case "esc":
 		m.workspaceRequest++
+		if !m.memoryOpen && m.details == "" {
+			m.contentFocus = false
+		}
+		m.details = ""
 		m.closeMemory()
 	case "home":
 		if m.tab == 7 {
@@ -507,11 +511,8 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.fetch
 		}
 	case "up", "k":
-		if m.tab == 5 {
-			if m.observedSelected > 0 {
-				m.observedSelected--
-				m.details = ""
-			}
+		if m.contentFocus {
+			m.moveContent(-1)
 			return m, nil
 		}
 		if m.selected > 0 {
@@ -522,11 +523,8 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.fetch
 		}
 	case "down", "j":
-		if m.tab == 5 {
-			if m.observedSelected+1 < len(m.observedSessions()) {
-				m.observedSelected++
-				m.details = ""
-			}
+		if m.contentFocus {
+			m.moveContent(1)
 			return m, nil
 		}
 		if m.selected+1 < len(m.agents) {
@@ -536,7 +534,11 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.closeMemory()
 			return m, m.fetch
 		}
-	case "tab", "right", "ctrl+right":
+	case "tab", "shift+tab":
+		m.contentFocus = !m.contentFocus
+		m.message = ""
+		return m, nil
+	case "right", "ctrl+right":
 		cmd := m.selectView(m.tab + 1)
 		return m, cmd
 	case "pgdown":
@@ -553,33 +555,24 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.task = 0
 			return m, m.fetch
 		}
-	case "shift+tab", "left", "ctrl+left":
+	case "left", "ctrl+left":
 		cmd := m.selectView(m.tab - 1)
 		return m, cmd
 	case "1", "2", "3", "4", "5", "6", "7", "8":
 		cmd := m.selectView(int(key[0] - '1'))
 		return m, cmd
 	case "enter":
-		if m.tab == 6 {
-			if m.selectedTeam() == nil || m.data.teamsErr != nil {
-				m.message = "No team target is selected. Press 2 for Sessions to open a native terminal, or 3 for Connections."
-				return m, nil
-			}
-			if len(m.agents) == 0 {
-				m.message = "No registered agent is available as the team's terminal target."
-				return m, nil
-			}
-			m.explicitSessionChoice(m.teamMemberIndex % len(m.agents))
-			m.closeMemory()
-			a := m.agents[m.selected]
-			m.data.headless = !a.External && m.data.runtime.Agents[a.ID].PaneID == "" && (m.data.research != nil || m.data.runtime.AttemptID == "" && a.Config.Interaction != "interactive")
-			if m.nativeNeedsRelaunch() {
-				m.reviewNativeRelaunch()
-				return m, nil
-			}
-			return m, m.attach()
+		if m.contentFocus && m.tab == 6 && (m.selectedTeam() == nil || m.data.teamsErr != nil) {
+			m.message = "No team target is selected. Press 2 for Sessions or 3 for Connections."
+			return m, nil
 		}
-		if m.tab == 5 {
+		if m.contentFocus && (m.tab == 0 || m.tab == 3 || m.tab == 4 || m.tab == 6 || m.tab == 7) {
+			if m.tab == 3 && !m.memoryOpen {
+				return m.key(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}})
+			}
+			return m.key(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'o'}})
+		}
+		if m.tab == 5 && m.contentFocus {
 			if observations := m.observedSessions(); len(observations) > 0 {
 				v := observations[m.observedSelected%len(observations)]
 				m.details = observedTitle(v) + "\nObserved ID: " + v.ID + "\nProject: " + v.Project + "\nStarted: " + sessionAdded(v.StartedAt) + "\nOriginal terminal: " + v.TTY + "\nTmux: " + v.TmuxSession + "\n" + v.AttachCommand + observationWorkspaceNote(v) + "\nConnect bridge: press c, then copy the displayed setup into the existing native conversation. No terminal input is injected."
@@ -645,8 +638,10 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.fetch
 		}
 	case "]":
+		m.contentFocus = true
 		m.stepContent(1)
 	case "[":
+		m.contentFocus = true
 		m.stepContent(-1)
 	case "alt+right", "l":
 		if m.tab == 6 && len(m.agents) > 0 {
@@ -782,7 +777,7 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.busy = true
 			return m, func() tea.Msg {
 				setup, err := connectObservedSession(context.Background(), state, v.ID, id)
-				details := observationWorkspaceNote(v) + "\n\nPrint setup in a shell:\n" + managedlaunch.ShellCommand([]string{"agentmux", "connect", v.ID, "--name", id, "--state", state}) + "\n\n" + setup
+				details := observationWorkspaceNote(v) + "\n\nPrint setup in a shell:\n" + managedlaunch.ShellCommand([]string{"amx", "connect", v.ID, "--name", id, "--state", state}) + "\n\n" + setup
 				return consoleAction{message: "Bridge prepared as " + id + ". Paste the setup in its original native session; readiness is not confirmed.", details: details, err: err}
 			}
 		}

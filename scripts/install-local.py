@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Atomically install a locally built Agentmux and its amx shortcut."""
+"""Atomically install the locally built amx command."""
 import argparse
 import importlib.util
 from pathlib import Path

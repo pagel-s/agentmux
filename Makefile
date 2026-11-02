@@ -5,7 +5,7 @@ GOCACHE ?= $(CURDIR)/.cache/go-build
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo none)
 DATE ?= $(shell date -u +%Y-%m-%d)
-BINARY := bin/agentmux
+BINARY := bin/amx
 PREFIX ?= $(HOME)/.local
 BINDIR ?= $(PREFIX)/bin
 DESTDIR ?=
@@ -16,12 +16,13 @@ UNIT_PACKAGES := $(shell GOCACHE=$(GOCACHE) $(GO) list ./... | grep -v '^agentmu
 build:
 	mkdir -p bin
 	GOCACHE=$(GOCACHE) $(GO) build -ldflags "-X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DATE)" -o $(BINARY) ./cmd/agentmux
+	ln -sfn amx bin/agentmux
 
 # Atomic binary replacement retains the previous executable. An unrelated amx
 # command is never replaced, including when upgrading Agentmux.
 install: build
 	mkdir -p "$(DESTDIR)$(BINDIR)"
-	python3 scripts/install-local.py --source "$(BINARY)" --destination "$(DESTDIR)$(BINDIR)/agentmux" --replace
+	python3 scripts/install-local.py --source "$(BINARY)" --destination "$(DESTDIR)$(BINDIR)/amx" --replace
 
 test: test-unit test-integration
 

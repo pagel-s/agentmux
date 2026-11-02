@@ -1,6 +1,6 @@
 # Interactive work sessions
 
-Start with `agentmux start` from your project directory after installing and
+Start with `amx start` from your project directory after installing and
 logging in to Claude Code and Codex. It opens a workbench for the default
 workspace `work`; select a session and press Enter to type into its native CLI.
 F1 returns to the workbench. A workspace contains sessions and an owner
@@ -18,11 +18,11 @@ are editable and may repeat; the permanent session ID remains visible and is
 used for every attach, message, permission and collaboration operation.
 
 ```sh
-agentmux add --harness claude --project ~/projects/api --title "Fix login redirect"
+amx add --harness claude --project ~/projects/api --title "Fix login redirect"
 # The command prints a generated stable ID; choosing a name is optional.
-agentmux label SESSION_ID "Investigate expired login cookie"
-agentmux label SESSION_ID ""  # Clear the title without changing the session.
-agentmux sessions
+amx label SESSION_ID "Investigate expired login cookie"
+amx label SESSION_ID ""  # Clear the title without changing the session.
+amx sessions
 ```
 
 The workbench and web app show title, project, provider and ID. Session details
@@ -43,7 +43,7 @@ native Antigravity;
 `--title` labels the human task, while `--role` supplies optional instructions
 to the agent at launch.
 
-For a pristine native launch, use `agentmux add --harness claude --native-only`.
+For a pristine native launch, use `amx add --harness claude --native-only`.
 This appends no Agentmux prompt or role and preserves the native CLI's local
 configuration. Broker credentials remain available for coordination you request
 manually; listing/attaching works normally. It cannot be combined with `--role`.
@@ -51,7 +51,7 @@ Native Antigravity is available with `--harness antigravity --native-only`; its
 direct CLI does not expose a verified appended-system-role interface. Use the
 Pi bridge when you want injected Agentmux context with that provider.
 
-Change a coordinated session's role with `agentmux role SESSION_ID "New role"`,
+Change a coordinated session's role with `amx role SESSION_ID "New role"`,
 or press **V** in the terminal workbench. The role editor uses version checking
 and preserves a failed draft. **Ctrl-R** reviews the latest role; Enter adopts
 only the reviewed version before a separate save. Managed workers capture the
@@ -78,12 +78,12 @@ must be replaced with the IDs or paths from your own workspace.
 With Claude Code and Codex installed and logged in:
 
 ```sh
-agentmux start --project /path/to/project
+amx start --project /path/to/project
 # In another terminal:
-agentmux attach claude
-agentmux attach codex
-agentmux dashboard
-agentmux web --open
+amx attach claude
+amx attach codex
+amx dashboard
+amx web --open
 ```
 
 `start --detach` starts without attachment. Commands accept `--session NAME` or
@@ -102,7 +102,7 @@ An explicit `--sandbox` must also match the running broker's mode; reopening nev
 changes that mode. A mismatch is rejected without restarting the workspace.
 Use `managed restart --state DIRECTORY` for explicit whole-workspace restart.
 
-Use `agentmux relaunch AGENT_ID` to restart one exited workspace-owned native
+Use `amx relaunch AGENT_ID` to restart one exited workspace-owned native
 session under the same ID while its healthy peers keep their processes. It starts
 a fresh native conversation by default. `--resume picker`, `--resume last` or
 `--resume NATIVE_ID` makes the native history choice explicit; it does not renew
@@ -122,7 +122,7 @@ If an older local definition directly invokes a removed or outdated native
 binary, select its installed public launcher for this one invocation:
 
 ```sh
-agentmux relaunch codex --native-launcher "$(command -v codex)"
+amx relaunch codex --native-launcher "$(command -v codex)"
 ```
 
 This requires an updated running controller and an absolute executable path.
@@ -135,7 +135,7 @@ An older controller rejects this option with upgrade guidance; it is never
 silently ignored. Add the workspace's `--session NAME` or `--state DIR` selector
 when it is not the default workspace.
 
-`agentmux workspaces` lists named workspaces and remembered custom state paths.
+`amx workspaces` lists named workspaces and remembered custom state paths.
 Use `--json` for structured inventory or `--register DIR` to add an older custom
 location. **Ctrl+W** (also **Shift+W**) opens the workspace chooser. From an
 interactive attachment, Enter hands off to that workspace while preserving the
@@ -151,10 +151,10 @@ used `start --session api`, keep using `--session api`, including on `add`,
 `sessions`, `connect`, `attach`, `web` and `down`. For a second workspace:
 
 ```sh
-agentmux start --session billing --project /path/to/billing
+amx start --session billing --project /path/to/billing
 # Later, from any directory:
-agentmux attach codex --session billing
-agentmux dashboard --session billing
+amx attach codex --session billing
+amx dashboard --session billing
 ```
 
 If `start` reports a different saved project, use `attach --session NAME` to
@@ -164,6 +164,11 @@ detached, attach again; no restart is needed. After `down`, running the original
 through each provider's native history controls; relaunching does not promise
 automatic conversation resumption. See [recovery](traces-and-recovery.md) for
 broker/task uncertainty and upgrades.
+
+For project directories, shell splits, multiple agents in one tmux window,
+normal tmux keys and last-session reattachment, see
+[terminal folders and layouts](terminal-workflow.md). Tab switches sidebar/content
+focus; ↑/↓ navigates that focused area and ←/→ changes views.
 
 Tasks in both consoles browse the complete broker history. In the terminal,
 `PgDn` loads older records, `PgUp` returns toward newer records and `f` searches
@@ -195,12 +200,12 @@ The controller is always checksum-pinned outside writable projects before launch
 including projects added later.
 
 ```sh
-agentmux add backend --harness claude --project ~/projects/backend
-agentmux add review --harness codex --project ~/projects/frontend --role "Review changes"
-agentmux collaborate backend review
-agentmux board "Use the group's API proposal as context."
-agentmux isolate review
-agentmux remove backend
+amx add backend --harness claude --project ~/projects/backend
+amx add review --harness codex --project ~/projects/frontend --role "Review changes"
+amx collaborate backend review
+amx board "Use the group's API proposal as context."
+amx isolate review
+amx remove backend
 ```
 
 One workspace can contain sessions from unrelated projects. `add` starts another
@@ -232,10 +237,10 @@ view or the exact memory namespace in Memory.
 
 ```sh
 # Assume api, api-review, billing and billing-review are registered IDs.
-agentmux collaborate api api-review
-agentmux collaborate billing billing-review
+amx collaborate api api-review
+amx collaborate billing billing-review
 # Replace GROUP_ID with the first command's printed Group value:
-agentmux board "API proposal ready for review" --group GROUP_ID
+amx board "API proposal ready for review" --group GROUP_ID
 ```
 
 Repeating `collaborate` with the same complete member set reuses its group and
@@ -277,8 +282,8 @@ workspace name, tmux panes, and provider-native conversation IDs.
 To review/edit a configured team before launch:
 
 ```sh
-agentmux managed setup --preset coding --output team.yaml
-agentmux start --config team.yaml --session my-team
+amx managed setup --preset coding --output team.yaml
+amx start --config team.yaml --session my-team
 ```
 
 For an idle managed review team, select `--preset reviewer-pair`; for coordinator,
@@ -291,12 +296,12 @@ preregistration/analysis rather than treating a role preset as a research design
 ## Existing sessions
 
 These commands use an already running Agentmux workspace. If you have none,
-start one first with `agentmux start --detach`. The independently started native
+start one first with `amx start --detach`. The independently started native
 terminal remains in its original window throughout discovery and connection.
 
 ```sh
-agentmux sessions
-agentmux connect OBSERVATION_ID --title "Review login changes"
+amx sessions
+amx connect OBSERVATION_ID --title "Review login changes"
 # Optional: --name existing-review chooses the stable ID explicitly.
 ```
 
@@ -315,7 +320,7 @@ normal shell capability. Native tool access must permit that helper path.
 
 A bridge does not retrofit process/filesystem isolation into an existing terminal.
 Disconnecting it revokes broker access and leaves the external process alone.
-Use `agentmux remove REGISTERED_ID` to disconnect that bridge; `isolate` keeps
+Use `amx remove REGISTERED_ID` to disconnect that bridge; `isolate` keeps
 the bridge available but disables its peer collaboration. `attach` cannot move
 an external session into the workspace; return to its original terminal.
 Transport failures never trigger automatic registration retries. Explicit reconnect
@@ -338,14 +343,15 @@ Keys are case-sensitive: `N`, `L`, `V`, and `P` mean Shift plus that letter. For
 `Ctrl-b b`, press Ctrl-b, release both keys, then press b. The same two-step
 prefix applies to the other Ctrl-b bindings. Shortcuts below depend on the
 active view and selected record; the footer shows the actions available there.
-Use Left/Right, Tab or a view number to switch between all eight views.
+Use Left/Right or a view number to switch between all eight views.
+Tab changes sidebar/content focus. Up/Down navigates the focused area.
 Connections and Teams use h/l or Alt-Left/Alt-Right for their recipient/target.
 In an editor, printable characters are text;
 use **Ctrl-G** for help and **Esc** to cancel before using navigation shortcuts.
 
 | Key | Action |
 | --- | --- |
-| ↑/↓ or j/k | Select agent |
+| ↑/↓ or j/k | Navigate the focused sidebar or content |
 | Enter | Focus its tracked terminal; an exited native CLI opens a same-ID relaunch review. Outside tmux, open an independent attachment |
 | Ctrl+P or / | Find by task, project, provider, ID or terminal location; Enter opens native, Tab selects here, Esc cancels |
 | Shift+L | Edit the selected session's human task title; empty clears |
@@ -358,7 +364,8 @@ use **Ctrl-G** for help and **Esc** to cancel before using navigation shortcuts.
 | F1 / Ctrl-b g in a native session | Return to the workbench |
 | Ctrl-b, then b / Shift+P / m / t in a native session | Open Board / Connections / Memory / Tasks in a popup |
 | Ctrl-b, then Shift+D | Choose read-only Broker or Supervisor logs without leaving the current terminal |
-| Tab / Shift-Tab or 1–8 | Switch Board, Sessions, Connections, Memory, Tasks, Existing terminals, Teams, Events |
+| Tab / Shift-Tab | Focus sidebar or content |
+| 1–8 | Select Board, Sessions, Connections, Memory, Tasks, Existing terminals, Teams, Events |
 | ←/→ or Ctrl+←/→ in every view | Switch views; editors, readers and reviews keep their own arrow keys |
 | [ / ] in Teams; h/l or Alt+←/→ | Choose a team; choose an exact agent for a membership action |
 | i / r / d in Teams | Review invite / remove or revoke invitation / dissolve with the current version; hints follow target membership |
@@ -445,19 +452,19 @@ Human input goes directly to the native CLI, including its normal approval
 prompts. Broker messages do not inject keystrokes or impersonate user input.
 In the default Manual mode, ask an interactive agent to read its broker inbox.
 For integrated Claude, Codex and Pi sessions, choose Review or Auto in Agents
-or with `agentmux delivery ID review|auto` to enable attributed native turns.
+or with `amx delivery ID review|auto` to enable attributed native turns.
 Sender Commands permission and receiver delivery mode are separate. See
 [native delivery](native-delivery.md) for approvals, subscriptions, lifecycle
 evidence, limits and provider-specific capabilities.
 
 ```sh
-agentmux send codex "Please read the proposed API on the team board."
-agentmux board "Proposal: keep parsing and persistence separate."
-agentmux inbox
-agentmux reply TASK_OR_MESSAGE_ID "Please also check error handling."
-agentmux reply MESSAGE_ID "A note, no task." --mode note
-agentmux reply BOARD_MESSAGE_ID "For this board." --board BOARD_NAMESPACE
-agentmux reply BOARD_MESSAGE_ID "Private follow-up." --to codex --mode note
+amx send codex "Please read the proposed API on the team board."
+amx board "Proposal: keep parsing and persistence separate."
+amx inbox
+amx reply TASK_OR_MESSAGE_ID "Please also check error handling."
+amx reply MESSAGE_ID "A note, no task." --mode note
+amx reply BOARD_MESSAGE_ID "For this board." --board BOARD_NAMESPACE
+amx reply BOARD_MESSAGE_ID "Private follow-up." --to codex --mode note
 ```
 
 `send`/`reply` default to `--mode auto`: a note for interactive agents and an
@@ -482,7 +489,7 @@ Empty replies are rejected before creating any message or task.
 
 ## Web app
 
-`agentmux web --open` opens a local full-screen app; without `--open`, it prints a
+`amx web --open` opens a local full-screen app; without `--open`, it prints a
 private link. `--port NUMBER` selects a loopback port; by default one is allocated.
 Ctrl-C stops the web process independently of the team. Never give its private
 owner link to agents.
@@ -554,7 +561,7 @@ unfiltered inbox may still contain the agent's own authored/direct receipts.
 
 Owner collaboration groups and consented dynamic teams have separate lifecycles.
 The coding preset leaves dynamic teams and spawning disabled. A configured
-managed team can enable and delegate them; `agentmux team --help` documents
+managed team can enable and delegate them; `amx team --help` documents
 create/list, metadata edits, invitations, removal/dissolution, ownership proposals,
 participant acceptance and atomic invited moves. Team name/mission edits retain
 the same namespace identities. An ownership proposal changes no authority until

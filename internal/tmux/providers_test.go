@@ -61,12 +61,12 @@ func TestCompileProviderCommand(t *testing.T) {
 			reasoning: "high",
 			want: `agy --model 'Gemini 3.8 Flash' --effort 'high' --prompt-interactive "$(cat 'research.md')
 
-$(agentmux prompt --provider 'antigravity' --mode 'cli-bridge')"`,
+$(amx prompt --provider 'antigravity' --mode 'cli-bridge')"`,
 		},
 		{
 			name:     "antigravity cli bridge without persona",
 			provider: "antigravity",
-			want:     `agy --prompt-interactive "$(agentmux prompt --provider 'antigravity' --mode 'cli-bridge')"`,
+			want:     `agy --prompt-interactive "$(amx prompt --provider 'antigravity' --mode 'cli-bridge')"`,
 		},
 		{
 			name:     "claude native mcp with persona and model",
@@ -76,7 +76,7 @@ $(agentmux prompt --provider 'antigravity' --mode 'cli-bridge')"`,
 			model:    "sonnet",
 			want: `claude --mcp-config ` + singleQuote(claudeMCPConfigJSON("test-session", resolve.Pane{Name: "lead-architect", Provider: "claude", Persona: "arch.md", Model: "sonnet"})) + ` --strict-mcp-config --append-system-prompt "$(cat 'arch.md')
 
-$(agentmux prompt --provider 'claude' --mode 'native-mcp')" --model 'sonnet'`,
+$(amx prompt --provider 'claude' --mode 'native-mcp')" --model 'sonnet'`,
 		},
 		{
 			name:      "claude native mcp with reasoning effort",
@@ -84,23 +84,23 @@ $(agentmux prompt --provider 'claude' --mode 'native-mcp')" --model 'sonnet'`,
 			paneName:  "lead-architect",
 			model:     "sonnet",
 			reasoning: "high",
-			want:      `claude --mcp-config ` + singleQuote(claudeMCPConfigJSON("test-session", resolve.Pane{Name: "lead-architect", Provider: "claude", Model: "sonnet", ReasoningEffort: "high"})) + ` --strict-mcp-config --append-system-prompt "$(agentmux prompt --provider 'claude' --mode 'native-mcp')" --model 'sonnet' --effort 'high'`,
+			want:      `claude --mcp-config ` + singleQuote(claudeMCPConfigJSON("test-session", resolve.Pane{Name: "lead-architect", Provider: "claude", Model: "sonnet", ReasoningEffort: "high"})) + ` --strict-mcp-config --append-system-prompt "$(amx prompt --provider 'claude' --mode 'native-mcp')" --model 'sonnet' --effort 'high'`,
 		},
 		{
 			name:     "gemini native mcp",
 			provider: "gemini-cli",
 			paneName: "visual-designer",
 			persona:  "design.md",
-			want:     `gemini --allowed-mcp-server-names 'agentmux' --include-directories ` + singleQuote(filepath.Dir(geminiPersonaPath("test-session", resolve.Pane{Name: "visual-designer", Provider: "gemini", Persona: "design.md"}))) + ` --prompt-interactive "$(agentmux prompt --provider 'gemini' --mode 'native-mcp')"`,
+			want:     `gemini --allowed-mcp-server-names 'agentmux' --include-directories ` + singleQuote(filepath.Dir(geminiPersonaPath("test-session", resolve.Pane{Name: "visual-designer", Provider: "gemini", Persona: "design.md"}))) + ` --prompt-interactive "$(amx prompt --provider 'gemini' --mode 'native-mcp')"`,
 		},
 		{
 			name:     "codex native mcp with persona",
 			provider: "openai",
 			paneName: "senior-coder",
 			persona:  "coder.md",
-			want: `codex --no-alt-screen --sandbox workspace-write --ask-for-approval never -c 'mcp_servers.agentmux.command="agentmux"' -c 'mcp_servers.agentmux.args=["mcp-server"]' -c 'mcp_servers.agentmux.env={AGENTMUX_PANE="senior-coder", AGENTMUX_SESSION="test-session"}' -c 'mcp_servers.agentmux.tools.kv_set.approval_mode="approve"' -c 'mcp_servers.agentmux.tools.kv_get.approval_mode="approve"' -c 'mcp_servers.agentmux.tools.wait.approval_mode="approve"' -c 'mcp_servers.agentmux.tools.scale.approval_mode="approve"' -c 'mcp_servers.agentmux.tools.send.approval_mode="approve"' "$(cat 'coder.md')
+			want: `codex --no-alt-screen --sandbox workspace-write --ask-for-approval never -c 'mcp_servers.agentmux.command="amx"' -c 'mcp_servers.agentmux.args=["mcp-server"]' -c 'mcp_servers.agentmux.env={AGENTMUX_PANE="senior-coder", AGENTMUX_SESSION="test-session"}' -c 'mcp_servers.agentmux.tools.kv_set.approval_mode="approve"' -c 'mcp_servers.agentmux.tools.kv_get.approval_mode="approve"' -c 'mcp_servers.agentmux.tools.wait.approval_mode="approve"' -c 'mcp_servers.agentmux.tools.scale.approval_mode="approve"' -c 'mcp_servers.agentmux.tools.send.approval_mode="approve"' "$(cat 'coder.md')
 
-$(agentmux prompt --provider 'codex' --mode 'native-mcp')"`,
+$(amx prompt --provider 'codex' --mode 'native-mcp')"`,
 		},
 		{
 			name:      "codex native mcp with reasoning effort",
@@ -108,7 +108,7 @@ $(agentmux prompt --provider 'codex' --mode 'native-mcp')"`,
 			paneName:  "senior-coder",
 			model:     "gpt-5-codex",
 			reasoning: "high",
-			want:      `codex --no-alt-screen --sandbox workspace-write --ask-for-approval never --model 'gpt-5-codex' -c 'mcp_servers.agentmux.command="agentmux"' -c 'mcp_servers.agentmux.args=["mcp-server"]' -c 'mcp_servers.agentmux.env={AGENTMUX_PANE="senior-coder", AGENTMUX_SESSION="test-session"}' -c 'mcp_servers.agentmux.tools.kv_set.approval_mode="approve"' -c 'mcp_servers.agentmux.tools.kv_get.approval_mode="approve"' -c 'mcp_servers.agentmux.tools.wait.approval_mode="approve"' -c 'mcp_servers.agentmux.tools.scale.approval_mode="approve"' -c 'mcp_servers.agentmux.tools.send.approval_mode="approve"' -c 'model_reasoning_effort=high' "$(agentmux prompt --provider 'codex' --mode 'native-mcp')"`,
+			want:      `codex --no-alt-screen --sandbox workspace-write --ask-for-approval never --model 'gpt-5-codex' -c 'mcp_servers.agentmux.command="amx"' -c 'mcp_servers.agentmux.args=["mcp-server"]' -c 'mcp_servers.agentmux.env={AGENTMUX_PANE="senior-coder", AGENTMUX_SESSION="test-session"}' -c 'mcp_servers.agentmux.tools.kv_set.approval_mode="approve"' -c 'mcp_servers.agentmux.tools.kv_get.approval_mode="approve"' -c 'mcp_servers.agentmux.tools.wait.approval_mode="approve"' -c 'mcp_servers.agentmux.tools.scale.approval_mode="approve"' -c 'mcp_servers.agentmux.tools.send.approval_mode="approve"' -c 'model_reasoning_effort=high' "$(amx prompt --provider 'codex' --mode 'native-mcp')"`,
 		},
 		{
 			name:     "gptme cli bridge with model and persona",
@@ -117,7 +117,7 @@ $(agentmux prompt --provider 'codex' --mode 'native-mcp')"`,
 			model:    "gpt-4o",
 			want: `gptme "$(cat 'review.md')
 
-$(agentmux prompt --provider 'gptme' --mode 'cli-bridge')" --model 'gpt-4o'`,
+$(amx prompt --provider 'gptme' --mode 'cli-bridge')" --model 'gpt-4o'`,
 		},
 		{
 			name:      "pi cli bridge with persona provider model and effort",
@@ -127,12 +127,12 @@ $(agentmux prompt --provider 'gptme' --mode 'cli-bridge')" --model 'gpt-4o'`,
 			reasoning: "high",
 			want: `pi --append-system-prompt "$(cat 'review.md')
 
-$(agentmux prompt --provider 'pi' --mode 'cli-bridge')" --model 'anthropic/claude-sonnet-5' --thinking 'high'`,
+$(amx prompt --provider 'pi' --mode 'cli-bridge')" --model 'anthropic/claude-sonnet-5' --thinking 'high'`,
 		},
 		{
 			name:     "pi cli bridge without persona",
 			provider: "pi",
-			want:     `pi --append-system-prompt "$(agentmux prompt --provider 'pi' --mode 'cli-bridge')"`,
+			want:     `pi --append-system-prompt "$(amx prompt --provider 'pi' --mode 'cli-bridge')"`,
 		},
 		{
 			name:     "unknown provider",
@@ -172,7 +172,7 @@ func TestClaudePersonaAppendPreservesArgumentsAndNativeInstructions(t *testing.T
 	}
 	for name, script := range map[string]string{
 		"claude":   "#!/bin/sh\nprintf '%s\\000' \"$@\"\n",
-		"agentmux": "#!/bin/sh\nprintf '%s' 'Agentmux coordination instructions.'\n",
+		"amx": "#!/bin/sh\nprintf '%s' 'Agentmux coordination instructions.'\n",
 	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(script), 0o700); err != nil {
 			t.Fatal(err)
@@ -230,17 +230,17 @@ func TestCompileProviderCommandFallsBackToCLIBridge(t *testing.T) {
 	}
 
 	claude := compileProviderCommand("test-session", resolve.Pane{Provider: "claude"})
-	if got, want := claude, `claude --append-system-prompt "$(agentmux prompt --provider 'claude' --mode 'cli-bridge')"`; got != want {
+	if got, want := claude, `claude --append-system-prompt "$(amx prompt --provider 'claude' --mode 'cli-bridge')"`; got != want {
 		t.Fatalf("claude fallback command = %q, want %q", got, want)
 	}
 
 	codex := compileProviderCommand("test-session", resolve.Pane{Provider: "codex"})
-	if got, want := codex, `codex --no-alt-screen --sandbox workspace-write --ask-for-approval never "$(agentmux prompt --provider 'codex' --mode 'cli-bridge')"`; got != want {
+	if got, want := codex, `codex --no-alt-screen --sandbox workspace-write --ask-for-approval never "$(amx prompt --provider 'codex' --mode 'cli-bridge')"`; got != want {
 		t.Fatalf("codex fallback command = %q, want %q", got, want)
 	}
 
 	gemini := compileProviderCommand("test-session", resolve.Pane{Provider: "gemini"})
-	if got, want := gemini, `gemini --prompt-interactive "$(agentmux prompt --provider 'gemini' --mode 'cli-bridge')"`; got != want {
+	if got, want := gemini, `gemini --prompt-interactive "$(amx prompt --provider 'gemini' --mode 'cli-bridge')"`; got != want {
 		t.Fatalf("gemini fallback command = %q, want %q", got, want)
 	}
 }

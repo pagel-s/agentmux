@@ -174,7 +174,7 @@ func providerContextPrompt(providerName string, mode string) string {
 }
 
 func providerPromptCommand(providerName string, mode string) string {
-	cmd := []string{"agentmux", "prompt", "--provider", singleQuote(providerName)}
+	cmd := []string{"amx", "prompt", "--provider", singleQuote(providerName)}
 	if strings.TrimSpace(mode) != "" {
 		cmd = append(cmd, "--mode", singleQuote(mode))
 	}
@@ -195,7 +195,7 @@ func agentmuxMCPServerConfig(session string, pane resolve.Pane) mcpServerConfig 
 		env["AGENTMUX_PANE"] = pane.Name
 	}
 	return mcpServerConfig{
-		Command: "agentmux",
+		Command: "amx",
 		Args:    []string{"mcp-server"},
 		Env:     env,
 	}
@@ -214,7 +214,7 @@ func claudeMCPConfigJSON(session string, pane resolve.Pane) string {
 	}
 	data, err := json.Marshal(cfg)
 	if err != nil {
-		return fmt.Sprintf(`{"mcpServers":{"agentmux":{"command":"agentmux","args":["mcp-server"],"env":{"AGENTMUX_SESSION":%s%s}}}}`, jsonStringLiteral(session), claudePaneEnvFallback(pane.Name))
+		return fmt.Sprintf(`{"mcpServers":{"agentmux":{"command":"amx","args":["mcp-server"],"env":{"AGENTMUX_SESSION":%s%s}}}}`, jsonStringLiteral(session), claudePaneEnvFallback(pane.Name))
 	}
 	return string(data)
 }

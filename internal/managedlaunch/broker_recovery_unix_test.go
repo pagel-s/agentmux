@@ -24,7 +24,7 @@ func TestNativeWorkspaceBrokerRecoveryPreservesTerminalAndUncertainTask(t *testi
 	}
 	executable := os.Getenv("AGENTMUX_TEST_BINARY")
 	if executable == "" {
-		executable = "../../bin/agentmux"
+		executable = "../../bin/amx"
 	}
 	executable, _ = filepath.Abs(executable)
 	root, err := os.MkdirTemp("", "amx-native-broker-")

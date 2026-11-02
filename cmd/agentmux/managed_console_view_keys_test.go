@@ -173,8 +173,6 @@ func TestConsoleEveryTaskEntryFetchesAndTabsWrap(t *testing.T) {
 		tab int
 		key tea.KeyMsg
 	}{
-		{3, tea.KeyMsg{Type: tea.KeyTab}},
-		{5, tea.KeyMsg{Type: tea.KeyShiftTab}},
 		{3, tea.KeyMsg{Type: tea.KeyRight}},
 		{5, tea.KeyMsg{Type: tea.KeyLeft}},
 		{3, tea.KeyMsg{Type: tea.KeyCtrlRight}},
@@ -190,7 +188,7 @@ func TestConsoleEveryTaskEntryFetchesAndTabsWrap(t *testing.T) {
 	for _, wrap := range []struct {
 		tab, want int
 		key       tea.KeyType
-	}{{0, 7, tea.KeyLeft}, {7, 0, tea.KeyRight}, {0, 7, tea.KeyShiftTab}, {7, 0, tea.KeyTab}} {
+	}{{0, 7, tea.KeyLeft}, {7, 0, tea.KeyRight}} {
 		next, _ := consolePress(console{tab: wrap.tab}, tea.KeyMsg{Type: wrap.key})
 		if next.tab != wrap.want {
 			t.Fatalf("%s failed to wrap at the end of the view strip", tea.KeyMsg{Type: wrap.key}.String())

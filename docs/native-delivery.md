@@ -16,20 +16,20 @@ draft before dispatch. `--native-only` disables this integration.
 Start a new workspace with the current binary, then use a regular owner shell:
 
 ```sh
-agentmux start --session collaboration-test --detach
-agentmux collaborate claude codex --session collaboration-test
-agentmux delivery codex review --session collaboration-test
-agentmux send codex "Summarize the board proposal in two sentences." \
+amx start --session collaboration-test --detach
+amx collaborate claude codex --session collaboration-test
+amx delivery codex review --session collaboration-test
+amx send codex "Summarize the board proposal in two sentences." \
   --mode instruction --session collaboration-test
-agentmux delivery codex --json --session collaboration-test
+amx delivery codex --json --session collaboration-test
 ```
 
 Read the complete pending item's text and copy its exact candidate ID from the
 last command:
 
 ```sh
-agentmux delivery codex --approve CANDIDATE_ID --session collaboration-test
-agentmux attach codex --session collaboration-test
+amx delivery codex --approve CANDIDATE_ID --session collaboration-test
+amx attach codex --session collaboration-test
 ```
 
 Review approves one exact item under the current policy version. A changed
@@ -41,9 +41,9 @@ to use `instruct` through its authenticated broker CLI.
 Choose **Auto** explicitly to receive eligible turns without each approval:
 
 ```sh
-agentmux delivery codex auto --max-turns 20 --max-hops 4 --cooldown 1 \
+amx delivery codex auto --max-turns 20 --max-hops 4 --cooldown 1 \
   --session collaboration-test
-agentmux delivery claude auto --session collaboration-test
+amx delivery claude auto --session collaboration-test
 ```
 
 The terminal Sessions view and the web Session detail view expose the same delivery
@@ -72,9 +72,9 @@ namespace access. Editing an unrelated pair does not wake other sessions whose
 effective boundaries remain the same.
 
 ```sh
-agentmux delivery codex auto --notes=true --pings=true --boards=true \
+amx delivery codex auto --notes=true --pings=true --boards=true \
   --memory-updates=true --results=true --session collaboration-test
-agentmux delivery codex manual --session collaboration-test
+amx delivery codex manual --session collaboration-test
 ```
 
 Returning to Manual stops future dispatch and requests safe cancellation of the
@@ -171,7 +171,7 @@ Agentmux does not replace a running pinned controller or restart your agents.
 
 For a first trial, use the separate `collaboration-test` workspace above. When
 ready to upgrade an older workspace, finish or preserve its native work, inspect
-uncertain tasks, and deliberately restart it with `agentmux managed restart
+uncertain tasks, and deliberately restart it with `amx managed restart
 --state /absolute/workspace/state`. Whole-workspace restart stops its owned
 sessions; choose history through explicit per-agent relaunch when resumption is
 needed. Never start a second worker against the same conversation.

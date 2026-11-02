@@ -7,7 +7,7 @@ For original YAML pane-layout examples, see [recipes](recipes.md).
 
 ## Everyday work sessions
 
-Use `make install` for both `agentmux` and `amx`. The [short command reference](getting-started/everyday-commands.md)
+Use `make install` for the `amx` command. The [short command reference](getting-started/everyday-commands.md)
 covers `amx a`, `ui`, `ls`, `link`, `mode`, and directional `allow`/`deny`.
 Everyday commands accept `-s NAME` for the workspace, before or after the command.
 Inside an owned tmux attachment the workspace is inferred from that exact
@@ -16,32 +16,35 @@ attachment; explicit selectors take precedence. Outside, it defaults to `work`.
 
 After building, put `bin/` on your PATH as shown in the [installation
 guide](getting-started/installation.md). With Claude Code and Codex installed and
-logged in, run `agentmux start` from your project directory. It creates the
+logged in, run `amx start` from your project directory. It creates the
 default workspace `work` and opens its workbench.
 
 | Command | Use it to |
 | --- | --- |
-| `agentmux start` | Start the default native Claude/Codex team, or attach when that same team is running |
-| `agentmux attach AGENT_ID` | Open one workspace-owned native conversation for direct typing |
-| `agentmux dashboard` | Return to the owner workbench |
-| `agentmux web --open` | Open the local owner app |
-| `agentmux add --harness claude --project DIR --title "Task"` | Start another native session; copy its printed stable ID |
-| `agentmux add --harness antigravity --native-only --project DIR` | Start native Antigravity without an injected Agentmux prompt |
-| `agentmux sessions` | List registered sessions and separately observed external terminals |
-| `agentmux workspaces [--register DIR]` | Find named and remembered custom workspaces; register an older custom location |
-| `agentmux relaunch AGENT_ID [--resume ID\|last\|picker] [--native-launcher ABSOLUTE_PATH]` | Relaunch one exited native session, retaining its stable ID and healthy peers; optional launcher recovery applies only to trusted-local interactive sessions |
-| `agentmux delivery AGENT_ID [manual\|review\|auto] [--approve CANDIDATE_ID]` | Inspect native delivery evidence, set receiver mode, or approve an exact queued item; `--help` lists limits and subscriptions |
-| `agentmux connect OBSERVED_ID --title "Task"` | Prepare a helper for an existing external session; paste the printed setup into its original terminal |
-| `agentmux label AGENT_ID "Task"` | Rename its display title while keeping its ID and conversation |
-| `agentmux role AGENT_ID "Role"` | Change the owner role with CAS; managed workers use it at their next claim, native agents receive an inbox notice |
-| `agentmux collaborate AGENT_ID OTHER_ID` | Give those sessions a dedicated board/memory group and allow notes/pings |
-| `agentmux send AGENT_ID "Message" [--mode note\|instruction\|auto]` | Choose an informational inbox note or an instruction task; auto follows the agent's interaction mode |
-| `agentmux inbox` | Inspect recent coordination and task activity as the owner |
-| `agentmux board "Note" --group GROUP_ID` | Post to a particular collaboration group's board |
-| `agentmux reply TASK_OR_MESSAGE_ID "Follow-up" [--mode auto\|note\|instruction]` | Follow up with broker-validated structured ancestry; shared board posts require `--board NAMESPACE` or `--to AGENT_ID` |
-| `agentmux isolate AGENT_ID` | Revoke its peer coordination and memberships across groups; native input stays open |
-| `agentmux remove AGENT_ID` | Close an owned terminal or disconnect an external bridge; retain saved history |
-| `agentmux down` | Stop the workspace's owned processes while keeping saved data |
+| `amx start` | Start the default native Claude/Codex team, or attach when that same team is running |
+| `amx a` | Restore the last live native terminal, or open the workspace chooser |
+| `amx split FIRST SECOND` | Combine existing native terminals in one tmux window |
+| `amx unsplit ID` | Return one agent to its own window |
+| `amx attach AGENT_ID` | Open one workspace-owned native conversation for direct typing |
+| `amx dashboard` | Return to the owner workbench |
+| `amx web --open` | Open the local owner app |
+| `amx add --harness claude --project DIR --title "Task"` | Start another native session; copy its printed stable ID |
+| `amx add --harness antigravity --native-only --project DIR` | Start native Antigravity without an injected Agentmux prompt |
+| `amx sessions` | List registered sessions and separately observed external terminals |
+| `amx workspaces [--register DIR]` | Find named and remembered custom workspaces; register an older custom location |
+| `amx relaunch AGENT_ID [--resume ID\|last\|picker] [--native-launcher ABSOLUTE_PATH]` | Relaunch one exited native session, retaining its stable ID and healthy peers; optional launcher recovery applies only to trusted-local interactive sessions |
+| `amx delivery AGENT_ID [manual\|review\|auto] [--approve CANDIDATE_ID]` | Inspect native delivery evidence, set receiver mode, or approve an exact queued item; `--help` lists limits and subscriptions |
+| `amx connect OBSERVED_ID --title "Task"` | Prepare a helper for an existing external session; paste the printed setup into its original terminal |
+| `amx label AGENT_ID "Task"` | Rename its display title while keeping its ID and conversation |
+| `amx role AGENT_ID "Role"` | Change the owner role with CAS; managed workers use it at their next claim, native agents receive an inbox notice |
+| `amx collaborate AGENT_ID OTHER_ID` | Give those sessions a dedicated board/memory group and allow notes/pings |
+| `amx send AGENT_ID "Message" [--mode note\|instruction\|auto]` | Choose an informational inbox note or an instruction task; auto follows the agent's interaction mode |
+| `amx inbox` | Inspect recent coordination and task activity as the owner |
+| `amx board "Note" --group GROUP_ID` | Post to a particular collaboration group's board |
+| `amx reply TASK_OR_MESSAGE_ID "Follow-up" [--mode auto\|note\|instruction]` | Follow up with broker-validated structured ancestry; shared board posts require `--board NAMESPACE` or `--to AGENT_ID` |
+| `amx isolate AGENT_ID` | Revoke its peer coordination and memberships across groups; native input stays open |
+| `amx remove AGENT_ID` | Close an owned terminal or disconnect an external bridge; retain saved history |
+| `amx down` | Stop the workspace's owned processes while keeping saved data |
 
 Replace uppercase placeholders with actual paths or IDs. `DIR` must already
 exist. `--harness` chooses the native CLI (`claude`, `codex`, `pi`, or native-only `antigravity`);
@@ -59,11 +62,11 @@ directory. For another workspace use `--session NAME` on each command, or select
 its exact directory with `--state DIR`. For example:
 
 ```sh
-agentmux start --session review --project /path/to/project
+amx start --session review --project /path/to/project
 # In another terminal:
-agentmux attach codex --session review
-agentmux web --session review --open
-agentmux down --session review
+amx attach codex --session review
+amx web --session review --open
+amx down --session review
 ```
 
 `send` queues coordination. Integrated native sessions can receive attributed
@@ -86,16 +89,16 @@ sessions](work-sessions.md). For bounded headless studies see
 Owner collaboration groups created by `collaborate` are distinct from dynamic
 consented teams. The latter require `teams.enabled` and delegated capabilities
 in the selected managed configuration; the everyday coding preset leaves them
-disabled. Use `agentmux team --help` for the complete command syntax:
+disabled. Use `amx team --help` for the complete command syntax:
 
 | Command | Behavior |
 | --- | --- |
-| `agentmux team list`, `agentmux team create NAME` | Inspect visible teams or create one within configured authority and lifetime limits |
-| `agentmux team edit ID --name NAME --description TEXT` | Change live metadata, retaining the team's ID and namespaces |
-| `agentmux team invite ID AGENT`, `agentmux team remove ID AGENT`, `agentmux team dissolve ID` | Review membership invitations, revocation or closure as a manager |
-| `agentmux team transfer ID AGENT` | Propose ownership; the proposed owner must accept separately |
-| `agentmux team join ID`, `agentmux team leave ID`, `agentmux team accept-owner ID` | Decide using `--credential-file FILE` for the actual acting participant |
-| `agentmux team move SOURCE DESTINATION` | Use the participant's credential and an existing destination invitation to move atomically |
+| `amx team list`, `amx team create NAME` | Inspect visible teams or create one within configured authority and lifetime limits |
+| `amx team edit ID --name NAME --description TEXT` | Change live metadata, retaining the team's ID and namespaces |
+| `amx team invite ID AGENT`, `amx team remove ID AGENT`, `amx team dissolve ID` | Review membership invitations, revocation or closure as a manager |
+| `amx team transfer ID AGENT` | Propose ownership; the proposed owner must accept separately |
+| `amx team join ID`, `amx team leave ID`, `amx team accept-owner ID` | Decide using `--credential-file FILE` for the actual acting participant |
+| `amx team move SOURCE DESTINATION` | Use the participant's credential and an existing destination invitation to move atomically |
 
 Add `--session NAME` or `--state DIR` to select the workspace. `--version N`
 pins a reviewed version; moves also accept `--to-version N`. Omitted versions
@@ -173,9 +176,9 @@ When to use it:
 Examples:
 
 ```bash
-./bin/agentmux templates
-./bin/agentmux init coding-starter coding.yaml
-./bin/agentmux init review-starter review.yaml
+./bin/amx templates
+./bin/amx init coding-starter coding.yaml
+./bin/amx init review-starter review.yaml
 ```
 
 ### `init`
@@ -191,10 +194,10 @@ When to use it:
 Examples:
 
 ```bash
-./bin/agentmux init coding-starter coding.yaml
-./bin/agentmux init default my-workflow.yaml
-./bin/agentmux init minimal scratch.yaml
-./bin/agentmux init ai-dev work/review.yaml --force
+./bin/amx init coding-starter coding.yaml
+./bin/amx init default my-workflow.yaml
+./bin/amx init minimal scratch.yaml
+./bin/amx init ai-dev work/review.yaml --force
 ```
 
 Useful notes:
@@ -215,8 +218,8 @@ When to use it:
 Examples:
 
 ```bash
-./bin/agentmux edit my-workflow.yaml
-./bin/agentmux edit my-workflow
+./bin/amx edit my-workflow.yaml
+./bin/amx edit my-workflow
 ```
 
 Useful notes:
@@ -235,8 +238,8 @@ When to use it:
 Examples:
 
 ```bash
-./bin/agentmux remember my-workflow ./my-workflow.yaml
-./bin/agentmux edit my-workflow
+./bin/amx remember my-workflow ./my-workflow.yaml
+./bin/amx edit my-workflow
 ```
 
 ## Config Commands
@@ -254,8 +257,8 @@ When to use it:
 Examples:
 
 ```bash
-./bin/agentmux validate my-workflow.yaml
-./bin/agentmux validate my-workflow.yaml --strict
+./bin/amx validate my-workflow.yaml
+./bin/amx validate my-workflow.yaml --strict
 ```
 
 Useful flags:
@@ -275,8 +278,8 @@ When to use it:
 Examples:
 
 ```bash
-./bin/agentmux render my-workflow.yaml
-./bin/agentmux render my-workflow.yaml --param project_dir=.
+./bin/amx render my-workflow.yaml
+./bin/amx render my-workflow.yaml --param project_dir=.
 ```
 
 ### `pack`
@@ -292,12 +295,12 @@ When to use it:
 Examples:
 
 ```bash
-./bin/agentmux pack my-workflow.yaml
-./bin/agentmux pack my-workflow.yaml my-team.amx
+./bin/amx pack my-workflow.yaml
+./bin/amx pack my-workflow.yaml my-team.amx
 ```
 
 Useful note:
-- `.amx` bundles can be loaded directly with `agentmux load my-team.amx`
+- `.amx` bundles can be loaded directly with `amx load my-team.amx`
 - you can host `.amx` bundles online and load them directly from a URL
 
 ### `tools`
@@ -313,8 +316,8 @@ When to use it:
 Examples:
 
 ```bash
-./bin/agentmux tools --format openai
-./bin/agentmux tools --format claude
+./bin/amx tools --format openai
+./bin/amx tools --format claude
 ```
 
 ### `prompt`
@@ -334,10 +337,10 @@ Useful note:
 Examples:
 
 ```bash
-./bin/agentmux prompt
-./bin/agentmux prompt --provider claude
-./bin/agentmux prompt --provider claude --mode native-mcp
-./bin/agentmux prompt --provider gemini --mode native-mcp
+./bin/amx prompt
+./bin/amx prompt --provider claude
+./bin/amx prompt --provider claude --mode native-mcp
+./bin/amx prompt --provider gemini --mode native-mcp
 ```
 
 ### `tool-call`
@@ -354,12 +357,12 @@ When to use it:
 Examples:
 
 ```bash
-./bin/agentmux tool-call kv_set --from-json '{"session":"demo","key":"task","value":"review"}'
-./bin/agentmux tool-call kv_get --from-stdin <<EOF
+./bin/amx tool-call kv_set --from-json '{"session":"demo","key":"task","value":"review"}'
+./bin/amx tool-call kv_get --from-stdin <<EOF
 {"session":"demo","key":"task"}
 EOF
-./bin/agentmux tool-call kv_set --from-file /tmp/agentmux-tool.json
-./bin/agentmux tool-call wait --from-json '{"session":"demo","pane":"planner","pattern":"PLAN_READY","timeout":"30s"}'
+./bin/amx tool-call kv_set --from-file /tmp/agentmux-tool.json
+./bin/amx tool-call wait --from-json '{"session":"demo","pane":"planner","pattern":"PLAN_READY","timeout":"30s"}'
 ```
 
 ### `mcp-server`
@@ -387,10 +390,10 @@ When to use it:
 Examples:
 
 ```bash
-./bin/agentmux load my-workflow.yaml
-./bin/agentmux load https://example.com/team.amx
-./bin/agentmux load my-workflow.yaml --replace --no-attach
-./bin/agentmux load my-workflow.yaml --dry-run
+./bin/amx load my-workflow.yaml
+./bin/amx load https://example.com/team.amx
+./bin/amx load my-workflow.yaml --replace --no-attach
+./bin/amx load my-workflow.yaml --dry-run
 ```
 
 Useful flags:
@@ -412,7 +415,7 @@ When to use it:
 Examples:
 
 ```bash
-./bin/agentmux reload my-workflow.yaml --no-attach
+./bin/amx reload my-workflow.yaml --no-attach
 ```
 
 Useful note:
@@ -432,7 +435,7 @@ When to use it:
 Examples:
 
 ```bash
-./bin/agentmux list
+./bin/amx list
 ```
 
 ## Runtime Commands
@@ -454,10 +457,10 @@ When to use it:
 Examples:
 
 ```bash
-./bin/agentmux status my-workflow
-./bin/agentmux status my-workflow --json
-./bin/agentmux status my-workflow --pane review
-./bin/agentmux status my-workflow --pane review --json
+./bin/amx status my-workflow
+./bin/amx status my-workflow --json
+./bin/amx status my-workflow --pane review
+./bin/amx status my-workflow --pane review --json
 ```
 
 ### `focus`
@@ -471,7 +474,7 @@ When to use it:
 Examples:
 
 ```bash
-./bin/agentmux focus my-workflow review
+./bin/amx focus my-workflow review
 ```
 
 ### `restart`
@@ -485,7 +488,7 @@ When to use it:
 Examples:
 
 ```bash
-./bin/agentmux restart my-workflow review
+./bin/amx restart my-workflow review
 ```
 
 ### `rerun`
@@ -499,7 +502,7 @@ When to use it:
 Examples:
 
 ```bash
-./bin/agentmux rerun my-workflow review
+./bin/amx rerun my-workflow review
 ```
 
 Useful note:
@@ -517,7 +520,7 @@ When to use it:
 Examples:
 
 ```bash
-./bin/agentmux stop my-workflow review
+./bin/amx stop my-workflow review
 ```
 
 ### `kill`
@@ -531,7 +534,7 @@ When to use it:
 Examples:
 
 ```bash
-./bin/agentmux kill my-workflow build
+./bin/amx kill my-workflow build
 ```
 
 Useful note:
@@ -550,10 +553,10 @@ When to use it:
 Examples:
 
 ```bash
-./bin/agentmux capture my-workflow review
-./bin/agentmux capture my-workflow review --tail 20
-./bin/agentmux capture my-workflow review --tail 20 --strip-empty
-./bin/agentmux capture my-workflow review --json --tail 20 --strip-empty
+./bin/amx capture my-workflow review
+./bin/amx capture my-workflow review --tail 20
+./bin/amx capture my-workflow review --tail 20 --strip-empty
+./bin/amx capture my-workflow review --json --tail 20 --strip-empty
 ```
 
 Useful flags:
@@ -573,8 +576,8 @@ When to use it:
 Examples:
 
 ```bash
-./bin/agentmux send my-workflow review -- "git status --short"
-./bin/agentmux send my-workflow review --no-enter -- "printf 'queued\n'"
+./bin/amx send my-workflow review -- "git status --short"
+./bin/amx send my-workflow review --no-enter -- "printf 'queued\n'"
 ```
 
 Useful note:
@@ -598,7 +601,7 @@ When to use it:
 Examples:
 
 ```bash
-./bin/agentmux dashboard my-workflow
+./bin/amx dashboard my-workflow
 ```
 
 Useful shortcuts inside the dashboard:
@@ -620,8 +623,8 @@ When to use it:
 Examples:
 
 ```bash
-./bin/agentmux inspect my-workflow reviewer
-./bin/agentmux inspect my-workflow reviewer --json
+./bin/amx inspect my-workflow reviewer
+./bin/amx inspect my-workflow reviewer --json
 ```
 
 ### `kv-set`
@@ -637,7 +640,7 @@ When to use it:
 Examples:
 
 ```bash
-./bin/agentmux kv-set my-team current_task "researching-agent-scaling"
+./bin/amx kv-set my-team current_task "researching-agent-scaling"
 ```
 
 ### `kv-get`
@@ -648,7 +651,7 @@ What it does:
 Examples:
 
 ```bash
-./bin/agentmux kv-get my-team current_task
+./bin/amx kv-get my-team current_task
 ```
 
 ### `kv-list`
@@ -659,8 +662,8 @@ What it does:
 Examples:
 
 ```bash
-./bin/agentmux kv-list my-team
-./bin/agentmux kv-list my-team --json
+./bin/amx kv-list my-team
+./bin/amx kv-list my-team --json
 ```
 
 ### `kv-del`
@@ -671,7 +674,7 @@ What it does:
 Examples:
 
 ```bash
-./bin/agentmux kv-del my-team current_task
+./bin/amx kv-del my-team current_task
 ```
 
 ### `wait`
@@ -689,9 +692,9 @@ When to use it:
 Examples:
 
 ```bash
-./bin/agentmux wait my-team builder "SUCCESS" --timeout 5m
-./bin/agentmux wait my-team reviewer '^• REVIEW_DONE$' --timeout 2m
-./bin/agentmux wait my-team builder "SUCCESS" --scope visible --timeout 5m
+./bin/amx wait my-team builder "SUCCESS" --timeout 5m
+./bin/amx wait my-team reviewer '^• REVIEW_DONE$' --timeout 2m
+./bin/amx wait my-team builder "SUCCESS" --scope visible --timeout 5m
 ```
 
 ### `scale`
@@ -705,8 +708,8 @@ When to use it:
 Examples:
 
 ```bash
-./bin/agentmux scale my-team researcher 5
-./bin/agentmux scale my-team researcher 1
+./bin/amx scale my-team researcher 5
+./bin/amx scale my-team researcher 1
 ```
 
 Useful note:
@@ -729,8 +732,8 @@ When to use it:
 Examples:
 
 ```bash
-./bin/agentmux doctor
-./bin/agentmux doctor ./shared-team-config.yaml
+./bin/amx doctor
+./bin/amx doctor ./shared-team-config.yaml
 ```
 
 ### `version`
@@ -741,8 +744,8 @@ What it does:
 Examples:
 
 ```bash
-./bin/agentmux version
-./bin/agentmux --version
+./bin/amx version
+./bin/amx --version
 ```
 
 ### `--help`
@@ -753,7 +756,7 @@ What it does:
 Examples:
 
 ```bash
-./bin/agentmux --help
+./bin/amx --help
 ```
 
 ## Common Flows
@@ -761,24 +764,24 @@ Examples:
 ### New workflow
 
 ```bash
-./bin/agentmux templates
-./bin/agentmux init default my-workflow.yaml
-./bin/agentmux validate my-workflow.yaml
-./bin/agentmux load my-workflow.yaml --replace --no-attach
+./bin/amx templates
+./bin/amx init default my-workflow.yaml
+./bin/amx validate my-workflow.yaml
+./bin/amx load my-workflow.yaml --replace --no-attach
 ```
 
 ### Edit and reapply
 
 ```bash
-./bin/agentmux edit my-workflow
-./bin/agentmux validate my-workflow.yaml
-./bin/agentmux reload my-workflow.yaml --no-attach
+./bin/amx edit my-workflow
+./bin/amx validate my-workflow.yaml
+./bin/amx reload my-workflow.yaml --no-attach
 ```
 
 ### Inspect and interact with a live pane
 
 ```bash
-./bin/agentmux status my-workflow --pane review
-./bin/agentmux capture my-workflow review --tail 20 --strip-empty
-./bin/agentmux send my-workflow review "git status --short"
+./bin/amx status my-workflow --pane review
+./bin/amx capture my-workflow review --tail 20 --strip-empty
+./bin/amx send my-workflow review "git status --short"
 ```

@@ -13,10 +13,10 @@
 # ~/.local, ~/.config, ~/.codex, or ~/.claude wholesale.
 #
 # Initialize first, populate workspaces, and git-init the Codex workspace:
-#   agentmux managed init <edited-file> --state /private/agentmux-coding
+#   amx managed init <edited-file> --state /private/agentmux-coding
 #   git init /private/agentmux-coding/workspaces/coder
-#   agentmux managed doctor <edited-file> --state /private/agentmux-coding
-#   agentmux managed up <edited-file> --state /private/agentmux-coding --broker-sandbox bubblewrap
+#   amx managed doctor <edited-file> --state /private/agentmux-coding
+#   amx managed up <edited-file> --state /private/agentmux-coding --broker-sandbox bubblewrap
 # Starting the team does not submit a task. Owner instructions are explicit.
 version: 2
 mode: managed

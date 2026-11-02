@@ -310,7 +310,7 @@ func (m console) eventsPanel(width, height int) string {
 	if m.eventPinned != nil {
 		out.WriteString(consoleAccent.Render("Pinned event · Home returns live") + "\n")
 	}
-	out.WriteString(consoleAccent.Render("Events & topology") + consoleMuted.Render("  [/] select · Home latest/live · o details") + "\n\n")
+	out.WriteString(consoleAccent.Render("Events & topology") + consoleMuted.Render("  ↑/↓ select · Home latest/live · o details") + "\n\n")
 	events := m.data.activity.Events
 	if len(events) == 0 {
 		return consoleClip(out.String()+consoleMuted.Render("No recent broker events. Agent thinking and native tool execution\nare visible only when exposed by the native terminal/provider."), width, height)

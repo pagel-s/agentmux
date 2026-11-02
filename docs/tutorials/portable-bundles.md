@@ -35,7 +35,7 @@ Once you have organized your team into a folder (with the YAML and any scripts),
 
 ```bash
 # Assuming you have a folder: my-team/session.yaml, my-team/script.sh
-agentmux pack my-team/session.yaml session.amx
+amx pack my-team/session.yaml session.amx
 ```
 
 This creates `session.amx` in the current directory. Without the second path, the
@@ -49,7 +49,7 @@ bundle contains the remaining files rather than a minimal dependency manifest.
 You can now send `session.amx` to anyone. They don't need to extract it manually. Agentmux handles it transparently:
 
 ```bash
-agentmux load session.amx
+amx load session.amx
 ```
 
 ### Remote Loading
@@ -57,7 +57,7 @@ agentmux load session.amx
 Because `.amx` files are self-contained, they are perfect for HTTP distribution. You can host them on GitHub Releases, S3, or your own server, and users can launch them with a single command:
 
 ```bash
-agentmux load https://your-server.com/downloads/my-team.amx
+amx load https://your-server.com/downloads/my-team.amx
 ```
 
 Agentmux downloads/unpacks the bundle into a temporary directory and launches

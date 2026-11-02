@@ -10,7 +10,7 @@ import (
 
 func runWorkRole(args []string, out, diagnostics io.Writer) int {
 	if workHelpRequested(args) {
-		fmt.Fprintln(out, "Usage: agentmux role AGENT_ID \"new role\" [--session NAME | --state DIR]\nUpdates owner role with version checking. Native sessions receive an inbox notice; no terminal input is injected. Managed workers use the current role at their next claim.")
+		fmt.Fprintln(out, "Usage: amx role AGENT_ID \"new role\" [--session NAME | --state DIR]\nUpdates owner role with version checking. Native sessions receive an inbox notice; no terminal input is injected. Managed workers use the current role at their next claim.")
 		return exitSuccess
 	}
 	fail := func(err error) int { fmt.Fprintln(diagnostics, "error:", err); return exitValidation }

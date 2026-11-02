@@ -29,7 +29,7 @@ func TestConsoleSessionRosterIsVerticalAtEverydaySplitWidths(t *testing.T) {
 			m.width, m.height = width, 40
 			m.agents[0].Title, m.agents[1].Title = "Poem writer", "Poem critic"
 			view := ansi.Strip(m.View())
-			for _, cue := range []string{"SESSIONS · ↑/↓", "1/3 · Ctrl+P switch", "SENDER · ↑/↓", "RECIPIENT · h/l", "Poem writer", "Poem critic"} {
+			for _, cue := range []string{"SESSIONS · ↑/↓", "1/3 · Ctrl+P switch", "SENDER · Tab", "RECIPIENT · ↑/↓", "Poem writer", "Poem critic"} {
 				if !strings.Contains(view, cue) {
 					t.Fatalf("missing session navigation cue %q at %d columns:\n%s", cue, width, view)
 				}

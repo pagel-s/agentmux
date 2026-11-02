@@ -44,7 +44,7 @@ func (m console) workspaceKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		row := m.workspacePicker.rows[m.workspacePicker.selected]
 		if row.Status != "running" && row.Status != "unknown" {
-			m.message = "Workspace is " + row.Status + ". Inspect it with agentmux managed status --state " + row.State + " before restarting."
+			m.message = "Workspace is " + row.Status + ". Inspect it with amx managed status --state " + row.State + " before restarting."
 			return m, nil
 		}
 		if row.State == m.state {
@@ -66,7 +66,7 @@ func (m console) workspacePanel(width, height int) string {
 		return consoleClip(out.String()+"Workspace inventory unavailable: "+consoleContent(m.workspacePicker.err.Error(), 300)+"\nEsc returns to your previous draft or review.", width, height)
 	}
 	if len(rows) == 0 {
-		out.WriteString("No saved workspaces found. agentmux start creates one.\nOlder custom paths: agentmux workspaces --register DIR")
+		out.WriteString("No saved workspaces found. amx start creates one.\nOlder custom paths: amx workspaces --register DIR")
 	}
 	count := max(1, (height-5)/4)
 	first := max(0, m.workspacePicker.selected-count+1)

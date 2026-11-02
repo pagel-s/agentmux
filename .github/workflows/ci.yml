@@ -55,6 +55,9 @@ jobs:
       - name: Verify release installer safety
         run: python3 scripts/test-install-release.py
 
+      - name: Verify release retry guards
+        run: python3 scripts/test-check-release.py
+
       - name: Verify soak audit and cleanup regressions
         run: python3 scripts/test-soak-managed.py
 

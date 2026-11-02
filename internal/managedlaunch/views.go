@@ -15,25 +15,25 @@ func validWindow(value string) bool {
 // The core session owns worker lifecycles. Attachments share only these exact
 // tracked worker windows; each attachment owns its own dashboard process.
 func (l *Launcher) workerWindows(ctx context.Context, runtime Runtime) ([]workerWindow, error) {
-	out, err := l.tmux(ctx, "list-panes", "-s", "-t", runtime.Session, "-F", "#{pane_id}\t#{window_id}\t#{@agentmux_runtime}\t#{@agentmux_role}\t#{@agentmux_agent}")
+	out, err := l.tmux(ctx, "list-panes", "-s", "-t", runtime.Session, "-F", "#{pane_id}\t#{window_id}\t#{@agentmux_runtime}\t#{@agentmux_role}\t#{@agentmux_agent}\t#{@agentmux_scratch}")
 	if err != nil {
 		return nil, err
 	}
 	var windows []workerWindow
-	seen := map[string]bool{}
 	for _, line := range strings.Split(strings.TrimSuffix(out, "\n"), "\n") {
 		if line == "" {
 			continue
 		}
 		fields := strings.Split(line, "\t")
-		if len(fields) != 5 || !validPane(fields[0]) || !validWindow(fields[1]) {
+		if (len(fields) != 5 && len(fields) != 6) || !validPane(fields[0]) || !validWindow(fields[1]) {
 			return nil, errors.New("invalid worker window metadata")
 		}
 		tracked, ok := runtime.Agents[fields[4]]
-		if !ok || tracked.PaneID != fields[0] || fields[2] != runtime.AttemptID || fields[3] != "worker" || seen[fields[1]] {
+		worker := ok && tracked.PaneID == fields[0] && fields[2] == runtime.AttemptID && fields[3] == "worker"
+		scratch := len(fields) == 6 && fields[5] == runtime.AttemptID
+		if !worker && !scratch {
 			continue
 		}
-		seen[fields[1]] = true
 		windows = append(windows, workerWindow{pane: fields[0], window: fields[1]})
 	}
 	return windows, nil

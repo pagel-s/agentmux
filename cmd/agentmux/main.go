@@ -73,8 +73,13 @@ func run(args []string) int {
 		printUsage()
 		return exitValidation
 	}
+	if len(args) == 1 && args[0] == "attach" {
+		return runWorkHomeOperation("attach", os.Stdin, os.Stdout, os.Stderr)
+	}
 
 	switch args[0] {
+	case "split", "unsplit":
+		return runWorkLayout(args[0], args[1:], os.Stdout, os.Stderr)
 	case "allow", "deny":
 		return runWorkPermission(args[0], args[1:], os.Stdout, os.Stderr)
 	case "start", "attach", "reply", "inbox", "board", "down", "remove", "retire", "collaborate", "disconnect", "isolate", "label":
@@ -248,15 +253,15 @@ func runTemplates(args []string) int {
 		}
 	}
 	fmt.Println("examples:")
-	fmt.Println("  agentmux init default my-workflow.yaml")
-	fmt.Println("  agentmux init coding-starter coding.yaml")
-	fmt.Println("  agentmux init minimal scratch.yaml")
+	fmt.Println("  amx init default my-workflow.yaml")
+	fmt.Println("  amx init coding-starter coding.yaml")
+	fmt.Println("  amx init minimal scratch.yaml")
 	return exitSuccess
 }
 
 func runInit(args []string) int {
 	if workHelpRequested(args) {
-		fmt.Println("Usage: agentmux init TEMPLATE PATH [--force]\nCreates a legacy pane-layout configuration. List templates with agentmux templates.\nFor everyday native work sessions use agentmux start; for managed presets use agentmux managed setup --help.")
+		fmt.Println("Usage: amx init TEMPLATE PATH [--force]\nCreates a legacy pane-layout configuration. List templates with amx templates.\nFor everyday native work sessions use amx start; for managed presets use amx managed setup --help.")
 		return exitSuccess
 	}
 	opts, err := cli.ParseInit(args)
@@ -274,10 +279,10 @@ func runInit(args []string) int {
 	fmt.Printf("created %s from template %q\n", path, opts.Template)
 	fmt.Printf("session: %s\n", session)
 	fmt.Printf("next:\n")
-	fmt.Printf("  agentmux validate %s\n", path)
-	fmt.Printf("  agentmux render %s\n", path)
-	fmt.Printf("  agentmux load %s --replace --no-attach\n", path)
-	fmt.Printf("  agentmux edit %s\n", path)
+	fmt.Printf("  amx validate %s\n", path)
+	fmt.Printf("  amx render %s\n", path)
+	fmt.Printf("  amx load %s --replace --no-attach\n", path)
+	fmt.Printf("  amx edit %s\n", path)
 	return exitSuccess
 }
 
@@ -547,7 +552,7 @@ func runSessionLaunch(mode string, opts cli.LoadOptions, requireExisting bool, r
 		return exitRuntime
 	}
 	if requireExisting && !exists {
-		fmt.Fprintf(os.Stderr, "error: %s requires existing session %q; use `agentmux load %s` to create it\n", mode, resolved.Session, opts.ConfigPath)
+		fmt.Fprintf(os.Stderr, "error: %s requires existing session %q; use `amx load %s` to create it\n", mode, resolved.Session, opts.ConfigPath)
 		return exitRuntime
 	}
 
@@ -617,7 +622,7 @@ func runSessionLaunch(mode string, opts cli.LoadOptions, requireExisting bool, r
 
 func runValidate(args []string) int {
 	if workHelpRequested(args) {
-		fmt.Println("Usage: agentmux validate CONFIG [--param key=value] [--strict]\nValidates a pane-layout configuration without launching it.\nFor managed team definitions use agentmux managed doctor CONFIG --help.")
+		fmt.Println("Usage: amx validate CONFIG [--param key=value] [--strict]\nValidates a pane-layout configuration without launching it.\nFor managed team definitions use amx managed doctor CONFIG --help.")
 		return exitSuccess
 	}
 	opts, err := cli.ParseValidate(args)
@@ -664,7 +669,7 @@ func runRender(args []string) int {
 
 func runList(args []string) int {
 	if workHelpRequested(args) {
-		fmt.Println("Usage: agentmux list\nLists legacy sessions on the default tmux socket.\nEveryday work sessions: agentmux sessions [--session NAME | --state DIR].")
+		fmt.Println("Usage: amx list\nLists legacy sessions on the default tmux socket.\nEveryday work sessions: amx sessions [--session NAME | --state DIR].")
 		return exitSuccess
 	}
 	if len(args) != 0 {
@@ -672,7 +677,7 @@ func runList(args []string) int {
 		return exitValidation
 	}
 
-	fmt.Fprintln(os.Stderr, "This lists legacy tmux sessions. For everyday work sessions use agentmux sessions [--session NAME | --state DIR].")
+	fmt.Fprintln(os.Stderr, "This lists legacy tmux sessions. For everyday work sessions use amx sessions [--session NAME | --state DIR].")
 	sessions, err := tmux.ListSessions()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
@@ -708,7 +713,7 @@ func runDashboard(args []string) int {
 
 func runStatus(args []string) int {
 	if workHelpRequested(args) {
-		fmt.Println("Usage: agentmux status SESSION [--json] [--pane PANE] [--logs [N]]\nInspects a legacy pane layout on the default tmux socket.\nEveryday work sessions: agentmux sessions [--session NAME | --state DIR].\nManaged runtime: agentmux managed status --state DIR [--watch].")
+		fmt.Println("Usage: amx status SESSION [--json] [--pane PANE] [--logs [N]]\nInspects a legacy pane layout on the default tmux socket.\nEveryday work sessions: amx sessions [--session NAME | --state DIR].\nManaged runtime: amx managed status --state DIR [--watch].")
 		return exitSuccess
 	}
 	jsonOut := hasFlag(args, "--json")
@@ -1394,7 +1399,7 @@ func resolveScaleConfigForTools(session string) (resolve.Config, *toolruntime.Er
 		return resolve.Config{}, &toolruntime.Error{
 			Code:     exitCodeName(exitRuntime),
 			ExitCode: exitRuntime,
-			Message:  fmt.Sprintf("session %q has no config path metadata; run 'agentmux remember %s <config>' to fix this", session, session),
+			Message:  fmt.Sprintf("session %q has no config path metadata; run 'amx remember %s <config>' to fix this", session, session),
 			Command:  "scale",
 			Session:  session,
 		}
@@ -1956,7 +1961,7 @@ func printCommandError(command string, jsonOut bool, exitCode int, err error, se
 	}
 	fmt.Fprintf(os.Stderr, "error: %v\n", err)
 	if command == "status" {
-		hint := []string{"agentmux", "sessions"}
+		hint := []string{"amx", "sessions"}
 		if session != "" {
 			hint = append(hint, "--session", session)
 		}
@@ -2009,9 +2014,9 @@ func versionString() string {
 	}
 
 	if commit != "none" {
-		return fmt.Sprintf("agentmux %s (commit: %s, built: %s)", version, commit, date)
+		return fmt.Sprintf("amx %s (commit: %s, built: %s)", version, commit, date)
 	}
-	return fmt.Sprintf("agentmux %s", version)
+	return fmt.Sprintf("amx %s", version)
 }
 
 func requireTMux() error {
@@ -2058,7 +2063,7 @@ func resolveEditTarget(target string) (string, error) {
 		return "", err
 	}
 	if strings.TrimSpace(path) == "" {
-		return "", fmt.Errorf("session %q is missing config path metadata; use `agentmux remember %s ./path/to/config.yaml`, `agentmux edit ./path/to/config.yaml`, or reload the session from a config path first", target, target)
+		return "", fmt.Errorf("session %q is missing config path metadata; use `amx remember %s ./path/to/config.yaml`, `amx edit ./path/to/config.yaml`, or reload the session from a config path first", target, target)
 	}
 	return path, nil
 }
@@ -2148,9 +2153,9 @@ func mustGetwd() string {
 }
 
 func printUsage() {
-	fmt.Println(`agentmux
+	fmt.Println(`amx · Agentmux
 
-Short command: amx (installed alongside agentmux). Run amx to open the current
+Run amx to open the current
 workspace or choose a running one. Short options: -s workspace, -p project,
 -d detach on up/start, -j JSON on mode/delivery or ws/workspaces, -o web browser.
 Use -s before or after the command. Inside an owned tmux attachment, omitted
@@ -2159,7 +2164,9 @@ Creation with up/start always defaults to work unless a selector is supplied.
 
 Everyday shortcuts:
   amx up -s daily -p ./project
-  amx a claude -s daily          amx ui -s daily
+  amx a -s daily                 amx ui -s daily
+  amx split claude codex -s daily
+  amx unsplit codex -s daily
   amx ls -s daily               amx ws
   amx new --harness codex -p ./project -s daily
   amx link claude codex -s daily
@@ -2167,83 +2174,85 @@ Everyday shortcuts:
   amx mode claude auto -s daily
 Aliases: up=start, a/open=attach, ui=dashboard, ls=sessions, ws=workspaces,
 new=add, link=collaborate, unlink=disconnect, name=label, mode=delivery, archive=retire.
-Ctrl+K in the workbench opens searchable Actions; Ctrl+P switches sessions.
+Ctrl+K opens Actions; Ctrl+P switches sessions. Tab focuses sidebar/content.
+Left/Right switches views; Up/Down navigates the focused area.
+amx a restores the last live native terminal; amx ui opens the workbench.
 
 Everyday work sessions use dedicated tmux sockets. Use sessions/dashboard to inspect them;
 the legacy list/status commands below address the default tmux socket.
 
 Usage:
-  agentmux start [--project DIR] [--session work] [--detach]
-  agentmux add [NAME] --harness claude|codex|pi|antigravity --project DIR [--title "..."] [--role "..." | --native-only]
-  agentmux label ID "Fix login redirect" [--session work | --state DIR]
-  agentmux role ID "Current owner role" [--session work | --state DIR]
-  agentmux sessions [--session work | --state DIR]
-  agentmux workspaces [--json] [--register DIR]
-  agentmux relaunch ID [--resume ID|last|picker] [--session work | --state DIR]
-  agentmux delivery ID [manual|review|auto] [--approve CANDIDATE] [--session work | --state DIR]
-  agentmux allow|deny FROM TO commands|messages|pings [--session work | --state DIR]
-  agentmux connect OBSERVED_ID --name NAME [--session work | --state DIR]
-  agentmux collaborate AGENT AGENT [...] [--legacy-policy preserve|group] [--session work | --state DIR]
-  agentmux disconnect AGENT AGENT [...] [--session work | --state DIR]
-  agentmux retire ID [--session work | --state DIR]
-  agentmux isolate AGENT [...] [--session work | --state DIR]
-  agentmux remove AGENT [--session work | --state DIR]
-  agentmux attach [AGENT] [--session work | --state DIR]
-  agentmux dashboard [--session work | --state DIR]
-  agentmux web [--session work | --state DIR] [--open]
-  agentmux send AGENT "message" [--mode auto|note|instruction] [--session work | --state DIR]
-  agentmux reply TASK_OR_MESSAGE_ID "message" [--mode auto|note|instruction]
+  amx start [--project DIR] [--session work] [--detach]
+  amx add [NAME] --harness claude|codex|pi|antigravity --project DIR [--title "..."] [--role "..." | --native-only]
+  amx label ID "Fix login redirect" [--session work | --state DIR]
+  amx role ID "Current owner role" [--session work | --state DIR]
+  amx sessions [--session work | --state DIR]
+  amx workspaces [--json] [--register DIR]
+  amx relaunch ID [--resume ID|last|picker] [--session work | --state DIR]
+  amx delivery ID [manual|review|auto] [--approve CANDIDATE] [--session work | --state DIR]
+  amx allow|deny FROM TO commands|messages|pings [--session work | --state DIR]
+  amx connect OBSERVED_ID --name NAME [--session work | --state DIR]
+  amx collaborate AGENT AGENT [...] [--legacy-policy preserve|group] [--session work | --state DIR]
+  amx disconnect AGENT AGENT [...] [--session work | --state DIR]
+  amx retire ID [--session work | --state DIR]
+  amx isolate AGENT [...] [--session work | --state DIR]
+  amx remove AGENT [--session work | --state DIR]
+  amx attach [AGENT] [--session work | --state DIR]
+  amx dashboard [--session work | --state DIR]
+  amx web [--session work | --state DIR] [--open]
+  amx send AGENT "message" [--mode auto|note|instruction] [--session work | --state DIR]
+  amx reply TASK_OR_MESSAGE_ID "message" [--mode auto|note|instruction]
       [--to AGENT | --board NAMESPACE] [--session work | --state DIR]
-  agentmux inbox [--session work | --state DIR]
-  agentmux board "note" [--group ID | --board NAMESPACE] [--session work | --state DIR]
-  agentmux team <list|create|edit|invite|remove|transfer|dissolve|join|leave|accept-owner|move> [options]
-  agentmux down [--session work | --state DIR]
-  agentmux templates
-  agentmux init <template> <path> [--force]
-  agentmux edit <path-or-session>
-  agentmux remember <session> <config>
-  agentmux pack <config> [<output.amx>]
-  agentmux tools [--format <openai|codex|gemini|claude>]
-  agentmux prompt [--provider <provider>] [--mode <cli-bridge|native-mcp>]
-  agentmux tool-call <tool-name> (--from-json <json> | --from-file <path> | --from-stdin)
-  agentmux mcp-server
-  agentmux managed <setup|up|down|restart|doctor|status|activity|init|serve|call|worker|remote|memory|trace|capsule|rotate> [options]
-  agentmux experiment <plan|run> <manifest> [options]
-  agentmux research <plan|run|analyze|status|watch|pause|resume|step|stop> <manifest-output-or-state> [options]
-  agentmux load <config> [--param key=value] [--attach|--no-attach] [--dry-run] [--replace] [--strict] [--verbose]
-  agentmux reload <config> [--param key=value] [--attach|--no-attach] [--dry-run] [--strict] [--verbose]
-  agentmux validate <config> [--param key=value] [--strict]
-  agentmux render <config> [--param key=value] [--strict]
-  agentmux list
-  agentmux dashboard <session>
-  agentmux status <session> [--json] [--pane <pane-name>] [--logs [N]]
-  agentmux inspect <session> <pane-name> [--json]
-  agentmux kv-set <session> <key> <value> [--json]
-  agentmux kv-get <session> <key> [--json]
-  agentmux kv-list <session> [--json]
-  agentmux kv-del <session> <key> [--json]
-  agentmux wait <session> <pane> <pattern> [--scope <output|visible>] [--timeout <duration>] [--json]
-  agentmux scale <session> <agent-name> <count> [--window <name>] [--json]
-  agentmux focus <session> <pane-name> [--json]
-  agentmux restart <session> <pane-name> [--json]
-  agentmux rerun <session> <pane-name> [--json]
-  agentmux stop <session> <pane-name> [--json]
-  agentmux kill <session> <pane-name> [--json]
-  agentmux capture <session> <pane-name> [--json] [--tail N] [--strip-empty]
-  agentmux send <session> <pane-name> [--json] [--no-enter] <command...>
-  agentmux doctor [<config>]
-  agentmux version`)
+  amx inbox [--session work | --state DIR]
+  amx board "note" [--group ID | --board NAMESPACE] [--session work | --state DIR]
+  amx team <list|create|edit|invite|remove|transfer|dissolve|join|leave|accept-owner|move> [options]
+  amx down [--session work | --state DIR]
+  amx templates
+  amx init <template> <path> [--force]
+  amx edit <path-or-session>
+  amx remember <session> <config>
+  amx pack <config> [<output.amx>]
+  amx tools [--format <openai|codex|gemini|claude>]
+  amx prompt [--provider <provider>] [--mode <cli-bridge|native-mcp>]
+  amx tool-call <tool-name> (--from-json <json> | --from-file <path> | --from-stdin)
+  amx mcp-server
+  amx managed <setup|up|down|restart|doctor|status|activity|init|serve|call|worker|remote|memory|trace|capsule|rotate> [options]
+  amx experiment <plan|run> <manifest> [options]
+  amx research <plan|run|analyze|status|watch|pause|resume|step|stop> <manifest-output-or-state> [options]
+  amx load <config> [--param key=value] [--attach|--no-attach] [--dry-run] [--replace] [--strict] [--verbose]
+  amx reload <config> [--param key=value] [--attach|--no-attach] [--dry-run] [--strict] [--verbose]
+  amx validate <config> [--param key=value] [--strict]
+  amx render <config> [--param key=value] [--strict]
+  amx list
+  amx dashboard <session>
+  amx status <session> [--json] [--pane <pane-name>] [--logs [N]]
+  amx inspect <session> <pane-name> [--json]
+  amx kv-set <session> <key> <value> [--json]
+  amx kv-get <session> <key> [--json]
+  amx kv-list <session> [--json]
+  amx kv-del <session> <key> [--json]
+  amx wait <session> <pane> <pattern> [--scope <output|visible>] [--timeout <duration>] [--json]
+  amx scale <session> <agent-name> <count> [--window <name>] [--json]
+  amx focus <session> <pane-name> [--json]
+  amx restart <session> <pane-name> [--json]
+  amx rerun <session> <pane-name> [--json]
+  amx stop <session> <pane-name> [--json]
+  amx kill <session> <pane-name> [--json]
+  amx capture <session> <pane-name> [--json] [--tail N] [--strip-empty]
+  amx send <session> <pane-name> [--json] [--no-enter] <command...>
+  amx doctor [<config>]
+  amx version`)
 
 	fmt.Println(`
 Starter flow:
-  agentmux start
-  agentmux attach claude
-  agentmux web --open
+  amx start
+  amx attach claude
+  amx web --open
 
 Legacy workspace flow:
-  agentmux templates
-  agentmux init default my-workflow.yaml
-  agentmux init coding-starter coding.yaml
-  agentmux validate my-workflow.yaml
-  agentmux load my-workflow.yaml --replace --no-attach`)
+  amx templates
+  amx init default my-workflow.yaml
+  amx init coding-starter coding.yaml
+  amx validate my-workflow.yaml
+  amx load my-workflow.yaml --replace --no-attach`)
 }

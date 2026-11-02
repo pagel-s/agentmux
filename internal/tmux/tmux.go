@@ -1630,7 +1630,7 @@ func findPaneByName(session string, name string) (PaneStatus, error) {
 		if len(available) == 0 {
 			return PaneStatus{}, fmt.Errorf("pane %q not found in session %q; session has no named panes. Add `name:` fields in config and reload the session", name, session)
 		}
-		return PaneStatus{}, fmt.Errorf("pane %q not found in session %q; available named panes: %s. Run `agentmux status %s` to inspect live panes", name, session, strings.Join(available, ", "), session)
+		return PaneStatus{}, fmt.Errorf("pane %q not found in session %q; available named panes: %s. Run `amx status %s` to inspect live panes", name, session, strings.Join(available, ", "), session)
 	}
 
 	return *target, nil
@@ -1642,7 +1642,7 @@ func ensureSessionExists(session string) error {
 		return err
 	}
 	if !exists {
-		return fmt.Errorf("session %q not found. Run `agentmux list` to inspect tmux sessions or `agentmux load <config>` to create it", session)
+		return fmt.Errorf("session %q not found. Run `amx list` to inspect tmux sessions or `amx load <config>` to create it", session)
 	}
 	return nil
 }

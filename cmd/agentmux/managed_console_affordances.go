@@ -160,7 +160,7 @@ func (m console) teamKeyHints() string {
 // Keep the footer's vocabulary identical to the keys it documents. Uppercase
 // shortcuts are spelled Shift+... so they cannot look like lowercase no-ops.
 func (m console) contextualKeys() string {
-	common := "←/→ views · Ctrl+P sessions · Ctrl+K Actions\nShift+W workspaces · ? help · q detach/close"
+	common := "Tab focus · ←/→ views · Ctrl+P sessions · Ctrl+K Actions · ? · q detach/close"
 	if m.workspacePicker != nil {
 		if m.workspacePicker.loading {
 			return "Loading workspaces · Esc/q returns to your previous draft or review"
@@ -208,7 +208,7 @@ func (m console) contextualKeys() string {
 	case 0:
 		keys := []string{"f scope", "Shift+F search", "PgUp/PgDn history"}
 		if len(m.boardMessages()) > 0 {
-			keys = append(keys, "[/] message", "r reply", "o read")
+			keys = append(keys, "↑/↓ message", "r reply", "o read")
 		}
 		if m.selectedBoard() != "" {
 			keys = append(keys, "b post", "+/- board")
@@ -227,7 +227,7 @@ func (m console) contextualKeys() string {
 		}
 	case 2:
 		if m.selectedID() != "" {
-			context = "↑/↓ sender · h/l recipient · c connect · d isolate"
+			context = "Tab sessions/recipient · ↑/↓ select · c connect · d isolate"
 			if !m.offline && m.data.boundaries.Agent == m.selectedID() {
 				context += "\nm/p/i note/ping/task · Shift+M/P/I reset override · o details"
 			}
@@ -236,14 +236,14 @@ func (m console) contextualKeys() string {
 		}
 	case 3:
 		if m.memoryOpen {
-			context = "[/] entry · n new · v refresh · Esc namespaces"
+			context = "↑/↓ entry · n new · v refresh · Esc namespaces"
 			if len(m.memoryEntries) > 0 {
 				context += " · o read · e edit"
 			}
 		} else {
 			context = "3 Connections: connect sessions to share a namespace"
 			if len(m.data.boundaries.Boards)+len(m.data.boundaries.Memory) > 0 {
-				context = "[/] namespace · r/w read/write · Shift+R reset · o details"
+				context = "↑/↓ namespace · r/w read/write · Shift+R reset · o details"
 				if len(m.data.boundaries.Memory) > 0 {
 					context += " · v entries"
 				}
@@ -252,7 +252,7 @@ func (m console) contextualKeys() string {
 	case 4:
 		keys := []string{"f history search", "y recipient", "z state"}
 		if len(m.data.activity.Tasks) > 0 {
-			keys = append(keys, "[/] task", "o read", "r reply", "c cancel")
+			keys = append(keys, "↑/↓ task", "o read", "r reply", "c cancel")
 		}
 		if m.taskMore {
 			keys = append(keys, "PgDn older")
@@ -271,7 +271,7 @@ func (m console) contextualKeys() string {
 	case 7:
 		context = "Home latest/live"
 		if len(m.data.activity.Events) > 0 {
-			context = "[/] pin event · Home live · PgUp/PgDn history · Shift+F search · g scope · o details"
+			context = "↑/↓ pin event · Home live · PgUp/PgDn history · Shift+F search · g scope · o details"
 		}
 		if m.data.research != nil {
 			context += "\nShift+P/R/S/T pause/resume/step/stop (reason + review)"

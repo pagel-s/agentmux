@@ -12,17 +12,17 @@ import (
 )
 
 const teamHelp = `Consented teams (native terminals keep running):
-  agentmux team list
-  agentmux team create NAME [--description TEXT]
-  agentmux team edit TEAM --name NAME [--description TEXT]
-  agentmux team invite TEAM AGENT
-  agentmux team remove TEAM AGENT
-  agentmux team transfer TEAM AGENT
-  agentmux team dissolve TEAM
-  agentmux team join TEAM --credential-file AGENT_CREDENTIAL
-  agentmux team leave TEAM --credential-file AGENT_CREDENTIAL
-  agentmux team accept-owner TEAM --credential-file NEW_OWNER_CREDENTIAL
-  agentmux team move SOURCE DESTINATION --credential-file AGENT_CREDENTIAL
+  amx team list
+  amx team create NAME [--description TEXT]
+  amx team edit TEAM --name NAME [--description TEXT]
+  amx team invite TEAM AGENT
+  amx team remove TEAM AGENT
+  amx team transfer TEAM AGENT
+  amx team dissolve TEAM
+  amx team join TEAM --credential-file AGENT_CREDENTIAL
+  amx team leave TEAM --credential-file AGENT_CREDENTIAL
+  amx team accept-owner TEAM --credential-file NEW_OWNER_CREDENTIAL
+  amx team move SOURCE DESTINATION --credential-file AGENT_CREDENTIAL
 
 Options: --session NAME | --state DIR; --version N; move also --to-version N.
 Omitted versions are read once immediately before submitting; conflicts are never
@@ -133,7 +133,7 @@ func runWorkTeam(args []string, out, diagnostics io.Writer) int {
 		want = 2
 	}
 	if len(pos) != want {
-		fmt.Fprintf(diagnostics, "error: team %s requires %d positional arguments; see agentmux team --help\n", op, want)
+		fmt.Fprintf(diagnostics, "error: team %s requires %d positional arguments; see amx team --help\n", op, want)
 		return exitValidation
 	}
 	consent := op == "join" || op == "leave" || op == "accept-owner" || op == "move"

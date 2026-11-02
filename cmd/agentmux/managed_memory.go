@@ -18,7 +18,7 @@ import (
 
 func runManagedMemory(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	usage := func() {
-		fmt.Fprintln(stderr, "Usage: agentmux managed memory <export|import|search|index|prune> --credential-file FILE [--namespace NAME] [--output FILE|--input FILE|--query TEXT] [--replace] [--embedding-base-url URL --embedding-model ID --allow-provider-calls]")
+		fmt.Fprintln(stderr, "Usage: amx managed memory <export|import|search|index|prune> --credential-file FILE [--namespace NAME] [--output FILE|--input FILE|--query TEXT] [--replace] [--embedding-base-url URL --embedding-model ID --allow-provider-calls]")
 	}
 	if len(args) < 1 {
 		usage()

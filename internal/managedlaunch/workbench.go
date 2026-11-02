@@ -13,7 +13,7 @@ import (
 const workbenchServiceFormat = "#{||:#{==:#{@agentmux_role},broker},#{==:#{@agentmux_role},supervisor}}"
 const workbenchVisibleFormat = "#{&&:#{!=:#{@agentmux_role},broker},#{!=:#{@agentmux_role},supervisor}}"
 const workbenchDashboardFormat = "#{==:#{@agentmux_role},dashboard}"
-const workbenchWindowLabel = "#{?" + workbenchDashboardFormat + ",Workbench,#{?@agentmux_title,#{q/h:@agentmux_title},#{?@agentmux_agent,#{q/h:@agentmux_agent},#W}}}"
+const workbenchWindowLabel = "#{?" + workbenchDashboardFormat + ",Workbench,#{?@agentmux_layout_label,#{q/h:@agentmux_layout_label},#{?@agentmux_title,#{q/h:@agentmux_title},#{?@agentmux_agent,#{q/h:@agentmux_agent},#W}}}}"
 const workbenchWindowFormat = "#{?" + workbenchServiceFormat + ",, " + workbenchWindowLabel + " }"
 const workbenchCurrentWindowFormat = "#{?" + workbenchServiceFormat + ", Service: #W (diagnostics) , " + workbenchWindowLabel + " }"
 
@@ -91,6 +91,9 @@ func (l *Launcher) configureWorkbench(ctx context.Context, runtime Runtime) erro
 		{"bind-key", "-n", "F1", "run-shell", "-C", "select-window -t #{q:@agentmux_dashboard}"},
 		{"bind-key", "g", "run-shell", "-C", "select-window -t #{q:@agentmux_dashboard}"},
 		{"bind-key", "w", "choose-tree", "-w", "-f", workbenchVisibleFormat},
+		{"bind-key", "c", "new-window", "-c", "#{?@agentmux_project,#{@agentmux_project},#{pane_current_path}}"},
+		{"bind-key", "%", "split-window", "-h", "-c", "#{?@agentmux_project,#{@agentmux_project},#{pane_current_path}}"},
+		{"bind-key", "\"", "split-window", "-v", "-c", "#{?@agentmux_project,#{@agentmux_project},#{pane_current_path}}"},
 	} {
 		if _, err := l.tmux(ctx, args...); err != nil {
 			return err
@@ -98,8 +101,60 @@ func (l *Launcher) configureWorkbench(ctx context.Context, runtime Runtime) erro
 	}
 	// Each attachment owns this hook and its private dashboard. Record a native
 	// window selection before F1 returns, without sending keys to an editor.
-	remember := "if-shell -F '#{&&:#{==:#{@agentmux_role},worker},#{!=:#{@agentmux_agent},}}' 'run-shell -C \"set-option -t #{q:session_id} @agentmux_focus_pending #{q:@agentmux_agent}\"'"
-	if _, err := l.tmux(ctx, "set-hook", "-t", runtime.Session, "after-select-window[42]", remember); err != nil {
+	if err := l.configurePaneProjects(ctx, runtime); err != nil {
+		return err
+	}
+	return l.configureWorkbenchHooks(ctx, runtime)
+}
+
+func (l *Launcher) configurePaneProjects(ctx context.Context, runtime Runtime) error {
+	store, err := managed.Open(l.options.StateDir)
+	if err != nil {
+		return nil
+	}
+	defer store.Close()
+	panes, err := l.panes(ctx, runtime)
+	if err != nil {
+		return err
+	}
+	for _, pane := range panes {
+		tracked, ok := runtime.Agents[pane.Agent]
+		if !ok || tracked.PaneID != pane.ID || pane.Attempt != runtime.AttemptID || pane.Role != "worker" {
+			continue
+		}
+		agent, err := store.Agent(pane.Agent)
+		if err != nil || agent.Workdir == "" {
+			continue
+		}
+		if _, err := l.tmux(ctx, "set-option", "-p", "-t", pane.ID, "@agentmux_project", agent.Workdir); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (l *Launcher) configureWorkbenchHooks(ctx context.Context, runtime Runtime) error {
+	core := runtime.Session
+	if saved, err := Snapshot(l.options.StateDir); err == nil && saved.AttemptID == runtime.AttemptID {
+		core = saved.Session
+	}
+	rememberCommand := "set-option -t #{q:session_id} @agentmux_focus_pending #{q:@agentmux_agent}; set-option -t #{q:session_id} @agentmux_last_agent #{q:@agentmux_agent}; " + ShellCommand([]string{"set-option", "-t", core, "@agentmux_last_agent"}) + " #{q:@agentmux_agent}"
+	remember := ShellCommand([]string{"if-shell", "-F", "#{&&:#{==:#{@agentmux_role},worker},#{!=:#{@agentmux_agent},}}", "run-shell -C " + ShellCommand([]string{rememberCommand})})
+	for _, event := range []string{"after-select-window[42]", "after-select-pane[42]"} {
+		if _, err := l.tmux(ctx, "set-hook", "-t", runtime.Session, event, remember); err != nil {
+			return err
+		}
+	}
+	// User-created windows belong to the workspace, rather than the disposable
+	// attachment. Linking preserves shells when this attachment detaches.
+	persist := ShellCommand([]string{"set-option", "-w", "-t", "#{window_id}", "@agentmux_scratch", runtime.AttemptID}) + "; " + ShellCommand([]string{"link-window", "-d", "-s", "#{window_id}", "-t", core + ":"})
+	hook := ShellCommand([]string{"if-shell", "-F", "#{&&:#{!=:#{@agentmux_view},},#{||:#{==:#{@agentmux_role},},#{==:#{@agentmux_role},worker}}}", "run-shell -C " + ShellCommand([]string{persist})})
+	if _, err := l.tmux(ctx, "set-hook", "-t", runtime.Session, "after-new-window[43]", hook); err != nil {
+		return err
+	}
+	// tmux has no after-break-pane hook. Anchor the resulting window as part
+	// of the normal breakout binding, after break-pane selects its new window.
+	if _, err := l.tmux(ctx, "bind-key", "!", "break-pane; "+ShellCommand([]string{"run-shell", "-C", persist})); err != nil {
 		return err
 	}
 	menu := []string{"display-menu", "-T", "Runtime services (read-only)"}
@@ -113,7 +168,7 @@ func (l *Launcher) configureWorkbench(ctx context.Context, runtime Runtime) erro
 		menu = append(menu, service.name, service.key, popup)
 	}
 	if len(menu) == 3 {
-		if _, err := l.tmux(ctx, "bind-key", "D", "display-message", "Runtime service panes unavailable; inspect agentmux managed status."); err != nil {
+		if _, err := l.tmux(ctx, "bind-key", "D", "display-message", "Runtime service panes unavailable; inspect amx managed status."); err != nil {
 			return err
 		}
 	} else if _, err := l.tmux(ctx, append([]string{"bind-key", "D"}, menu...)...); err != nil {
@@ -170,6 +225,11 @@ func (l *Launcher) syncWindowTitle(ctx context.Context, runtime Runtime, pane, a
 			title = string(runes[:36]) + "…"
 		}
 		label = title + " [" + agent + "]"
+	}
+	// The pane keeps its own title when it moves to a combined or broken-out
+	// window. Retain the window option for existing consumers as well.
+	if _, err = l.tmux(ctx, "set-option", "-p", "-t", pane, "@agentmux_title", label); err != nil {
+		return err
 	}
 	_, err = l.tmux(ctx, "set-option", "-w", "-t", pane, "@agentmux_title", label)
 	return err

@@ -1,12 +1,12 @@
 # Single-task experiment pilots
 
-`agentmux experiment` runs finite, auditable comparisons on the managed runtime.
+`amx experiment` runs finite, auditable comparisons on the managed runtime.
 It creates a fresh broker, credentials, workspaces, homes, and private/shared
 memory for every trial. Agents within a trial run concurrently; trials run
 serially. Tmux is not required.
 
 Use this runner for a finite instruction/assertion matrix. Use
-[`agentmux research`](research.md) for repeated-round decisions, private
+[`amx research`](research.md) for repeated-round decisions, private
 observations, scarce resources, dynamic populations, declared behavioral
 outcomes, role/personality treatments and counterbalanced factorial designs.
 Those are distinct manifest schemas; research fields are not accepted by an
@@ -17,8 +17,8 @@ produce evidence about agent cooperation, competition, or personality.
 
 ```sh
 go build -o /tmp/agentmux ./cmd/agentmux
-/tmp/agentmux experiment plan examples/experiments/pilot.yaml
-/tmp/agentmux experiment run examples/experiments/pilot.yaml --output /tmp/amx-pilot
+/tmp/amx experiment plan examples/experiments/pilot.yaml
+/tmp/amx experiment run examples/experiments/pilot.yaml --output /tmp/amx-pilot
 ```
 
 Use a new, empty output directory. Existing output must be private (`0700`).
@@ -136,7 +136,7 @@ failed-infrastructure, or interrupted attempt is never silently retried:
 
 ```sh
 # First stop any processes left by the interrupted attempt.
-/tmp/agentmux experiment run examples/experiments/pilot.yaml \
+/tmp/amx experiment run examples/experiments/pilot.yaml \
   --output /tmp/amx-pilot --rerun-interrupted
 ```
 
