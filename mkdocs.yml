@@ -53,6 +53,10 @@ nav:
   - Tutorials:
       - Legacy Layout Handoff: tutorials/hello-team.md
       - Portable Bundles: tutorials/portable-bundles.md
+  - Coding Workflows:
+      - Work on a Task: working.md
+      - Advanced Workflows: workflows.md
+      - Validation and Boundaries: workflow-validation.md
   - Core Concepts:
       - Layout Compiler (v1): architecture/mental-model.md
       - Pane Coordination (v1): architecture/coordination.md

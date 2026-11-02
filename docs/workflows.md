@@ -48,7 +48,7 @@ exclusive report copy. Reports execute no model calls and contain private task
 and code content.
 
 For an actual provider-backed coding task, the
-[native comparison example](../examples/workflows/native-compare.json) asks
+[native comparison example](https://github.com/pagel-s/agentmux/blob/main/examples/workflows/native-compare.json) asks
 Antigravity and Codex to implement `normalize_tags` in separate worktrees. External
 Python assertions check normalization, error behavior, generators, fresh outputs
 and nonmutation. Installed authenticated CLIs are required. Opt in explicitly:
