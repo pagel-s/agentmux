@@ -217,32 +217,32 @@ func runWorkSession(operation string, args []string, in io.Reader, out, diagnost
 func runWorkSessionInner(operation string, args []string, in io.Reader, out, diagnostics io.Writer) int {
 	if workHelpRequested(args) {
 		fmt.Fprintln(out, `Human work sessions:
-  agentmux start [--project DIR] [--session work] [--detach]
+  amx start [--project DIR] [--session work] [--detach]
                  [--config team.yaml] [--sandbox bubblewrap|local] [--state DIR]
-  agentmux attach [AGENT] [--session work | --state DIR]
-  agentmux dashboard [--session work | --state DIR]
-  agentmux web [--session work | --state DIR]
-  agentmux send AGENT "message" [--mode auto|note|instruction]
-  agentmux reply TASK_OR_MESSAGE_ID "message" [--mode auto|note|instruction]
+  amx attach [AGENT] [--session work | --state DIR]
+  amx dashboard [--session work | --state DIR]
+  amx web [--session work | --state DIR]
+  amx send AGENT "message" [--mode auto|note|instruction]
+  amx reply TASK_OR_MESSAGE_ID "message" [--mode auto|note|instruction]
                  [--to AGENT | --board NAMESPACE]
-  agentmux inbox [--session work | --state DIR]
-  agentmux board "note" [--group ID | --board NAMESPACE] [--session work | --state DIR]
-  agentmux add [NAME] --harness claude|codex|pi|antigravity --project DIR
+  amx inbox [--session work | --state DIR]
+  amx board "note" [--group ID | --board NAMESPACE] [--session work | --state DIR]
+  amx add [NAME] --harness claude|codex|pi|antigravity --project DIR
                  [--title "..."] [--role "..." | --native-only]
-  agentmux label ID "Fix login redirect"
-  agentmux role ID "Current owner role"
-  agentmux workspaces [--json] [--register DIR]
-  agentmux relaunch ID [--resume ID|last|picker] [--native-launcher ABSOLUTE_PATH]
-  agentmux delivery ID [manual|review|auto] [--approve CANDIDATE]
-  agentmux remove NAME
-  agentmux retire NAME
-  agentmux disconnect NAME NAME [...] [--group ID]
-  agentmux sessions
-  agentmux connect OBSERVED_ID --name NAME
-  agentmux collaborate NAME NAME [...] [--legacy-policy preserve|group]
-  agentmux isolate NAME [...]
-  agentmux team <list|create|edit|invite|remove|transfer|dissolve|join|leave|accept-owner|move>
-  agentmux down [--session work | --state DIR]
+  amx label ID "Fix login redirect"
+  amx role ID "Current owner role"
+  amx workspaces [--json] [--register DIR]
+  amx relaunch ID [--resume ID|last|picker] [--native-launcher ABSOLUTE_PATH]
+  amx delivery ID [manual|review|auto] [--approve CANDIDATE]
+  amx remove NAME
+  amx retire NAME
+  amx disconnect NAME NAME [...] [--group ID]
+  amx sessions
+  amx connect OBSERVED_ID --name NAME
+  amx collaborate NAME NAME [...] [--legacy-policy preserve|group]
+  amx isolate NAME [...]
+  amx team <list|create|edit|invite|remove|transfer|dissolve|join|leave|accept-owner|move>
+  amx down [--session work | --state DIR]
 
 Select one workspace with --session NAME or --state DIR on each command;
 inside an owned attachment it is inferred from that exact context; outside,
@@ -260,7 +260,7 @@ Use attach to type directly. Native Antigravity requires --native-only; use its 
 bridge for injected coordination context. ? opens workbench help, Ctrl-G editor
 help, Ctrl-T message intent, V role editing, B admission budgets, W workspaces,
 and U single-session relaunch. team --help describes participant consent.
-Legacy raw pane input remains: agentmux send SESSION PANE -- COMMAND.`)
+Legacy raw pane input remains: amx send SESSION PANE -- COMMAND.`)
 		return exitSuccess
 	}
 	if err := validateWorkFlags(operation, args); err != nil {
@@ -298,7 +298,7 @@ Legacy raw pane input remains: agentmux send SESSION PANE -- COMMAND.`)
 				if project == "" {
 					project = "."
 				}
-				project, e = filepath.Abs(project)
+				project, e = filepath.Abs(expandUserPath(project))
 				if e != nil {
 					return fail(e)
 				}
@@ -388,13 +388,18 @@ Legacy raw pane input remains: agentmux send SESSION PANE -- COMMAND.`)
 		runtime, e := launcher.Describe(ctx)
 		if e != nil {
 			if os.IsNotExist(e) {
-				return fail(fmt.Errorf("work session not found; start this workspace with %s, or select an existing --state / --session", managedlaunch.ShellCommand([]string{"agentmux", "start", "--session", o.session, "--state", o.state})))
+				return fail(fmt.Errorf("work session not found; start this workspace with %s, or select an existing --state / --session", managedlaunch.ShellCommand([]string{"amx", "start", "--session", o.session, "--state", o.state})))
 			}
 			return fail(e)
 		}
 		agent := ""
 		if len(o.args) == 1 {
 			agent = o.args[0]
+		} else {
+			agent, e = launcher.LastAgent(ctx, runtime)
+			if e != nil {
+				return fail(e)
+			}
 		}
 		if strings.HasPrefix(os.Getenv("TMUX"), managedlaunch.SocketPath(o.state)+",") {
 			if agent != "" {
@@ -411,7 +416,7 @@ Legacy raw pane input remains: agentmux send SESSION PANE -- COMMAND.`)
 	}
 	credential, err := managed.LoadCredential(managed.CredentialPath(o.state, ""))
 	if err != nil {
-		return fail(errors.New("work session not found; use agentmux start or select --state / --session"))
+		return fail(errors.New("work session not found; use amx start or select --state / --session"))
 	}
 	client := managed.NewClient(credential)
 	fmt.Fprintf(out, "Workspace: %s\n", activityText(o.state, 300))
@@ -515,7 +520,7 @@ Legacy raw pane input remains: agentmux send SESSION PANE -- COMMAND.`)
 		}
 		fmt.Fprintf(out, "%s queued for %s: %s\n", kind, audience, id)
 		if kind == "Message" {
-			fmt.Fprintln(out, "Interactive agent: read its broker inbox, or talk directly with:", managedlaunch.ShellCommand([]string{"agentmux", "attach", target, "--state", o.state}))
+			fmt.Fprintln(out, "Interactive agent: read its broker inbox, or talk directly with:", managedlaunch.ShellCommand([]string{"amx", "attach", target, "--state", o.state}))
 		}
 		if target != "" {
 			if raw, err := workCall(ctx, client, "native.status", map[string]any{"agent": target}); err == nil {
@@ -528,7 +533,7 @@ Legacy raw pane input remains: agentmux send SESSION PANE -- COMMAND.`)
 						fmt.Fprintln(out, "Automatic note delivery is off; this note stays in the broker inbox.")
 					}
 					if kind == "Instruction" && v.Status.Mode == "review" {
-						fmt.Fprintln(out, "Approve the exact item in Agents (Shift+A) or with agentmux delivery", target, "--approve", id)
+						fmt.Fprintln(out, "Approve the exact item in Agents (Shift+A) or with amx delivery", target, "--approve", id)
 					}
 				}
 			}

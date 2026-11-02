@@ -33,7 +33,7 @@ func runManagedSetupIO(ctx context.Context, args []string, input io.Reader, stdo
 	project := flags.String("project", "", "existing shared project directory for a preset; omitted creates separate workspaces")
 	sandboxMode := flags.String("sandbox", "local", "preset agent and broker isolation: bubblewrap or explicitly trusted local")
 	flags.Usage = func() {
-		fmt.Fprintln(stderr, "Usage: agentmux managed setup [--spec setup.json] --output team.yaml [--init-git]\nWithout --spec, asks for agent roles, runtimes, isolation and explicit authentication choices.")
+		fmt.Fprintln(stderr, "Usage: amx managed setup [--spec setup.json] --output team.yaml [--init-git]\nWithout --spec, asks for agent roles, runtimes, isolation and explicit authentication choices.")
 		flags.PrintDefaults()
 	}
 	if err := flags.Parse(args); err != nil {
@@ -120,7 +120,7 @@ func runManagedSetupIO(ctx context.Context, args []string, input io.Reader, stdo
 	if err := managedsetup.Write(path, plan.Config); err != nil {
 		return managedCLIError(stdout, "setup", "", exitRuntime, err)
 	}
-	return writeManagedEnvelope(stdout, managedEnvelope{Operation: "setup", OK: true, Result: map[string]any{"config": path, "session": spec.Session, "agents": len(spec.Agents), "broker_sandbox": plan.BrokerSandbox, "preflight": report, "model_metadata": discoveries, "warnings": plan.Warnings, "workspace_notes": notes, "next": []string{"agentmux managed doctor " + shellQuote(path), "agentmux managed up " + shellQuote(path) + " --broker-sandbox " + plan.BrokerSandbox}}})
+	return writeManagedEnvelope(stdout, managedEnvelope{Operation: "setup", OK: true, Result: map[string]any{"config": path, "session": spec.Session, "agents": len(spec.Agents), "broker_sandbox": plan.BrokerSandbox, "preflight": report, "model_metadata": discoveries, "warnings": plan.Warnings, "workspace_notes": notes, "next": []string{"amx managed doctor " + shellQuote(path), "amx managed up " + shellQuote(path) + " --broker-sandbox " + plan.BrokerSandbox}}})
 }
 
 func askManagedSetup(input io.Reader, output io.Writer) (managedsetup.Spec, error) {

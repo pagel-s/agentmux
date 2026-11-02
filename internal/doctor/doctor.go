@@ -132,7 +132,7 @@ func RenderText(report Report) string {
 	var b strings.Builder
 
 	fmt.Fprintf(&b, "shell:         %s\n", report.Environment.Shell)
-	fmt.Fprintf(&b, "agentmux:      %s\n", report.Environment.AgentmuxVersion)
+	fmt.Fprintf(&b, "amx:           %s\n", report.Environment.AgentmuxVersion)
 	fmt.Fprintf(&b, "go_binary:     %s\n", report.Environment.GoBinary)
 	fmt.Fprintf(&b, "go_version:    %s\n", report.Environment.GoVersion)
 	fmt.Fprintf(&b, "tmux_binary:   %s\n", report.Environment.TMuxBinary)
@@ -298,7 +298,7 @@ func collectEnvironment(agentmuxVersion string, probes Probes) Environment {
 
 	tmuxPath, tmuxVersion, tmuxVersionNumber := localTMuxVersion(probes)
 	goPath, goVersion, goVersionNumber := localGoVersion(probes)
-	agentmuxPath, _ := probes.LookPath("agentmux")
+	agentmuxPath, _ := probes.LookPath("amx")
 	projectTemplates, globalTemplates := templateCounts(probes)
 
 	return Environment{
@@ -360,12 +360,12 @@ func collectDiagnostics(env Environment) []Message {
 	if env.AgentmuxPath == "" {
 		diagnostics = append(diagnostics, Message{
 			Status:  StatusWarning,
-			Message: "WARNING: agentmux is not in your PATH. You must call it via absolute path or add its directory to PATH.",
+			Message: "WARNING: amx is not in your PATH. You must call it via absolute path or add its directory to PATH.",
 		})
 	} else {
 		diagnostics = append(diagnostics, Message{
 			Status:  StatusSuccess,
-			Message: fmt.Sprintf("agentmux is in PATH at %s", env.AgentmuxPath),
+			Message: fmt.Sprintf("amx is in PATH at %s", env.AgentmuxPath),
 		})
 	}
 

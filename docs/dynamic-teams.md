@@ -17,7 +17,7 @@ From the repository root, build with `make build` first. This fixture uses a
 custom state path, so keep `--state /tmp/amx-teams` on subsequent owner commands:
 
 ```sh
-./bin/agentmux managed up examples/managed/bounded-teams.yaml --state /tmp/amx-teams --broker-sandbox bubblewrap
+./bin/amx managed up examples/managed/bounded-teams.yaml --state /tmp/amx-teams --broker-sandbox bubblewrap
 ```
 
 The example has `lead`, `peer`, the static `team` board, shared memory `findings`,
@@ -66,7 +66,7 @@ access, while `none` keeps the network namespace separate.
 Using the lead's credential:
 
 ```sh
-./bin/agentmux managed call agent.spawn \
+./bin/amx managed call agent.spawn \
   --credential-file /tmp/amx-teams/credentials/lead.json \
   --request-id recruit-helper-1 \
   --json '{
@@ -115,7 +115,7 @@ agent-to-agent instruction edge.
 Create a team with the lead credential:
 
 ```sh
-./bin/agentmux managed call team.create \
+./bin/amx managed call team.create \
   --credential-file /tmp/amx-teams/credentials/lead.json \
   --json '{"name":"Review group"}'
 ```
@@ -127,12 +127,12 @@ The human owner can administer teams without impersonating a participant.
 Copy the returned team ID, then invite the peer using the current version:
 
 ```sh
-./bin/agentmux managed call team.invite \
+./bin/amx managed call team.invite \
   --credential-file /tmp/amx-teams/credentials/lead.json \
   --json '{"id":"TEAM_ID","agent":"peer","version":1}'
 
 # After that invitation, use the version returned by it (normally 2).
-./bin/agentmux managed call team.join \
+./bin/amx managed call team.join \
   --credential-file /tmp/amx-teams/credentials/peer.json \
   --json '{"id":"TEAM_ID","version":2}'
 ```
@@ -151,7 +151,7 @@ invited to. The human owner can inspect all teams. Use it to obtain current
 versions before mutations:
 
 ```sh
-./bin/agentmux managed call team.list \
+./bin/amx managed call team.list \
   --credential-file /tmp/amx-teams/credentials/lead.json --json '{}'
 ```
 
@@ -186,16 +186,16 @@ agent behavior, not an administrative privilege grant.
 ## Everyday control and live inspection
 
 ```sh
-agentmux team list --state /tmp/amx-teams
-agentmux team create "API investigation" --description "Temporary joint review" --state /tmp/amx-teams
+amx team list --state /tmp/amx-teams
+amx team create "API investigation" --description "Temporary joint review" --state /tmp/amx-teams
 # Replace TEAM_ID below with the ID returned by create:
-agentmux team edit TEAM_ID --name "API review" --description "Owner-approved scope" --state /tmp/amx-teams
-agentmux team invite TEAM_ID lead --state /tmp/amx-teams
-agentmux team invite TEAM_ID peer --state /tmp/amx-teams
+amx team edit TEAM_ID --name "API review" --description "Owner-approved scope" --state /tmp/amx-teams
+amx team invite TEAM_ID lead --state /tmp/amx-teams
+amx team invite TEAM_ID peer --state /tmp/amx-teams
 # Each invited agent runs this with its own credential, if it consents:
 "$AGENTMUX_CLI" team join TEAM_ID --credential-file "$AGENTMUX_CREDENTIAL_FILE"
 # After lead has joined, the owner proposes a transfer:
-agentmux team transfer TEAM_ID lead --state /tmp/amx-teams
+amx team transfer TEAM_ID lead --state /tmp/amx-teams
 # Lead, as the proposed new owner, separately accepts:
 "$AGENTMUX_CLI" team accept-owner TEAM_ID --credential-file "$AGENTMUX_CREDENTIAL_FILE"
 # A non-owner member may move only after a separate destination invitation:
@@ -233,7 +233,7 @@ describes owner CAS admission-budget edits and effective-versus-stored access.
 Inspect the fixture's lead capacity without reserving anything:
 
 ```sh
-agentmux managed call capacity.get --credential-file /tmp/amx-teams/owner.json \
+amx managed call capacity.get --credential-file /tmp/amx-teams/owner.json \
   --json '{"agent":"lead"}'
 ```
 
@@ -269,7 +269,7 @@ The owner can inspect the registry with `agent.list`. A parent/ancestor can stop
 its descendants; the owner can stop any configured agent:
 
 ```sh
-./bin/agentmux managed call agent.stop \
+./bin/amx managed call agent.stop \
   --credential-file /tmp/amx-teams/credentials/lead.json \
   --json '{"id":"CHILD_ID"}'
 ```

@@ -3,7 +3,7 @@
 This guide shows concrete starting points for common Agentmux workflows.
 
 These recipes use the original YAML layout mode (`init` / `load`) and raw pane
-controls. For everyday Claude/Codex conversations, begin with `agentmux start`
+controls. For everyday Claude/Codex conversations, begin with `amx start`
 and the [work-session guide](work-sessions.md). That workflow provides the
 authenticated coordination broker, collaboration groups and live permissions.
 
@@ -21,13 +21,13 @@ Use this when you want one session for editing, tests, git, and an AI helper pan
 Best starter:
 
 ```bash
-./bin/agentmux init coding-starter coding.yaml
+./bin/amx init coding-starter coding.yaml
 ```
 
 Fuller starter:
 
 ```bash
-./bin/agentmux init default coding.yaml
+./bin/amx init default coding.yaml
 ```
 
 `coding-starter` is the fastest path when you want a small file to tweak.
@@ -41,9 +41,9 @@ Fastest copyable file:
 Typical next steps:
 
 ```bash
-./bin/agentmux validate coding.yaml
-./bin/agentmux render coding.yaml
-./bin/agentmux load coding.yaml --replace --no-attach
+./bin/amx validate coding.yaml
+./bin/amx render coding.yaml
+./bin/amx load coding.yaml --replace --no-attach
 ```
 
 What to customize first:
@@ -89,9 +89,9 @@ layout:
 Good runtime loop:
 
 ```bash
-./bin/agentmux status coding
-./bin/agentmux capture coding tests --tail 20 --strip-empty
-./bin/agentmux send coding coder "Summarize the current diff"
+./bin/amx status coding
+./bin/amx capture coding tests --tail 20 --strip-empty
+./bin/amx send coding coder "Summarize the current diff"
 ```
 
 Related files:
@@ -106,13 +106,13 @@ Use this when you want a dedicated code-review workspace with an editor pane, a 
 Best starter:
 
 ```bash
-./bin/agentmux init review-starter review.yaml
+./bin/amx init review-starter review.yaml
 ```
 
 Fuller starter:
 
 ```bash
-./bin/agentmux init review-loop review.yaml
+./bin/amx init review-loop review.yaml
 ```
 
 Fastest copyable file:
@@ -122,9 +122,9 @@ Fastest copyable file:
 Typical next steps:
 
 ```bash
-./bin/agentmux validate review.yaml
-./bin/agentmux load review.yaml --replace --no-attach
-./bin/agentmux status review
+./bin/amx validate review.yaml
+./bin/amx load review.yaml --replace --no-attach
+./bin/amx status review
 ```
 
 What to customize first:
@@ -163,10 +163,10 @@ layout:
 Good runtime loop:
 
 ```bash
-./bin/agentmux focus review reviewer
-./bin/agentmux send review reviewer "Review the current diff for regressions"
-./bin/agentmux capture review reviewer --tail 40 --strip-empty
-./bin/agentmux rerun review checks
+./bin/amx focus review reviewer
+./bin/amx send review reviewer "Review the current diff for regressions"
+./bin/amx capture review reviewer --tail 40 --strip-empty
+./bin/amx rerun review checks
 ```
 
 Related files:
@@ -180,15 +180,15 @@ Use this when you want one tmux session for a remote shell plus supporting local
 Best starter:
 
 ```bash
-./bin/agentmux init ssh-ops ops.yaml
+./bin/amx init ssh-ops ops.yaml
 ```
 
 Typical next steps:
 
 ```bash
-./bin/agentmux validate ops.yaml
-./bin/agentmux load ops.yaml --replace --no-attach
-./bin/agentmux status ops
+./bin/amx validate ops.yaml
+./bin/amx load ops.yaml --replace --no-attach
+./bin/amx status ops
 ```
 
 What to customize first:
@@ -225,9 +225,9 @@ layout:
 Good runtime loop:
 
 ```bash
-./bin/agentmux status ops
-./bin/agentmux capture ops logs --tail 40 --strip-empty
-./bin/agentmux focus ops prod
+./bin/amx status ops
+./bin/amx capture ops logs --tail 40 --strip-empty
+./bin/amx focus ops prod
 ```
 
 Related files:
@@ -241,7 +241,7 @@ Use this when you want panes that behave differently when their startup command 
 Best starter:
 
 ```bash
-./bin/agentmux init on-exit watcher.yaml
+./bin/amx init on-exit watcher.yaml
 ```
 
 What this starter demonstrates:
@@ -254,10 +254,10 @@ What this starter demonstrates:
 Useful commands while testing it:
 
 ```bash
-./bin/agentmux load watcher.yaml --replace --no-attach
-./bin/agentmux status watcher
-./bin/agentmux capture watcher watcher --tail 20 --strip-empty
-./bin/agentmux restart watcher watcher
+./bin/amx load watcher.yaml --replace --no-attach
+./bin/amx status watcher
+./bin/amx capture watcher watcher --tail 20 --strip-empty
+./bin/amx restart watcher watcher
 ```
 
 Related files:
@@ -271,19 +271,19 @@ Use this when you want multiple agents to work together using shared state and s
 Best starter:
 
 ```bash
-./bin/agentmux init supervisor-demo team.yaml
+./bin/amx init supervisor-demo team.yaml
 ```
 
 What this starter demonstrates:
 
-- **Shared Blackboard (KV-Store):** Agents reading and writing to `agentmux kv-set`.
+- **Shared Blackboard (KV-Store):** Agents reading and writing to `amx kv-set`.
 - **Synchronization (Wait):** One agent waiting for another to print a specific message.
 - **Dynamic Scaling:** A manager agent expanding the team automatically.
 
 Typical next steps:
 
 ```bash
-./bin/agentmux load team.yaml
+./bin/amx load team.yaml
 # Observe the manager pane coordinating the engineer panes
 ```
 
@@ -291,13 +291,13 @@ Key coordination commands:
 
 ```bash
 # Set a shared variable
-./bin/agentmux kv-set my-team current_task "research"
+./bin/amx kv-set my-team current_task "research"
 
 # Wait for a pane to finish
-./bin/agentmux wait my-team worker "DONE"
+./bin/amx wait my-team worker "DONE"
 
 # Scale the workforce
-./bin/agentmux scale my-team worker 5
+./bin/amx scale my-team worker 5
 ```
 
 Related files:
@@ -307,7 +307,7 @@ Related files:
 ## Choosing A Starter
 
 For authenticated native conversations and opt-in collaboration, begin with
-`agentmux start` and the [fresh-install walkthrough](getting-started/quickstart.md).
+`amx start` and the [fresh-install walkthrough](getting-started/quickstart.md).
 If you specifically want a v1 custom layout:
 
 - use `default` for day-to-day coding
@@ -319,5 +319,5 @@ If you specifically want a v1 custom layout:
 List all starters:
 
 ```bash
-./bin/agentmux templates
+./bin/amx templates
 ```

@@ -53,7 +53,7 @@ conversation, or replay after an uncertain response.
 Inspect a reference using the owner credential:
 
 ```sh
-agentmux managed call conversation.status --credential-file STATE/owner.json \
+amx managed call conversation.status --credential-file STATE/owner.json \
   --json '{"agent":"lead"}'
 ```
 
@@ -62,7 +62,7 @@ First stop its process and resolve any uncertain task using the managed task
 recovery procedure. Then explicitly start a new conversation generation:
 
 ```sh
-agentmux managed call conversation.reset --credential-file STATE/owner.json \
+amx managed call conversation.reset --credential-file STATE/owner.json \
   --json '{"agent":"lead"}'
 ```
 

@@ -11,6 +11,7 @@ func (m *console) selectView(index int) tea.Cmd {
 		m.closeMemory()
 	}
 	m.tab = index
+	m.contentFocus = index != 1
 	if index == 4 || index == 0 || index == 7 {
 		return m.fetch
 	}

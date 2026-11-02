@@ -412,31 +412,31 @@ func parseManagedCLI(operation string, args []string) (managedCLIOptions, error)
 
 func printManagedUsage(out io.Writer) {
 	fmt.Fprintln(out, `Managed runtime (opt-in v2 configuration):
-  agentmux managed setup [--preset coding|reviewer-pair|research-team | --spec FILE]
+  amx managed setup [--preset coding|reviewer-pair|research-team | --spec FILE]
       [--output FILE] [--session NAME] [--project DIR] [--sandbox local|bubblewrap]
       [--init-git]
-  agentmux managed up <config> [--state <private-dir>]
+  amx managed up <config> [--state <private-dir>]
       [--broker-sandbox local|bubblewrap] [--attach]
-  agentmux managed down --state <private-dir>
-  agentmux managed restart --state <private-dir> [--broker-sandbox local|bubblewrap] [--attach]
-  agentmux managed doctor <config> [--state <private-dir>]
-  agentmux managed init <config> --state <private-dir>
-  agentmux managed serve --state <private-dir> [--sandbox local|bubblewrap]
-  agentmux managed call <operation> [--credential-file <path>] [--socket <path>]
+  amx managed down --state <private-dir>
+  amx managed restart --state <private-dir> [--broker-sandbox local|bubblewrap] [--attach]
+  amx managed doctor <config> [--state <private-dir>]
+  amx managed init <config> --state <private-dir>
+  amx managed serve --state <private-dir> [--sandbox local|bubblewrap]
+  amx managed call <operation> [--credential-file <path>] [--socket <path>]
       [--json <object> | --stdin] [--request-id <id>]
-  agentmux managed worker --state <private-dir> --agent <id> [--once] [--definition FILE]
+  amx managed worker --state <private-dir> --agent <id> [--once] [--definition FILE]
       [--native-resume ID|last|picker] [--native-launcher ABSOLUTE_PATH]
-  agentmux managed remote --state DIR --agent ID --host SSH_ALIAS --remote-dir DIR
+  amx managed remote --state DIR --agent ID --host SSH_ALIAS --remote-dir DIR
       [--layout FILE] [--binary FILE] [--once] [--resume]
-  agentmux managed memory export|import|search|index|prune [--help]
-  agentmux managed trace list|verify|show --state DIR --agent ID [--id ID] [--mac MAC]
-  agentmux managed trace export --state DIR --agent ID --id TRACE_ID
+  amx managed memory export|import|search|index|prune [--help]
+  amx managed trace list|verify|show --state DIR --agent ID [--id ID] [--mac MAC]
+  amx managed trace export --state DIR --agent ID --id TRACE_ID
       [--mac TASK_MAC] --output NEW_PRIVATE_FILE
-  agentmux managed trace verify-bundle --input FILE --trust OWNER_PUBLIC_KEY_SHA256
-  agentmux managed capsule inspect|recover --state DIR --agent ID [--help]
-  agentmux managed status --state <private-dir> [--watch]
-  agentmux managed activity --state <private-dir> [--watch]
-  agentmux managed rotate --state <private-dir> --agent <id|'$owner'>
+  amx managed trace verify-bundle --input FILE --trust OWNER_PUBLIC_KEY_SHA256
+  amx managed capsule inspect|recover --state DIR --agent ID [--help]
+  amx managed status --state <private-dir> [--watch]
+  amx managed activity --state <private-dir> [--watch]
+  amx managed rotate --state <private-dir> --agent <id|'$owner'>
 
 Call credentials may come from AGENTMUX_CREDENTIAL_FILE; AGENTMUX_SOCKET
 overrides the credential's socket when --socket is omitted. Credentials are
@@ -447,6 +447,6 @@ saved mount declarations; it never rewrites the saved process definition.
 Useful broker calls: identity, boundaries.get, capacity.get, budget.status,
 task.list, agent.role and capacity.update. Owner edits use current CAS versions;
 resource controls govern admissions, not hard provider billing. Consented team
-controls are also available through agentmux team --help.
+controls are also available through amx team --help.
 See docs/managed-runtime.md for setup, permissions, and examples.`)
 }

@@ -3,7 +3,7 @@
 For an ordinary local Antigravity terminal in an already-running workspace:
 
 ```sh
-agentmux add --session work --harness antigravity --native-only \
+amx add --session work --harness antigravity --native-only \
   --project . --title "Antigravity investigation"
 ```
 
@@ -27,7 +27,7 @@ environment. Generate a new private key rather than copying this example text:
 
 ```sh
 export AGENTMUX_AGY_BRIDGE_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')"
-agentmux provider antigravity serve \
+amx provider antigravity serve \
   --listen 127.0.0.1:8097 \
   --models gemini-3.8-flash-low \
   --max-concurrent 1 --max-requests 20 --timeout 45s &
@@ -46,10 +46,10 @@ history/logging can retain inference prompts on the host, outside agent access.
 Set up the isolated client from the same shell, preserving the bridge key:
 
 ```sh
-agentmux managed setup --spec examples/managed/setup-antigravity-bridge.json --output agy-team.yaml
-agentmux managed up agy-team.yaml --broker-sandbox bubblewrap
+amx managed setup --spec examples/managed/setup-antigravity-bridge.json --output agy-team.yaml
+amx managed up agy-team.yaml --broker-sandbox bubblewrap
 # When the managed run is finished:
-agentmux managed down --state /absolute/path/to/its/state
+amx managed down --state /absolute/path/to/its/state
 kill "$bridge_pid"
 wait "$bridge_pid"
 unset AGENTMUX_AGY_BRIDGE_KEY

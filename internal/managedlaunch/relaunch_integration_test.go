@@ -17,7 +17,7 @@ func TestIndividualNativeRelaunchPreservesPeerAndAttempt(t *testing.T) {
 	}
 	exe := os.Getenv("AGENTMUX_TEST_BINARY")
 	if exe == "" {
-		exe = "../../bin/agentmux"
+		exe = "../../bin/amx"
 	}
 	exe, _ = filepath.Abs(exe)
 	state, err := os.MkdirTemp("", "amx-relaunch-")

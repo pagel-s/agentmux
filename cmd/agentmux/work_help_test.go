@@ -55,6 +55,22 @@ func TestWorkHelpPreservesLiteralMessagesAndOptionValues(t *testing.T) {
 	}
 }
 
+func TestLayoutHelpAndInvalidOptionsNeedNoRuntime(t *testing.T) {
+	for _, operation := range []string{"split", "unsplit"} {
+		var out, diagnostics bytes.Buffer
+		if code := runWorkLayout(operation, []string{"--help"}, &out, &diagnostics); code != exitSuccess || !strings.Contains(out.String(), "amx split") {
+			t.Fatalf("layout help failed: %d %s %s", code, &out, &diagnostics)
+		}
+		for _, args := range [][]string{{"alice", "--project", "/tmp"}, {"alice", "--vertical", "--vertical"}} {
+			out.Reset()
+			diagnostics.Reset()
+			if code := runWorkLayout(operation, args, &out, &diagnostics); code != exitValidation {
+				t.Fatalf("invalid layout options reached a runtime: %q: %d %s", args, code, &diagnostics)
+			}
+		}
+	}
+}
+
 func TestWorkSendRoutingPreservesLiteralAndLegacySeparators(t *testing.T) {
 	for _, args := range [][]string{{"--help"}, {"-h"}, {"agent", "message"}, {"agent", "--", "--help"}, {"agent", "--", "--state=literal-message"}, {"agent", "message", "--state", "/tmp/work"}} {
 		if !workSendRequested(args) {
@@ -93,7 +109,7 @@ func TestAttachMissingWorkspaceGivesExactRecoveryCommand(t *testing.T) {
 	state := filepath.Join(root, "agentmux", "newcomer")
 	var out, diagnostics bytes.Buffer
 	code := runWorkSession("attach", []string{"claude", "--session", "newcomer"}, strings.NewReader(""), &out, &diagnostics)
-	for _, want := range []string{"work session not found", "'agentmux' 'start'", "'--session' 'newcomer'", "'--state' '" + state + "'"} {
+	for _, want := range []string{"work session not found", "'amx' 'start'", "'--session' 'newcomer'", "'--state' '" + state + "'"} {
 		if code == exitSuccess || !strings.Contains(diagnostics.String(), want) {
 			t.Fatalf("missing recovery %q: code=%d %s", want, code, &diagnostics)
 		}

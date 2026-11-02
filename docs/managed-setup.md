@@ -1,6 +1,6 @@
 # Managed setup
 
-`agentmux managed setup --output team.yaml` asks for each agent's role, harness,
+`amx managed setup --output team.yaml` asks for each agent's role, harness,
 model, isolation and authentication choice. It discovers installed executables
 and code dependencies, runs bounded preflight checks, creates dedicated private
 workspaces, and writes a new mode-0600 validated YAML file. It refuses to
@@ -10,9 +10,9 @@ prints credentials, or changes provider/global settings.
 For reproducible setup, supply a JSON specification:
 
 ```sh
-agentmux managed setup --spec examples/managed/setup-local-pi.json --output team.yaml
-agentmux managed doctor team.yaml
-agentmux managed up team.yaml --broker-sandbox bubblewrap
+amx managed setup --spec examples/managed/setup-local-pi.json --output team.yaml
+amx managed doctor team.yaml
+amx managed up team.yaml --broker-sandbox bubblewrap
 ```
 
 Edit the model ID and endpoint to match a running server first. A failed
@@ -56,9 +56,9 @@ allowlist egress are unavailable in interactive mode.
 Preset setup is also available:
 
 ```sh
-agentmux managed setup --preset coding --session work --project /path/to/project --output coding.yaml
-agentmux managed setup --preset reviewer-pair --session review --output review.yaml
-agentmux managed setup --preset research-team --session study --output study.yaml
+amx managed setup --preset coding --session work --project /path/to/project --output coding.yaml
+amx managed setup --preset reviewer-pair --session review --output review.yaml
+amx managed setup --preset research-team --session study --output study.yaml
 ```
 
 `coding` creates native Claude/Codex terminals with peer/shared access disabled

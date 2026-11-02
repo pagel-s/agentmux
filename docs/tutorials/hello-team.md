@@ -23,7 +23,7 @@ agents:
       printf "Thinking about the architecture...\n"
       sleep 3
       printf "Plan complete.\n"
-      agentmux kv-set first-team status "PLAN_READY"
+      amx kv-set first-team status "PLAN_READY"
       exec $SHELL
 
   worker:
@@ -32,7 +32,7 @@ agents:
     command: |
       printf "Worker waiting for the plan...\n"
       # Block until the planner pane outputs the specific string
-      agentmux wait first-team planner "Plan complete"
+      amx wait first-team planner "Plan complete"
       
       # Now the worker can proceed safely
       printf "\n[STARTING] Executing the plan!\n"
@@ -55,7 +55,7 @@ layout:
 Start the session:
 
 ```bash
-agentmux load my-team.yaml
+amx load my-team.yaml
 ```
 
 When tmux opens, you will see two panes side-by-side. 
@@ -67,7 +67,7 @@ Watch closely: The **Worker** (on the right) will explicitly say "waiting for th
 Once the team is running, detach from tmux (`Prefix + d`) and open the Mission Control dashboard:
 
 ```bash
-agentmux dashboard first-team
+amx dashboard first-team
 ```
 
 In the dashboard, you will see your two agents running. Look at the **Blackboard (KV)** section on the right. You should see `status: PLAN_READY`. This is the shared memory your planner agent created using `kv-set`!

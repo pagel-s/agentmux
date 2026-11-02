@@ -25,10 +25,10 @@ graph TD;
     SessionOpts -->|kv-get current_task| PaneC[Agent: Writer]
 ```
 
-Any pane can run `agentmux kv-set my-session key "value"` to write, and any other pane can run `agentmux kv-get my-session key` to read. 
+Any pane can run `amx kv-set my-session key "value"` to write, and any other pane can run `amx kv-get my-session key` to read.
 
 *   **Stateless:** If Agentmux crashes, the data survives in tmux.
-*   **Inspectable:** `agentmux kv-list SESSION` shows the values that participants explicitly stored, not their private reasoning.
+*   **Inspectable:** `amx kv-list SESSION` shows the values that participants explicitly stored, not their private reasoning.
 
 ## 2. Synchronization (Wait)
 
@@ -41,7 +41,7 @@ graph LR;
     Worker -->|Unblocks| Action[Execute Plan]
 ```
 
-The `agentmux wait` command polls a target pane's output stream. When it detects a specific regex string, it unblocks and exits with code 0.
+The `amx wait` command polls a target pane's output stream. When it detects a specific regex string, it unblocks and exits with code 0.
 
 ## 3. Dynamic Scaling
 
@@ -49,7 +49,7 @@ When an agentic team encounters a massive task, the manager might decide to para
 
 ```mermaid
 graph TD;
-    Manager[Manager Pane] -->|agentmux scale worker 3| Agentmux[Agentmux CLI]
+    Manager[Manager Pane] -->|amx scale worker 3| Agentmux[Agentmux CLI]
     Agentmux -->|Reads session metadata| OldConfig[Original Config]
     Agentmux -->|tmux split-window| NewPane1[Worker 2]
     Agentmux -->|tmux split-window| NewPane2[Worker 3]
@@ -65,9 +65,9 @@ authority; see [dynamic teams](../dynamic-teams.md).
 The legacy pane launcher provides these context-delivery mechanisms:
 
 1.  **Environment Injection:** Every pane automatically receives `$AGENTMUX_SESSION` and `$AGENTMUX_PANE` environment variables.
-2.  **CLI Tool Bridge:** Models call real coordination actions through `agentmux tool-call`, using `--from-stdin`, `--from-file`, or `--from-json`, which wraps the existing Agentmux CLI in a machine-stable JSON envelope.
-3.  **Native MCP Surface:** Agentmux can expose the same coordination registry through `agentmux mcp-server`, allowing providers with verified MCP support to use the tools natively instead of shelling out.
-4.  **Schema Export For Compatibility:** The `agentmux tools` command still generates provider-friendly JSON schemas (`openai`, `codex`, `gemini`, `claude`) for debugging or compatibility exports, but it is no longer the primary runtime contract.
+2.  **CLI Tool Bridge:** Models call real coordination actions through `amx tool-call`, using `--from-stdin`, `--from-file`, or `--from-json`, which wraps the existing Agentmux CLI in a machine-stable JSON envelope.
+3.  **Native MCP Surface:** Agentmux can expose the same coordination registry through `amx mcp-server`, allowing providers with verified MCP support to use the tools natively instead of shelling out.
+4.  **Schema Export For Compatibility:** The `amx tools` command still generates provider-friendly JSON schemas (`openai`, `codex`, `gemini`, `claude`) for debugging or compatibility exports, but it is no longer the primary runtime contract.
 5.  **JIT Compilation:** Using the `provider`, `persona`, and optional `reasoning_effort` fields, Agentmux compiles provider-specific CLI commands that deliver persona and operational coordination through the strongest real surfaces available, selecting `native-mcp` or `cli-bridge` per provider at launch time.
 
 Persona delivery is intentionally provider-specific:

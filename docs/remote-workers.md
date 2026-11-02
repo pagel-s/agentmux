@@ -10,7 +10,7 @@ The remote host can read that worker's token/data and must be trusted for them.
 Start the local broker, submit a task, then run:
 
 ```bash
-agentmux managed remote --state STATE --agent worker --host YOUR_SSH_ALIAS \
+amx managed remote --state STATE --agent worker --host YOUR_SSH_ALIAS \
   --remote-dir /tmp/my-agentmux-worker --once
 ```
 

@@ -106,7 +106,7 @@ func TestConsoleDetachNeverSelectsAnotherClientsNativePane(t *testing.T) {
 func TestConsoleFiltersRegisteredObservationsWithoutLosingRoutingMetadata(t *testing.T) {
 	agents := []managed.AgentInfo{{ID: "bridge", State: "active", External: true, ExternalRef: "known"}, {ID: "old", State: "revoked", External: true, ExternalRef: "unregistered"}}
 	raw := []sessioninventory.Session{{ID: "known", TTY: "pts/1"}, {ID: "unregistered", TTY: "pts/2"}, {ID: "selected", TTY: "pts/3"}}
-	m := console{tab: 5, agents: agents, observedSelected: 1, data: consoleData{selected: "bridge", observed: raw}}
+	m := console{tab: 5, contentFocus: true, agents: agents, observedSelected: 1, data: consoleData{selected: "bridge", observed: raw}}
 	visible := m.observedSessions()
 	if len(visible) != 2 || visible[0].ID != "unregistered" || visible[1].ID != "selected" {
 		t.Fatalf("wrong terminal inventory: %+v", visible)
@@ -162,7 +162,7 @@ func TestConsoleComposerKeepsRecipientAndAllowsEditing(t *testing.T) {
 }
 
 func TestConsoleLateMemoryDoesNotReopenAnotherAgentsOrClosedEditor(t *testing.T) {
-	for _, navigation := range []tea.KeyMsg{{Type: tea.KeyDown}, {Type: tea.KeyEsc}, {Type: tea.KeyTab}} {
+	for _, navigation := range []tea.KeyMsg{{Type: tea.KeyDown}, {Type: tea.KeyEsc}, {Type: tea.KeyRight}} {
 		m := console{tab: 3, agents: []managed.AgentInfo{{ID: "alice"}, {ID: "bob"}}, data: consoleData{selected: "alice", boundaries: managed.Boundaries{Agent: "alice", Memory: []managed.BoundaryScope{{Name: "alice-group", Read: true}}}}}
 		next, cmd := m.key(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}})
 		m = next.(console)

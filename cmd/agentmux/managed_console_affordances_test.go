@@ -13,6 +13,7 @@ import (
 
 func TestConsoleEmptyTeamsExplainsEveryUnavailableTeamAction(t *testing.T) {
 	m := teamConsoleFixture()
+	m.contentFocus = true
 	m.data.teams = nil
 	for _, size := range [][2]int{{80, 24}, {231, 62}} {
 		m.width, m.height = size[0], size[1]
@@ -143,7 +144,7 @@ func TestConsoleCrossWorkspaceNativeAttachShowsCommandWithoutNesting(t *testing.
 	m.failedDraft = &consoleDraft{target: "codex", text: "retained note"}
 	msg := m.attach()()
 	guidance, ok := msg.(consoleAttachGuidance)
-	if !ok || guidance.command != managedlaunch.ShellCommand([]string{"agentmux", "attach", "codex", "--state", m.state}) {
+	if !ok || guidance.command != managedlaunch.ShellCommand([]string{"amx", "attach", "codex", "--state", m.state}) {
 		t.Fatalf("cross-workspace attach did not produce a correctly quoted separate-terminal command: %+v", msg)
 	}
 	next, cmd := m.Update(msg)

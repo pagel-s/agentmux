@@ -1,6 +1,6 @@
 # Finite multi-agent research environments
 
-`agentmux research` runs repeated-round environments with private observations,
+`amx research` runs repeated-round environments with private observations,
 scarce resources, validated decisions, and live objective payoff feedback. It
 complements the single-task [`experiment` pilot](experiments.md). Built-in
 environments are `public-goods-v1` and `trust-exchange-v1`; the exported `Scenario` / `Episode`
@@ -15,13 +15,13 @@ deterministic command participants:
 
 ```sh
 make build
-./bin/agentmux research plan examples/research/public-goods.yaml
-./bin/agentmux research run examples/research/public-goods.yaml --output /tmp/amx-research
-./bin/agentmux research analyze /tmp/amx-research
-./bin/agentmux research analyze /tmp/amx-research --csv /tmp/amx-research-analysis.csv
+./bin/amx research plan examples/research/public-goods.yaml
+./bin/amx research run examples/research/public-goods.yaml --output /tmp/amx-research
+./bin/amx research analyze /tmp/amx-research
+./bin/amx research analyze /tmp/amx-research --csv /tmp/amx-research-analysis.csv
 ```
 
-Run these commands from the repository root. Later examples use `agentmux` on
+Run these commands from the repository root. Later examples use `amx` on
 your PATH; see [installation](getting-started/installation.md). `plan` validates
 and prints the trial matrix and task counts without starting participants.
 `run` occupies its terminal until completion; use another terminal to observe it.
@@ -47,15 +47,15 @@ attempt becomes ready. The private output's `live.json` points to that attempt.
 To open the controls before the first participant phase:
 
 ```sh
-agentmux research run examples/research/dynamic-population.yaml \
+amx research run examples/research/dynamic-population.yaml \
   --output /tmp/amx-live-study --start-paused
 
 # In another terminal; OUTPUT follows the current attempt:
-agentmux research status /tmp/amx-live-study
-agentmux research watch /tmp/amx-live-study --follow
+amx research status /tmp/amx-live-study
+amx research watch /tmp/amx-live-study --follow
 # Use the exact STATE printed by the runner:
-agentmux dashboard --state STATE --view research
-agentmux web --state STATE
+amx dashboard --state STATE --view research
+amx web --state STATE
 ```
 
 `OUTPUT` means the study's top-level output directory (here
@@ -103,7 +103,7 @@ and an explicit reason. In CLI JSON, use
 progress revision or acknowledged version. For example, after reading version 2:
 
 ```sh
-agentmux research step /tmp/amx-live-study --version 2 \
+amx research step /tmp/amx-live-study --version 2 \
   --reason "Inspect team formation after one phase"
 ```
 
@@ -299,10 +299,10 @@ independent blocks, provisioning and a native-turn budget before execution.
 Try that design without any model calls, from the repository root:
 
 ```sh
-agentmux research plan examples/research/roles-personality.yaml
-agentmux research run examples/research/roles-personality.yaml \
+amx research plan examples/research/roles-personality.yaml
+amx research run examples/research/roles-personality.yaml \
   --output /tmp/amx-role-profile-pilot
-agentmux research analyze /tmp/amx-role-profile-pilot \
+amx research analyze /tmp/amx-role-profile-pilot \
   --csv /tmp/amx-role-profile-summary.csv \
   --behavior-csv /tmp/amx-role-profile-behavior.csv
 ```
@@ -380,7 +380,7 @@ Actual native execution additionally requires explicit `--allow-models`, a
 strict preregistration, and positive `budget.max_model_tasks`:
 
 ```sh
-agentmux research run /private/study.yaml --output /tmp/amx-model-study --allow-models
+amx research run /private/study.yaml --output /tmp/amx-model-study --allow-models
 ```
 
 Agent count, roles, harness/model versions, native permissions, tools, context,
@@ -407,7 +407,7 @@ output is the descriptive aggregate, not the private observations.
 Export those rows separately without raw prompts:
 
 ```sh
-agentmux research analyze /tmp/amx-research --behavior-csv /tmp/amx-behavior.csv
+amx research analyze /tmp/amx-research --behavior-csv /tmp/amx-behavior.csv
 ```
 
 The overall trial and each phase have finite deadlines, including phase task
@@ -423,7 +423,7 @@ or uncertain attempt requires stopping any remaining processes and explicitly
 choosing a fresh attempt with `--rerun-interrupted`:
 
 ```sh
-agentmux research run examples/research/public-goods.yaml \
+amx research run examples/research/public-goods.yaml \
   --output /tmp/amx-research --rerun-interrupted
 ```
 

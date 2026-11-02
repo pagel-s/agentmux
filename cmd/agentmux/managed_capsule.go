@@ -16,7 +16,7 @@ import (
 
 func runManagedCapsule(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(stderr, "Usage: agentmux managed capsule inspect|recover --state DIR --agent ID [--action restore|publish|discard --expect DIGEST]")
+		fmt.Fprintln(stderr, "Usage: amx managed capsule inspect|recover --state DIR --agent ID [--action restore|publish|discard --expect DIGEST]")
 		return exitValidation
 	}
 	op := args[0]

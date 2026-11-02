@@ -34,7 +34,9 @@ jobs:
         run: node --test cmd/agentmux/workweb/app.test.cjs
 
       - name: Build the CLI for lifecycle tests
-        run: go build -o bin/agentmux ./cmd/agentmux
+        run: |
+          go build -o bin/amx ./cmd/agentmux
+          ln -sfn amx bin/agentmux
 
       - name: Run test suite
         env:
@@ -54,6 +56,9 @@ jobs:
 
       - name: Verify release installer safety
         run: python3 scripts/test-install-release.py
+
+      - name: Verify release retry guards
+        run: python3 scripts/test-check-release.py
 
       - name: Verify soak audit and cleanup regressions
         run: python3 scripts/test-soak-managed.py

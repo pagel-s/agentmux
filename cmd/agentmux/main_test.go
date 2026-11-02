@@ -23,7 +23,7 @@ func TestVersionString(t *testing.T) {
 		version = original
 	})
 
-	if got, want := versionString(), "agentmux test"; got != want {
+	if got, want := versionString(), "amx test"; got != want {
 		t.Fatalf("versionString() = %q, want %q", got, want)
 	}
 }

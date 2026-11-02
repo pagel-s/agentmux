@@ -3,10 +3,10 @@
 # and private workdirs are not filesystem isolation or enforced read-only access.
 #
 # Initialize before starting so both default workspaces are Git repositories:
-#   agentmux managed init examples/managed/claude-codex.yaml --state .agentmux-state/claude-codex
+#   amx managed init examples/managed/claude-codex.yaml --state .agentmux-state/claude-codex
 #   git init .agentmux-state/claude-codex/workspaces/coder
 #   git init .agentmux-state/claude-codex/workspaces/reviewer
-#   agentmux managed up examples/managed/claude-codex.yaml --state .agentmux-state/claude-codex --broker-sandbox bubblewrap
+#   amx managed up examples/managed/claude-codex.yaml --state .agentmux-state/claude-codex --broker-sandbox bubblewrap
 # No task or model call is started until an authorized instruction is submitted.
 version: 2
 mode: managed

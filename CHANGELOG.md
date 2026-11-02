@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.11.0 - 2026-11-02
+
+- Reject stale release retries whose commit no longer matches the tag, serialize
+  publication per tag, and skip complete published releases without replacing assets.
+
+- Make `amx` the installed executable and primary command throughout help,
+  provider instructions and docs. Safely migrate the old `amx → agentmux`
+  shortcut to a real executable, retaining the previous inode as a backup.
+- Add visible sidebar/content focus: Tab changes focus, Up/Down navigates that
+  pane, Left/Right changes views, and Enter reads selected content.
+- Restore the last live native terminal with `amx a`; choose among multiple
+  running workspaces rather than silently selecting one.
+- Add `amx split` and `amx unsplit` for existing native sessions. Exact pane IDs
+  remain focusable when several agents share a tmux window.
+- Preserve scratch windows and normal Ctrl-b ! breakouts across detach/reattach.
+  New shell splits/windows inherit the selected project directory.
+- Add a practical terminal workflow guide and model-free acceptance covering
+  folders, native layouts, scratch persistence, last attachment and unchanged PIDs.
+
 ## v0.10.0 - 2026-11-02
 
 Terminal-first workspaces, native collaboration and an observable control center.

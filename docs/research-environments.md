@@ -10,9 +10,9 @@ covers the second game and opt-in coalition/population mechanics.
 Run the command-only protocol example:
 
 ```sh
-agentmux research plan examples/research/trust-exchange.yaml
-agentmux research run examples/research/trust-exchange.yaml --output /tmp/amx-exchange
-agentmux research analyze /tmp/amx-exchange --behavior-csv /tmp/amx-exchange-behavior.csv
+amx research plan examples/research/trust-exchange.yaml
+amx research run examples/research/trust-exchange.yaml --output /tmp/amx-exchange
+amx research analyze /tmp/amx-exchange --behavior-csv /tmp/amx-exchange-behavior.csv
 ```
 
 `trust-exchange-v1` has two economic stages per round:
@@ -82,7 +82,7 @@ access still follows current broker membership and its revocation rules.
 ## Declared dynamic populations
 
 ```sh
-agentmux research run examples/research/dynamic-population.yaml --output /tmp/amx-population
+amx research run examples/research/dynamic-population.yaml --output /tmp/amx-population
 ```
 
 The default is a fixed population with spawning disabled. Opt in explicitly:

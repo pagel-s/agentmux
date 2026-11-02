@@ -37,7 +37,7 @@ outcome of this pilot.
 
 ```sh
 python3 scripts/research/prepare-study.py --output /tmp/amx-study-input
-agentmux research plan /tmp/amx-study-input/study.yaml
+amx research plan /tmp/amx-study-input/study.yaml
 ```
 
 Preparation discovers installed code-only dependency closures and selects
@@ -54,9 +54,9 @@ Use a current uniquely named executable for the entire collection so concurrent
 development rebuilds cannot change broker/worker code between cells:
 
 ```sh
-agentmux research run /tmp/amx-study-input/study.yaml \
+amx research run /tmp/amx-study-input/study.yaml \
   --output /tmp/amx-native-study --allow-models
-agentmux research analyze /tmp/amx-native-study --csv /tmp/amx-native-summary.csv \
+amx research analyze /tmp/amx-native-study --csv /tmp/amx-native-summary.csv \
   --behavior-csv /tmp/amx-native-behavior.csv
 ```
 

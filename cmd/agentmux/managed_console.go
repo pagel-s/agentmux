@@ -67,6 +67,7 @@ type consoleAction struct {
 	nativeDraft        *consoleNativeAction
 }
 type console struct {
+	contentFocus                                          bool
 	selectionRevision                                     uint64
 	focusSequence                                         uint64
 	messageHistoryScope, eventHistoryScope, eventPinScope *consoleHistoryPage
@@ -448,7 +449,7 @@ func (m console) attach() tea.Cmd {
 		}
 		hostTMUX := os.Getenv("TMUX")
 		if hostTMUX != "" && !strings.HasPrefix(hostTMUX, managedlaunch.SocketPath(state)+",") {
-			return consoleAttachGuidance{command: managedlaunch.ShellCommand([]string{"agentmux", "attach", id, "--state", state})}
+			return consoleAttachGuidance{command: managedlaunch.ShellCommand([]string{"amx", "attach", id, "--state", state})}
 		}
 		if hostTMUX == "" {
 			return consoleAttach{state: state, agent: id, controller: exe}
@@ -820,14 +821,14 @@ func runManagedConsoleView(state, view string, popup bool, in io.Reader, out, di
 	}
 	credential, err := managed.LoadCredential(managed.CredentialPath(state, ""))
 	if err != nil {
-		fmt.Fprintln(diagnostics, "error: work session not found; use agentmux start or select --state / --session")
+		fmt.Fprintln(diagnostics, "error: work session not found; use amx start or select --state / --session")
 		return exitRuntime
 	}
 	if credential.AgentID != "$owner" {
 		fmt.Fprintln(diagnostics, "error: dashboard requires the owner credential")
 		return exitValidation
 	}
-	model := console{selectionRevision: currentConsoleFocusRevision(state), studyFollow: true, state: state, client: managed.NewClient(credential), tab: index, popup: popup}
+	model := console{contentFocus: index != 1, selectionRevision: currentConsoleFocusRevision(state), studyFollow: true, state: state, client: managed.NewClient(credential), tab: index, popup: popup}
 	_, err = tea.NewProgram(model, tea.WithInput(in), tea.WithOutput(out), tea.WithAltScreen()).Run()
 	if err != nil && !errors.Is(err, context.Canceled) {
 		fmt.Fprintln(diagnostics, "error: dashboard:", err)

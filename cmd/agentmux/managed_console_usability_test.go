@@ -120,17 +120,25 @@ func TestConsoleMemoryRefreshKeepsEntryByKey(t *testing.T) {
 	}
 }
 
-func TestConsoleTeamsEnterUsesExplicitActionTarget(t *testing.T) {
+func TestConsoleTeamsEnterReadsContentAndSidebarEntersItsExactAgent(t *testing.T) {
 	m := teamConsoleFixture()
-	m.agents[1].External = true
-	m.agents[1].Config = managedconfig.Agent{Interaction: "interactive"}
+	m.contentFocus = true
+	before := m.selectedID()
 	m, cmd := consolePress(m, tea.KeyMsg{Type: tea.KeyEnter})
-	if cmd == nil || m.selectedID() != "bob" {
-		t.Fatal("Teams Enter targeted unrelated roster selection")
+	if cmd != nil || m.reader == nil || m.selectedID() != before {
+		t.Fatal("Teams Enter did not read without changing the sidebar")
+	}
+	m.reader = nil
+	m.contentFocus = false
+	m.agents[0].External = true
+	m.agents[0].Config = managedconfig.Agent{Interaction: "interactive"}
+	m, cmd = consolePress(m, tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil || m.selectedID() != before {
+		t.Fatal("Sidebar Enter changed to an unrelated team action target")
 	}
 	action := cmd().(consoleAction)
-	if !strings.Contains(action.details, "bob") {
-		t.Fatal("external bridge guidance did not use exact Teams target")
+	if !strings.Contains(action.details, before) {
+		t.Fatal("native guidance did not use the focused sidebar agent")
 	}
 }
 

@@ -22,7 +22,7 @@ func runExperiment(args []string) int {
 
 func runExperimentIO(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	usage := func() {
-		fmt.Fprintln(stderr, "Usage: agentmux experiment plan <manifest.yaml>\n       agentmux experiment run <manifest.yaml> --output <private-dir> [--allow-models] [--rerun-interrupted]")
+		fmt.Fprintln(stderr, "Usage: amx experiment plan <manifest.yaml>\n       amx experiment run <manifest.yaml> --output <private-dir> [--allow-models] [--rerun-interrupted]")
 	}
 	if len(args) == 1 && (args[0] == "help" || args[0] == "--help" || args[0] == "-h") {
 		usage()
@@ -49,7 +49,7 @@ func runExperimentIO(ctx context.Context, args []string, stdout, stderr io.Write
 		return exitValidation
 	}
 	if flags.NArg() != 0 {
-		fmt.Fprintln(stderr, "experiment accepts one manifest path followed by flags; run agentmux experiment --help")
+		fmt.Fprintln(stderr, "experiment accepts one manifest path followed by flags; run amx experiment --help")
 		return exitValidation
 	}
 	if args[0] == "plan" && (*output != "" || *allowModels || *rerun) {

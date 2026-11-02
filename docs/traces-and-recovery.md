@@ -24,9 +24,9 @@ is needed. Someone holding the owner key and editable database can rewrite
 both; this is authenticated local evidence, not public immutable attestation.
 
 ```bash
-agentmux managed trace list --state STATE --agent coder
-agentmux managed trace verify --state STATE --agent coder --id TRACE_ID --mac TASK_MAC
-agentmux managed trace show --state STATE --agent coder --id TRACE_ID
+amx managed trace list --state STATE --agent coder
+amx managed trace verify --state STATE --agent coder --id TRACE_ID --mac TASK_MAC
+amx managed trace show --state STATE --agent coder --id TRACE_ID
 ```
 
 These commands require the state owner's credential/filesystem access and work
@@ -47,11 +47,11 @@ are exported. The bundle contains the trace's task/tool content, so it remains
 sensitive even when known credential values were redacted during capture.
 
 ```sh
-agentmux managed trace export --state STATE --agent coder --id TRACE_ID \
+amx managed trace export --state STATE --agent coder --id TRACE_ID \
   --mac TASK_MAC --output /private/trace-bundle.json
 # Copy the printed fingerprint through an independently trusted channel.
 # Verification works on another machine with no state directory or secret key:
-agentmux managed trace verify-bundle --input /private/trace-bundle.json \
+amx managed trace verify-bundle --input /private/trace-bundle.json \
   --trust OWNER_PUBLIC_KEY_SHA256
 ```
 
@@ -87,17 +87,17 @@ Use `managed activity`, `managed status`, `task.list`, `task.get` and
 broker crash or transport loss. Stop old workers before any owner resolution:
 
 ```bash
-agentmux managed down --state STATE
+amx managed down --state STATE
 # In one terminal, run the broker in the foreground:
-agentmux managed serve --state STATE --sandbox bubblewrap
+amx managed serve --state STATE --sandbox bubblewrap
 ```
 
 In another terminal, inspect the exact task and resolve its current version:
 
 ```bash
-agentmux managed call task.get --credential-file STATE/owner.json \
+amx managed call task.get --credential-file STATE/owner.json \
   --json '{"id":"TASK_ID"}'
-agentmux managed call task.resolve --credential-file STATE/owner.json \
+amx managed call task.resolve --credential-file STATE/owner.json \
   --json '{"id":"TASK_ID","version":CURRENT_VERSION,"resolution":"fail"}'
 ```
 
@@ -115,7 +115,7 @@ blocked after interrupted execution; `conversation.reset` explicitly starts a
 new generation after task delivery is resolved. Old history is retained, not
 silently resumed as confirmed work.
 
-For an exited workspace-owned interactive terminal, `agentmux relaunch AGENT_ID
+For an exited workspace-owned interactive terminal, `amx relaunch AGENT_ID
 --state STATE` keeps its identity and healthy peers, and starts a fresh native
 conversation by default. Select `--resume last`, `--resume picker`, or a native
 conversation ID explicitly when supported by that harness. This does not retry

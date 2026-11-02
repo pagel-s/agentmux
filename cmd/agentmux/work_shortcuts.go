@@ -26,7 +26,7 @@ var workAliases = map[string]string{
 
 func workCommand(command string) bool {
 	switch command {
-	case "start", "attach", "dashboard", "sessions", "workspaces", "add", "collaborate", "disconnect", "isolate", "label", "delivery", "role", "web", "send", "reply", "inbox", "board", "down", "remove", "retire", "connect", "relaunch", "allow", "deny":
+	case "start", "attach", "dashboard", "sessions", "workspaces", "add", "collaborate", "disconnect", "isolate", "label", "delivery", "role", "web", "send", "reply", "inbox", "board", "down", "remove", "retire", "connect", "relaunch", "allow", "deny", "split", "unsplit":
 		return true
 	}
 	return false
@@ -259,6 +259,10 @@ func ownedWorkContext(value string, query func(context.Context, string, ...strin
 }
 
 func runWorkHome(in io.Reader, out, diagnostics io.Writer) int {
+	return runWorkHomeOperation("dashboard", in, out, diagnostics)
+}
+
+func runWorkHomeOperation(operation string, in io.Reader, out, diagnostics io.Writer) int {
 	input, terminal := in.(interface{ Fd() uintptr })
 	terminal = terminal && term.IsTerminal(input.Fd())
 	output, outputTerminal := out.(interface{ Fd() uintptr })
@@ -273,7 +277,7 @@ func runWorkHome(in io.Reader, out, diagnostics io.Writer) int {
 			fmt.Fprintf(out, "Current workspace: %s\nOpen: amx ui --state %s\n", consoleContent(current.session, 100), consoleContent(current.state, 500))
 			return exitSuccess
 		}
-		return runWorkSession("dashboard", []string{"--state", current.state}, in, out, diagnostics)
+		return runWorkSession(operation, []string{"--state", current.state}, in, out, diagnostics)
 	}
 	rows, err := workspaceInventory("")
 	if err != nil {
@@ -287,7 +291,7 @@ func runWorkHome(in io.Reader, out, diagnostics io.Writer) int {
 		}
 	}
 	if len(live) == 1 && terminal {
-		return runWorkSession("dashboard", []string{"--state", live[0].State}, in, out, diagnostics)
+		return runWorkSession(operation, []string{"--state", live[0].State}, in, out, diagnostics)
 	}
 	if len(live) == 0 || !terminal {
 		fmt.Fprintln(out, "amx · workspaces")
@@ -303,7 +307,7 @@ func runWorkHome(in io.Reader, out, diagnostics io.Writer) int {
 		return exitRuntime
 	}
 	if chosen := model.(workHome).chosen; chosen != "" {
-		return runWorkSession("dashboard", []string{"--state", chosen}, in, out, diagnostics)
+		return runWorkSession(operation, []string{"--state", chosen}, in, out, diagnostics)
 	}
 	return exitSuccess
 }

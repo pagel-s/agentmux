@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Install an explicit Agentmux release after checking its published SHA256.
 
-Downloads artifacts only; never executes downloaded installer scripts. Installs
-agentmux and its sibling amx shortcut. Existing binaries require --replace and
-are retained as backups; unrelated shortcuts are never replaced.
+Downloads artifacts only; never executes downloaded installer scripts.
+amx is the canonical executable. Legacy archives remain supported. Existing
+binaries require --replace and are retained as backups; unrelated shortcuts
+are never replaced.
 """
 import argparse
 import hashlib
@@ -89,8 +90,10 @@ def install(archive,manifest,name,destination,replace,expected_version=None):
             if i>=1000:raise ValueError('archive has too many entries')
             expanded+=entry.size
             if entry.size<0 or expanded>256*1024*1024:raise ValueError('expanded archive exceeds bound')
-            if entry.name=='agentmux':entries.append(entry)
-        if len(entries)!=1 or not entries[0].isfile() or not 0<entries[0].size<=128*1024*1024:raise ValueError('archive must contain one regular agentmux executable')
+            if entry.name in ('amx','agentmux'):entries.append(entry)
+        canonical=[entry for entry in entries if entry.name=='amx']
+        if canonical:entries=canonical
+        if len(entries)!=1 or not entries[0].isfile() or not 0<entries[0].size<=128*1024*1024:raise ValueError('archive must contain one regular amx executable (legacy agentmux archives are supported)')
         stream=tar.extractfile(entries[0]);binary=stream.read(128*1024*1024+1)
         if len(binary)!=entries[0].size:raise ValueError('truncated executable')
     return install_binary(binary,destination,replace,expected_version)
@@ -109,13 +112,17 @@ def install_binary(binary,destination,replace=False,expected_version=None):
     """
     if not 0<len(binary)<=128*1024*1024:raise ValueError('executable exceeds bound')
     target=Path(destination).absolute();parent=target.parent.resolve(strict=True);target=parent/target.name
-    original=None
+    original=None;legacy=None;legacy_original=None
     try:original=target.lstat()
     except FileNotFoundError:pass
     if original is not None:
-        if stat.S_ISLNK(original.st_mode):raise ValueError('refusing a symlink destination')
-        if not stat.S_ISREG(original.st_mode):raise ValueError('destination must be a regular executable')
         if not replace:raise ValueError('destination exists; use --replace explicitly')
+        if stat.S_ISLNK(original.st_mode):
+            if target.name!='amx' or os.readlink(target) not in ('agentmux',str(parent/'agentmux')):raise ValueError('refusing a symlink destination')
+            legacy=parent/'agentmux';legacy_original=legacy.lstat()
+            if not stat.S_ISREG(legacy_original.st_mode):raise ValueError('legacy agentmux destination must be a regular executable')
+            if not re.match(r'^(?:agentmux|amx)\s',probe_version(str(legacy))):raise ValueError('legacy shortcut does not identify an Agentmux executable')
+        elif not stat.S_ISREG(original.st_mode):raise ValueError('destination must be a regular executable')
     alias=parent/'amx' if target.name!='amx' else None
     if alias is not None and os.path.lexists(alias):validate_alias(alias,target)
     fd,path=tempfile.mkstemp(prefix='.agentmux-install-',dir=parent)
@@ -124,10 +131,10 @@ def install_binary(binary,destination,replace=False,expected_version=None):
         with os.fdopen(fd,'wb') as out:out.write(binary);out.flush();os.fsync(out.fileno())
         os.chmod(path,0o755)
         version=probe_version(path)
-        if 'agentmux' not in version.lower():raise ValueError('unexpected executable version response')
+        if not re.match(r'^(?:agentmux|amx)\s',version):raise ValueError('unexpected executable version response')
         if expected_version:
             release_version=expected_version[1:] if expected_version.startswith('v') else expected_version
-            if not re.match(r'^agentmux\s+v?'+re.escape(release_version)+r'(?:\s|$)',version):raise ValueError('executable version does not match selected release')
+            if not re.match(r'^(?:amx|agentmux)\s+v?'+re.escape(release_version)+r'(?:\s|$)',version):raise ValueError('executable version does not match selected release')
         # No overwrite: another installation or unrelated command wins a race.
         if alias is not None and not os.path.lexists(alias):
             # Publish a known symlink inode, so rollback cannot mistake a
@@ -146,15 +153,27 @@ def install_binary(binary,destination,replace=False,expected_version=None):
             if (current.st_dev,current.st_ino)!=(original.st_dev,original.st_ino):
                 raise ValueError('destination changed during installation; retry after inspecting it')
             backup=parent/(target.name+'.backup-'+secrets.token_hex(6))
-            os.link(target,backup,follow_symlinks=False)
+            os.link(legacy or target,backup,follow_symlinks=False)
             saved=backup.lstat();current=target.lstat()
-            if (saved.st_dev,saved.st_ino)!=(original.st_dev,original.st_ino) or (current.st_dev,current.st_ino)!=(original.st_dev,original.st_ino):
+            expected=legacy_original or original
+            if (saved.st_dev,saved.st_ino)!=(expected.st_dev,expected.st_ino) or (current.st_dev,current.st_ino)!=(original.st_dev,original.st_ino):
                 raise ValueError('destination changed while retaining its backup; no executable was replaced')
+            if legacy is not None:
+                check=legacy.lstat()
+                if (check.st_dev,check.st_ino)!=(expected.st_dev,expected.st_ino):raise ValueError('legacy executable changed during migration; no executable was replaced')
             if alias is not None:validate_alias(alias,target)
             os.replace(path,target)
         else:
             os.link(path,target);os.unlink(path)
         committed=True
+        if legacy is not None:
+            # Retire only the exact executable which backed our old shortcut.
+            # Its original inode remains at the unique recovery backup.
+            try:
+                current=legacy.lstat()
+                if (current.st_dev,current.st_ino)==(legacy_original.st_dev,legacy_original.st_ino):legacy.unlink()
+            except OSError:
+                print('amx installed; legacy agentmux path could not be retired; inspect it separately',file=sys.stderr)
         return version.strip()
     finally:
         if os.path.exists(path):os.unlink(path)
@@ -169,7 +188,8 @@ def install_binary(binary,destination,replace=False,expected_version=None):
             if backup is not None:
                 try:
                     current=target.lstat();saved=backup.lstat()
-                    if (current.st_dev,current.st_ino)==(original.st_dev,original.st_ino)==(saved.st_dev,saved.st_ino):backup.unlink()
+                    expected=legacy_original or original
+                    if (current.st_dev,current.st_ino)==(original.st_dev,original.st_ino) and (saved.st_dev,saved.st_ino)==(expected.st_dev,expected.st_ino):backup.unlink()
                 except FileNotFoundError:pass
 
 def download(url,limit):

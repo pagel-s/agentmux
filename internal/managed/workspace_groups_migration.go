@@ -22,7 +22,7 @@ func reviewLegacyWorkspaceGroup(ctx context.Context, q queryer, c *ControlState,
 		return nil
 	}
 	if policy == "" {
-		return fault("conflict", "legacy collaboration permissions need explicit owner review; no changes applied. Choose legacy_policy preserve to retain historical direct overrides, or group to remove untagged pair allows while preserving all denies. CLI: agentmux collaborate AGENT AGENT --legacy-policy preserve|group; inspect control.get first")
+		return fault("conflict", "legacy collaboration permissions need explicit owner review; no changes applied. Choose legacy_policy preserve to retain historical direct overrides, or group to remove untagged pair allows while preserving all denies. CLI: amx collaborate AGENT AGENT --legacy-policy preserve|group; inspect control.get first")
 	}
 	if policy == "group" {
 		edges := []EdgeControl{}

@@ -53,7 +53,11 @@ func (m console) roster(width, height int) string {
 	if len(m.agents) > 0 {
 		position = m.selected + 1
 	}
-	out.WriteString(consoleAccent.Render("SESSIONS · ↑/↓") + "\n")
+	if !m.contentFocus {
+		out.WriteString(consoleSelected.Render(" SESSIONS · ↑/↓ ") + "\n")
+	} else {
+		out.WriteString(consoleMuted.Render("SESSIONS · Tab focus") + "\n")
+	}
 	out.WriteString(consoleMuted.Render(fmt.Sprintf("%d/%d · Ctrl+P switch", position, len(m.agents))) + "\n")
 	rows := max(1, (height-4)/2)
 	start := max(0, m.selected-rows+1)
@@ -79,10 +83,8 @@ func (m console) roster(width, height int) string {
 		fmt.Fprintf(&out, "%s\n", consoleMuted.Render(fmt.Sprintf("↑ %d above · ↓ %d below", start, len(m.agents)-end)))
 	}
 	hint := m.nativeEntryHint()
-	if m.tab == 6 {
-		hint = "h/l team action target\n2 Sessions: native terminals"
-	} else if m.tab == 5 {
-		hint = "↑/↓ observed terminal\nEnter details · c bridge"
+	if m.contentFocus {
+		hint = "Tab: focus sessions\nCtrl+P: find a session"
 	}
 	if m.data.headless {
 		hint = "↑/↓ select · / find\nTasks output · Events state"
@@ -132,7 +134,7 @@ func (m console) panel(width, height int) string {
 			boardHints += " · PgUp newer"
 		}
 		if len(messages) > 0 {
-			boardHints += " · [/] select · r reply · o read all"
+			boardHints += " · ↑/↓ select · r reply · Enter read"
 		}
 		fmt.Fprintf(&out, "%s  %s\n\n", consoleAccent.Render(filters[m.boardFilter%3]), consoleMuted.Render(boardHints))
 		if len(messages) == 0 {
@@ -237,7 +239,7 @@ func (m console) panel(width, height int) string {
 		out.WriteString(consoleAccent.Render("Connections") + consoleMuted.Render(fmt.Sprintf("  revision %d", m.data.boundaries.Version)) + "\n\n")
 		if len(m.agents) > 0 {
 			target := m.agents[m.target%len(m.agents)].ID
-			fmt.Fprintf(&out, "%s\n%s\n%s\n%s\n\n", consoleMuted.Render("SENDER · ↑/↓ session"), consoleAccent.Render(consoleClip(consoleContent(m.agentLabel(m.selectedID()), 300), width, 1)), consoleMuted.Render("RECIPIENT · h/l or Alt+←/→"), consoleAccent.Render(consoleClip(consoleContent(m.agentLabel(target), 300), width, 1)))
+			fmt.Fprintf(&out, "%s\n%s\n%s\n%s\n\n", consoleMuted.Render("SENDER · Tab → sessions"), consoleAccent.Render(consoleClip(consoleContent(m.agentLabel(m.selectedID()), 300), width, 1)), consoleMuted.Render("RECIPIENT · ↑/↓ here · h/l"), consoleAccent.Render(consoleClip(consoleContent(m.agentLabel(target), 300), width, 1)))
 			for _, row := range []struct{ key, action, label string }{{"m", "message.send", "Messages"}, {"p", "ping.send", "Pings"}, {"i", "instruct", "Commands"}} {
 				enabled := boundaryAllows(m.data.boundaries, target, row.action)
 				value := "○  denied"
@@ -280,7 +282,7 @@ func (m console) panel(width, height int) string {
 			break
 		}
 		if m.memoryOpen {
-			fmt.Fprintf(&out, "%s  %s\n\n", consoleAccent.Render("Memory / "+m.scopeLabel(m.memoryNamespace)), consoleMuted.Render("owner view · [/] entry · o read · e edit · n new · v refresh · Esc back"))
+			fmt.Fprintf(&out, "%s  %s\n\n", consoleAccent.Render("Memory / "+m.scopeLabel(m.memoryNamespace)), consoleMuted.Render("owner view · ↑/↓ entry · o read · e edit · n new · v refresh · Esc back"))
 			if len(m.memoryEntries) == 0 {
 				out.WriteString(consoleMuted.Render("No entries. Press n to create a shared note."))
 			}
@@ -306,7 +308,7 @@ func (m console) panel(width, height int) string {
 			scopes := append(append([]managed.BoundaryScope{}, m.data.boundaries.Boards...), m.data.boundaries.Memory...)
 			hints := ""
 			if len(scopes) > 0 {
-				hints = "  [/] select · r/w access · Shift+R reset · o details"
+				hints = "  ↑/↓ select · r/w access · Shift+R reset · o details"
 				if len(m.data.boundaries.Memory) > 0 {
 					hints += " · v memory"
 				}
@@ -346,7 +348,7 @@ func (m console) panel(width, height int) string {
 	case 4:
 		taskHints := ""
 		if len(m.data.activity.Tasks) > 0 {
-			taskHints = "  [/] select · o read all · r follow up · c cancel"
+			taskHints = "  ↑/↓ select · Enter read · r follow up · c cancel"
 		}
 		out.WriteString(consoleAccent.Render("Tasks & results") + consoleMuted.Render(taskHints) + "\n\n")
 		historyHint := fmt.Sprintf("Page %d · f search · y to · z state", len(m.taskBack)+1)
@@ -515,7 +517,7 @@ func (m console) View() string {
 	}
 	var compact string
 	if width < 64 && len(m.agents) > 0 && m.workspacePicker == nil && m.reader == nil && m.nativeAction == nil && m.composer != "find" {
-		compact = consoleClip(consoleMuted.Render(fmt.Sprintf("Session %d/%d · ↑/↓ · Ctrl+P switch", m.selected+1, len(m.agents))), width, 1) + "\n" + consoleClip(consoleSelected.Render("› "+consoleContent(m.agentLabel(m.selectedID()), 300)), width, 1) + "\n"
+		compact = consoleClip(consoleMuted.Render(fmt.Sprintf("Session %d/%d · Ctrl+P switch", m.selected+1, len(m.agents))), width, 1) + "\n" + consoleClip(consoleSelected.Render("› "+consoleContent(m.agentLabel(m.selectedID()), 300)), width, 1) + "\n"
 		bodyHeight = max(1, bodyHeight-2)
 	}
 	var body string
@@ -536,10 +538,10 @@ func (m console) View() string {
 		// Each divider row needs its own left gutter. Prefixing the complete
 		// multiline block would indent only its first row.
 		bar := strings.TrimSuffix(strings.Repeat(" "+separator+"\n", bodyHeight), "\n")
-		right := lipgloss.NewStyle().PaddingLeft(2).Render(m.panel(width-sideWidth-4, bodyHeight))
+		right := lipgloss.NewStyle().PaddingLeft(2).Render(m.contentFocusLabel() + "\n" + m.panel(width-sideWidth-4, max(1, bodyHeight-1)))
 		body = lipgloss.JoinHorizontal(lipgloss.Top, m.roster(sideWidth, bodyHeight), bar, right)
 	} else {
-		body = m.panel(width, bodyHeight)
+		body = m.contentFocusLabel() + "\n" + m.panel(width, max(1, bodyHeight-1))
 	}
 	return consoleClip(header, width, 1) + "\n" + consoleClip(navigation.String(), width, 1) + "\n\n" + compact + consoleClip(body, width, bodyHeight) + "\n" + bottom
 }

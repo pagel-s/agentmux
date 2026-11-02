@@ -63,7 +63,7 @@ real turns. For an endpoint already listening on port 34501 with model ID
 
 ```sh
 python3 scripts/smoke-managed-models.py \
-  --binary ./bin/agentmux \
+  --binary ./bin/amx \
   --allow-models \
   --pi-base-url http://127.0.0.1:34501/v1 \
   --pi-model cached-qwen-1.5b \
