@@ -75,7 +75,23 @@ func TestWorkTaskOpenExactOlderTaskRealTMux(t *testing.T) {
 		t.Fatal("target fixture must be older than the ordinary first task page")
 	}
 
-	socket := filepath.Join(t.TempDir(), "tmux.sock")
+	terminalRoot := t.TempDir()
+	socket := filepath.Join(terminalRoot, "tmux.sock")
+	statusPath := filepath.Join(terminalRoot, "observer-exit-status")
+	wrapper := filepath.Join(terminalRoot, "run-observer")
+	// Record the actual CLI child's status before this shell exits. A dead pane
+	// can be observable before tmux has reaped it and exposed its exit status.
+	const wrapperScript = `#!/bin/sh
+amx_task_open_status_path=$1
+shift
+"$@"
+amx_task_open_exit_status=$?
+printf '%s\n' "$amx_task_open_exit_status" > "$amx_task_open_status_path"
+exit "$amx_task_open_exit_status"
+`
+	if err = os.WriteFile(wrapper, []byte(wrapperScript), 0700); err != nil {
+		t.Fatal(err)
+	}
 	tmux := func(args ...string) (string, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -95,7 +111,7 @@ func TestWorkTaskOpenExactOlderTaskRealTMux(t *testing.T) {
 	t.Cleanup(func() { _, _ = tmux("kill-server") })
 	pane := checkedTMux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "exact-task-open", "-x", "150", "-y", "44", "/bin/sh")
 	checkedTMux("set-window-option", "-t", pane, "remain-on-exit", "on")
-	command := "exec " + managedlaunch.ShellCommand([]string{binary, "task", id, "--open", "--state", state})
+	command := "exec " + managedlaunch.ShellCommand([]string{wrapper, statusPath, binary, "task", id, "--open", "--state", state})
 	checkedTMux("respawn-pane", "-k", "-t", pane, command)
 	waitScreen := func(label string, match func(string) bool) string {
 		t.Helper()
@@ -133,12 +149,17 @@ func TestWorkTaskOpenExactOlderTaskRealTMux(t *testing.T) {
 	checkedTMux("send-keys", "-t", pane, "Escape")
 	waitScreen("return from actions without mutation", func(screen string) bool { return strings.Contains(screen, "Exact task: "+id) })
 	checkedTMux("send-keys", "-t", pane, "q")
-	waitScreen("observer exit", func(string) bool {
+	var childStatus []byte
+	waitScreen("observer exit and recorded child status", func(string) bool {
 		dead, err := tmux("display-message", "-p", "-t", pane, "#{pane_dead}")
-		return err == nil && dead == "1"
+		if err != nil || dead != "1" {
+			return false
+		}
+		childStatus, err = os.ReadFile(statusPath)
+		return err == nil && strings.HasSuffix(string(childStatus), "\n")
 	})
-	if status := checkedTMux("display-message", "-p", "-t", pane, "#{pane_dead_status}"); status != "0" {
-		t.Fatalf("observer exited unsuccessfully: %s", status)
+	if string(childStatus) != "0\n" {
+		t.Fatalf("observer exited unsuccessfully: %q", childStatus)
 	}
 	if after := rpc(owner, "task.get", map[string]any{"id": id}); !bytes.Equal(before, after) {
 		t.Fatalf("opening or reading recovery changed exact task evidence:\nbefore %s\nafter %s", before, after)
