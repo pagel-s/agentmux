@@ -136,7 +136,7 @@ workspace. Outside, bare `amx` or `amx a` uses the sole running workspace or
 shows a chooser when several are running. Commands with an explicit agent ID
 still use workspace `work` outside an attachment unless you provide `-s`.
 
-In source builds after v0.12.0, press `/` or Ctrl+F in the startup/resume workspace
+In v0.13.0, press `/` or Ctrl+F in the startup/resume workspace
 chooser or the workbench's **Ctrl+W** picker,
 then type to filter by name, path or status; arrows or Ctrl+N/P select a match, Ctrl+U clears and
 Enter opens the exact displayed workspace. Non-interactive `amx` shows active

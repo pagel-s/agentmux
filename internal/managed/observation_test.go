@@ -2,6 +2,7 @@ package managed
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -9,6 +10,42 @@ import (
 	"testing"
 	"time"
 )
+
+type blockedObservationQueryer struct{ queryer }
+
+func (q blockedObservationQueryer) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
+	if strings.HasPrefix(query, observedTasksSQL) {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	return q.queryer.QueryContext(ctx, query, args...)
+}
+
+func TestObservationReadBudgetPreservesTheExactLeaseMonitor(t *testing.T) {
+	s := testStore(t, testConfig())
+	instruction(t, s)
+	task, lease := claim(t, s)
+	worker := credential(t, s, "bob")
+	entered := make(chan struct{})
+	finished := make(chan *Fault, 1)
+	go func() {
+		s.mu.Lock()
+		close(entered)
+		_, problem := s.observation(context.Background(), blockedObservationQueryer{s.db}, actor{ID: ownerID}, json.RawMessage(`{}`))
+		s.mu.Unlock()
+		finished <- problem
+	}()
+	<-entered
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	current, err := workerGetLeasedTask(ctx, workerTestCaller(s, worker), task.ID, lease)
+	if problem := <-finished; problem == nil || problem.Code != "cancelled" {
+		t.Fatalf("blocked operational query did not become an unavailable observation: %v", problem)
+	}
+	if err != nil || current.ID != task.ID || current.Delivery != "dispatching" {
+		t.Fatalf("unavailable observation starved the exact 500ms worker monitor: %v", err)
+	}
+}
 
 func TestObservationMetadataIndexMigratesExistingState(t *testing.T) {
 	s := testStore(t, testConfig())
@@ -145,52 +182,60 @@ func TestObservationPagesAndNativeSummaryNeverReadBodyColumns(t *testing.T) {
 	}
 }
 
-func TestObservationAtDefaultHistoryCapacityDoesNotInterruptLeaseMonitoring(t *testing.T) {
-	s := testStore(t, testConfig())
+func assertObservationAtDefaultHistoryCapacity(t *testing.T, fixture largeHistoryFixture) {
+	t.Helper()
+	s, worker, live := fixture.store, fixture.worker, fixture.live
 	ctx := context.Background()
-	worker := credential(t, s, "bob")
-	transaction, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer transaction.Rollback()
-	payload := strings.Repeat("X", s.cfg.Limits.MaxMessageBytes)
-	for i := 0; i < s.cfg.Limits.MaxTasks-1; i++ {
-		if err = saveTask(ctx, transaction, taskRecord{Task: Task{ID: fmt.Sprintf("task_large_history_%04d", i), To: "bob", State: "submitted", Delivery: "acknowledged", Version: 2, Text: payload, Result: payload}}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	live := taskRecord{Task: Task{ID: "task_live_monitor", To: "bob", State: "running", Delivery: "dispatching", Version: 2, Text: payload}, Instance: worker.InstanceID, LeaseToken: "exact-live-lease", Expires: time.Now().Add(time.Hour).Unix()}
-	if err = saveTask(ctx, transaction, live); err != nil {
-		t.Fatal(err)
-	}
-	if err = transaction.Commit(); err != nil {
+	var err error
+
+	var recordsBefore, requestsBefore, exposuresBefore int
+	if err = s.db.QueryRow("SELECT (SELECT COUNT(*) FROM records),(SELECT COUNT(*) FROM requests),(SELECT COUNT(*) FROM exposures)").Scan(&recordsBefore, &requestsBefore, &exposuresBefore); err != nil {
 		t.Fatal(err)
 	}
 	entered := make(chan struct{})
-	finished := make(chan *Fault, 1)
+	type observationOutcome struct {
+		result  any
+		problem *Fault
+	}
+	finished := make(chan observationOutcome, 1)
 	started := time.Now()
 	go func() {
 		// Store.Call holds this exact lock around observation. Start a worker
 		// read after admission so a slow observer cannot hide behind scheduling.
 		s.mu.Lock()
 		close(entered)
-		_, problem := s.observation(ctx, s.db, actor{ID: ownerID}, json.RawMessage(`{"limit":25}`))
+		result, problem := s.observation(ctx, s.db, actor{ID: ownerID}, json.RawMessage(`{"limit":25}`))
 		s.mu.Unlock()
-		finished <- problem
+		finished <- observationOutcome{result, problem}
 	}()
 	<-entered
 	monitorCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
 	defer cancel()
 	current, readErr := workerGetLeasedTask(monitorCtx, workerTestCaller(s, worker), live.ID, live.LeaseToken)
-	problem := <-finished
-	if problem != nil {
-		t.Fatal(problem)
-	}
-	if readErr != nil || current.ID != live.ID || current.Delivery != "dispatching" {
+	outcome := <-finished
+	if readErr != nil || current.ID != live.ID || current.Delivery != "dispatching" || current.Version != live.Version {
 		t.Fatalf("operational read interrupted the live worker's 500ms lease monitor: %v", readErr)
 	}
-	t.Logf("full default history observation and concurrent exact lease read: %s", time.Since(started))
+	if outcome.problem != nil {
+		if outcome.problem.Code != "cancelled" || outcome.result != nil {
+			t.Fatalf("observation failed outside its explicit unavailable budget outcome: %v", outcome.problem)
+		}
+		t.Logf("metadata budget returned unavailable while the exact lease monitor succeeded: %s", time.Since(started))
+	} else {
+		snapshot, ok := outcome.result.(ObservationSnapshot)
+		if !ok || snapshot.Tasks != s.cfg.Limits.MaxTasks || snapshot.AttentionCount != s.cfg.Limits.MaxTasks-1 || snapshot.ActiveCount != 1 || len(snapshot.Attention) != 25 || len(snapshot.Active) != 1 || snapshot.Active[0].ID != live.ID {
+			t.Fatalf("available large-history observation is inconsistent: %+v", outcome.result)
+		}
+		t.Logf("available full default history observation and exact lease read: %s", time.Since(started))
+	}
+	retained, err := loadTask(ctx, s.db, live.ID)
+	if err != nil || retained.LeaseToken != live.LeaseToken || retained.Instance != live.Instance || retained.Expires != live.Expires || retained.Version != live.Version || retained.State != live.State || retained.Delivery != live.Delivery || retained.Text != live.Text {
+		t.Fatalf("operational read changed the exact execution attempt: %+v %v", retained, err)
+	}
+	var recordsAfter, requestsAfter, exposuresAfter int
+	if err = s.db.QueryRow("SELECT (SELECT COUNT(*) FROM records),(SELECT COUNT(*) FROM requests),(SELECT COUNT(*) FROM exposures)").Scan(&recordsAfter, &requestsAfter, &exposuresAfter); err != nil || recordsAfter != recordsBefore || requestsAfter != requestsBefore || exposuresAfter != exposuresBefore {
+		t.Fatalf("operational read changed durable history/receipts/exposure counts: %v", err)
+	}
 }
 
 func TestObservationReportsLogicalCapacityWithoutConsumingReceipts(t *testing.T) {

@@ -52,5 +52,12 @@
       ". Worker reporting and native events do not establish task correctness.";
   }
 
-  return Object.freeze({ observationTimeText, nativeReportingText, taskProgressText });
+  function nativePendingCountText(status) {
+    if (status?.pending_known === false) return "unknown";
+    const count = status?.pending_count ?? (Array.isArray(status?.pending) ? status.pending.length : null);
+    return Number.isInteger(count) && count >= 0
+      ? String(count) + (status.pending_more ? "+" : "") : "unknown";
+  }
+
+  return Object.freeze({ observationTimeText, nativeReportingText, taskProgressText, nativePendingCountText });
 });

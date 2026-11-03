@@ -24,7 +24,7 @@ const nativeObservedAgentsSQL = `SELECT json_extract(data,'$.id'),
  FROM records INDEXED BY records_agent_observation_metadata WHERE kind='agent' AND json_extract(data,'$.id')>?`
 
 func (s *Store) nativeObservationInventory(ctx context.Context, q queryer, after string, limit int) (any, *Fault) {
-	ctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(ctx, operationalObservationReadBudget)
 	defer cancel()
 	if limit <= 0 || limit > 200 {
 		limit = 200

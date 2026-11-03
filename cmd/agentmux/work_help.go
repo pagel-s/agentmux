@@ -58,8 +58,8 @@ Next: amx observe with the same selector summarizes fresh operational evidence.`
 auto sends notes to native sessions and instruction tasks to managed workers.
 Use --mode instruction to delegate explicitly; instructions print an exact task ID
 and same-workspace inspection command. A queued task is not verified completion.
-Native receivers also need compatible readiness and Review or Auto delivery;
-sender command permission and receiver delivery are separate controls.
+Native receivers also need compatible readiness and Review or Auto delivery.
+Owner send uses owner authority; peer command permission and receiver delivery are separate controls.
 Next: amx task TASK_ID with the same selector inspects delivery and recovery.
 Legacy raw terminal input: amx send SESSION PANE -- COMMAND.`
 	case "reply":
@@ -135,6 +135,12 @@ inspection and exact task/version recovery before another attempt.
 Next: amx context with the same selector reports runtime state.`
 	default:
 		body = "Usage: amx " + operation + " [--session NAME | --state DIR]\n\nUse amx help all for the complete command reference."
+	}
+	if operation == "send" || operation == "reply" || operation == "attach" {
+		body += `
+
+Inspect: amx task TASK_ID [--json | --open]; amx tasks reads retained history.
+Opening never retries or resolves a task; recovery is separately reviewed.`
 	}
 	return body + `
 

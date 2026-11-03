@@ -5,7 +5,7 @@ before applying them to your project.
 
 ## Get your first checked result
 
-[Install v0.12.0](getting-started/installation.md), then run:
+[Install v0.13.0](getting-started/installation.md), then run:
 
 ```sh
 amx demo
@@ -38,13 +38,12 @@ workspace switching and individual-session recovery. A
 [source build](getting-started/installation.md#build-from-source) remains an
 alternative to release binaries.
 
-Current `main` includes daily power-user shortcuts beyond the published
-v0.12.0 release: `amx context` explains the selected workspace, `amx tasks`
+v0.13.0 includes the daily power-user controls: `amx context` explains the selected workspace, `amx tasks`
 searches retained delegation history, and `amx task ID --open -s NAME` opens
 the exact task's evidence and recovery controls. `amx observe` summarizes fresh
 broker/worker reporting and complete retained task counts, with bounded attention
 and optional JSONL watching. Both terminal and web Actions
-offer **Tasks for selected session**. Build from source for these controls;
+offer **Tasks for selected session**. Upgrade existing workspace controllers explicitly;
 see [everyday commands](getting-started/everyday-commands.md) for the five daily loops.
 
 Keep the [everyday command reference](commands.md#everyday-work-sessions) handy

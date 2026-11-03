@@ -230,6 +230,26 @@ func TestConsoleNativeQueuePageDoesNotClaimToBeComplete(t *testing.T) {
 	}
 }
 
+func TestConsoleUnknownAdmissionKeepsPolicyControlsAndDoesNotClaimEmptyQueue(t *testing.T) {
+	m := nativeConsoleFixture()
+	m.data.native.PendingKnown = false
+	m.data.native.Coverage = "Pending admission unavailable; current policy and retained transport remain inspectable."
+	m.data.native.Pending = nil
+	view := ansi.Strip(m.nativeDeliverySummary(100))
+	if !strings.Contains(view, "pending unknown") || !strings.Contains(view, "Shift+D settings") || strings.Contains(view, "pending 0") {
+		t.Fatalf("unknown admission became empty or hid controls: %s", view)
+	}
+	m.reviewNativeDelivery(false)
+	if m.nativeAction == nil {
+		t.Fatalf("pending diagnostics blocked policy controls: %s", m.message)
+	}
+	m.nativeAction = nil
+	m.reviewNativeDelivery(true)
+	if m.nativeAction != nil || !strings.Contains(m.message, "unavailable") {
+		t.Fatalf("unknown admission reached approval: %+v %s", m.nativeAction, m.message)
+	}
+}
+
 func TestConsoleNativeWeakerAdapterGuaranteesStayVisibleBeforeAuto(t *testing.T) {
 	m := nativeConsoleFixture()
 	m.data.native.Adapter = "claude"

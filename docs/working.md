@@ -6,11 +6,11 @@ Antigravity reviews the final revision, and the project checks run again. You
 receive a saved report and a patch in a separate Git worktree. Agentmux does not
 integrate that patch into your project until you explicitly apply it.
 
-Available in [Agentmux v0.12.0](getting-started/installation.md). To inspect a
+Available in [Agentmux v0.13.0](getting-started/installation.md). To inspect a
 checked fixture before configuring providers, start with
 [`amx demo`](getting-started/first-result.md).
 
-[![Actual offline report from the model-free demo, showing saved checks and the retained change](assets/guide/checked-work-report.jpg?v=78d91f2ad404)](getting-started/first-result.md)
+[![Actual offline report from the model-free demo, showing saved checks and the retained change](assets/guide/checked-work-report.jpg?v=c1d8bad75eaf)](getting-started/first-result.md)
 
 The report above comes from `amx demo`, a deterministic fixture with no model
 calls. For your own task, the daily sequence is:
@@ -22,8 +22,8 @@ calls. For your own task, the daily sequence is:
 | Inspect | `amx work show RUN_ID --open` | Read fresh report evidence and the patch |
 | Apply | `amx work apply RUN_ID` | Recheck and apply the selected result explicitly |
 
-Use a current source build for the run-ID listing and report opening; the base
-journey is available in v0.12.0. See [inspection](#inspect-the-result) for older releases.
+v0.13.0 includes run-ID listing and report opening. The base journey also works
+in v0.12.0; see [inspection](#inspect-the-result) for the older report route.
 
 The five execution phases retain checks and review evidence. Failed or uncertain
 work remains available to inspect; it does not become an approved application.
@@ -207,13 +207,13 @@ inspection. Ordinary inspection starts no model and opens no browser. `list`
 shows stable run IDs for this project, newest first. Omit `--limit` to retain
 the full list; an explicit limit accepts 1–1024.
 
-In source builds after v0.12.0, `show RUN_ID --open` renders a fresh private,
+In v0.13.0, `show RUN_ID --open` renders a fresh private,
 script-free HTML report from the selected run's saved evidence and asks the
 system browser to open it. Use an explicit ID, directory or `latest`; it
 resolves that selector once and never starts another run. Existing `report.html`
 is not opened. The generated file path is printed and retained even if the
 browser cannot open it. `--open` and `--json` cannot be combined. Stable IDs
-and `--limit` are also source-build additions after v0.12.0.
+and `--limit` are included in v0.13.0.
 
 Use an explicit directory or run ID to inspect another recorded attempt:
 

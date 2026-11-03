@@ -5,13 +5,14 @@ This guide explains what each command is for, when to use it, and the most usefu
 For a guided native-terminal workflow, see [work sessions](work-sessions.md).
 For original YAML pane-layout examples, see [recipes](recipes.md).
 
-`context`, `observe`, `task`/`tasks` (including `task ID --open`), `work list --limit` and `work show --open` are
-source-build additions after v0.12.0.
+`context`, `observe`, `task`/`tasks` (including `task ID --open`), `work list --limit`
+and `work show --open` are included in v0.13.0. Older workspace controllers
+need an explicit upgrade before they can serve the new controls.
 
 ## Checked coding requests
 
 `demo`, `work` and `flow` are included in
-[Agentmux v0.12.0](getting-started/installation.md). `work` and `flow` select a Git project,
+[Agentmux v0.13.0](getting-started/installation.md). `work` and `flow` select a Git project,
 independently of an interactive workspace's `-s NAME` selector.
 
 | Command | Use it to |

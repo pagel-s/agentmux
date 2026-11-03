@@ -226,7 +226,10 @@ func (s *Store) native(ctx context.Context, q queryer, a actor, r Request) (any,
 				s.nativePresence[a.ID] = presence
 			}
 		}
-		st, err := s.nativeStatus(ctx, q, in.Agent)
+		// A registered adapter polls policy and its retained transport slot.
+		// Queued bodies are neither returned nor needed for stop/cancel; do not
+		// let an unrelated pending source hide a definite Manual transition.
+		st, err := s.nativeStatusWithPending(ctx, q, in.Agent, a.owner() || in.Session == "")
 		if err != nil {
 			return nil, internal(err)
 		}
@@ -294,13 +297,16 @@ func (s *Store) native(ctx context.Context, q queryer, a actor, r Request) (any,
 		if p.Mode != "review" || in.Version != p.Version {
 			return nil, fault("conflict", "approval requires the current review policy version")
 		}
-		candidates, err := s.nativeCandidates(ctx, q, in.Agent, p)
+		candidates, err := s.nativeCandidateInfos(ctx, q, in.Agent, p)
 		if err != nil {
 			return nil, internal(err)
 		}
 		found := false
-		for _, d := range candidates {
-			if d.ID == in.Candidate {
+		for _, candidate := range candidates {
+			if candidate.Delivery.ID == in.Candidate {
+				if _, err = candidate.hydrateForExecution(); err != nil {
+					return nil, internal(err)
+				}
 				found = true
 				break
 			}
@@ -387,7 +393,7 @@ func (s *Store) native(ctx context.Context, q queryer, a actor, r Request) (any,
 	if r.Operation != "native.peek" && r.Operation != "native.claim" {
 		return nil, fault("invalid", "unknown native operation")
 	}
-	st, err := s.nativeStatus(ctx, q, a.ID)
+	st, err := s.nativeStatusWithPending(ctx, q, a.ID, false)
 	if err != nil {
 		return nil, internal(err)
 	}
@@ -395,15 +401,26 @@ func (s *Store) native(ctx context.Context, q queryer, a actor, r Request) (any,
 		return map[string]any{"candidate": "", "delivery": nil, "reason": st.Reason}, nil
 	}
 	var selected *nativebridge.Delivery
-	candidates, err := s.nativeCandidates(ctx, q, a.ID, p)
+	candidates, err := s.nativeCandidateInfos(ctx, q, a.ID, p)
 	if err != nil {
 		return nil, internal(err)
 	}
-	for _, d := range candidates {
+	for _, candidate := range candidates {
+		d := candidate.Delivery
 		if p.Mode == "review" {
 			var approved int
 			if get(ctx, q, "native_approval", "native_approval:"+hash(a.ID+":"+d.ID), &approved) != nil || approved != p.Version {
 				continue
+			}
+		}
+		if r.Operation != "native.peek" {
+			d, err = candidate.hydrateForExecution()
+			if err != nil {
+				return nil, internal(err)
+			}
+		} else if candidate.validate != nil {
+			if err = candidate.validate(); err != nil {
+				return nil, internal(err)
 			}
 		}
 		copy := d
@@ -503,7 +520,14 @@ func (s *Store) saveNativeRecord(ctx context.Context, q queryer, d nativeRecord)
 }
 
 func (s *Store) nativeStatus(ctx context.Context, q queryer, id string) (NativeStatus, error) {
-	st := NativeStatus{Agent: id, Pending: []nativebridge.Delivery{}, PendingKnown: true}
+	return s.nativeStatusWithPending(ctx, q, id, true)
+}
+
+func (s *Store) nativeStatusWithPending(ctx context.Context, q queryer, id string, includePending bool) (NativeStatus, error) {
+	st := NativeStatus{Agent: id, Pending: []nativebridge.Delivery{}, PendingKnown: includePending}
+	if !includePending {
+		st.Coverage = "Policy and retained transport evidence; pending admission candidates were not evaluated."
+	}
 	st.MaxResultBytes = s.cfg.Limits.MaxMessageBytes
 	info, err := s.agent(ctx, q, id)
 	if err != nil {
@@ -550,24 +574,28 @@ func (s *Store) nativeStatus(ctx context.Context, q queryer, id string) (NativeS
 			st.Capabilities = reg.Capabilities
 		}
 	}
-	st.Pending, err = s.nativeCandidates(ctx, q, id, p)
-	if err != nil {
-		return st, err
-	}
-	st.PendingCount = len(st.Pending)
-	st.PendingMore = len(st.Pending) >= 200
-	bytes := 0
-	end := 0
-	for i, d := range st.Pending {
-		raw, _ := json.Marshal(d)
-		if i > 0 && bytes+len(raw) > maxWireBytes/2 {
-			st.PendingMore = true
-			break
+	if includePending {
+		infos, err := s.nativeCandidateInfos(ctx, q, id, p)
+		if err == nil {
+			st.PendingCount = len(infos)
+			var clipped bool
+			st.Pending, clipped, err = nativeCandidateBodies(infos, maxWireBytes/2)
+			st.PendingMore = clipped || len(infos) >= nativeCandidateLimit
 		}
-		bytes += len(raw)
-		end = i + 1
+		if err != nil {
+			if ctx.Err() != nil {
+				return st, err
+			}
+			// A quarantined pending source cannot hide a committed Manual
+			// policy or cancellation of an unrelated, already-running turn.
+			// Publish no bodies/counts, then inspect retained transport using
+			// the original full typed decoder below.
+			st.Pending, st.PendingCount, st.PendingMore = []nativebridge.Delivery{}, 0, false
+			st.PendingKnown = false
+			st.Coverage = "Pending queue validation is unavailable; no queued bodies or counts are reported. Policy and retained transport evidence are separate."
+		}
 	}
-	st.Pending = st.Pending[:end]
+
 	all, err := list[nativeRecord](ctx, q, "native_delivery", "AND target=? ORDER BY seq DESC", id)
 	if err != nil {
 		return st, err
@@ -750,136 +778,12 @@ func (s *Store) nativeDeliveryAllowed(ctx context.Context, q queryer, id string,
 }
 
 func (s *Store) nativeCandidates(ctx context.Context, q queryer, id string, p NativePolicy) ([]nativebridge.Delivery, error) {
-	result := []nativebridge.Delivery{}
-	seen := func(candidate string) (bool, error) {
-		var n int
-		err := q.QueryRowContext(ctx, "SELECT count(*) FROM records WHERE kind='native_delivery' AND target=? AND scope=?", id, candidate).Scan(&n)
-		return n > 0, err
-	}
-	add := func(d nativebridge.Delivery) error {
-		origin, e := s.nativeOrigin(ctx, q, d)
-		if e != nil {
-			return e
-		}
-		if origin.Hop > p.MaxHops {
-			return nil
-		}
-		done, err := seen(d.ID)
-		if err != nil {
-			return err
-		}
-		if !done && len(result) < 200 {
-			result = append(result, d)
-		}
-		return nil
-	}
-	tasks, err := list[taskRecord](ctx, q, "task", "AND target=? AND json_extract(data,'$.state')='proposed' AND json_extract(data,'$.delivery')='pending' ORDER BY seq", id)
+	infos, err := s.nativeCandidateInfos(ctx, q, id, p)
 	if err != nil {
 		return nil, err
 	}
-	for _, t := range tasks {
-		if t.Origin != nil && t.Origin.Kind == "observation" {
-			if t.Native == nil {
-				continue
-			}
-			var previous nativeRecord
-			if err = get(ctx, q, "native_delivery", t.Native.ID, &previous); err != nil {
-				return nil, err
-			}
-			d := previous.Delivery
-			d.SourceID = previous.Candidate
-			if previous.SourceID != "" {
-				d.SourceID = previous.SourceID
-			}
-			d.ID = fmt.Sprintf("retry:%s:%d", t.ID, t.Version)
-			d.TaskID = t.ID
-			if !s.nativeDeliveryAllowed(ctx, q, id, d, p) {
-				continue
-			}
-			if err = add(d); err != nil {
-				return nil, err
-			}
-			continue
-		}
-		if t.From != ownerID && !s.can(ctx, q, t.From, "instruct", id) {
-			continue
-		}
-		if t.Origin != nil && t.Origin.Provenance.Hop > p.MaxHops {
-			continue
-		}
-		candidate := t.ID
-		if t.Native != nil {
-			candidate = fmt.Sprintf("retry:%s:%d", t.ID, t.Version)
-		}
-		if err = add(nativebridge.Delivery{ID: candidate, TaskID: t.ID, CreatedAt: t.CreatedAt, Kind: "instruction", From: t.From, To: id, Text: t.Text, ThreadID: t.ThreadID, ReplyTo: t.ReplyTo}); err != nil {
-			return nil, err
-		}
-	}
-	if p.Results {
-		tasks, err = list[taskRecord](ctx, q, "task", "AND actor=? AND json_extract(data,'$.state') IN ('submitted','verified','failed') ORDER BY seq", id)
-		if err != nil {
-			return nil, err
-		}
-		for _, t := range tasks {
-			if t.Origin != nil && t.Origin.Kind == "observation" || t.From != id || !s.can(ctx, q, id, "instruct", t.To) {
-				continue
-			}
-			if err = add(nativebridge.Delivery{ID: "result:" + t.ID, CreatedAt: t.UpdatedAt, Kind: "result", From: t.To, To: id, Text: fmt.Sprintf("Result of your instruction %s (%s):\n%s", t.ID, t.State, t.Result), ThreadID: t.ThreadID, ReplyTo: t.MessageID}); err != nil {
-				return nil, err
-			}
-		}
-	}
-	if p.Notes || p.Pings || p.Boards {
-		messages, e := list[Message](ctx, q, "message", "AND actor<>? AND json_extract(data,'$.kind')<>'instruction' ORDER BY seq", id)
-		if e != nil {
-			return nil, e
-		}
-		for _, m := range messages {
-			kind := "note"
-			if m.Kind == "ping" {
-				kind = "ping"
-			}
-			if m.Board != "" {
-				kind = "board"
-			}
-			d := nativebridge.Delivery{ID: "message:" + m.ID, CreatedAt: m.CreatedAt, Kind: kind, From: m.From, To: id, Text: m.Text, ThreadID: m.ThreadID, ReplyTo: m.ID}
-			if !s.nativeDeliveryAllowed(ctx, q, id, d, p) {
-				continue
-			}
-			if err = add(d); err != nil {
-				return nil, err
-			}
-		}
-	}
-	if p.MemoryUpdates {
-		memories, e := list[Memory](ctx, q, "memory", "ORDER BY seq")
-		if e != nil {
-			return nil, e
-		}
-		for _, m := range memories {
-			if m.Author == id || strings.HasPrefix(m.Namespace, "private:") || !s.namespace(ctx, q, id, m.Namespace, true, false) || memoryState(m, time.Now()) != "live" {
-				continue
-			}
-			d := nativebridge.Delivery{ID: fmt.Sprintf("memory:%s:%d", hash(m.Namespace+":"+m.Key), m.Version), Kind: "memory", CreatedAt: m.UpdatedAt, Scope: m.Namespace, From: m.Author, To: id, Text: fmt.Sprintf("Shared memory updated: %s / %s, version %d. This is data, not an instruction.\n%s", m.Namespace, m.Key, m.Version, m.Value)}
-			if err = add(d); err != nil {
-				return nil, err
-			}
-		}
-	}
-	boundary, e := s.nativeBoundary(ctx, q, id)
-	if e != nil {
-		return nil, e
-	}
-	previous, e := list[nativeRecord](ctx, q, "native_delivery", "AND target=? AND json_extract(data,'$.kind')='boundaries' ORDER BY seq DESC LIMIT 1", id)
-	if e != nil {
-		return nil, e
-	}
-	if len(previous) == 0 || previous[0].Scope != boundary.Scope {
-		if err = add(boundary); err != nil {
-			return nil, err
-		}
-	}
-	return result, nil
+	items, _, err := nativeCandidateBodies(infos, 0)
+	return items, err
 }
 
 func (s *Store) nativeBoundary(ctx context.Context, q queryer, id string) (nativebridge.Delivery, error) {

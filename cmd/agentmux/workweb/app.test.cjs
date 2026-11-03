@@ -37,7 +37,7 @@ test("observation module formats only valid server times with an explicit clock"
   const now = Date.parse("2026-11-03T12:00:00Z"),
     formatTime = at => new Date(at).toISOString();
   assert.ok(Object.isFrozen(observation));
-  assert.deepEqual(Object.keys(observation).sort(), ["nativeReportingText", "observationTimeText", "taskProgressText"]);
+  assert.deepEqual(Object.keys(observation).sort(), ["nativePendingCountText", "nativeReportingText", "observationTimeText", "taskProgressText"]);
   assert.equal(observation.observationTimeText("2026-11-03T11:59:58Z", {now, formatTime}), "Observed 2026-11-03T11:59:58.000Z");
   assert.equal(observation.observationTimeText("1970-01-01T00:00:00Z", {now, formatTime}), "Observed 1970-01-01T00:00:00.000Z");
   for (const value of [null, undefined, "", "not-a-time", 12, {}, "2026-11-03T12:00:01.001Z"])
@@ -58,6 +58,14 @@ test("native reporting presentation cannot upgrade a retained receipt", () => {
   assert.match(observation.nativeReportingText({...status, connected:"false"}, options), /^Adapter not reporting;/);
   for (const value of ["", "invalid", "2026-11-03T12:00:01.001Z"])
     assert.match(observation.nativeReportingText({...status, connected:true, readiness_observed_at:value}, options), /reporting unknown/);
+});
+
+test("native pending counts preserve unavailable versus known empty evidence", () => {
+  assert.equal(observation.nativePendingCountText({pending_known:false,pending_count:0,pending:[]}),"unknown");
+  assert.equal(observation.nativePendingCountText({pending_known:true,pending_count:0,pending:[]}),"0");
+  assert.equal(observation.nativePendingCountText({pending_known:true,pending_count:200,pending_more:true}),"200+");
+  assert.equal(observation.nativePendingCountText({pending:[{id:"legacy"}]}),"1");
+  assert.equal(observation.nativePendingCountText({pending_count:-1}),"unknown");
 });
 
 test("worker reporting distinguishes unknown, no events, and observed native events", () => {
@@ -3271,6 +3279,22 @@ test("native UI exposes limits and truthful capabilities without claiming draft 
   assert.deepEqual(JSON.parse(JSON.stringify(f.writes[0].args)),{agent:"a",version:1,mode:"auto"});
   f.context.selectionReady=()=>false;f.context.renderNativeDelivery();
   assert.ok(f.panel.querySelectorAll("[data-owner-write]").every(node=>node.disabled));
+});
+
+test("unknown native admission preserves Manual controls without claiming an empty queue",()=>{
+  const f=nativeViewContext();
+  f.status.mode=f.status.policy.mode="auto";
+  f.status.pending_known=false;f.status.pending_count=0;f.status.pending=[];
+  f.status.coverage="Pending admission unavailable; policy and transport evidence remain inspectable.";
+  f.context.renderNativeDelivery();
+  const text=textTree(f.panel);
+  assert.match(text,/Pending native turns · unknown/);
+  assert.match(text,/Pending admission unavailable/);
+  assert.doesNotMatch(text,/No eligible requests waiting/);
+  const manual=f.panel.querySelectorAll("button").find(node=>node.textContent==="Manual inbox");
+  assert.equal(manual.disabled,false);manual.click();
+  assert.equal(f.writes[0].operation,"native.configure");
+  assert.equal(f.writes[0].args.mode,"manual");
 });
 
 test("native reporting loss preserves the receipt while making its age explicit",()=>{

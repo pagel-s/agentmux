@@ -38,7 +38,7 @@ func TestObserveRetainedCountsBoundedAttentionAndNoTaskMutation(t *testing.T) {
 		t.Fatalf("observation: %d %s %s", code, out.String(), diagnostics.String())
 	}
 	var result workObservation
-	if err = json.Unmarshal(out.Bytes(), &result); err != nil || !result.Complete || result.Broker != "connected" || result.Runtime.State != "not_recorded" || result.State != state || result.Source != "explicit --state" {
+	if err = json.Unmarshal(out.Bytes(), &result); err != nil || !result.Complete || result.ObserverVersion != versionString() || result.Broker != "connected" || result.Runtime.State != "not_recorded" || result.State != state || result.Source != "explicit --state" {
 		t.Fatalf("bad headless observation: %+v %v", result, err)
 	}
 	if result.Snapshot.Tasks != 28 || result.Snapshot.AttentionCount != 28 || len(result.Snapshot.Attention) != 2 || !result.Snapshot.AttentionMore {

@@ -75,6 +75,17 @@ CREATE TABLE IF NOT EXISTS records (
 CREATE INDEX IF NOT EXISTS records_kind_seq ON records(kind,seq);
 CREATE INDEX IF NOT EXISTS records_target ON records(kind,target);
 CREATE INDEX IF NOT EXISTS records_scope ON records(kind,scope);
+CREATE INDEX IF NOT EXISTS records_native_candidate_metadata ON records(
+ actor,target,seq,id,length(CAST(data AS BLOB)),
+ json_extract(data,'$.id'),json_extract(data,'$.message_id'),
+ json_extract(data,'$.reply_to'),json_extract(data,'$.thread_id'),
+ json_extract(data,'$.from'),json_extract(data,'$.to'),
+ json_extract(data,'$.state'),json_extract(data,'$.delivery'),json_extract(data,'$.version'),
+ json_extract(data,'$.created_at'),json_extract(data,'$.updated_at'),
+ json_extract(data,'$.origin'),json_type(data,'$.origin'),
+ json_type(data,'$.native'),json_extract(data,'$.native.id'),
+ json_extract(data,'$.instance'),json_extract(data,'$.expires')
+) WHERE kind='task';
 CREATE INDEX IF NOT EXISTS records_task_observation_metadata ON records(
  id,
  COALESCE(json_extract(data,'$.state'),''),

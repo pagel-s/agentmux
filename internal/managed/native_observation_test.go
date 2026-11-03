@@ -3,9 +3,7 @@ package managed
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"reflect"
-	"strings"
 	"testing"
 	"time"
 )
@@ -92,28 +90,15 @@ func TestNativeSummaryInventoryAuthorizationPaginationAndRetiredOverrides(t *tes
 	}
 }
 
-func TestNativeSummaryDoesNotReevaluateLargePeerResultBodies(t *testing.T) {
-	s := nativeStore(t)
-	ctx := context.Background()
-	transaction, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer transaction.Rollback()
-	payload := strings.Repeat("N", s.cfg.Limits.MaxMessageBytes)
-	for i := 0; i < s.cfg.Limits.MaxTasks; i++ {
-		if err = saveTask(ctx, transaction, taskRecord{Task: Task{ID: fmt.Sprintf("task_native_result_%04d", i), From: "alice", To: "bob", State: "submitted", Delivery: "acknowledged", Version: 2, Text: payload, Result: payload}}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err = transaction.Commit(); err != nil {
-		t.Fatal(err)
-	}
+func assertNativeSummaryAtDefaultHistoryCapacity(t *testing.T, fixture largeHistoryFixture) {
+	t.Helper()
+	s := fixture.store
+
 	// Candidate evaluation would read/recheck every result and can hold the
 	// broker lock beyond the worker monitor deadline. Summary never needs it.
 	started := time.Now()
 	statuses := nativeSummaryIn(t, s)
-	if len(statuses) != 2 || statuses["alice"].PendingKnown || statuses["bob"].PendingKnown || statuses["alice"].Coverage == "" {
+	if len(statuses) != 1 || statuses["alice"].Agent != "alice" || statuses["alice"].PendingKnown || len(statuses["alice"].Pending) != 0 || statuses["alice"].Coverage == "" {
 		t.Fatalf("native summary lost unknown-pending semantics: %+v", statuses)
 	}
 	t.Logf("native summary over full default peer-result history: %s", time.Since(started))

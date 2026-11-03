@@ -98,7 +98,9 @@ jobs:
           python3 scripts/test-publish-release.py
 
       - name: Verify comparison harness failure controls without model calls
-        run: python3 scripts/test-compare-workflows.py
+        run: |
+          python3 scripts/test-compare-workflows.py
+          python3 scripts/test-subscription-pilot.py
 
       - name: Verify soak audit and cleanup regressions
         run: python3 scripts/test-soak-managed.py

@@ -4175,9 +4175,10 @@ function renderNativeDelivery() {
   };
   settings.append(form);panel.append(settings);
   if (status.active) panel.append(el("p",status.active.phase==="uncertain" ? "action-error" : "session-note","Current delivery "+status.active.id+": "+status.active.phase+". "+(status.active.reason||"Awaiting a correlated native receipt.")+" Last receipt: "+(status.active.updated_at || "unknown")+"."));
-  const pending=status.pending||[], queue=el("div","native-queue");
-  queue.append(el("h3","","Pending native turns · "+(status.pending_count ?? pending.length)+(status.pending_more ? "+" : "")));
-  if (!pending.length) queue.append(el("p","session-note","No eligible requests waiting."));
+  const pending=status.pending||[], queue=el("div","native-queue"), pendingKnown=status.pending_known!==false;
+  queue.append(el("h3","","Pending native turns · "+AgentmuxObservation.nativePendingCountText(status)));
+  if (!pendingKnown) queue.append(el("p","action-error",status.coverage || "Pending admission is unavailable. Current policy and retained transport evidence remain inspectable; this is not a known empty queue."));
+  else if (!pending.length) queue.append(el("p","session-note","No eligible requests waiting."));
   for(const delivery of pending.slice(0,5)) {
     const item=el("details","native-candidate");item.dataset.disclosureKey="native:"+delivery.id;item.dataset.itemKey=delivery.id;
     item.append(el("summary","",delivery.kind+" from "+sessionReference(delivery.from)+" · "+ageText(delivery.created_at)),el("code","",delivery.id),el("pre","",delivery.text));

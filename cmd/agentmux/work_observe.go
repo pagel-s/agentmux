@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -22,21 +23,22 @@ import (
 // Observation is an owner read, never a health assertion about a model. The
 // broker transaction and tmux inventory are independently timed observations.
 type workObservation struct {
-	SchemaVersion int                          `json:"schema_version"`
-	ObservedAt    string                       `json:"observed_at"`
-	Workspace     string                       `json:"workspace"`
-	State         string                       `json:"state"`
-	Source        string                       `json:"source"`
-	Complete      bool                         `json:"complete"`
-	Broker        string                       `json:"broker"`
-	BrokerError   string                       `json:"broker_error,omitempty"`
-	Snapshot      *managed.ObservationSnapshot `json:"snapshot,omitempty"`
-	Runtime       managedlaunch.Runtime        `json:"runtime"`
-	RuntimeError  string                       `json:"runtime_error,omitempty"`
-	Native        []workNativeObservation      `json:"native"`
-	NativeMore    bool                         `json:"native_more"`
-	NativeError   string                       `json:"native_error,omitempty"`
-	Storage       workStorageObservation       `json:"storage"`
+	SchemaVersion   int                          `json:"schema_version"`
+	ObserverVersion string                       `json:"observer_version"`
+	ObservedAt      string                       `json:"observed_at"`
+	Workspace       string                       `json:"workspace"`
+	State           string                       `json:"state"`
+	Source          string                       `json:"source"`
+	Complete        bool                         `json:"complete"`
+	Broker          string                       `json:"broker"`
+	BrokerError     string                       `json:"broker_error,omitempty"`
+	Snapshot        *managed.ObservationSnapshot `json:"snapshot,omitempty"`
+	Runtime         managedlaunch.Runtime        `json:"runtime"`
+	RuntimeError    string                       `json:"runtime_error,omitempty"`
+	Native          []workNativeObservation      `json:"native"`
+	NativeMore      bool                         `json:"native_more"`
+	NativeError     string                       `json:"native_error,omitempty"`
+	Storage         workStorageObservation       `json:"storage"`
 }
 
 type workStorageObservation struct {
@@ -169,7 +171,7 @@ Read-only: never starts, retries, resolves or changes a workspace.`)
 func collectWorkObservation(ctx context.Context, o workOptions, limit int) workObservation {
 	ctx, cancel := context.WithTimeout(ctx, 4*time.Second)
 	defer cancel()
-	result := workObservation{SchemaVersion: 1, Workspace: o.session, State: o.state, Source: o.selectionSource, Broker: "unavailable", Native: []workNativeObservation{}}
+	result := workObservation{SchemaVersion: 1, ObserverVersion: versionString(), Workspace: o.session, State: o.state, Source: o.selectionSource, Broker: "unavailable", Native: []workNativeObservation{}}
 	// Each goroutine owns separate result fields; all reads wait for completion.
 	var pending sync.WaitGroup
 	pending.Add(3)
@@ -208,6 +210,10 @@ func collectWorkObservation(ctx context.Context, o workOptions, limit int) workO
 		raw, err := workCall(ctx, client, "observation.get", map[string]any{"limit": limit})
 		if err != nil {
 			result.BrokerError = err.Error()
+			var problem *managed.Fault
+			if errors.As(err, &problem) && problem.Code == "unsupported" {
+				result.BrokerError += "; workspace controller lacks observation.get; upgrade its controller explicitly after inspecting current work"
+			}
 			return
 		}
 		var snapshot managed.ObservationSnapshot
@@ -264,6 +270,7 @@ func collectWorkObservation(ctx context.Context, o workOptions, limit int) workO
 
 func formatWorkObservation(out io.Writer, r workObservation) error {
 	var b strings.Builder
+	fmt.Fprintf(&b, "Observer: %s\n", consoleContent(r.ObserverVersion, 256))
 	fmt.Fprintf(&b, "Observed: %s\nWorkspace: %s\nState: %s\nSource: %s\nBroker: %s\nWorkers: %s\n", r.ObservedAt, consoleContent(r.Workspace, 128), consoleContent(r.State, 4000), r.Source, r.Broker, consoleContent(r.Runtime.State, 100))
 	for _, item := range []struct{ name, problem string }{{"Broker", r.BrokerError}, {"Workers", r.RuntimeError}, {"Native reporting", r.NativeError}} {
 		if item.problem != "" {
@@ -272,6 +279,9 @@ func formatWorkObservation(out io.Writer, r workObservation) error {
 	}
 	if r.Runtime.AttemptID != "" {
 		fmt.Fprintf(&b, "Attempt: %s\n", consoleContent(r.Runtime.AttemptID, 256))
+	}
+	if r.Runtime.Controller != "" {
+		fmt.Fprintf(&b, "Controller: %s\n", consoleContent(r.Runtime.Controller, 4000))
 	}
 	if r.Runtime.Problem != "" {
 		fmt.Fprintf(&b, "Runtime attention: %s\n", consoleContent(r.Runtime.Problem, 1000))

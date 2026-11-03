@@ -7,7 +7,7 @@ workspace. If no terminal has been selected or it has closed, the workbench open
 With several running workspaces, choose one or pass `-s NAME`.
 
 The searchable choosers, `context`, `observe`, `task`/`tasks`, exact-task workbench opening,
-bounded run lists and report opening below are source-build features after v0.12.0.
+bounded run lists and report opening below are included in v0.13.0.
 
 ## Daily power-user loop
 
@@ -39,8 +39,8 @@ quiet reporting alone does not establish a stalled or failed model.
 
 ## Ask for a checked coding change
 
-The base checked workflow is included in [v0.12.0](installation.md); `--limit`
-and `--open` below require a newer source build. For a first checked fixture
+The checked workflow, `--limit` and `--open` below are included in
+[v0.13.0](installation.md). For a first checked fixture
 with no provider setup, run [`amx demo`](first-result.md).
 From a Git project with an initial commit and the selected native CLIs installed:
 

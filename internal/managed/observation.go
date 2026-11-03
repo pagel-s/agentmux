@@ -7,6 +7,10 @@ import (
 	"time"
 )
 
+// Leave half of the worker's 500ms lease-monitor deadline for authentication,
+// cancellation and response handling, including under scheduling load.
+const operationalObservationReadBudget = 250 * time.Millisecond
+
 // ObservationSnapshot is a fresh owner-only read projection. Counts cover the
 // entire retained task history. Attention is bounded and contains no task,
 // result, usage, credential, or native event bodies. A quiet adapter is not
@@ -177,7 +181,7 @@ func (s *Store) observation(ctx context.Context, q queryer, a actor, raw json.Ra
 	}
 	// A large configured history may exceed this observation budget. Return an
 	// unavailable sample instead of starving workers' 500ms lease monitors.
-	ctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(ctx, operationalObservationReadBudget)
 	defer cancel()
 	at := time.Now()
 	result, err := taskObservationCounts(ctx, q, at)

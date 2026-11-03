@@ -7,16 +7,17 @@ POSIX shell after installation. Native sessions additionally require **tmux
 
 ## Install a published binary (recommended)
 
-Release **[v0.12.0](https://github.com/pagel-s/agentmux/releases/tag/v0.12.0)**
-provides Linux/macOS binaries for x86-64 and ARM64. It includes `amx demo`,
-[`amx work`](../working.md), [`amx flow`](../workflows.md) and native terminal
-sessions. The managed runtime and workbench remain experimental.
+Release **[v0.13.0](https://github.com/pagel-s/agentmux/releases/tag/v0.13.0)**
+provides MIT-licensed Linux/macOS binaries for x86-64 and ARM64. It includes
+`amx demo`, checked `work`/`flow` journeys, native sessions, searchable workspace
+choosers, `context`, `observe`, retained `task`/`tasks` inspection and exact-task
+recovery navigation. No Go toolchain is needed for these controls.
+The managed runtime and workbench remain experimental.
 
-Current `main` has newer daily controls: `amx context`, `amx observe`, `amx task` / `tasks`,
-exact task opening with `task ID --open`, searchable startup and Ctrl+W workspace choosers,
-and `work list --limit` / `work show --open`. Use the
-[source installation](#build-from-source) for these features. The v0.12.0
-archives are unchanged and do not contain them.
+An existing workspace keeps its pinned controller and workers after installation.
+Inspect current work before explicitly upgrading/restarting that workspace; a new
+observer executable alone does not upgrade its controller. Earlier v0.12.0
+archives remain unchanged.
 
 For publicly accessible release assets, download the versioned installer from
 GitHub, inspect it, then run it with Python 3. These commands also require `curl`.
@@ -28,10 +29,10 @@ GitHub CLI route below.
 mkdir -p "$HOME/.local/bin"
 amx_release_dir="$(mktemp -d)"
 curl --fail --location --proto '=https' --tlsv1.2 \
-  https://raw.githubusercontent.com/pagel-s/agentmux/v0.12.0/scripts/install-release.py \
+  https://raw.githubusercontent.com/pagel-s/agentmux/v0.13.0/scripts/install-release.py \
   --output "$amx_release_dir/install-release.py"
 # Read the downloaded installer before running it.
-python3 "$amx_release_dir/install-release.py" --version v0.12.0 \
+python3 "$amx_release_dir/install-release.py" --version v0.13.0 \
   --destination "$HOME/.local/bin/amx"
 rm -r "$amx_release_dir"
 export PATH="$HOME/.local/bin:$PATH"
@@ -46,13 +47,13 @@ versioned installer before installation:
 ```sh
 mkdir -p "$HOME/.local/bin"
 amx_release_dir="$(mktemp -d)"
-gh release download v0.12.0 --repo pagel-s/agentmux \
+gh release download v0.13.0 --repo pagel-s/agentmux \
   --dir "$amx_release_dir" --pattern 'agentmux_*.tar.gz' --pattern checksums.txt
 gh api repos/pagel-s/agentmux/contents/scripts/install-release.py \
-  --method GET -f ref=v0.12.0 --header 'Accept: application/vnd.github.raw+json' \
+  --method GET -f ref=v0.13.0 --header 'Accept: application/vnd.github.raw+json' \
   > "$amx_release_dir/install-release.py"
 # Read the downloaded installer before running it.
-python3 "$amx_release_dir/install-release.py" --version v0.12.0 \
+python3 "$amx_release_dir/install-release.py" --version v0.13.0 \
   --artifact-dir "$amx_release_dir" --destination "$HOME/.local/bin/amx"
 rm -r "$amx_release_dir"
 export PATH="$HOME/.local/bin:$PATH"

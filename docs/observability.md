@@ -14,11 +14,18 @@ containing the exact state directory so a later inspection cannot silently
 target another workspace. All four commands are read-only. Opening a task
 does not retry it or resolve its delivery.
 
-`amx observe`, live managed-turn progress, and the reporting timestamps on
-this page require a current [source build](getting-started/installation.md#build-from-source).
-They are newer than the published v0.12.0 binaries. Upgrade the workspace's
+`amx observe`, live managed-turn progress and the reporting timestamps on
+this page are included in [v0.13.0](getting-started/installation.md).
+Upgrade an older workspace's
 controller and workers explicitly; installing a new CLI does not replace a
-running controller. An older controller can report this operation as unsupported.
+running controller. An older controller can report this operation as unsupported. The output records
+`observer_version` and the pinned controller path separately; installing a new
+observer does not prove that an existing workspace upgraded its controller.
+
+![Actual amx observe output showing capacity, uncertain delivery and a live command-worker check-in](assets/guide/terminal-observability.jpg?v=0c1af4e27808)
+
+The capture uses disposable command-only fixtures. The running worker reports a
+check-in and zero native model events; stopped delivery remains uncertain.
 
 ## Read the evidence separately
 

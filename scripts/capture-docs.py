@@ -191,7 +191,7 @@ class Capture:
         width = 136
         canvas = Image.new("RGB", (int(width * cell + 2 * pad), len(parsed.plain.splitlines()) * line_height + 2 * pad + 32), "#000000")
         draw = ImageDraw.Draw(canvas)
-        draw.text((pad, 10), "AGENTMUX · CURRENT SOURCE · COMMAND-ONLY FIXTURE", font=normal, fill="#a993d5")
+        draw.text((pad, 10), "AGENTMUX · CURRENT BUILD · COMMAND-ONLY FIXTURE", font=normal, fill="#a993d5")
         draw.line((pad, 37, canvas.width - pad, 37), fill="#342644")
         console = Console(file=io.StringIO(), width=width, color_system="truecolor", force_terminal=True)
         x, y = 0, 0

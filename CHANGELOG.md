@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.13.0 - 2026-11-03
+
 - Add `amx observe` with live worker check-ins, native event metadata,
   readiness timestamps, retained capacity and database file sizes. Keep recorded
   delivery, effective uncertainty and model activity distinct.

@@ -1,7 +1,7 @@
 # Your first checked result
 
 Start with a deterministic fixture before configuring providers or using a real
-project. [Install Agentmux v0.12.0](installation.md), then run from any directory:
+project. [Install Agentmux v0.13.0](installation.md), then run from any directory:
 
 ```sh
 amx demo
