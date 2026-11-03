@@ -16,6 +16,36 @@ ASSETS = {
     "agentmux_darwin_arm64.tar.gz", "agentmux_darwin_x86_64.tar.gz",
     "agentmux_linux_arm64.tar.gz", "agentmux_linux_x86_64.tar.gz", "checksums.txt",
 }
+RELEASE_PAGE_SIZE = 100
+RELEASE_PAGE_LIMIT = 10
+RELEASE_RESPONSE_LIMIT = 16 * 1024 * 1024
+
+
+def release_json(url, headers, allow_missing=False):
+    """Read one bounded API response without exposing transport diagnostics."""
+    try:
+        request = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(request, timeout=30) as response:
+            payload = response.read(RELEASE_RESPONSE_LIMIT + 1)
+    except urllib.error.HTTPError as error:
+        code = error.code
+        # Close error responses too: repeated fallback requests must not retain
+        # response handles or later emit their unredacted transport diagnostics.
+        try:
+            error.close()
+        except Exception:
+            raise ValueError("could not read release state; publication was not started") from None
+        if allow_missing and code == 404:
+            return False, None
+        raise ValueError("could not verify release state (HTTP %s); publication was not started" % code) from None
+    except Exception:
+        raise ValueError("could not read release state; publication was not started") from None
+    if len(payload) > RELEASE_RESPONSE_LIMIT:
+        raise ValueError("release response exceeds verification bound; publication was not started")
+    try:
+        return True, json.loads(payload)
+    except (ValueError, UnicodeError):
+        raise ValueError("could not read release state; publication was not started") from None
 
 
 def git(*args):
@@ -47,21 +77,34 @@ def fetch_release(repository, tag):
     if not token:
         raise ValueError("GITHUB_TOKEN is required to verify release state")
     endpoint = os.environ.get("GITHUB_API_URL", "https://api.github.com").rstrip("/")
-    url = endpoint + "/repos/" + repository + "/releases/tags/" + urllib.parse.quote(tag, safe="")
-    request = urllib.request.Request(url, headers={
+    releases_url = endpoint + "/repos/" + repository + "/releases"
+    headers = {
         "Authorization": "Bearer " + token,
         "Accept": "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
-    })
-    try:
-        with urllib.request.urlopen(request, timeout=30) as response:
-            return json.load(response)
-    except urllib.error.HTTPError as error:
-        if error.code == 404:
-            return None
-        raise ValueError("could not verify release state (HTTP %s); publication was not started" % error.code) from None
-    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
-        raise ValueError("could not read release state; publication was not started") from None
+    }
+    found, release = release_json(releases_url + "/tags/" + urllib.parse.quote(tag, safe=""), headers, allow_missing=True)
+    if found:
+        if not isinstance(release, dict) or release.get("tag_name") != tag:
+            raise ValueError("unexpected release response; publication was not started")
+        return release
+    # The by-tag endpoint may omit unpublished drafts even for an authorized
+    # owner. Complete a bounded authenticated list scan before declaring absence
+    # or selecting a draft; a later page may contain a duplicate matching tag.
+    matching = None
+    for page in range(1, RELEASE_PAGE_LIMIT + 1):
+        _, releases = release_json(releases_url + "?" + urllib.parse.urlencode({"per_page": RELEASE_PAGE_SIZE, "page": page}), headers)
+        if (not isinstance(releases, list) or len(releases) > RELEASE_PAGE_SIZE
+                or any(not isinstance(item, dict) or not isinstance(item.get("tag_name"), str) for item in releases)):
+            raise ValueError("unexpected release list response; publication was not started")
+        for item in releases:
+            if item["tag_name"] == tag:
+                if matching is not None:
+                    raise ValueError("multiple releases match the exact tag; inspect them before publishing")
+                matching = item
+        if len(releases) < RELEASE_PAGE_SIZE:
+            return matching
+    raise ValueError("release pagination exceeds verification bound; publication was not started")
 
 
 def should_publish(tag, release):
