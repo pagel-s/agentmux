@@ -15,6 +15,11 @@ import (
 
 const nativeCandidateLimit = 200
 
+// Status shares the broker lock with execution lease checks. Keep its complete
+// source/body window deliberately smaller than the wire limit; PendingMore
+// exposes a bounded prefix, and exact task reads remain available for detail.
+const nativeStatusBodyBudget = 256 << 10
+
 // Candidate identity, authority and provenance are selected from metadata first.
 // Status validates and hydrates a bounded input/output window. Peek, approval
 // and claim re-read the exact chosen source inside the same broker operation;

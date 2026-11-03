@@ -579,7 +579,7 @@ func (s *Store) nativeStatusWithPending(ctx context.Context, q queryer, id strin
 		if err == nil {
 			st.PendingCount = len(infos)
 			var clipped bool
-			st.Pending, clipped, err = nativeCandidateBodies(infos, maxWireBytes/2)
+			st.Pending, clipped, err = nativeCandidateBodies(infos, nativeStatusBodyBudget)
 			st.PendingMore = clipped || len(infos) >= nativeCandidateLimit
 		}
 		if err != nil {
