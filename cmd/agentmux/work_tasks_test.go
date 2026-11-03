@@ -97,6 +97,9 @@ func TestWorkTasksValidationCreatesNoWorkspace(t *testing.T) {
 	}{
 		{"task", nil}, {"task", []string{""}}, {"task", []string{"task_one", "task_two"}},
 		{"task", []string{"task_one", "--limit", "25"}},
+		{"task", []string{"task_one", "--open", "--json"}},
+		{"task", []string{"task_one", "--open", "--open"}},
+		{"tasks", []string{"--open"}}, {"tasks", []string{"--open=false"}},
 		{"task", []string{"../escape"}}, {"tasks", []string{"task_one"}},
 		{"tasks", []string{"--limit", "0"}}, {"tasks", []string{"--limit", "201"}},
 		{"tasks", []string{"--status", "done"}}, {"tasks", []string{"--to", "../peer"}},
@@ -119,7 +122,7 @@ func TestWorkTaskRecoveryEvidenceDoesNotImplyStoppedOrVerified(t *testing.T) {
 	var out bytes.Buffer
 	printWorkTask(&out, "/workspace 'exact'", managed.Task{ID: "task_old", To: "peer", State: "running", Delivery: "dispatching", Version: 7,
 		Recovery: &managed.TaskRecovery{Delivery: "uncertain", Actions: []string{"fail", "retry"}, Reason: "Lease expired; stop the prior process before retrying."}})
-	for _, want := range []string{"State: running", "Delivery: dispatching", "Version: 7", "Recovery delivery: uncertain", "stop the prior process", managedlaunch.ShellCommand([]string{"amx", "ui", "--state", "/workspace 'exact'"})} {
+	for _, want := range []string{"State: running", "Delivery: dispatching", "Version: 7", "Recovery delivery: uncertain", "stop the prior process", managedlaunch.ShellCommand([]string{"amx", "task", "task_old", "--open", "--state", "/workspace 'exact'"})} {
 		if !strings.Contains(out.String(), want) {
 			t.Fatalf("lost evidence %q: %s", want, out.String())
 		}

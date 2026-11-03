@@ -254,7 +254,7 @@ func (m *console) resetSessionHistory(previous, current string) {
 	if m.eventScope {
 		m.resetEventHistory()
 	}
-	if m.taskRecipient != "" {
+	if m.taskRecipient != "" && m.taskExactID == "" {
 		m.taskRecipient = current
 		m.taskAfter, m.taskCursor = "", ""
 		m.taskBack = nil

@@ -9,6 +9,9 @@
 - Add `amx task ID` and filtered, paginated `amx tasks`; delegation prints an
   exact workspace-scoped inspection command. Task state, delivery and recovery
   evidence remain distinct.
+- Open one delegated task directly with `amx task ID --open`, retaining its
+  exact workspace and identity through refreshes. Recovery remains an explicit,
+  version-checked review; opening never retries or resolves a task.
 - Open a selected session's complete task history directly from TUI/web Actions
   and web attention summaries. Reject stale history replies after navigation.
   Quick launch review explicitly shows the model default and host execution.

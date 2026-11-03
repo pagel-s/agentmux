@@ -130,7 +130,7 @@ func normalizeWorkCLI(input []string) ([]string, error) {
 				name = "--json"
 			}
 		case "-o":
-			if command == "web" {
+			if command == "web" || command == "task" {
 				name = "--open"
 			}
 		}

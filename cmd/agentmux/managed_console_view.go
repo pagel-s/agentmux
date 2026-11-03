@@ -352,6 +352,9 @@ func (m console) panel(width, height int) string {
 		}
 		out.WriteString(consoleAccent.Render("Tasks & results") + consoleMuted.Render(taskHints) + "\n\n")
 		historyHint := fmt.Sprintf("Page %d · f search · y to · z state", len(m.taskBack)+1)
+		if m.taskExactID != "" {
+			historyHint = "Exact task: " + consoleContent(m.taskExactID, 256) + " · f/y/z browse history"
+		}
 		if m.taskRecipient != "" {
 			historyHint += " · to " + m.taskRecipient
 		}
@@ -365,6 +368,12 @@ func (m console) panel(width, height int) string {
 			historyHint += " · PgUp newer"
 		}
 		out.WriteString(consoleMuted.Render(historyHint) + "\n")
+		if m.taskExactID != "" && len(m.data.activity.Tasks) > 0 {
+			v := m.data.activity.Tasks[m.task%len(m.data.activity.Tasks)]
+			if recovery := consoleTaskRecovery(v); recovery != nil {
+				out.WriteString("Recovery: " + consoleContent(recovery.Delivery, 100) + " · Ctrl+K reviews recovery actions for this exact task/version.\n" + consoleContent(recovery.Reason, 1000) + "\n")
+			}
+		}
 		if m.taskQuery != "" {
 			out.WriteString("Search: " + consoleContent(m.taskQuery, 200) + "\n")
 		}
@@ -385,12 +394,20 @@ func (m console) panel(width, height int) string {
 		}
 		if len(m.data.activity.Tasks) > 0 {
 			v := m.data.activity.Tasks[m.task%len(m.data.activity.Tasks)]
-			out.WriteString("\n" + consoleMuted.Render(v.ID) + "\nResult · o reads full content\n" + consoleContent(v.Result, 4000))
+			out.WriteString("\n" + consoleMuted.Render(v.ID) + fmt.Sprintf(" · version %d\n", v.Version))
+			if m.taskExactID != "" {
+				out.WriteString("Instruction · Enter reads full content\n" + consoleContent(v.Text, 2000) + "\n")
+			}
+			out.WriteString("Result · o reads full content\n" + consoleContent(v.Result, 4000))
 			if len(v.Usage) > 0 {
 				out.WriteString("\n\n" + consoleMuted.Render("Provider-reported usage: ") + consoleContent(string(v.Usage), 500))
 			}
 		} else {
-			out.WriteString(consoleMuted.Render("No managed tasks yet.\nHuman-led native sessions use their own conversation UI."))
+			if m.taskExactID != "" {
+				out.WriteString(consoleMuted.Render("Exact task unavailable. Refresh or verify this task in the selected workspace; no other task is substituted."))
+			} else {
+				out.WriteString(consoleMuted.Render("No managed tasks yet.\nHuman-led native sessions use their own conversation UI."))
+			}
 		}
 	case 5:
 		observations := m.observedSessions()
