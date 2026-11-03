@@ -24,10 +24,27 @@ const resultLimit = 128 << 10
 // merges changes into the source repository.
 func Run(ctx context.Context, plan Plan, output string, allowModels bool) (report Report, runErr error) {
 	plan = normalized(plan)
+	ctx, plan, closeEarlyCredentials, err := registerIsolationEnvironment(ctx, plan)
+	closeCredentials := func() {}
+	defer func() {
+		if _, err := sanitizeIsolationEvidence(ctx, &report); err != nil {
+			runErr = errors.Join(runErr, err)
+		}
+		runErr = redactEarlyIsolationError(ctx, runErr)
+		closeCredentials()
+		closeEarlyCredentials()
+	}()
+	if err != nil {
+		return report, err
+	}
 	if err := ValidatePlan(plan); err != nil {
 		return report, err
 	}
 	if err := modelPermission(plan, allowModels); err != nil {
+		return report, err
+	}
+	ctx, plan, closeCredentials, err = prepareIsolationCredentials(ctx, plan)
+	if err != nil {
 		return report, err
 	}
 	preparedCtx, containmentErr := PrepareProcessContainment(ctx, plan.ProcessContainment)
@@ -41,12 +58,20 @@ func Run(ctx context.Context, plan Plan, output string, allowModels bool) (repor
 		return report, rootErr
 	}
 	plan.Repository = repository
+	if err := ValidateIsolation(plan); err != nil {
+		return report, err
+	}
+	if containsIsolationCredential(ctx, []byte(output)) {
+		return report, ErrIsolationCredentialLeak
+	}
 	dir, err := newOutput(ctx, plan.Repository, output)
 	if err != nil {
 		return report, err
 	}
-	report = Report{Kind: plan.Kind, Version: 1, ID: randomRunID(), Mode: plan.Mode, Goal: plan.Goal, Execution: plan.Execution, ProcessContainment: plan.ProcessContainment, State: "running", Repository: plan.Repository, Output: dir, StartedAt: timestamp()}
+	report = Report{Kind: plan.Kind, Storage: plan.Storage, Isolation: plan.Isolation, ReviewContext: "fresh", Version: 1, ID: randomRunID(), Mode: plan.Mode, Goal: plan.Goal, Execution: plan.Execution, ProcessContainment: plan.ProcessContainment, State: "running", Repository: plan.Repository, Output: dir, StartedAt: timestamp()}
 	defer func() {
+		defer func() { runErr = redactEarlyIsolationError(ctx, runErr) }()
+		runErr = redactEarlyIsolationError(ctx, runErr)
 		report.FinishedAt = timestamp()
 		if runErr != nil {
 			report.Error = runErr.Error()
@@ -58,32 +83,45 @@ func Run(ctx context.Context, plan Plan, output string, allowModels bool) (repor
 		} else {
 			report.State = "completed"
 		}
-		if err := saveJSON(filepath.Join(dir, "report.json"), report); err != nil {
+		if err := saveIsolationJSON(ctx, filepath.Join(dir, "report.json"), &report); err != nil {
 			runErr = errors.Join(runErr, err)
 			report.State = "failed"
 			report.Error = runErr.Error()
 		}
-		if _, err := RenderReport(dir); err != nil {
+		if _, err := RenderReportContext(ctx, dir); err != nil {
 			runErr = errors.Join(runErr, fmt.Errorf("render workflow report: %w", err))
 			report.Error = runErr.Error()
 			if report.State != "interrupted" {
 				report.State = "failed"
 			}
-			if persistErr := saveJSON(filepath.Join(dir, "report.json"), report); persistErr != nil {
+			if persistErr := saveIsolationJSON(ctx, filepath.Join(dir, "report.json"), &report); persistErr != nil {
 				runErr = errors.Join(runErr, persistErr)
 				report.Error = runErr.Error()
 			}
 		}
 		report = compactReport(report)
 	}()
-	if err = saveJSON(filepath.Join(dir, "plan.json"), redactedPlan(plan)); err != nil {
+	retainedPlan := redactedPlan(plan)
+	if err = saveIsolationJSON(ctx, filepath.Join(dir, "plan.json"), &retainedPlan); err != nil {
 		return report, err
 	}
-	if err = saveJSON(filepath.Join(dir, "report.json"), report); err != nil {
+	if err = saveIsolationJSON(ctx, filepath.Join(dir, "report.json"), &report); err != nil {
 		return report, err
 	}
 	runCtx, cancel := context.WithTimeout(ctx, time.Duration(plan.TimeoutSeconds)*time.Second)
 	defer cancel()
+	runCtx, err = PrepareSnapshotStorage(runCtx, plan.Storage, plan.Repository, filepath.Join(dir, "git"))
+	if err != nil {
+		return report, err
+	}
+	runCtx, closeIsolation, err := PrepareIsolation(runCtx, plan, dir)
+	if err != nil {
+		return report, err
+	}
+	defer func() {
+		report.BridgeUsage = IsolationUsage(runCtx)
+		closeIsolation()
+	}()
 	snap, err := Capture(runCtx, plan.Repository, filepath.Join(dir, "snapshot"))
 	if err != nil {
 		return report, err
@@ -93,7 +131,7 @@ func Run(ctx context.Context, plan Plan, output string, allowModels bool) (repor
 	if plan.expectedTree != "" && (snap.Tree != plan.expectedTree || snap.ContentSHA256 != plan.expectedContent) {
 		return report, errors.New("source changed after the stable revision was selected; no candidate was started")
 	}
-	if err = saveJSON(filepath.Join(dir, "report.json"), report); err != nil {
+	if err = saveIsolationJSON(ctx, filepath.Join(dir, "report.json"), &report); err != nil {
 		return report, err
 	}
 	if plan.Mode == "mission" {
@@ -115,7 +153,7 @@ func Run(ctx context.Context, plan Plan, output string, allowModels bool) (repor
 		result := CandidateResult{ID: candidate.ID, Harness: candidate.Harness, Model: candidate.Model, State: "pending", Worktree: worktree, StartedAt: timestamp()}
 		report.Candidates = append(report.Candidates, result)
 	}
-	if err = saveJSON(filepath.Join(dir, "report.json"), report); err != nil {
+	if err = saveIsolationJSON(ctx, filepath.Join(dir, "report.json"), &report); err != nil {
 		return report, err
 	}
 	var failures []error
@@ -141,7 +179,7 @@ func Run(ctx context.Context, plan Plan, output string, allowModels bool) (repor
 			result := report.Candidates[index]
 			result.State = "running"
 			report.Candidates[index] = result
-			writeErr := saveJSON(filepath.Join(dir, "report.json"), report)
+			writeErr := saveIsolationJSON(ctx, filepath.Join(dir, "report.json"), &report)
 			mu.Unlock()
 			if writeErr != nil {
 				mu.Lock()
@@ -163,7 +201,7 @@ func Run(ctx context.Context, plan Plan, output string, allowModels bool) (repor
 			if result.State != "verified" {
 				failures = append(failures, fmt.Errorf("candidate %s: %s", candidate.ID, result.State))
 			}
-			if saveErr := saveJSON(filepath.Join(dir, "report.json"), report); saveErr != nil {
+			if saveErr := saveIsolationJSON(ctx, filepath.Join(dir, "report.json"), &report); saveErr != nil {
 				failures = append(failures, saveErr)
 			}
 		}(index, candidate)
@@ -207,12 +245,14 @@ func runMission(ctx context.Context, p Plan, report Report) (Report, error) {
 		}
 		result := CandidateResult{ID: step.ID, State: "running", Worktree: report.Worktree, StartedAt: timestamp()}
 		report.Steps = append(report.Steps, StepResult{ID: step.ID, DependsOn: step.DependsOn, ReadOnly: step.ReadOnly, GateReview: step.GateReview, CandidateResult: result})
-		if err = saveJSON(filepath.Join(report.Output, "report.json"), report); err != nil {
+		if err = saveIsolationJSON(ctx, filepath.Join(report.Output, "report.json"), &report); err != nil {
 			return report, err
 		}
 		if step.Verify && step.Candidate == "" {
 			v, verifyErr := verifyPrepared(ctx, report.Worktree, p.Checks)
-			result.Verification = &v
+			if verificationHasIdentity(v) {
+				result.Verification = &v
+			}
 			result.FinishedAt = timestamp()
 			result.State = "verified"
 			if verifyErr != nil {
@@ -222,7 +262,7 @@ func runMission(ctx context.Context, p Plan, report Report) (Report, error) {
 				result.State = "checks_failed"
 			}
 			result.EvidencePath = filepath.Join(sdir, "verification.json")
-			if evidenceErr := saveJSON(result.EvidencePath, v); evidenceErr != nil {
+			if evidenceErr := saveIsolationJSON(ctx, result.EvidencePath, &v); evidenceErr != nil {
 				return report, evidenceErr
 			}
 		} else {
@@ -236,6 +276,7 @@ func runMission(ctx context.Context, p Plan, report Report) (Report, error) {
 			stepPlan := p
 			stepPlan.requireResult = step.RequireResult
 			stepPlan.requireReadOnly = step.ReadOnly
+			stepPlan.requireFreshReview = step.Review
 			result = executeCandidate(ctx, stepPlan, candidate, result, sdir, goal, step.Verify)
 			if step.Review && result.State == "completed" {
 				verdict, reviewErr := ParseReviewResult(result.Result)
@@ -250,7 +291,7 @@ func runMission(ctx context.Context, p Plan, report Report) (Report, error) {
 					}
 				}
 				if result.EvidencePath != "" {
-					if err = saveJSON(result.EvidencePath, result); err != nil {
+					if err = saveIsolationJSON(ctx, result.EvidencePath, &result); err != nil {
 						return report, err
 					}
 				}
@@ -259,7 +300,7 @@ func runMission(ctx context.Context, p Plan, report Report) (Report, error) {
 		sr := StepResult{ID: step.ID, DependsOn: step.DependsOn, ReadOnly: step.ReadOnly, GateReview: step.GateReview, CandidateResult: result}
 		report.Steps[len(report.Steps)-1] = sr
 		completed[step.ID] = sr
-		if err = saveJSON(filepath.Join(report.Output, "report.json"), report); err != nil {
+		if err = saveIsolationJSON(ctx, filepath.Join(report.Output, "report.json"), &report); err != nil {
 			return report, err
 		}
 		if result.State != "completed" && result.State != "verified" {
@@ -278,8 +319,10 @@ func runMission(ctx context.Context, p Plan, report Report) (Report, error) {
 	} else {
 		v, err = verifyPrepared(ctx, report.Worktree, p.Checks)
 	}
-	report.Verification = &v
-	if evidenceErr := saveJSON(filepath.Join(report.Output, "verification.json"), v); evidenceErr != nil {
+	if verificationHasIdentity(v) {
+		report.Verification = &v
+	}
+	if evidenceErr := saveIsolationJSON(ctx, filepath.Join(report.Output, "verification.json"), &v); evidenceErr != nil {
 		return report, evidenceErr
 	}
 	if err != nil {
@@ -309,6 +352,17 @@ func runMission(ctx context.Context, p Plan, report Report) (Report, error) {
 
 func missionStepGoal(p Plan, step Step, candidate Candidate, completed map[string]StepResult) (string, error) {
 	goal := p.Goal + "\n\nCurrent mission step: " + step.ID + "\n" + step.Goal
+	if step.Review {
+		criteria, err := json.Marshal(p.Checks)
+		if err != nil {
+			return "", err
+		}
+		goal += "\n\nIndependent review with fresh context. Inspect the current project files against the owner's task and acceptance criteria. No implementation narrative, prior review, prior approval or prior check output is supplied. Form your own findings. These acceptance commands describe criteria; the controller executes them independently.\nAcceptance criteria:\n" + string(criteria)
+		if len(goal)+len(candidate.Prompt)+4096 > 1<<20 {
+			return "", errors.New("fresh review brief and acceptance criteria exceed the prompt budget")
+		}
+		return goal, nil
+	}
 	dependencyLimit := 16 << 10
 	if len(step.DependsOn) > 0 {
 		// Reserve candidate instructions and framing before allocating explicit
@@ -346,6 +400,12 @@ func executeCandidate(ctx context.Context, p Plan, c Candidate, r CandidateResul
 	defer func() {
 		result.FinishedAt = timestamp()
 		result.DurationMillis = time.Since(start).Milliseconds()
+		defer func() {
+			if _, err := sanitizeIsolationEvidence(ctx, &result); err != nil {
+				result.Error = "workflow evidence redaction failed"
+				result.State = "failed"
+			}
+		}()
 		if result.StartingSnapshot != nil {
 			captureCtx := ctx
 			cancel := func() {}
@@ -353,10 +413,20 @@ func executeCandidate(ctx context.Context, p Plan, c Candidate, r CandidateResul
 				captureCtx, cancel = context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 			}
 			defer cancel()
-			finishCandidateArtifacts(captureCtx, &result, dir)
+			if leakErr := CheckIsolationCredentialLeak(captureCtx, c.ID, result.Worktree); leakErr != nil {
+				if result.Error != "" {
+					result.Error += "; "
+				}
+				result.Error += "artifact export refused: " + leakErr.Error()
+				if result.State != "uncertain" && result.State != "interrupted" {
+					result.State = "credential_leak"
+				}
+			} else {
+				finishCandidateArtifacts(captureCtx, &result, dir)
+			}
 		}
 		if result.EvidencePath != "" {
-			if persistErr := saveJSON(result.EvidencePath, result); persistErr != nil {
+			if persistErr := saveIsolationJSON(ctx, result.EvidencePath, &result); persistErr != nil {
 				if result.Error != "" {
 					result.Error += "; "
 				}
@@ -374,6 +444,10 @@ func executeCandidate(ctx context.Context, p Plan, c Candidate, r CandidateResul
 		return
 	}
 	result.StartingSnapshot = &initial
+	if p.requireFreshReview {
+		result.ReviewContext = "fresh"
+		goal += "\n\nExact revision under independent review: Git tree " + initial.Tree + "; selected raw content SHA256 " + initial.ContentSHA256 + "."
+	}
 	prompt := goal
 	if c.Prompt != "" {
 		prompt += "\n\nOwner-configured candidate instructions:\n" + c.Prompt
@@ -409,11 +483,16 @@ func executeCandidate(ctx context.Context, p Plan, c Candidate, r CandidateResul
 			result.Error = "assembled workflow input exceeds 1 MiB; reduce dependency summaries"
 			return
 		}
+		if containsIsolationCredential(ctx, []byte(prompt)) {
+			result.State = "credential_leak"
+			result.Error = ErrIsolationCredentialLeak.Error()
+			return
+		}
 		result.Input = prompt
 		inputDigest := sha256.Sum256([]byte(prompt))
 		result.InputSHA256 = hex.EncodeToString(inputDigest[:])
 		result.EvidencePath = filepath.Join(dir, fmt.Sprintf("attempt-%d.json", attempt))
-		if err := saveJSON(result.EvidencePath, result); err != nil {
+		if err := saveIsolationJSON(ctx, result.EvidencePath, &result); err != nil {
 			result.State = "failed"
 			result.Error = err.Error()
 			return
@@ -423,27 +502,40 @@ func executeCandidate(ctx context.Context, p Plan, c Candidate, r CandidateResul
 			timeout = 600
 		}
 		turnCtx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
-		native, err := harness.Run(turnCtx, harness.Request{Harness: c.Harness, Model: c.Model, Command: c.Command, Prompt: prompt, Workdir: r.Worktree, Env: c.Env, BaseURL: c.BaseURL, APIKeyEnv: c.APIKeyEnv, ReapDescendants: true, Wrap: processContainmentWrapper(contextProcessContainment(ctx))})
+		request := harness.Request{Harness: c.Harness, Model: c.Model, Command: c.Command, Prompt: prompt, Workdir: r.Worktree, Env: c.Env, BaseURL: c.BaseURL, APIKeyEnv: c.APIKeyEnv, Conversation: &harness.Conversation{Mode: "fresh"}, ReapDescendants: true, Wrap: processContainmentWrapper(contextProcessContainment(ctx))}
+		request, closeRequest, prepareErr := IsolationRequest(turnCtx, c, request, p.requireReadOnly)
+		if prepareErr != nil {
+			cancel()
+			result.State = "failed"
+			result.Error = prepareErr.Error()
+			return
+		}
+		result.RuntimeHarness = request.Harness
+		native, err := harness.Run(turnCtx, request)
+		native, redacted, redactErr := redactIsolationNativeResult(turnCtx, native)
+		err = errors.Join(err, redactErr)
+		if err != nil {
+			originalMessage := err.Error()
+			err = RedactIsolationError(turnCtx, c.ID, err)
+			redacted = redacted || err.Error() != originalMessage
+		}
+		result.CredentialsRedacted = result.CredentialsRedacted || redacted
+		closeRequest()
 		cancel()
 		result.AttemptFinishedAt = timestamp()
 		result.Result = bounded(native.Text, resultLimit)
 		result.Truncated = len(native.Text) > resultLimit
 		result.Usage = native.Usage
 		if len(native.Events) > 0 {
-			var eventBytes []byte
-			for _, event := range native.Events {
-				eventBytes = append(eventBytes, event...)
-				eventBytes = append(eventBytes, '\n')
-			}
 			path := filepath.Join(dir, fmt.Sprintf("native-events-%d.jsonl", attempt))
-			if evidenceErr := writeNewPrivate(path, eventBytes); evidenceErr != nil {
+			digest, evidenceErr := writeIsolationNativeEvents(ctx, path, native.Events)
+			if evidenceErr != nil {
 				result.State = "uncertain"
 				result.Error = "native turn ran but its event evidence could not be retained: " + evidenceErr.Error()
 				return
 			}
-			digest := sha256.Sum256(eventBytes)
 			result.NativeEventsPath = path
-			result.NativeEventsSHA256 = hex.EncodeToString(digest[:])
+			result.NativeEventsSHA256 = digest
 		}
 		if len(native.Usage) > 0 {
 			result.UsageRecords = append(result.UsageRecords, AttemptUsage{Attempt: attempt, Usage: append(json.RawMessage(nil), native.Usage...)})
@@ -451,7 +543,7 @@ func executeCandidate(ctx context.Context, p Plan, c Candidate, r CandidateResul
 		if err != nil {
 			result.State = "uncertain"
 			result.Error = err.Error()
-			_ = saveJSON(filepath.Join(dir, fmt.Sprintf("attempt-%d.json", attempt)), result)
+			_ = saveIsolationJSON(ctx, filepath.Join(dir, fmt.Sprintf("attempt-%d.json", attempt)), &result)
 			return
 		}
 		result.State = "completed"
@@ -475,7 +567,9 @@ func executeCandidate(ctx context.Context, p Plan, c Candidate, r CandidateResul
 		}
 		if verify {
 			v, verifyErr := verifyPrepared(ctx, r.Worktree, p.Checks)
-			result.Verification = &v
+			if verificationHasIdentity(v) {
+				result.Verification = &v
+			}
 			if verifyErr != nil {
 				result.State = "failed"
 				result.Error = verifyErr.Error()
@@ -487,7 +581,7 @@ func executeCandidate(ctx context.Context, p Plan, c Candidate, r CandidateResul
 				result.State = "checks_failed"
 			}
 		}
-		if err = saveJSON(filepath.Join(dir, fmt.Sprintf("attempt-%d.json", attempt)), result); err != nil {
+		if err = saveIsolationJSON(ctx, filepath.Join(dir, fmt.Sprintf("attempt-%d.json", attempt)), &result); err != nil {
 			result.State = "failed"
 			result.Error = err.Error()
 			return
@@ -609,6 +703,10 @@ func saveJSON(path string, value any) error {
 		return err
 	}
 	data = append(data, '\n')
+	return saveJSONBytes(path, data)
+}
+
+func saveJSONBytes(path string, data []byte) error {
 	if len(data) > 32<<20 {
 		return errors.New("workflow record exceeds 32 MiB; execution evidence remains in its retained attempt files")
 	}

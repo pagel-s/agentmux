@@ -54,10 +54,13 @@ func TestAllowlistAttenuationCannotBroadenDNSOrPins(t *testing.T) {
 
 func privateSocket(t *testing.T) string {
 	t.Helper()
-	dir := t.TempDir()
-	if err := os.Chmod(dir, 0700); err != nil {
+	// Unix socket paths have a small fixed limit. Go versions that include
+	// full subtest names in TempDir can exceed it before the proxy is tested.
+	dir, err := os.MkdirTemp("/tmp", "amx-proxy-")
+	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
 	return filepath.Join(dir, "proxy.sock")
 }
 

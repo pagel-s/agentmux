@@ -47,8 +47,11 @@ Add `--allow-models` before `--`:
 amx work "Fix the login redirect" --allow-models -- go test ./...
 ```
 
-The command prints the result location immediately and reports phase changes
-as they are recorded. The usual path is:
+Without full isolation, the command prints the result location immediately
+and reports phase changes as they are recorded. Isolated CLI runs defer stdout
+and stderr until completion so selected credentials can be checked before
+publication. Use an explicit `--output` path to locate retained evidence during
+such a run. The usual path is:
 
 1. Implement the requested change and run the declared check.
 2. Review the implementation without changing its checked content.
@@ -62,8 +65,13 @@ stop the journey and remain visible in the result. A model saying “finished”
 does not replace review approval and executable checks.
 
 Default native selections are Codex `gpt-6.1-sol` and Antigravity
-`gemini-3.8-flash-low`. This journey does not select Claude or delegate to other
-models. Their availability still depends on your account and CLI versions.
+`gemini-3.8-flash-low`. `--coder` and `--reviewer` explicitly select another
+supported profile, including Claude. Availability depends on your account and
+CLI versions. Each review starts a new native session with the owner’s task,
+acceptance criteria and current files. Implementation narrative, earlier review
+findings and earlier approvals are excluded from that review’s input.
+Workflow profiles that request native resume, continue or transcript selection
+are rejected before admission. Codex workflow turns also use ephemeral sessions.
 
 Normally the plan uses four native turns; completed implementation-check
 failures can use up to six with the default two correction attempts. Native
@@ -93,15 +101,73 @@ A descendant that creates another session or process group remains in the PID
 namespace and is terminated with it. The default `process-group` policy retains
 the ordinary process-group cleanup behavior.
 
-This option preserves host filesystem, network, devices and native authentication
-access. Requests to independent host services are outside its process-descendant
-boundary. For filesystem and network isolation, use the existing managed capsule
-workflow; this command does not silently copy native credentials into a sandbox.
+This option alone preserves host filesystem, network, devices and native
+authentication access. Requests to independent host services are outside its
+process-descendant boundary. Use the full isolation option below to restrict
+filesystem and network authority too.
 
 Preview also shows selected file and byte counts. Snapshot admission is bounded
-to 100,000 existing selected files and 512 MiB, checked before Git writes new
-snapshot objects and checked again while fingerprinting. These are protective
+to 100,000 existing selected files and 512 MiB, checked before raw working-content
+snapshot objects are written and checked again while fingerprinting. These are protective
 selection bounds; trusted filters and unrelated writers are not a disk quota.
+
+### Private snapshots and full isolation
+
+New runs default to `--storage private`. Snapshot objects live in the private
+run directory, and every candidate has an independent Git object store without
+alternates or shared hardlinks. Capturing and running a task leaves the source’s
+index, objects, refs and Git configuration unchanged. Explicit application uses
+a persistent `.git/agentmux-apply.lock` coordination file while preserving the
+source index, objects, refs and configuration. `--storage shared` explicitly
+selects the legacy source-object-store behavior; full isolation requires private
+storage. Deleting a private run removes its retained copies, but cannot erase
+filesystem backups or independently copied evidence.
+
+On Linux, `--isolation bubblewrap` requires real user, PID, mount and network
+namespaces and capped private HOME and temporary filesystems. Required probes
+fail closed. Native tools see their selected candidate workspace, system runtime
+files and explicit `--read-only-path` dependencies. Reviewer workspaces are
+read-only. Checks can create build output in their assigned worktree, receive
+no provider credentials or network, and fail verification if selected files change.
+The default network policy is `none`; provider turns need the exact inference
+origins you deliberately grant:
+
+```sh
+amx work "Fix the redirect" --isolation bubblewrap --network allowlist \
+  --coder codex --reviewer claude \
+  --allow-origin https://YOUR-CODEX-INFERENCE-ORIGIN \
+  --allow-origin https://YOUR-CLAUDE-INFERENCE-ORIGIN \
+  --auth coder=/private/codex-auth.json --auth reviewer=/private/claude-auth.json \
+  --read-only-path /opt/selected-native-runtime --allow-models -- /usr/bin/python3 -m unittest
+```
+
+Replace the origin placeholders with the actual origins needed by your selected
+profiles. Grants match exact scheme, host and port; redirects to another origin
+need their own grant. HTTPS is inspected by a trusted per-turn proxy: an
+ephemeral public CA is mounted read-only, each HTTP/1.1 Host or HTTP/2 authority
+is checked, and upstream certificates and hostnames are verified. The signing
+key stays in controller memory. Certificate-pinned, mutual-TLS or custom-trust
+clients may fail closed; opaque tunnels and HTTP upgrades are refused. Runtime directories and executable dependencies outside
+the system runtime must be selected explicitly. Do not grant a broad home or
+credential directory as a runtime dependency. Selected credential files must
+remain outside the source project and exposed dependencies. Supported fields
+are filtered into a sealed anonymous, read-only handoff for that candidate;
+the original login file and ambient login directories are not mounted. This
+selection does not establish that a provider account or endpoint is usable.
+
+With full isolation the default Antigravity reviewer uses `antigravity-bridge`:
+an explicit Gemini model runs through a bounded host inference bridge, while
+Pi performs the model’s tools inside the isolated workspace. The host bridge
+does not execute model tools or export Antigravity login files. Its inference
+requests are counted and capped separately from native turns. See the
+[advanced guide](workflows.md) for plan fields and direct provider selection.
+
+The Go controller remains trusted: it reads source inputs, runs the selected
+host inference adapter and admits explicit source application after its checks.
+Independent host services and unrelated host writers are outside its authority.
+HOME and temporary filesystems default to 64 MiB each. Workspace growth has no
+hard disk quota; selection bounds and post-run evidence limits do not provide
+one. Keep reports private because they contain task and code data.
 
 ## Inspect the result
 
@@ -197,11 +263,12 @@ inspection; it is not silently treated as approval.
 
 ## Execution and evidence
 
-The journey uses trusted local execution. Native tools and checks retain host
-authority; worktrees separate changes but are not filesystem or network
-sandboxes. Review changes are checked and refused, which does not isolate a
-reviewer's process from the host. Use trusted owner-authored requests and
-checks, and keep the reports private because they contain task and code data.
+Without `--isolation bubblewrap`, native tools and checks use trusted local
+execution with host authority. Private Git stores separate retained data; they
+do not themselves confine a process. With full isolation, the recorded policy is
+required again for inspection, verification, recovery and application helpers.
+Unavailable boundaries remain visible as failures. The trusted controller and
+owner-selected runtime dependencies are part of that boundary.
 
 For individual comparisons, custom mission plans, exact handoff delivery,
 snapshot watchers and repeated trials, use [the advanced workflow

@@ -11,6 +11,47 @@ import (
 
 const conversationTestID = "d7f7211a-9471-43a5-841b-ae63320164a2"
 
+func TestExplicitFreshConversationRejectsNativeHistorySelection(t *testing.T) {
+	for _, name := range []string{"claude", "codex", "pi", "antigravity"} {
+		for _, mode := range []string{"", "fresh"} {
+			flags := []string{"--continue", "--resume=" + conversationTestID, "--conversation", "--conversation=" + conversationTestID, "--conversation-id", "--session", "--session-id", "--session-dir", "--fork", "--fork-session", "--from-pr=123", "--teleport", "--cloud", "--remote", "--attach", "--attach-session", "--bg", "--background", "--desktop", "--remote-control", "--environment", "--tmux", "--worktree", "--ide", "--chrome", "--cd=/tmp", "--cwd", "--directory", "--project", "--new-project", "-C", "-w"}
+			if name == "codex" {
+				flags = append(flags, "resume", "fork", "queue", "apply", "exec", "e", "app-server", "-C/tmp/wrong-project", "-C=/tmp/wrong-project", "-cmodel=other", "-vw/tmp/wrong-project")
+			}
+			if name == "claude" {
+				flags = append(flags, "attach", "respawn", "logs", "agents", "ultrareview")
+			}
+			if name == "antigravity" {
+				flags = append(flags, "agent", "remote-control", "--prompt-interactive", "-i")
+			}
+			if name == "pi" {
+				flags = append(flags, "auth", "config")
+			}
+			if name != "codex" {
+				flags = append(flags, "-c", "-r"+conversationTestID, "-pc", "-pr"+conversationTestID, "-hpc", "-ppc")
+			}
+			for _, flag := range flags {
+				t.Run(name+"/"+mode+"/"+flag, func(t *testing.T) {
+					_, err := Build(Request{Harness: name, Command: []string{"fixture-native", flag}, Conversation: &Conversation{Mode: mode}})
+					if err == nil || !strings.Contains(err.Error(), "conversation selection") {
+						t.Fatalf("fresh session admitted native history control: %v", err)
+					}
+				})
+			}
+		}
+	}
+	spec, err := Build(Request{Harness: "codex", Command: []string{"codex", "-c", "model_reasoning_effort=low"}, Conversation: &Conversation{Mode: "fresh"}})
+	if err != nil || !strings.Contains(strings.Join(spec.Args, " "), "--ephemeral") {
+		t.Fatalf("fresh Codex lost ephemeral execution or legitimate config: %+v %v", spec, err)
+	}
+	if _, err := Build(Request{Harness: "command", Command: []string{"python3", "-c", "print('review')"}, Conversation: &Conversation{Mode: "fresh"}}); err != nil {
+		t.Fatal("fresh process fixture must retain its ordinary argv:", err)
+	}
+	if _, err := Build(Request{Harness: "antigravity", Command: []string{"agy", "--continue"}}); err != nil {
+		t.Fatal("nil trusted-local policy compatibility changed:", err)
+	}
+}
+
 func conversationRequest(t *testing.T, name, mode string) Request {
 	t.Helper()
 	dir := t.TempDir()

@@ -11,7 +11,7 @@ BINDIR ?= $(PREFIX)/bin
 DESTDIR ?=
 UNIT_PACKAGES := $(shell GOCACHE=$(GOCACHE) $(GO) list ./... | grep -v '^agentmux/internal/tmux$$')
 
-.PHONY: build install test test-unit test-integration test-managed test-sandbox test-resources test-research test-soak test-scale fmt check clean
+.PHONY: build install test test-unit test-integration test-managed test-sandbox test-resources test-research test-soak test-workflow-soak test-scale fmt check clean
 
 build:
 	mkdir -p bin
@@ -57,6 +57,11 @@ test-research: build
 # outside the source tree; a failed check exits nonzero and cleans up workers.
 test-soak: build
 	python3 scripts/soak-managed.py --turns 10 --interval 0
+
+# Reproducible model-free workflow failures with real Linux isolation. Evidence
+# stays in a newly allocated private /tmp parent; no provider credentials load.
+test-workflow-soak: build
+	@workflow_soak_root=$$(mktemp -d /tmp/agentmux-workflow-soak.XXXXXX) && python3 scripts/soak-workflows.py --binary "$(BINARY)" --output "$$workflow_soak_root/evidence" --iterations 10 --duration-seconds 1800 --storage private --isolation bubblewrap --containment pid-namespace
 
 # Two real isolated terminals plus synthetic registry entries up to the limit.
 # This tests admission/snapshot scaling, not 200 simultaneous model processes.

@@ -46,7 +46,11 @@ rejected; an owner must select a literal address or supply explicit `ips` for a
 private service. An IP-literal origin cannot pin another address. Explicit pins
 also avoid changes in DNS answers during the worker's lifetime.
 
-For HTTPS CONNECT, the proxy checks the requested host/port and a bounded TLS
+This section describes existing managed-mode networking (`StartLegacy`). Full
+`work`/`flow` isolation instead uses the inspecting proxy described in the
+[workflow guide](workflows.md).
+
+For HTTPS CONNECT, the managed-mode proxy checks the requested host/port and a bounded TLS
 ClientHello's SNI before opening the upstream. Other SNI names, non-TLS tunnels,
 and encrypted ClientHello are rejected. HTTP authority mismatches and proxy
 credentials forwarded to upstream services are rejected/removed. The proxy

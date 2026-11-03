@@ -154,6 +154,51 @@ func TestWorkflowCLICheckFailuresAndOutputRefusal(t *testing.T) {
 	}
 }
 
+func TestWorkflowCLIStandaloneCheckUsesPrivateObjectsByDefault(t *testing.T) {
+	root, _, plan := workflowCLIFixture(t)
+	if err := os.WriteFile(filepath.Join(plan.Repository, "untracked-private-content"), []byte("uncommitted raw bytes\r\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	objects := func() map[string]string {
+		t.Helper()
+		result := map[string]string{}
+		git := filepath.Join(plan.Repository, ".git")
+		if err := filepath.WalkDir(git, func(path string, entry os.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if entry.IsDir() {
+				return nil
+			}
+			data, err := os.ReadFile(path)
+			result[path] = string(data)
+			return err
+		}); err != nil {
+			t.Fatal(err)
+		}
+		return result
+	}
+	before, _ := json.Marshal(objects())
+	checks, output := filepath.Join(root, "private-checks.json"), filepath.Join(root, "private-verification.json")
+	writeWorkflowTestJSON(t, checks, []workflow.Check{{Name: "pass", Command: []string{"/bin/true"}}})
+	invokeWorkflowCLI(t, exitSuccess, "check", "--repo", plan.Repository, "--checks", checks, "--output", output)
+	after, _ := json.Marshal(objects())
+	if !bytes.Equal(before, after) {
+		t.Fatal("private standalone check changed source Git metadata")
+	}
+	var v workflow.Verification
+	if err := workflow.DecodeFile(output, &v); err != nil || v.Storage != workflow.StoragePrivate || v.Store != output+".git" {
+		t.Fatalf("verification lost its private cache: %+v %v", v, err)
+	}
+	if fresh, err := workflow.IsFresh(context.Background(), plan.Repository, v); err != nil || !fresh {
+		t.Fatalf("private standalone verification cannot be refreshed: %v %v", fresh, err)
+	}
+	final, _ := json.Marshal(objects())
+	if !bytes.Equal(before, final) {
+		t.Fatal("private freshness check changed source Git metadata")
+	}
+}
+
 func pythonWorkflowQuote(s string) string { raw, _ := json.Marshal(s); return string(raw) }
 
 func TestWorkflowCLIRejectsInvalidOptionsBeforeExecution(t *testing.T) {

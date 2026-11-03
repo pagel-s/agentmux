@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -78,10 +79,15 @@ func (w *probeOutput) Write(p []byte) (int, error) {
 // No probe may inherit provider credentials, produce unbounded diagnostics, or
 // hold startup indefinitely through a child or an inherited output pipe.
 func runSandboxProbe(ctx context.Context, binary string, args []string) ([]byte, error) {
+	return runSandboxProbeFiles(ctx, binary, args, nil)
+}
+
+func runSandboxProbeFiles(ctx context.Context, binary string, args []string, files []*os.File) ([]byte, error) {
 	probeCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 	output := &probeOutput{cancel: cancel}
 	cmd := exec.CommandContext(probeCtx, binary, args...)
+	cmd.ExtraFiles = append([]*os.File(nil), files...)
 	cmd.Env = []string{"PATH=/usr/bin:/bin", "LANG=C"}
 	cmd.Stdout, cmd.Stderr = output, output
 	cmd.WaitDelay = 100 * time.Millisecond

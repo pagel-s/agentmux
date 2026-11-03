@@ -3,12 +3,37 @@ package main
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"agentmux/internal/managed"
 	"agentmux/internal/managedconfig"
 	"agentmux/internal/sessioninventory"
 	tea "github.com/charmbracelet/bubbletea"
 )
+
+func TestSessionSearchDoesNotMatchDisplayedCreationTime(t *testing.T) {
+	const created = "2026-11-03T07:18:00Z"
+	stamp, err := time.Parse(time.RFC3339, created)
+	if err != nil {
+		t.Fatal(err)
+	}
+	query := "Problem " + stamp.Local().Format("15")
+	m := console{agents: []managed.AgentInfo{
+		{ID: "target", Title: query, CreatedAt: created},
+		{ID: "other", Title: "Problem other", CreatedAt: created},
+	}, data: consoleData{observed: []sessioninventory.Session{
+		{ID: "external-target", Harness: "codex", Title: query, StartedAt: created},
+		{ID: "external-other", Harness: "codex", Title: "Problem other", StartedAt: created},
+	}}}
+	m.compose("find", "", "", query)
+	matches := m.sessionMatches()
+	if len(matches) != 2 || matches[0].agent != 0 || matches[1].observation != 0 {
+		t.Fatalf("displayed timestamps introduced unrelated session matches: %+v", matches)
+	}
+	if !strings.Contains(matches[0].detail, "added "+sessionAdded(created)) || !strings.Contains(matches[1].detail, "started "+sessionAdded(created)) {
+		t.Fatal("creation time disappeared from session details")
+	}
+}
 
 func TestSessionPickerDistinguishesDuplicateTitlesAndDoesNotRetarget(t *testing.T) {
 	m := console{agents: []managed.AgentInfo{

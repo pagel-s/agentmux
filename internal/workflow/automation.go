@@ -25,18 +25,20 @@ type WatchEntry struct {
 }
 
 type WatchReport struct {
-	Version              int          `json:"version"`
-	ProcessContainment   string       `json:"process_containment,omitempty"`
-	Repository           string       `json:"repository"`
-	Output               string       `json:"output"`
-	State                string       `json:"state"`
-	StartedAt            string       `json:"started_at"`
-	FinishedAt           string       `json:"finished_at,omitempty"`
-	Options              WatchOptions `json:"options"`
-	Runs                 []WatchEntry `json:"runs"`
-	Error                string       `json:"error,omitempty"`
-	CurrentTree          string       `json:"current_tree,omitempty"`
-	CurrentContentSHA256 string       `json:"current_content_sha256,omitempty"`
+	Version              int               `json:"version"`
+	Storage              string            `json:"storage,omitempty"`
+	Isolation            *IsolationOptions `json:"isolation,omitempty"`
+	ProcessContainment   string            `json:"process_containment,omitempty"`
+	Repository           string            `json:"repository"`
+	Output               string            `json:"output"`
+	State                string            `json:"state"`
+	StartedAt            string            `json:"started_at"`
+	FinishedAt           string            `json:"finished_at,omitempty"`
+	Options              WatchOptions      `json:"options"`
+	Runs                 []WatchEntry      `json:"runs"`
+	Error                string            `json:"error,omitempty"`
+	CurrentTree          string            `json:"current_tree,omitempty"`
+	CurrentContentSHA256 string            `json:"current_content_sha256,omitempty"`
 }
 
 // Watch reviews stable revisions only. Every review runs in private detached
@@ -44,6 +46,19 @@ type WatchReport struct {
 // execution:'local' still grants each executable the owner's host authority.
 func Watch(ctx context.Context, p Plan, output string, allowModels bool, options WatchOptions) (report WatchReport, runErr error) {
 	p = normalized(p)
+	ctx, p, closeEarlyCredentials, err := registerIsolationEnvironment(ctx, p)
+	closeCredentials := func() {}
+	defer func() {
+		if _, err := sanitizeIsolationEvidence(ctx, &report); err != nil {
+			runErr = errors.Join(runErr, err)
+		}
+		runErr = redactEarlyIsolationError(ctx, runErr)
+		closeCredentials()
+		closeEarlyCredentials()
+	}()
+	if err != nil {
+		return report, err
+	}
 	if p.Mode != "compare" {
 		return report, errors.New("watch requires compare mode")
 	}
@@ -51,6 +66,10 @@ func Watch(ctx context.Context, p Plan, output string, allowModels bool, options
 		return report, err
 	}
 	if err := modelPermission(p, allowModels); err != nil {
+		return report, err
+	}
+	ctx, p, closeCredentials, err = prepareIsolationCredentials(ctx, p)
+	if err != nil {
 		return report, err
 	}
 	prepared, containmentErr := PrepareProcessContainment(ctx, p.ProcessContainment)
@@ -64,6 +83,12 @@ func Watch(ctx context.Context, p Plan, output string, allowModels bool, options
 		return report, rootErr
 	}
 	p.Repository = canonicalRepo
+	if err := ValidateIsolation(p); err != nil {
+		return report, err
+	}
+	if containsIsolationCredential(ctx, []byte(output)) {
+		return report, ErrIsolationCredentialLeak
+	}
 	if options.IntervalSeconds == 0 {
 		options.IntervalSeconds = 5
 	}
@@ -84,10 +109,11 @@ func Watch(ctx context.Context, p Plan, output string, allowModels bool, options
 	if err != nil {
 		return report, err
 	}
-	report = WatchReport{Version: 1, ProcessContainment: p.ProcessContainment, Repository: repo, Output: dir, State: "watching", StartedAt: timestamp(), Options: options, Runs: []WatchEntry{}}
+	report = WatchReport{Version: 1, Storage: p.Storage, Isolation: p.Isolation, ProcessContainment: p.ProcessContainment, Repository: repo, Output: dir, State: "watching", StartedAt: timestamp(), Options: options, Runs: []WatchEntry{}}
 	var failures []error
 	defer func() {
 		runErr = errors.Join(append(failures, runErr)...)
+		runErr = redactEarlyIsolationError(ctx, runErr)
 		report.FinishedAt = timestamp()
 		if runErr != nil {
 			report.Error = runErr.Error()
@@ -98,7 +124,7 @@ func Watch(ctx context.Context, p Plan, output string, allowModels bool, options
 		} else {
 			report.State = "completed"
 		}
-		if err := saveJSON(filepath.Join(dir, "watch.json"), report); err != nil {
+		if err := saveIsolationJSON(ctx, filepath.Join(dir, "watch.json"), &report); err != nil {
 			runErr = errors.Join(runErr, err)
 			report.Error = runErr.Error()
 			if report.State != "interrupted" {
@@ -106,11 +132,20 @@ func Watch(ctx context.Context, p Plan, output string, allowModels bool, options
 			}
 		}
 	}()
-	if err = saveJSON(filepath.Join(dir, "watch.json"), report); err != nil {
+	if err = saveIsolationJSON(ctx, filepath.Join(dir, "watch.json"), &report); err != nil {
 		return report, err
 	}
 	watchCtx, cancel := context.WithTimeout(ctx, time.Duration(options.TimeoutSeconds)*time.Second)
 	defer cancel()
+	watchCtx, err = PrepareSnapshotStorage(watchCtx, p.Storage, repo, filepath.Join(dir, "git"))
+	if err != nil {
+		return report, err
+	}
+	watchCtx, closeContext, err := PrepareReportIsolation(watchCtx, Report{Repository: repo, Output: dir, Isolation: p.Isolation})
+	if err != nil {
+		return report, err
+	}
+	defer closeContext()
 	interval := time.Duration(options.IntervalSeconds) * time.Second
 	last, pending := "", ""
 	for len(report.Runs) < options.MaxRuns {
@@ -136,7 +171,7 @@ func Watch(ctx context.Context, p Plan, output string, allowModels bool, options
 			report.Runs[i].Superseded = stale
 		}
 		if changed {
-			if err = saveJSON(filepath.Join(dir, "watch.json"), report); err != nil {
+			if err = saveIsolationJSON(ctx, filepath.Join(dir, "watch.json"), &report); err != nil {
 				return report, err
 			}
 		}
@@ -144,6 +179,8 @@ func Watch(ctx context.Context, p Plan, output string, allowModels bool, options
 			reviewPlan := p
 			reviewPlan.MaxAttempts = 1
 			reviewPlan.requireResult = true
+			reviewPlan.requireReadOnly = true
+			reviewPlan.requireFreshReview = true
 			reviewPlan.expectedTree = tree
 			reviewPlan.expectedContent = raw
 			reviewPlan.Goal = "Review this stable repository snapshot. Report actionable findings and cite files and reproductions where available. Do not edit the snapshot.\n\nOwner review request:\n" + p.Goal
@@ -153,7 +190,7 @@ func Watch(ctx context.Context, p Plan, output string, allowModels bool, options
 			report.Runs = append(report.Runs, entry)
 			// Record admission before launching a review so a hard interruption
 			// cannot leave the watch summary unaware of its retained child run.
-			if err = saveJSON(filepath.Join(dir, "watch.json"), report); err != nil {
+			if err = saveIsolationJSON(ctx, filepath.Join(dir, "watch.json"), &report); err != nil {
 				report.Runs[entryIndex].State = "not_started"
 				report.Runs[entryIndex].Error = err.Error()
 				return report, err
@@ -197,7 +234,7 @@ func Watch(ctx context.Context, p Plan, output string, allowModels bool, options
 			}
 			report.Runs[entryIndex] = entry
 			last = run.Snapshot.Tree + ":" + run.Snapshot.ContentSHA256
-			if err = saveJSON(filepath.Join(dir, "watch.json"), report); err != nil {
+			if err = saveIsolationJSON(ctx, filepath.Join(dir, "watch.json"), &report); err != nil {
 				return report, err
 			}
 			if watchCtx.Err() != nil {
@@ -242,19 +279,21 @@ type LabCandidate struct {
 }
 
 type LabReport struct {
-	Version            int            `json:"version"`
-	ProcessContainment string         `json:"process_containment,omitempty"`
-	Repository         string         `json:"repository"`
-	Output             string         `json:"output"`
-	State              string         `json:"state"`
-	StartedAt          string         `json:"started_at"`
-	FinishedAt         string         `json:"finished_at,omitempty"`
-	Snapshot           Snapshot       `json:"snapshot"`
-	Repetitions        int            `json:"repetitions"`
-	Runs               []LabEntry     `json:"runs"`
-	Candidates         []LabCandidate `json:"candidates"`
-	Interpretation     string         `json:"interpretation"`
-	Error              string         `json:"error,omitempty"`
+	Version            int               `json:"version"`
+	Storage            string            `json:"storage,omitempty"`
+	Isolation          *IsolationOptions `json:"isolation,omitempty"`
+	ProcessContainment string            `json:"process_containment,omitempty"`
+	Repository         string            `json:"repository"`
+	Output             string            `json:"output"`
+	State              string            `json:"state"`
+	StartedAt          string            `json:"started_at"`
+	FinishedAt         string            `json:"finished_at,omitempty"`
+	Snapshot           Snapshot          `json:"snapshot"`
+	Repetitions        int               `json:"repetitions"`
+	Runs               []LabEntry        `json:"runs"`
+	Candidates         []LabCandidate    `json:"candidates"`
+	Interpretation     string            `json:"interpretation"`
+	Error              string            `json:"error,omitempty"`
 }
 
 // Lab repeats candidate workflows on a frozen source snapshot and rotates
@@ -262,6 +301,19 @@ type LabReport struct {
 // ranking or a claim that passing the selected checks proves correctness.
 func Lab(ctx context.Context, p Plan, output string, allowModels bool, repetitions int) (report LabReport, runErr error) {
 	p = normalized(p)
+	ctx, p, closeEarlyCredentials, err := registerIsolationEnvironment(ctx, p)
+	closeCredentials := func() {}
+	defer func() {
+		if _, err := sanitizeIsolationEvidence(ctx, &report); err != nil {
+			runErr = errors.Join(runErr, err)
+		}
+		runErr = redactEarlyIsolationError(ctx, runErr)
+		closeCredentials()
+		closeEarlyCredentials()
+	}()
+	if err != nil {
+		return report, err
+	}
 	if p.Mode != "compare" {
 		return report, errors.New("lab requires compare mode")
 	}
@@ -269,6 +321,10 @@ func Lab(ctx context.Context, p Plan, output string, allowModels bool, repetitio
 		return report, err
 	}
 	if err := modelPermission(p, allowModels); err != nil {
+		return report, err
+	}
+	ctx, p, closeCredentials, err = prepareIsolationCredentials(ctx, p)
+	if err != nil {
 		return report, err
 	}
 	prepared, containmentErr := PrepareProcessContainment(ctx, p.ProcessContainment)
@@ -282,6 +338,12 @@ func Lab(ctx context.Context, p Plan, output string, allowModels bool, repetitio
 		return report, rootErr
 	}
 	p.Repository = canonicalRepo
+	if err := ValidateIsolation(p); err != nil {
+		return report, err
+	}
+	if containsIsolationCredential(ctx, []byte(output)) {
+		return report, ErrIsolationCredentialLeak
+	}
 	if repetitions < 1 || repetitions > 20 {
 		return report, errors.New("lab repetitions must be 1–20")
 	}
@@ -289,8 +351,9 @@ func Lab(ctx context.Context, p Plan, output string, allowModels bool, repetitio
 	if err != nil {
 		return report, err
 	}
-	report = LabReport{Version: 1, ProcessContainment: p.ProcessContainment, Repository: p.Repository, Output: dir, State: "running", StartedAt: timestamp(), Repetitions: repetitions, Runs: []LabEntry{}, Interpretation: "Descriptive results for this task, snapshot and checks. Passing checks does not establish general correctness. Order rotates; provider state and execution timing remain variable. Usage is retained in individual run reports; no inferred dollar totals or automatic winner."}
+	report = LabReport{Version: 1, Storage: p.Storage, Isolation: p.Isolation, ProcessContainment: p.ProcessContainment, Repository: p.Repository, Output: dir, State: "running", StartedAt: timestamp(), Repetitions: repetitions, Runs: []LabEntry{}, Interpretation: "Descriptive results for this task, snapshot and checks. Passing checks does not establish general correctness. Order rotates; provider state and execution timing remain variable. Usage is retained in individual run reports; no inferred dollar totals or automatic winner."}
 	defer func() {
+		runErr = redactEarlyIsolationError(ctx, runErr)
 		report.FinishedAt = timestamp()
 		if runErr != nil {
 			report.Error = runErr.Error()
@@ -301,7 +364,7 @@ func Lab(ctx context.Context, p Plan, output string, allowModels bool, repetitio
 		} else {
 			report.State = "completed"
 		}
-		if err := saveJSON(filepath.Join(dir, "lab.json"), report); err != nil {
+		if err := saveIsolationJSON(ctx, filepath.Join(dir, "lab.json"), &report); err != nil {
 			runErr = errors.Join(runErr, err)
 			report.Error = runErr.Error()
 			if report.State != "interrupted" {
@@ -309,11 +372,20 @@ func Lab(ctx context.Context, p Plan, output string, allowModels bool, repetitio
 			}
 		}
 	}()
-	if err = saveJSON(filepath.Join(dir, "lab.json"), report); err != nil {
+	if err = saveIsolationJSON(ctx, filepath.Join(dir, "lab.json"), &report); err != nil {
 		return report, err
 	}
 	labCtx, cancel := context.WithTimeout(ctx, time.Duration(p.TimeoutSeconds)*time.Second)
 	defer cancel()
+	labCtx, err = PrepareSnapshotStorage(labCtx, p.Storage, p.Repository, filepath.Join(dir, "git"))
+	if err != nil {
+		return report, err
+	}
+	labCtx, closeContext, err := PrepareReportIsolation(labCtx, Report{Repository: p.Repository, Output: dir, Isolation: p.Isolation})
+	if err != nil {
+		return report, err
+	}
+	defer closeContext()
 	snap, err := Capture(labCtx, p.Repository, filepath.Join(dir, "snapshot"))
 	if err != nil {
 		return report, err
@@ -356,7 +428,7 @@ func Lab(ctx context.Context, p Plan, output string, allowModels bool, repetitio
 		report.Runs = append(report.Runs, entry)
 		// Persist the pinned snapshot and admitted trial before its processes
 		// start; retained aggregate progress must identify an interrupted child.
-		if err = saveJSON(filepath.Join(dir, "lab.json"), report); err != nil {
+		if err = saveIsolationJSON(ctx, filepath.Join(dir, "lab.json"), &report); err != nil {
 			report.Runs[entryIndex].State = "not_started"
 			report.Runs[entryIndex].Error = err.Error()
 			return report, err
@@ -370,8 +442,8 @@ func Lab(ctx context.Context, p Plan, output string, allowModels bool, repetitio
 			// original source. Keep integration addressed to that original
 			// project, while plan.json retains the actual execution baseline.
 			run.Repository = snap.Repository
-			run.Snapshot = snap
-			if persistErr := saveJSON(filepath.Join(entry.Output, "report.json"), run); persistErr != nil {
+			run.IntegrationSnapshot = &snap
+			if persistErr := saveIsolationJSON(labCtx, filepath.Join(entry.Output, "report.json"), &run); persistErr != nil {
 				trialErr = errors.Join(trialErr, persistErr)
 			}
 			// Run generated this private view before the lab re-addressed the
@@ -379,8 +451,15 @@ func Lab(ctx context.Context, p Plan, output string, allowModels bool, repetitio
 			// the final report and integration target.
 			if removeErr := os.Remove(filepath.Join(entry.Output, "report.html")); removeErr != nil && !os.IsNotExist(removeErr) {
 				trialErr = errors.Join(trialErr, removeErr)
-			} else if _, renderErr := RenderReport(entry.Output); renderErr != nil {
+			} else if _, renderErr := RenderReportContext(labCtx, entry.Output); renderErr != nil {
 				trialErr = errors.Join(trialErr, renderErr)
+				if run.State != "interrupted" {
+					run.State = "failed"
+				}
+				run.Error = redactEarlyIsolationError(labCtx, trialErr).Error()
+				if persistErr := saveIsolationJSON(labCtx, filepath.Join(entry.Output, "report.json"), &run); persistErr != nil {
+					trialErr = errors.Join(trialErr, persistErr)
+				}
 			}
 		}
 		entry.State = run.State
@@ -409,7 +488,7 @@ func Lab(ctx context.Context, p Plan, output string, allowModels bool, repetitio
 		for _, c := range p.Candidates {
 			report.Candidates = append(report.Candidates, *summary[c.ID])
 		}
-		if err = saveJSON(filepath.Join(dir, "lab.json"), report); err != nil {
+		if err = saveIsolationJSON(ctx, filepath.Join(dir, "lab.json"), &report); err != nil {
 			return report, err
 		}
 	}

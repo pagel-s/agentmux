@@ -27,27 +27,30 @@ type Explanation struct {
 }
 
 type EvidenceItem struct {
-	NativeEventsPath   string        `json:"native_events_path,omitempty"`
-	NativeEventsSHA256 string        `json:"native_events_sha256,omitempty"`
-	ID                 string        `json:"id"`
-	Harness            string        `json:"harness,omitempty"`
-	Input              string        `json:"prepared_input,omitempty"`
-	InputSHA256        string        `json:"input_sha256,omitempty"`
-	InputTruncated     bool          `json:"input_truncated,omitempty"`
-	ResultTruncated    bool          `json:"result_truncated,omitempty"`
-	EvidencePath       string        `json:"evidence_path,omitempty"`
-	State              string        `json:"state"`
-	DependsOn          []string      `json:"depends_on,omitempty"`
-	Revision           string        `json:"revision,omitempty"`
-	ContentSHA256      string        `json:"content_sha256,omitempty"`
-	Patch              string        `json:"patch,omitempty"`
-	PatchSHA256        string        `json:"patch_sha256,omitempty"`
-	PatchIntact        bool          `json:"patch_intact"`
-	Verification       *Verification `json:"verification,omitempty"`
-	Fresh              *bool         `json:"fresh,omitempty"`
-	FreshnessError     string        `json:"freshness_error,omitempty"`
-	Result             string        `json:"result,omitempty"`
-	Error              string        `json:"error,omitempty"`
+	ReviewContext       string        `json:"review_context,omitempty"`
+	RuntimeHarness      string        `json:"runtime_harness,omitempty"`
+	CredentialsRedacted bool          `json:"credentials_redacted,omitempty"`
+	NativeEventsPath    string        `json:"native_events_path,omitempty"`
+	NativeEventsSHA256  string        `json:"native_events_sha256,omitempty"`
+	ID                  string        `json:"id"`
+	Harness             string        `json:"harness,omitempty"`
+	Input               string        `json:"prepared_input,omitempty"`
+	InputSHA256         string        `json:"input_sha256,omitempty"`
+	InputTruncated      bool          `json:"input_truncated,omitempty"`
+	ResultTruncated     bool          `json:"result_truncated,omitempty"`
+	EvidencePath        string        `json:"evidence_path,omitempty"`
+	State               string        `json:"state"`
+	DependsOn           []string      `json:"depends_on,omitempty"`
+	Revision            string        `json:"revision,omitempty"`
+	ContentSHA256       string        `json:"content_sha256,omitempty"`
+	Patch               string        `json:"patch,omitempty"`
+	PatchSHA256         string        `json:"patch_sha256,omitempty"`
+	PatchIntact         bool          `json:"patch_intact"`
+	Verification        *Verification `json:"verification,omitempty"`
+	Fresh               *bool         `json:"fresh,omitempty"`
+	FreshnessError      string        `json:"freshness_error,omitempty"`
+	Result              string        `json:"result,omitempty"`
+	Error               string        `json:"error,omitempty"`
 }
 
 func Explain(directory string) (Explanation, error) {
@@ -55,13 +58,19 @@ func Explain(directory string) (Explanation, error) {
 	if err != nil {
 		return Explanation{}, err
 	}
-	e := Explanation{Version: 1, ID: r.ID, Goal: r.Goal, Mode: r.Mode, State: r.State, BaseCommit: r.Snapshot.BaseCommit, StartingTree: r.Snapshot.Tree, StartingContentSHA256: r.Snapshot.ContentSHA256, Items: []EvidenceItem{}, Coverage: "Owner-recorded workflow inputs, results, snapshots and checks. This is not provider attestation, hidden reasoning, or a complete record of external activity. Freshness is checked when this explanation is read."}
+	source := SourceSnapshot(r)
+	e := Explanation{Version: 1, ID: r.ID, Goal: r.Goal, Mode: r.Mode, State: r.State, BaseCommit: source.BaseCommit, StartingTree: source.Tree, StartingContentSHA256: source.ContentSHA256, Items: []EvidenceItem{}, Coverage: "Owner-recorded workflow inputs, results, snapshots and checks. This is not provider attestation, hidden reasoning, or a complete record of external activity. Freshness is checked when this explanation is read. Credential-redacted native frames are explicitly labelled; their digest identifies the saved redacted evidence."}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
+	ctx, closeContext, contextErr := ReportContext(ctx, r)
+	defer closeContext()
 	item := func(c CandidateResult, dependencies []string, checkFreshness bool) EvidenceItem {
 		v := EvidenceItem{ID: c.ID, Harness: c.Harness, Input: c.Input, InputSHA256: c.InputSHA256, InputTruncated: c.InputTruncated, ResultTruncated: c.Truncated, EvidencePath: c.EvidencePath, State: c.State, DependsOn: dependencies, Patch: c.Patch, PatchSHA256: c.PatchSHA256, Verification: c.Verification, Result: c.Result, Error: c.Error}
 		v.NativeEventsPath = c.NativeEventsPath
 		v.NativeEventsSHA256 = c.NativeEventsSHA256
+		v.RuntimeHarness = c.RuntimeHarness
+		v.ReviewContext = c.ReviewContext
+		v.CredentialsRedacted = c.CredentialsRedacted
 		if c.FinalSnapshot != nil {
 			v.Revision = c.FinalSnapshot.Tree
 			v.ContentSHA256 = c.FinalSnapshot.ContentSHA256
@@ -74,7 +83,10 @@ func Explain(directory string) (Explanation, error) {
 			}
 		}
 		if checkFreshness && c.Verification != nil {
-			fresh, err := IsFresh(ctx, c.Worktree, *c.Verification)
+			fresh, err := false, contextErr
+			if err == nil {
+				fresh, err = IsFresh(ctx, c.Worktree, *c.Verification)
+			}
 			if err != nil {
 				v.FreshnessError = err.Error()
 			} else {
@@ -130,8 +142,9 @@ func Handoff(directory, candidateID string) (string, error) {
 		return "", err
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Agentmux handoff\n\n## Objective\n\n%s\n\n## Recorded work\n\nRun: %s\nCandidate: %s\nState: %s\nBase commit: %s\nStarting tree: %s\n", r.Goal, r.ID, c.ID, c.State, r.Snapshot.BaseCommit, r.Snapshot.Tree)
-	fmt.Fprintf(&b, "Starting content SHA256: %s\n", r.Snapshot.ContentSHA256)
+	source := SourceSnapshot(r)
+	fmt.Fprintf(&b, "# Agentmux handoff\n\n## Objective\n\n%s\n\n## Recorded work\n\nRun: %s\nCandidate: %s\nState: %s\nBase commit: %s\nStarting tree: %s\n", r.Goal, r.ID, c.ID, c.State, source.BaseCommit, source.Tree)
+	fmt.Fprintf(&b, "Starting content SHA256: %s\n", source.ContentSHA256)
 	if c.FinalSnapshot != nil {
 		fmt.Fprintf(&b, "Result tree: %s\n", c.FinalSnapshot.Tree)
 		fmt.Fprintf(&b, "Result content SHA256: %s\n", c.FinalSnapshot.ContentSHA256)
@@ -177,7 +190,12 @@ func Handoff(directory, candidateID string) (string, error) {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
-		fresh, err := IsFresh(ctx, c.Worktree, *c.Verification)
+		ctx, closeContext, err := ReportContext(ctx, r)
+		defer closeContext()
+		fresh := false
+		if err == nil {
+			fresh, err = IsFresh(ctx, c.Worktree, *c.Verification)
+		}
 		if err != nil {
 			fmt.Fprintf(&b, "\nCurrent freshness is unknown: %s\n", err)
 		} else {

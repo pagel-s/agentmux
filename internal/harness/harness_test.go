@@ -17,7 +17,7 @@ import (
 )
 
 func helperRequest(name, scenario string) Request {
-	return Request{Harness: name, Prompt: "literal $(touch should-not-exist); `echo nope`\nnew line \u2028 preserved", Command: []string{os.Args[0], "-test.run=TestHarnessProcess", "--"}, Env: map[string]string{"AGENTMUX_HARNESS_HELPER": "1", "AGENTMUX_HARNESS_SCENARIO": scenario}}
+	return Request{Harness: name, Prompt: "literal $(touch should-not-exist); `echo nope`\nnew line \u2028 preserved", Command: []string{os.Args[0], "--test.run=TestHarnessProcess", "--"}, Env: map[string]string{"AGENTMUX_HARNESS_HELPER": "1", "AGENTMUX_HARNESS_SCENARIO": scenario}}
 }
 
 // A real child process exercises pipes, argv, process exit, and cancellation;

@@ -182,7 +182,7 @@ func TestGuidedPreflightRejectsUnsafeOrUnavailableRequests(t *testing.T) {
 				}
 				options.Output = filepath.Join(link, "runs", "new")
 			case "unapproved-provider":
-				options.Coder = &Candidate{Harness: "claude"}
+				options.Coder = &Candidate{Harness: "unsupported"}
 			case "non-gemini-reviewer":
 				options.Reviewer = &Candidate{Harness: "antigravity", Model: "claude-unapproved"}
 			}

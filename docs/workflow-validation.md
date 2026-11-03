@@ -1,10 +1,12 @@
-# Workflow validation record — 2 November 2026
+# Workflow validation record — 2–3 November 2026
 
-This record covers the new `amx flow` implementation on the current local
-working tree based on `e205a24`. It is development validation, not a claim of
-universal correctness, production availability or security certification.
-Only Codex and Antigravity with an explicitly selected Gemini model are used
-for live model acceptance. No Claude model calls are made.
+This record preserves successive development runs of `amx flow` and `amx work`,
+including earlier builds based on `e205a24`. Evidence and hashes belong to their
+individual runs. They do not establish universal correctness, production
+availability or security certification. Earlier live acceptance used Codex and
+Antigravity with an explicit Gemini model. The owner now also permits explicit
+Claude profiles. The model-free regression runs and the separately bounded
+three-provider live checks are identified below.
 
 ## Reproduce
 
@@ -22,6 +24,15 @@ python3 scripts/validate-workflows.py --binary bin/amx --output /tmp/amx-flow-na
 The script freezes a private copy of the executable and records its SHA256,
 UTC timestamps, each case's exit status and observed provider usage. It uses
 new disposable repositories and retains all evidence in the selected directory.
+Provider-free runs use an allowlisted environment, an empty private HOME and
+private Codex/XDG paths; ambient API keys, login roots, shell/Python hooks and
+Git overrides are excluded. The record labels this `private-fixtures`.
+Explicit native or Antigravity-diagnostic modes instead label
+`explicit-native-login` and retain the owner's login roots and relevant desktop
+login/runtime references. They still exclude arbitrary API-key variables and
+unrelated secrets. PATH remains owner-selected executable discovery. Environment
+filtering alone does not restrict host filesystem authority; full isolation is
+selected separately.
 The external acceptance assertions are owner-authored argv outside candidate
 source files. They accept a known-good implementation and reject a known-bad
 one. Existing live teams and conversations are not used for these checks.
@@ -305,26 +316,259 @@ All four journeys used the same frozen pre-publication executable SHA256:
 ```
 
 The repository working agreements record the owner's standing preference to
-commit and push completed validated changes and use only Codex and
-Antigravity/Gemini for live agent validation. This publication pass used no live
+commit and push completed validated changes. At that point live validation
+selected Codex and Antigravity/Gemini; Claude is now permitted too. That
+publication pass used no live
 providers. Frozen executable hashes describe the tested binaries; a rebuild
 with committed version metadata can have a different executable hash.
 
+## Private storage, isolated tools and workflow fault soak
+
+The provider-free integration build passed **19 guided** and **14 advanced**
+acceptance cases with private storage and full Bubblewrap isolation. Its strict
+one-cycle workflow soak passed **all 11 scenario classes**, **143 assertions**,
+and observed **2,294 process identities**, from **21:23:53 to 21:24:19 UTC** on
+2 November 2026. The runner reaped **891** adopted exited fixture processes and
+required no surviving observed descendants. These are finite integration runs,
+not a multi-day reliability result or a live isolated-provider acceptance run.
+
+Evidence:
+
+- `/tmp/agentmux-guided-full-integration-20261102/validation.json`
+- `/tmp/agentmux-flow-full-integration-20261102/validation.json`
+- `/tmp/agentmux-soak-full-integration-current2-20261102/soak.json`
+
+All three used executable SHA256:
+
+```text
+4e4a96d91234a4f70fb1d56b20237212308bf1af3b03dd45ffb011cf979dcc95
+```
+
+The first full soak remains failed at
+`/tmp/agentmux-soak-full-integration-current-20261102/soak.json`. It exposed an
+incorrect fixture oracle: a write to an absolute `/tmp` path can succeed inside
+the capsule’s private temporary filesystem. The corrected probe verifies host
+secret read denial, host outside-write absence and host listener isolation.
+A separate regression exercises the actual probe with private temporary writes
+and confirms that a host write fails the oracle. Failed evidence is retained.
+
+Reproduce a new bounded run after building the intended source:
+
+The acceptance and soak harnesses require Linux with `/proc` and pidfd support
+for identity-safe process observation and cleanup. Unsupported hosts fail before
+workload admission. This harness requirement is separate from the CLI's macOS
+build support.
+
+```sh
+python3 scripts/test-validate-workflows.py
+python3 scripts/test-soak-workflows.py
+python3 scripts/validate-workflows.py --binary bin/amx --output /tmp/amx-new-guided-full --guided --storage private --isolation bubblewrap
+python3 scripts/validate-workflows.py --binary bin/amx --output /tmp/amx-new-flow-full --storage private --isolation bubblewrap
+python3 scripts/validate-workflows.py --binary bin/amx --output /tmp/amx-new-flow-shared --storage shared
+python3 scripts/soak-workflows.py --binary bin/amx --output /tmp/amx-new-workflow-soak --iterations 10 --duration-seconds 1800 --seed 20261102 --containment pid-namespace --storage private --isolation bubblewrap
+```
+
+Each output must be new. `make test-workflow-soak` builds and allocates a private
+output parent automatically. Ten iterations mean ten seeded permutations of all
+11 scenario classes: sustained guided history, actual acceptance failure,
+structured review rejection, stale source, stale result, cancellation, owner
+SIGKILL, source-apply crashes before and after mutation, concurrent application
+and the file/network boundary probe. Guided requests change each iteration,
+retain one history and check exact turn counts, source staging and owner bytes.
+Fault cases inspect durable uncertainty, held leases and recovery without patch
+replay. The duration is a maximum budget, not a minimum time commitment.
+`--scenario` explicitly narrows coverage; without full isolation the boundary
+case is recorded as excluded rather than passed.
+
+The soak freezes the executable and harness with hashes, uses an empty private
+HOME, excludes ambient credentials/Git overrides, and admits no live providers.
+It records per-case commands, exit status, stdout/stderr and observed Linux
+process identities including runtime-thread children. It acts as a subreaper
+and signals only pinned pidfds after checking process identity. Descendant
+observation is bounded and is not a hostile-process containment boundary.
+If the soak itself is
+killed, its admitted CLI has a parent-death SIGKILL; incomplete manifests remain
+incomplete. Artifact bytes are checked between quiescent cases with a final
+record reserve; this is an evidence budget, not a hard workspace disk quota.
+CI runs both safety suites, explicit shared compatibility, full isolated fixture
+journeys and one strict soak cycle in the namespace-capable sandbox job. Failed
+model-free evidence is retained as a short-lived CI artifact.
+
+Independent review must start a fresh context each round. Supply only the task,
+acceptance criteria and current source/diff. Do not supply implementation chat,
+previous reviewer conclusions or approvals. Implementation feedback and stream
+replay are useful validation but do not count as a new independent approval.
+The guided runner follows the same separation: each review receives a new
+session with current files and criteria, and its exact revision and fresh-context
+requirement are recorded and checked before application.
+
+## Frozen hardening build — 3 November 2026
+
+The final Go/build source manifest contains 574 files; its SHA256 is
+`c27e0de2c385c2db5adae509ddf843be8f31dc31bea0d700df0f6a8c96aa9d0c`.
+All entries were rechecked after validation with no source changes. The frozen
+Go 1.27.3 executable has SHA256
+`c69df172975f4387e1d521e3343d98cec21ea2d96a382f4a5550e2330fe84573`.
+It predates the publication commit's version metadata. Evidence is retained
+privately under `/tmp/agentmux-publish-20261103-2942z0ya`; these local paths are
+not portable published artifacts.
+
+| Check | Result on this build |
+| --- | --- |
+| Complete race suite, managed and experiment integration enabled | Passed in 342.25 seconds; 2,669 test/subtest passes across 37 tested packages; two packages have no tests. |
+| Complete minimum-toolchain suite, Go 1.24.0 | Passed in 210.36 seconds with the same 2,669 test/subtest passes. |
+| Actual Linux namespaces and installed-native protocol fixtures, race enabled | Passed in 426.75 seconds; 726 test/subtest passes across authentication, AG bridge, egress, sandbox and workflow packages. No provider inference. |
+| Workflow parser fuzzing | Passed 252,230 executions in 21.028 seconds. |
+| Static analysis and portability | `go vet ./...` passed. All packages and tests compiled for Darwin ARM64; this does not establish macOS runtime behavior. |
+| Owner console interaction regressions | Node test passed. The full and Go 1.24 suites include the real tmux session-search integration. |
+
+The full and minimum-toolchain records each contain 67 skip events, including
+the two packages without tests. Optional installed-provider, resource and other
+explicitly gated integrations remain visible in their JSONL/status records.
+The separate namespace/native-fixture suite contains seven skip events; its
+selected real-isolation and installed Codex/Pi endpoint fixtures ran. Counts
+include subtests and should not be read as independent end-to-end scenarios.
+Records: `full-race.status.json`, `go124-full.status.json`,
+`native-fixtures-race.status.json`, their complete JSONL/logs, `fuzz.log`,
+`vet.log` and `darwin-compile.log`.
+
+Three additional real tmux search journeys passed on a distinct corrected
+search build with SHA256
+`5ea650c563f32b3a627cead245b9b68a4eeb6ec98a34c885ffd25fd183d4a2ac`.
+Their records are
+`/tmp/agentmux-release-final-20261103-1oyfkhgu/search-fixed-uat.json` and
+`search-fixed-uat-{0,1,2}.log` in that directory; these are supplementary
+implementation checks, not three more runs of the frozen publication binary.
+
+### Model-free acceptance on the frozen build
+
+All six complete CLI matrices passed with zero provider turns and no inherited
+provider keys. The environment profile is `private-fixtures`.
+
+| Mode | Private storage | Explicit legacy shared storage | Private storage with full isolation |
+| --- | --- | --- | --- |
+| Advanced `flow` journey | 14 cases | 13 cases | 14 cases |
+| Guided `work` journey | 19 cases | 18 cases | 19 cases |
+
+The records are `flow-private-release/validation.json`,
+`guided-private-release/validation.json`, `flow-shared-release/validation.json`,
+`guided-shared-release/validation.json`, `flow-full-release/validation.json` and
+`guided-full-release/validation.json` under the evidence root. Each records
+`passed: true` and `completed: true`, the frozen executable hash and the exact
+runner/helper hashes. The validator safety suite passed 38 tests, including
+malformed revision/policy evidence and completion-publication failures.
+
+The acceptance runner SHA256 is
+`d58708cd0addb880ad3bdf27d1c112029dcbcb25870bc158d2d345218afaec61`.
+The shared process helper SHA256 is
+`6247562568f9b67624807075e29240b531df2007394182cfb1b88b2d4bf9387a`.
+Consumed Git/SHA256 evidence requires valid strings; booleans, numeric aliases,
+missing private selection pins and mismatched revision pins are rejected.
+Mission assertions follow the complete revision chain through writing,
+read-only review, verification-only steps and the final artifact. Review roles
+and fresh context are required explicitly. Signaling support is probed before
+workload admission; unsupported environments fail closed.
+`diagnostic.json` records only `cases_completed`/`cases_passed` with an explicit
+case scope; `validation.json` is its single run-completion authority. Broken
+output, failed cleanup/publication and SIGKILL before that commit cannot be
+inferred successful from the diagnostic case record.
+
+### Ten-cycle strict fault soak
+
+The reviewed soak completed ten seeded permutations of all 11 scenario classes:
+**110 cases**, **4,030 assertions**, **33,971 observed process identities** and
+**13,540 reaped adopted fixture processes**. Every case passed, with no coverage
+exclusions or model calls. Private storage, PID namespaces and full Bubblewrap
+isolation were required. The run lasted from **08:54:49 to 09:04:06 UTC on
+3 November 2026** (9 minutes 17 seconds), within its 1,800-second budget.
+
+Record: `soak-final/soak.json` under the frozen build's evidence root. It records
+`state: passed`, `completed: true`, `iterations_completed: 10` and seed
+`20261103`. Per-case commands, outputs, exact source/staging observations,
+uncertain apply/recovery evidence and process identities remain retained.
+Observed-tree cleanup is finite operational evidence, not a guarantee about
+unobserved hostile processes or independent host services.
+
+The soak runner SHA256 is
+`f0246430ad9cbba31791b22bd472d8939493a68eb03e861450618e8ed2097a69`;
+the helper is the `624756…` version recorded above. The run froze and checked
+the then-current regression suite SHA256
+`1007ef3eafc8bbbfac00bdf6bc51ef0abf9a854fe26e62d739af001b903ae64d`.
+That suite passed all 29 tests with actual namespace integration and no skips.
+The runner/helper were unchanged throughout the long run.
+
+A subsequent test-only CI retention patch expanded the regression suite to
+32 tests; all passed with actual namespaces and zero skips in 156.832 seconds.
+The exact validated test file was then copied into the repository and its
+three focused retention tests passed again. Its SHA256 is
+`187ad690aca3c80dba9b1132c500d586e427f8f4e0dbdf583fec254a1caad907`.
+The production runner/helper and validator did not change. This distinguishes
+the long soak's frozen regression-test provenance from the published
+retention-only test update.
+
+CI explicitly enables both real namespace and real-CLI mutation integrations.
+`AGENTMUX_WORKFLOW_TEST_EVIDENCE_ROOT` selects a private parent for retained
+unique `0700` integration directories; when configured, every outcome remains
+available, including failures caught by `subTest`. Without it, tests retain
+their ordinary temporary cleanup. Invalid empty, relative, file or symlink
+sinks are refused. Failure artifacts include this directory and hidden Git
+stores/markers. The exact retention patch and CI configuration received a
+separate fresh-context review with no actionable findings.
+
+Three provisional long runs were deliberately interrupted while independent
+reviews identified missing assertions. Their nonpassing records remain in
+`soak-pre-semantic-fix/`, `soak-pre-review-bindings/` and
+`soak-pre-final-chain/`. They are not counted as passing final evidence. Their
+relocation records identify original absolute paths; these archived records
+are not live application inputs.
+
+Final independent scope reviews started with fresh contexts. They covered
+private storage/application, isolation/authentication/network/publication,
+workflow guides, validator revision/role semantics, and the soak/process
+helper. Reviewers' default tool sandboxes sometimes denied namespace creation;
+those probes failed closed and remain distinct from the authorized host
+namespace runs that passed. These are scoped reviews and finite validation,
+not universal correctness or a multi-day reliability result.
+
+### Isolated live provider checks
+
+Each profile received only a synthetic disposable repository, a fresh session,
+one admitted turn, a 120-second native deadline and a 150-second workflow
+budget. Each used private storage and required Bubblewrap/PID isolation. The
+external checks required exactly `HELLO_AGENTMUX\n` in the new file and the
+original README unchanged. All three finished verified, passed checks and left
+the original source and its Git files unchanged.
+
+| Explicit profile | Observed result | Retained record |
+| --- | --- | --- |
+| Codex 0.166.0, `gpt-6.1-sol` | Actual file tool completed, one attempt. Inspected HTTPS fallback succeeded after the strict proxy refused a WebSocket upgrade. | `live-codex/report.json`, `live-codex-validation.json` |
+| Antigravity/Gemini `gemini-3.8-flash-low`, isolated Pi 1.4.0 tools | Actual file tool completed, one attempt; two inference requests admitted of four allowed. The selected host inference adapter remains trusted. | `live-gemini/report.json`, `live-gemini-validation.json` |
+| Claude 2.1.317, `claude-haiku-5-5` | Actual file tool completed, one attempt, with a selected filtered login and explicit HTTPS origins. The configured native USD 0.25 option was not a measured billing guarantee. | `live-claude-corrected/report.json`, `live-claude-corrected-validation.json` |
+
+The first Claude fixture stopped at local MCP schema validation because its
+empty configuration omitted the required `mcpServers` record. Its uncertain
+result remains retained under `live-claude/`. A separately recorded fresh
+fixture corrected that local configuration; the engine did not retry the
+uncertain turn. These checks establish the recorded versions and task, not
+future provider compatibility or arbitrary task correctness. No Agentmux source
+or design was sent in these synthetic live checks.
+
 ## Enforced controls and operational boundaries
 
-The next hardening pass replaces several previous limitations with enforced
-controls. It preserves protective bounds and explicitly identifies guarantees
-that require a different authority boundary or an external service.
+The current hardening pass enforces the controls below. It preserves
+protective bounds and identifies guarantees that require a different authority
+boundary or an external service.
 
 | Area | Enforced behavior | Boundary that remains |
 | --- | --- | --- |
-| Escaped child processes | Required `pid-namespace` mode probes Linux user/PID namespaces and contains descendants after normal completion, cancellation and controller death. Native tools, checks and Git helpers inherit the policy. No fallback. | The default is ordinary process groups. PID containment retains trusted host filesystem, network, devices and native authentication. Independent host services are not descendants. Full hostile-code isolation belongs to the existing managed capsule boundary. |
+| Escaped child processes | Required `pid-namespace` mode probes Linux user/PID namespaces and contains descendants after normal completion, cancellation and controller death. Native tools, checks and Git helpers inherit the policy. Full Bubblewrap isolation also requires this boundary. No fallback. | The default without full isolation is ordinary process groups. PID containment alone retains trusted host filesystem/network authority. Independent host services are not descendants. |
+| Filesystem, authentication and network | Explicit `isolation.mode: bubblewrap` restricts native tools to selected workspaces, system runtime and explicit read-only dependencies. Reviewers receive a read-only worktree. Checks may create build output in their assigned worktree, receive no network/auth, and fail verification if selected content changes. Selected filtered native credentials are read-only anonymous data. Direct networking is denied. Workflow HTTPS is inspected with a per-turn CA: HTTP/1.1 Host and HTTP/2 authority, pinned dialing and upstream TLS are checked. The isolated AG inference bridge is explicit. | The Go controller and selected host inference adapter remain trusted. Broad runtime grants expose their contents. Independent services and unrelated host writers remain outside controller authority. Certificate-pinned, mutual-TLS or incompatible custom-trust clients fail closed. Existing managed mode retains its documented CONNECT/SNI destination boundary. Full isolated live-provider acceptance is distinct from protocol-fixture validation. |
 | Interrupted application | A durable uncertain intent precedes source mutation. The same journal is finalized after source verification and syncing changed files/directories. Unresolved or damaged history blocks another application. | Exact content observation cannot establish that arbitrary unrelated host writers have stopped. Divergent or unavailable evidence stays uncertain. |
 | Recovery | `work recover` / `flow recover` compare exact source HEAD/content and finalize existing evidence only. Source-writing Git inherits the application lease; recovery cannot proceed while that admitted writer holds it. | Recovery never guesses a missing outcome, replays a patch, undoes external effects or controls unrelated programs. |
 | Durable records | Files and containing directory entries are synced after creation or atomic replacement. Unsupported sync semantics fail closed. Registration and application locks release after their owning processes/descriptors exit. | Filesystem, kernel and hardware must honor their sync contracts. Existing source Git objects have their own durability and retention. Tests simulate hard process interruption, not arbitrary physical storage failures. |
-| Snapshot storage | Selection is admitted before Git writes objects: at most 512 MiB and 100,000 existing files. Exact hashing rechecks the bounds and records byte/file counts. Preview exposes observed selection. | These are protective selection limits, not a disk quota against trusted filters or concurrent writers. Unsupported gitlinks and nonreproducible conversions are refused. |
-| Git object privacy | Run directories and records are private; canonical patches and exact snapshots are checked before application. | Snapshots and retention refs remain in the source Git object store. Its permissions, sharing, backups and garbage collection remain repository concerns. A private report does not privately relocate or securely erase those objects. |
-| Provider compatibility | Native frames are bounded and validated; ambiguous or incompatible outcomes fail closed with retained evidence. Guided selections are Codex and explicit Antigravity/Gemini. | Future provider releases and arbitrary tools require validation. Recorded stream replay establishes parser compatibility with those recordings, not future service behavior. |
+| Snapshot storage | Private snapshots default for new plans and guided work. Current selected content is limited to 512 MiB and 100,000 existing files. Raw snapshot streaming rechecks the bounds and records byte/file counts; metadata and imported base objects have separate bounds. Preview exposes observed selection. | Selection limits are not a hard workspace disk quota. Private HOME/tmp caps are separate. Unsupported gitlinks and nonreproducible conversions are refused. |
+| Git object privacy | Private run stores and candidate stores are independent, with no source alternates or hardlinked objects. Capturing/running leaves source objects, refs, config and index unchanged. Standalone `flow check` defaults to an independent `OUTPUT.git` fingerprint store. | Explicit `storage: shared` and old reports retain legacy source storage. Keep the fingerprint store for freshness. Explicit apply may retain its coordination lock file. Run deletion cannot securely erase backups or independent copies. |
+| Provider compatibility | Native frames are bounded and validated; ambiguous or incompatible outcomes fail closed with retained evidence. Guided defaults are Codex and explicit Antigravity/Gemini; profiles can explicitly select Claude. | Future provider releases and arbitrary tools require validation. Recorded stream replay establishes parser compatibility with those recordings, not future service behavior. |
 | Cost | Native admission, retries, parallelism and whole-run/check deadlines are bounded. Uncertain provider turns are never automatically replayed. | A native turn can contain multiple billable requests. A hard monetary cap requires a provider-side spending control; missing or delayed usage cannot support a local billing guarantee. |
 | Correctness | Acceptance commands, two structured reviews, exact revision binding and explicit application gate the result. | These provide task-specific evidence, not infallible model judgments or a proof of arbitrary program correctness. Long-term reliability requires continued operational evidence. |
 

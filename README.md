@@ -18,6 +18,11 @@ For revision-bound comparisons, checks, handoffs, snapshot review, missions and
 repeated team trials, see [the workflow guide](docs/workflows.md). Start with the
 command-only examples: `amx flow --help`.
 
+New workflows use private Git snapshots and fresh review sessions. On Linux,
+`--isolation bubblewrap` also requires filesystem, process and network isolation;
+Codex and Claude run inside it, while Antigravity/Gemini can supply inference to
+isolated Pi tools. See the [controls and limits](docs/workflows.md#private-storage-and-full-isolation).
+
 The new `work` and `flow` commands require the current source build until the
 next release. Run `make install` from this checkout to update your local `amx`.
 

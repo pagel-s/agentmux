@@ -26,10 +26,30 @@ type SnapshotSelection struct {
 // writing an index, Git objects, refs or run output. The result describes this
 // observation, not a lock against later writers. Ignored untracked data is not
 // selected, while ignored data already tracked by HEAD or the index is selected.
+// Private worktrees also retain their controller-pinned starting paths.
 func SnapshotUsage(ctx context.Context, repository string) (SnapshotSelection, error) {
+	private, err := privateStorageForRepository(ctx, repository)
+	if err != nil {
+		return SnapshotSelection{}, err
+	}
+	if private != nil {
+		ctx = context.WithValue(ctx, snapshotStorageContextKey{}, private)
+	}
 	repo, err := repositoryRoot(ctx, repository)
 	if err != nil {
 		return SnapshotSelection{}, err
+	}
+	if private != nil {
+		paths, err := privateSelectedPaths(ctx, repo)
+		if err != nil {
+			return SnapshotSelection{}, err
+		}
+		root, err := os.OpenRoot(repo)
+		if err != nil {
+			return SnapshotSelection{}, err
+		}
+		defer root.Close()
+		return measurePrivateSelectedPaths(ctx, root, paths)
 	}
 	return snapshotUsageRoot(ctx, repo)
 }

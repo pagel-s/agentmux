@@ -46,7 +46,7 @@ func WrapProcessTree(spec harness.Spec) (harness.Spec, error) {
 		// These variables execute code in the launcher before the PID namespace
 		// exists. Permitting them would bypass the requested lifetime boundary.
 		if strings.HasPrefix(key, "LD_") || key == "GCONV_PATH" || key == "LOCPATH" || key == "GLIBC_TUNABLES" {
-			return harness.Spec{}, fmt.Errorf("environment variable %q is unsafe for the containment launcher", key)
+			return harness.Spec{}, errors.New("environment contains a variable unsafe for the containment launcher")
 		}
 	}
 	args := []string{"--die-with-parent", "--new-session", "--unshare-user", "--unshare-pid", "--cap-drop", "ALL", "--bind", "/", "/", "--dev-bind", "/dev", "/dev", "--proc", "/proc"}

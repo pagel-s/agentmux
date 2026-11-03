@@ -70,6 +70,10 @@ func TestLoadReportRejectsInventedSuccessfulEvidence(t *testing.T) {
 	dir, r := evidenceRun(t)
 	for _, change := range []func(*Report){
 		func(r *Report) { r.State = "invented" }, func(r *Report) { r.Candidates[0].State = "uncertain" }, func(r *Report) { r.Candidates[0].Verification = nil }, func(r *Report) { r.Output = filepath.Dir(r.Output) }, func(r *Report) { r.Candidates = append(r.Candidates, r.Candidates[0]) },
+		func(r *Report) { r.Candidates[0].Verification.Store = r.Snapshot.Store },
+		func(r *Report) { r.Candidates[0].Verification.IgnoreSHA256 = strings.Repeat("0", 64) },
+		func(r *Report) { r.Candidates[0].FinalSnapshot.IgnoreSHA256 = strings.Repeat("0", 64) },
+		func(r *Report) { r.Snapshot.IgnoreSHA256 = "" },
 	} {
 		bytes, _ := json.Marshal(r)
 		var modified Report

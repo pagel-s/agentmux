@@ -25,6 +25,20 @@ type ApplyResult struct {
 	Receipt     string `json:"receipt,omitempty"`
 }
 
+type privateApplicationMetadataKey struct{}
+type privateApplicationMetadata struct{ Repository, Store string }
+
+// Only Apply binds this capability after its exact private preview has passed.
+// The namespace wrapper may mount this one private Git directory read-only for
+// fixed source-application plumbing; native/check processes never receive it.
+func PrivateApplicationMetadata(ctx context.Context, repository string) string {
+	v, _ := ctx.Value(privateApplicationMetadataKey{}).(privateApplicationMetadata)
+	if v.Repository == repository {
+		return v.Store
+	}
+	return ""
+}
+
 // Apply is an explicit owner operation. It never chooses a winner, commits or
 // pushes. Concurrent writers must be settled before integrating a result.
 func Apply(ctx context.Context, directory, candidateID string) (ApplyResult, error) {
@@ -32,10 +46,16 @@ func Apply(ctx context.Context, directory, candidateID string) (ApplyResult, err
 	if err != nil {
 		return ApplyResult{}, err
 	}
-	ctx, err = PrepareProcessContainment(ctx, r.ProcessContainment)
+	source := SourceSnapshot(r)
+	sourceObjects := source
+	if r.Snapshot.Store != "" {
+		sourceObjects.Store = r.Snapshot.Store
+	}
+	ctx, closeReport, err := ReportContext(ctx, r)
 	if err != nil {
 		return ApplyResult{}, err
 	}
+	defer closeReport()
 	c, err := selectResult(r, candidateID)
 	if err != nil {
 		return ApplyResult{}, err
@@ -61,13 +81,13 @@ func Apply(ctx context.Context, directory, candidateID string) (ApplyResult, err
 	if err != nil {
 		return result, err
 	}
-	if err = validateSnapshot(ctx, r.Repository, r.Snapshot); err != nil {
+	if err = validateSnapshot(ctx, r.Repository, sourceObjects); err != nil {
 		return result, err
 	}
 	if err = validateSnapshot(ctx, c.Worktree, *c.FinalSnapshot); err != nil {
 		return result, err
 	}
-	canonical, err := gitOutput(ctx, r.Repository, nil, "diff", "--binary", "--full-index", "--no-ext-diff", "--no-textconv", r.Snapshot.Commit, c.FinalSnapshot.Tree, "--")
+	canonical, err := SnapshotDiff(ctx, sourceObjects, *c.FinalSnapshot)
 	if err != nil {
 		return result, err
 	}
@@ -99,18 +119,18 @@ func Apply(ctx context.Context, directory, candidateID string) (ApplyResult, err
 	if err != nil {
 		return result, err
 	}
-	if strings.TrimSpace(string(head)) != r.Snapshot.BaseCommit {
+	if strings.TrimSpace(string(head)) != source.BaseCommit {
 		return result, errors.New("source HEAD changed since the run; review and integrate the patch manually")
 	}
 	current, content, err := contentState(ctx, r.Repository)
 	if err != nil {
 		return result, err
 	}
-	if current != r.Snapshot.Tree || content != r.Snapshot.ContentSHA256 {
+	if current != source.Tree || content != source.ContentSHA256 {
 		return result, errors.New("source files changed since the run; preserve current work and reconcile the patch manually")
 	}
 	if len(patch) == 0 {
-		if c.FinalSnapshot.ContentSHA256 != r.Snapshot.ContentSHA256 {
+		if c.FinalSnapshot.ContentSHA256 != source.ContentSHA256 {
 			return result, errors.New("checked result changes raw bytes that the Git patch cannot represent; integrate it manually")
 		}
 		result.Note = "No changes to apply."
@@ -125,7 +145,7 @@ func Apply(ctx context.Context, directory, candidateID string) (ApplyResult, err
 	if err = os.Remove(preview); err != nil {
 		return result, err
 	}
-	if err = CreateWorktree(ctx, r.Snapshot, preview); err != nil {
+	if err = CreateWorktree(ctx, sourceObjects, preview); err != nil {
 		return result, err
 	}
 	result.Preview = preview
@@ -139,6 +159,9 @@ func Apply(ctx context.Context, directory, candidateID string) (ApplyResult, err
 	if previewTree != c.FinalSnapshot.Tree || previewContent != c.FinalSnapshot.ContentSHA256 {
 		return result, errors.New("patch does not reproduce the checked result's exact bytes; source was not changed")
 	}
+	if sourceObjects.Store != "" {
+		ctx = context.WithValue(ctx, privateApplicationMetadataKey{}, privateApplicationMetadata{Repository: r.Repository, Store: filepath.Join(preview, ".git")})
+	}
 	if _, err = applyGit(ctx, r.Repository, patch, "apply", "--check", "--binary", "-"); err != nil {
 		return result, err
 	}
@@ -146,12 +169,12 @@ func Apply(ctx context.Context, directory, candidateID string) (ApplyResult, err
 	if err != nil {
 		return result, err
 	}
-	if current != r.Snapshot.Tree || content != r.Snapshot.ContentSHA256 {
+	if current != source.Tree || content != source.ContentSHA256 {
 		return result, errors.New("source changed during integration review; nothing was applied")
 	}
 	// An empty commit or a branch switch can move HEAD without changing the
 	// selected files. File fingerprints alone cannot establish source freshness.
-	if matches, headErr := sourceHEADMatches(ctx, r.Repository, r.Snapshot.BaseCommit); headErr != nil {
+	if matches, headErr := sourceHEADMatches(ctx, r.Repository, source.BaseCommit); headErr != nil {
 		return result, headErr
 	} else if !matches {
 		return result, errors.New("source HEAD changed during integration review; nothing was applied")
@@ -166,15 +189,19 @@ func Apply(ctx context.Context, directory, candidateID string) (ApplyResult, err
 	if err = writePrivateJSON(result.Receipt, result); err != nil {
 		return result, fmt.Errorf("persist application intent before source mutation: %w", err)
 	}
+	ctx, err = AdmitIsolatedSourceWrite(ctx, r.Repository)
+	if err != nil {
+		return result, fmt.Errorf("admit trusted isolated integration: %w", err)
+	}
 	result.Phase = "finished"
 	if _, err = applyGit(ctx, r.Repository, patch, "apply", "--binary", "-"); err != nil {
 		result.Uncertain = true
 		result.Note = "Patch application did not confirm completion. Inspect the source before retrying; some files may have changed."
 		inspectCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		observedTree, observedContent, inspectErr := contentState(inspectCtx, r.Repository)
-		headMatches, headErr := sourceHEADMatches(inspectCtx, r.Repository, r.Snapshot.BaseCommit)
+		headMatches, headErr := sourceHEADMatches(inspectCtx, r.Repository, source.BaseCommit)
 		if inspectErr == nil && headErr == nil && headMatches {
-			if observedTree == r.Snapshot.Tree && observedContent == r.Snapshot.ContentSHA256 {
+			if observedTree == source.Tree && observedContent == source.ContentSHA256 {
 				result.Uncertain = false
 				result.Note = "Patch application failed; selected source content remains at the recorded starting snapshot."
 			}
@@ -182,7 +209,7 @@ func Apply(ctx context.Context, directory, candidateID string) (ApplyResult, err
 				result.Applied = true
 				if syncErr := syncAppliedSource(inspectCtx, r, *c.FinalSnapshot); syncErr == nil {
 					finalTree, finalRaw, finalErr := contentState(inspectCtx, r.Repository)
-					finalHEAD, finalHEADErr := sourceHEADMatches(inspectCtx, r.Repository, r.Snapshot.BaseCommit)
+					finalHEAD, finalHEADErr := sourceHEADMatches(inspectCtx, r.Repository, source.BaseCommit)
 					if finalErr == nil && finalHEADErr == nil && finalHEAD && finalTree == c.FinalSnapshot.Tree && finalRaw == c.FinalSnapshot.ContentSHA256 {
 						result.Uncertain = false
 						result.Note = "The application process did not confirm completion, but persisted source content matches the checked result. Do not repeat the application."
@@ -203,7 +230,7 @@ func Apply(ctx context.Context, directory, candidateID string) (ApplyResult, err
 	result.Note = "Applied selected patch to the source working tree; index, commits and remote are unchanged."
 	persistErr := syncAppliedSource(ctx, r, *c.FinalSnapshot)
 	current, content, checkErr := contentState(ctx, r.Repository)
-	headMatches, headErr := sourceHEADMatches(ctx, r.Repository, r.Snapshot.BaseCommit)
+	headMatches, headErr := sourceHEADMatches(ctx, r.Repository, source.BaseCommit)
 	var finalErr error
 	if persistErr != nil || checkErr != nil || headErr != nil || !headMatches || current != c.FinalSnapshot.Tree || content != c.FinalSnapshot.ContentSHA256 {
 		result.Uncertain = true
@@ -226,13 +253,28 @@ func sourceHEADMatches(ctx context.Context, repository, expected string) (bool, 
 }
 
 func applyGit(ctx context.Context, repo string, input []byte, args ...string) ([]byte, error) {
+	if SnapshotStoragePolicy(ctx) == StoragePrivate {
+		if err := rejectPrivatePromisorSource(ctx, repo); err != nil {
+			return nil, err
+		}
+	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	argv := append([]string{"-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-C", repo}, args...)
+	if store := PrivateApplicationMetadata(ctx, repo); store != "" && len(args) > 0 && args[0] == "apply" {
+		if _, err := validatePrivateStore(ctx, store); err != nil {
+			return nil, err
+		}
+		prefix := []string{"-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-c", "core.autocrlf=false", "-c", "core.safecrlf=false", "-c", "core.eol=lf", "-c", "apply.whitespace=nowarn", "-c", "apply.ignorewhitespace=false", "-C", repo, "--git-dir=" + store, "--work-tree=" + repo}
+		argv = append(prefix, args...)
+	}
 	cmd := exec.CommandContext(ctx, "git", argv...)
 	configureGitProcess(cmd)
 	cmd.Stdin = bytes.NewReader(input)
 	cmd.Env = cleanGitEnvironment()
+	if PrivateApplicationMetadata(ctx, repo) != "" && len(args) > 0 && args[0] == "apply" {
+		cmd.Env = append(cmd.Env, "GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_CONFIG_SYSTEM="+os.DevNull)
+	}
 	if lease, ok := ctx.Value(applicationLeaseContextKey{}).(*os.File); ok {
 		// ExtraFiles duplicates this descriptor without close-on-exec. Closing
 		// the owner process cannot release the coordination lock while a source
@@ -264,7 +306,10 @@ func cleanGitEnvironment() []string {
 			env = append(env, value)
 		}
 	}
-	return append(env, "GIT_TERMINAL_PROMPT=0", "GIT_CONFIG_NOSYSTEM=1")
+	// Controller Git must never retrieve absent objects from a source remote.
+	// The protocol allowlist also blocks transports on older Git versions that
+	// do not understand GIT_NO_LAZY_FETCH.
+	return append(env, "GIT_TERMINAL_PROMPT=0", "GIT_CONFIG_NOSYSTEM=1", "GIT_NO_LAZY_FETCH=1", "GIT_ALLOW_PROTOCOL=", "GIT_NO_REPLACE_OBJECTS=1")
 }
 
 func saveApplyReceipt(directory string, result ApplyResult) error {

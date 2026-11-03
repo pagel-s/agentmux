@@ -18,8 +18,9 @@ import (
 const maxFileBytes = 1 << 20
 
 type File struct {
-	Source string
-	Target string
+	Source     string
+	Target     string
+	Descriptor *os.File
 }
 
 type Prepared struct {
@@ -29,6 +30,13 @@ type Prepared struct {
 }
 
 func (p *Prepared) Close() {
+	if p != nil {
+		for _, file := range p.Files {
+			if file.Descriptor != nil {
+				_ = file.Descriptor.Close()
+			}
+		}
+	}
 	if p != nil && p.dir != "" {
 		_ = os.RemoveAll(p.dir)
 	}
@@ -39,6 +47,17 @@ func (p *Prepared) Close() {
 // isolation between workers, not a credential-hiding proxy. Native refreshes
 // cannot update the read-only snapshot or the owner's original cache.
 func Prepare(name string, auth managedconfig.NativeAuth) (*Prepared, error) {
+	return prepare(name, auth, false)
+}
+
+// PrepareAnonymous keeps filtered credentials only in a sealed anonymous Linux
+// file. Controller death closes its descriptor; there is no pathname-backed
+// credential snapshot to strand after SIGKILL. The original login is untouched.
+func PrepareAnonymous(name string, auth managedconfig.NativeAuth) (*Prepared, error) {
+	return prepare(name, auth, true)
+}
+
+func prepare(name string, auth managedconfig.NativeAuth, anonymous bool) (*Prepared, error) {
 	p := &Prepared{}
 	if auth.File == "" && auth.Provider == "" {
 		return p, nil
@@ -54,7 +73,7 @@ func Prepare(name string, auth managedconfig.NativeAuth) (*Prepared, error) {
 	if err != nil || !info.Mode().IsRegular() || (info.Mode().Perm() != 0600 && info.Mode().Perm() != 0400) || !ownedByController(info) {
 		return nil, errors.New("native auth source must be an owned private regular file (mode 0600 or 0400), without hardlinks or symlinks")
 	}
-	f, err := os.Open(auth.File)
+	f, err := openCredentialFile(auth.File)
 	if err != nil {
 		return nil, errors.New("native auth source could not be opened")
 	}
@@ -66,6 +85,11 @@ func Prepare(name string, auth managedconfig.NativeAuth) (*Prepared, error) {
 	data, err := io.ReadAll(io.LimitReader(f, maxFileBytes+1))
 	if err != nil || len(data) > maxFileBytes {
 		return nil, errors.New("native auth source exceeds the bounded credential-file size or could not be read")
+	}
+	ended, statErr := f.Stat()
+	pathEnd, pathErr := os.Lstat(auth.File)
+	if statErr != nil || pathErr != nil || !os.SameFile(info, ended) || !os.SameFile(info, pathEnd) || ended.Size() != info.Size() || int64(len(data)) != info.Size() || ended.Mode() != info.Mode() || pathEnd.Mode() != info.Mode() || !ended.ModTime().Equal(info.ModTime()) || !pathEnd.ModTime().Equal(info.ModTime()) {
+		return nil, errors.New("native auth source changed while reading")
 	}
 	var source map[string]json.RawMessage
 	dec := json.NewDecoder(bytes.NewReader(data))
@@ -117,6 +141,17 @@ func Prepare(name string, auth managedconfig.NativeAuth) (*Prepared, error) {
 	filtered, err := json.Marshal(selected)
 	if err != nil {
 		return nil, errors.New("native auth credential object could not be prepared")
+	}
+	if anonymous {
+		descriptor, source, err := anonymousCredential(filtered)
+		if err != nil {
+			return nil, err
+		}
+		p.Files = []File{{Source: source, Target: target, Descriptor: descriptor}}
+		var values any
+		_ = json.Unmarshal(filtered, &values)
+		p.Secrets = secretStrings(values)
+		return p, nil
 	}
 	p.dir, err = os.MkdirTemp("", "agentmux-auth-*")
 	if err != nil {

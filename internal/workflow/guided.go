@@ -10,6 +10,9 @@ import (
 	"path/filepath"
 	"strings"
 	"unicode/utf8"
+
+	"agentmux/internal/agentauth"
+	"agentmux/internal/managedconfig"
 )
 
 // GuidedOptions describes one owner-requested coding-and-review journey.
@@ -17,6 +20,8 @@ import (
 // command-only checks as well as selecting supported native profiles.
 type GuidedOptions struct {
 	Repository          string
+	Storage             string
+	Isolation           *IsolationOptions
 	ProcessContainment  string
 	Goal                string
 	Output              string
@@ -26,11 +31,14 @@ type GuidedOptions struct {
 	CheckTimeoutSeconds int
 	Coder               *Candidate
 	Reviewer            *Candidate
+	CoderHarness        string
+	ReviewerHarness     string
 }
 
 // GuidedPreview is read-only preflight evidence. It does not establish that a
-// provider is signed in or a later check will pass. Preparing it starts no
-// executable and creates no output, Git object, ref, branch or worktree.
+// provider is signed in or a later check will pass. Preparing it uses read-only
+// Git queries, starts no provider/check, and creates no output, object, ref,
+// branch or worktree.
 type GuidedPreview struct {
 	Plan           Plan              `json:"plan"`
 	Selection      SnapshotSelection `json:"selection"`
@@ -42,14 +50,45 @@ type GuidedPreview struct {
 	MaxNativeTurns int               `json:"max_native_turns"`
 }
 
+// MarshalJSON publishes reference metadata without the environment capabilities
+// retained in Plan for execution. Preparing the preview separately checks this
+// representation against every selected credential before returning success.
+func (p GuidedPreview) MarshalJSON() ([]byte, error) {
+	type publication GuidedPreview
+	value := publication(p)
+	value.Plan = redactedPlan(p.Plan)
+	return json.Marshal(value)
+}
+
 const guidedReviewSchema = `{"type":"object","additionalProperties":false,"required":["decision","summary","findings"],"properties":{"decision":{"type":"string","enum":["approve","request_changes"]},"summary":{"type":"string","minLength":1,"maxLength":2048},"findings":{"type":"array","maxItems":16,"items":{"type":"object","additionalProperties":false,"required":["file","line","message"],"properties":{"file":{"type":"string","minLength":1,"maxLength":512},"line":{"type":"integer","minimum":1,"maximum":10000000},"message":{"type":"string","minLength":1,"maxLength":512}}}}}}`
 
-const guidedReviewInstructions = `Review the current worktree against the owner's objective and recorded implementation. Read the actual files using native file tools. Do not edit, create or delete files. Do not delegate or invoke other models. This session permits native file tools; do not use terminal commands, RunCommand, ls or pwd. No directory listing is needed. Return JSON only, with no Markdown fences, in exactly this shape: {"decision":"approve"|"request_changes","summary":"specific conclusion","findings":[{"file":"relative/path","line":1,"message":"specific actionable defect"}]}. Approve requires an empty findings array. Request_changes requires at least one actionable finding. An approval means the inspected revision satisfies this review; it is not a guarantee of general correctness.`
+const guidedReviewInstructions = `Start an independent review using only the owner's objective, acceptance criteria and current worktree supplied in this fresh session. Read the actual files using the available read-only tools. Do not edit, create or delete files. Do not delegate or invoke other models. Return JSON only, with no Markdown fences, in exactly this shape: {"decision":"approve"|"request_changes","summary":"specific conclusion","findings":[{"file":"relative/path","line":1,"message":"specific actionable defect"}]}. Approve requires an empty findings array. Request_changes requires at least one actionable finding. An approval means the inspected revision satisfies this review; it is not a guarantee of general correctness.`
 
 // PrepareGuided validates a useful end-to-end plan before any model can run.
 // Default checks are deliberately narrow: Go tests, or an existing npm test
 // script. Multi-stack and unsupported projects need an explicit argv command.
-func PrepareGuided(ctx context.Context, options GuidedOptions) (GuidedPreview, error) {
+func PrepareGuided(ctx context.Context, options GuidedOptions) (preview GuidedPreview, prepareErr error) {
+	ctx, options, closeCredentials, err := prepareGuidedCredentials(ctx, options)
+	defer closeCredentials()
+	defer func() { prepareErr = redactEarlyIsolationError(ctx, prepareErr) }()
+	if err != nil {
+		return preview, err
+	}
+	preview, err = prepareGuided(ctx, options)
+	if err != nil {
+		return preview, err
+	}
+	data, err := json.Marshal(preview)
+	if err != nil {
+		return GuidedPreview{}, isolationEvidenceRefusal(ctx)
+	}
+	if _, changed, err := redactIsolationJSON(ctx, data); changed || err != nil {
+		return GuidedPreview{}, isolationEvidenceRefusal(ctx)
+	}
+	return preview, nil
+}
+
+func prepareGuided(ctx context.Context, options GuidedOptions) (GuidedPreview, error) {
 	var preview GuidedPreview
 	if err := ctx.Err(); err != nil {
 		return preview, err
@@ -99,11 +138,12 @@ func PrepareGuided(ctx context.Context, options GuidedOptions) (GuidedPreview, e
 	if attempts == 0 {
 		attempts = 2
 	}
-	coder, err := guidedCandidate("coder", options.Coder)
+	profiles := guidedCandidateSelections(options)
+	coder, err := guidedCandidate("coder", &profiles[0])
 	if err != nil {
 		return preview, err
 	}
-	reviewer, err := guidedCandidate("reviewer", options.Reviewer)
+	reviewer, err := guidedCandidate("reviewer", &profiles[1])
 	if err != nil {
 		return preview, err
 	}
@@ -113,6 +153,7 @@ func PrepareGuided(ctx context.Context, options GuidedOptions) (GuidedPreview, e
 	}
 	plan := Plan{
 		Version: 1, Kind: "work", Repository: repo, Goal: options.Goal, Execution: "local", Mode: "mission",
+		Storage: options.Storage, Isolation: options.Isolation,
 		ProcessContainment: containment,
 		TimeoutSeconds:     timeout, MaxAttempts: attempts, MaxParallel: 1,
 		Candidates: []Candidate{coder, reviewer},
@@ -125,6 +166,7 @@ func PrepareGuided(ctx context.Context, options GuidedOptions) (GuidedPreview, e
 			{ID: "final-check", Verify: true, DependsOn: []string{"final-review"}},
 		},
 	}
+	plan = normalized(plan)
 	if err := ValidatePlan(plan); err != nil {
 		return preview, err
 	}
@@ -132,6 +174,16 @@ func PrepareGuided(ctx context.Context, options GuidedOptions) (GuidedPreview, e
 		binary := candidate.Harness
 		if candidate.Harness == "antigravity" {
 			binary = "agy"
+		}
+		if candidate.Harness == "antigravity-bridge" {
+			binary = "pi"
+			bridge := "agy"
+			if len(plan.Isolation.BridgeCommand) > 0 {
+				bridge = plan.Isolation.BridgeCommand[0]
+			}
+			if err := guidedExecutable(repo, bridge); err != nil {
+				return preview, fmt.Errorf("Antigravity inference service is unavailable: %w", err)
+			}
 		}
 		if len(candidate.Command) > 0 {
 			binary = candidate.Command[0]
@@ -150,6 +202,12 @@ func PrepareGuided(ctx context.Context, options GuidedOptions) (GuidedPreview, e
 	if containment == "pid-namespace" {
 		authority = "Linux PID namespace containment is required and probed before execution. Filesystem and network retain trusted local authority. Integration requires an explicit apply command."
 	}
+	if plan.Isolation != nil {
+		authority = "Required filesystem, PID and network namespaces: only the assigned worktree is writable; selected credentials and exact inference origins are explicit capabilities. Checks receive no credentials or network. Integration remains explicit."
+		if plan.Isolation.Network == "allowlist" {
+			authority += " HTTPS uses an inspecting proxy with a temporary CA; incompatible clients fail closed."
+		}
+	}
 	return GuidedPreview{
 		Plan: plan, Selection: selection, Repository: repo, Output: output, CheckSource: checkSource,
 		Phases:         []string{"Implement and check", "Review the implementation", "Address review findings", "Review the final revision", "Run final checks"},
@@ -158,10 +216,93 @@ func PrepareGuided(ctx context.Context, options GuidedOptions) (GuidedPreview, e
 	}, nil
 }
 
-func RunGuided(ctx context.Context, options GuidedOptions, allowModels bool) (Report, error) {
-	preview, err := PrepareGuided(ctx, options)
+// Select credentials before any metadata validation or Git diagnostic can be
+// returned. This starts no process and writes no run files. Keep the exact
+// selected environment in the execution plan; only diagnostics are redacted.
+func prepareGuidedCredentials(ctx context.Context, options GuidedOptions) (context.Context, GuidedOptions, func(), error) {
+	if options.Isolation == nil && isolationFromContext(ctx) == nil {
+		return ctx, options, func() {}, nil
+	}
+	plan := Plan{Isolation: options.Isolation, Candidates: guidedCandidateSelections(options)}
+	ctx, plan, cleanup, err := registerIsolationEnvironment(ctx, plan)
 	if err != nil {
-		return Report{}, err
+		return ctx, options, cleanup, err
+	}
+	options.Coder, options.Reviewer = &plan.Candidates[0], &plan.Candidates[1]
+	policy := options.Isolation
+	if policy == nil {
+		policy = IsolationFromContext(ctx)
+	}
+	registry, _ := ctx.Value(isolationCredentialsKey{}).(*isolationCredentials)
+	fail := func(err error) (context.Context, GuidedOptions, func(), error) {
+		// A failed native selection has unknown values, so no nonempty error
+		// text is safe, including a fixed error or a replacement marker.
+		return ctx, options, cleanup, &redactedIsolationError{original: err, message: ""}
+	}
+	if policy != nil && len(policy.Auth) > 16 {
+		return fail(errors.New("selected native authentication exceeds its bound"))
+	}
+	candidates := map[string]Candidate{}
+	for _, candidate := range plan.Candidates {
+		if _, duplicate := candidates[candidate.ID]; duplicate && policy != nil && len(policy.Auth) != 0 {
+			return fail(errors.New("selected native authentication requires unambiguous candidates"))
+		}
+		candidates[candidate.ID] = candidate
+	}
+	if policy != nil {
+		for id, auth := range policy.Auth {
+			candidate, exists := candidates[id]
+			if !exists {
+				return fail(errors.New("selected native authentication requires an explicit candidate"))
+			}
+			prepared, err := agentauth.PrepareAnonymous(candidate.Harness, managedconfig.NativeAuth{File: auth.File, Provider: auth.Provider})
+			if err != nil {
+				return fail(err)
+			}
+			registry.mu.Lock()
+			registry.values[id] = append(registry.values[id], prepared.Secrets...)
+			registry.mu.Unlock()
+			prepared.Close()
+		}
+	}
+	registry.mu.Lock()
+	registry.authPending = false
+	registry.mu.Unlock()
+	selectedIsolationCredentials(ctx) // preserve an outer CLI publication observer
+	return ctx, options, cleanup, nil
+}
+
+func guidedCandidateSelections(options GuidedOptions) []Candidate {
+	profile := func(role, fallback, selected string, override *Candidate) Candidate {
+		candidate := Candidate{ID: role, Harness: fallback}
+		if selected != "" {
+			candidate.Harness = selected
+		}
+		if override != nil {
+			candidate = *override
+			if candidate.ID == "" {
+				candidate.ID = role
+			}
+		}
+		return candidate
+	}
+	reviewer := "antigravity"
+	if options.Isolation != nil {
+		reviewer = "antigravity-bridge"
+	}
+	return []Candidate{profile("coder", "codex", options.CoderHarness, options.Coder), profile("reviewer", reviewer, options.ReviewerHarness, options.Reviewer)}
+}
+
+func RunGuided(ctx context.Context, options GuidedOptions, allowModels bool) (report Report, runErr error) {
+	ctx, options, closeCredentials, err := prepareGuidedCredentials(ctx, options)
+	defer closeCredentials()
+	defer func() { runErr = redactEarlyIsolationError(ctx, runErr) }()
+	if err != nil {
+		return report, err
+	}
+	preview, err := prepareGuided(ctx, options)
+	if err != nil {
+		return report, err
 	}
 	return RunMission(ctx, preview.Plan, preview.Output, allowModels)
 }
@@ -196,6 +337,21 @@ func guidedCandidate(role string, override *Candidate) (Candidate, error) {
 		}
 	}
 	switch c.Harness {
+	case "claude":
+		if c.Model == "" {
+			c.Model = "sonnet"
+		}
+		if c.TimeoutSeconds == 0 {
+			c.TimeoutSeconds = 180
+		}
+		if len(c.Command) == 0 {
+			c.Command = []string{"claude", "--max-turns", "16"}
+			if role == "reviewer" {
+				c.Command = append(c.Command, "--tools", "Read,Glob,Grep", "--allowedTools", "Read,Glob,Grep", "--json-schema", guidedReviewSchema)
+			} else {
+				c.Command = append(c.Command, "--allowedTools", "Read,Write,Edit,Glob,Grep,Bash")
+			}
+		}
 	case "codex":
 		if c.Model == "" {
 			c.Model = "gpt-6.1-sol"
@@ -223,17 +379,30 @@ func guidedCandidate(role string, override *Candidate) (Candidate, error) {
 		if c.TimeoutSeconds == 0 {
 			c.TimeoutSeconds = 90
 		}
+	case "antigravity-bridge":
+		if c.Model == "" {
+			c.Model = "gemini-3.8-flash-low"
+		}
+		if !strings.HasPrefix(c.Model, "gemini-") {
+			return c, errors.New("isolated Antigravity inference requires an explicit Gemini model")
+		}
+		if c.TimeoutSeconds == 0 {
+			c.TimeoutSeconds = 180
+		}
 	case "command":
 		// Explicit owner/test fixture argv. A command's name does not establish
 		// whether it will use a model; the normal local authority boundary applies.
 	default:
-		return c, errors.New("guided work supports Codex, Antigravity/Gemini or explicit owner command profiles")
+		return c, errors.New("guided work supports Codex, Claude, Antigravity/Gemini, its isolated bridge, or explicit owner command profiles")
 	}
 	if role == "reviewer" {
 		if c.Prompt != "" {
 			c.Prompt += "\n\n"
 		}
 		c.Prompt += guidedReviewInstructions
+		if c.Harness == "antigravity" {
+			c.Prompt += "\nUse native file tools only; do not use terminal commands, RunCommand, ls or pwd."
+		}
 	} else if c.Harness == "antigravity" {
 		c.Prompt += "\nUse native read_file/write_file tools directly in the current worktree. Do not use RunCommand, ls or pwd; terminal commands are not approved in this profile."
 	}

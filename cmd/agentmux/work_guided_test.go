@@ -13,6 +13,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"agentmux/internal/egress"
 	"agentmux/internal/workflow"
 )
 
@@ -156,6 +157,51 @@ func TestGuidedCLIPIDPreviewPreservesPolicyWithoutProbing(t *testing.T) {
 	}
 	if _, err := os.Stat(catalog); !os.IsNotExist(err) {
 		t.Fatal("preview created catalog state")
+	}
+}
+
+func TestGuidedPreviewRetainsIsolationCapabilities(t *testing.T) {
+	o := workflow.NormalizedIsolation(&workflow.IsolationOptions{
+		Mode: "bubblewrap", Network: "allowlist",
+		Allow:         []egress.Endpoint{{Origin: "https://api.example.com"}, {Origin: "https://second.example.com"}},
+		ReadOnlyPaths: []string{"/tmp/runtime dependencies", "/tmp/second"},
+		Auth:          map[string]workflow.IsolationAuth{"coder": {File: "/tmp/login 'quoted'.json"}, "reviewer": {File: "/tmp/review.json", Provider: "anthropic"}},
+	})
+	preview := workflow.GuidedPreview{Repository: "/tmp/project", Output: "/tmp/result", Plan: workflow.Plan{
+		Goal: "Check quotes ' and $(literal)", Storage: workflow.StoragePrivate, Isolation: o,
+		Candidates:         []workflow.Candidate{{Harness: "codex"}, {Harness: "claude"}},
+		Checks:             []workflow.Check{{Command: []string{"/usr/bin/true"}, TimeoutSeconds: 60}},
+		ProcessContainment: "pid-namespace", TimeoutSeconds: 600, MaxAttempts: 2,
+	}}
+	var out bytes.Buffer
+	printGuidedPreview(&out, preview, "", true, false)
+	for _, want := range []string{"'--storage' 'private'", "'--isolation' 'bubblewrap'", "'--network' 'allowlist'", "'--coder' 'codex'", "'--reviewer' 'claude'", "'--allow-origin' 'https://api.example.com'", "'--allow-origin' 'https://second.example.com'", "'--read-only-path' '/tmp/runtime dependencies'", "'--auth' 'reviewer=/tmp/review.json'", "'--auth-provider' 'reviewer=anthropic'"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("suggestion lost %q: %s", want, out.String())
+		}
+	}
+	preview.Plan.Isolation.Allow[0].IPs = []string{"127.0.0.1"}
+	out.Reset()
+	printGuidedPreview(&out, preview, "", true, false)
+	if strings.Contains(out.String(), "Run: ") || !strings.Contains(out.String(), "retain all configured capabilities") {
+		t.Fatalf("preview weakened plan-only pinned capability: %s", out.String())
+	}
+}
+
+func TestGuidedCLIRepeatedCapabilitiesAndScalarRefusal(t *testing.T) {
+	root, repo, catalog, check := guidedCLIFixture(t)
+	args := []string{"Inspect the current files", "--repo", repo, "--catalog", catalog, "--isolation", "bubblewrap", "--allow-origin", "https://api.example.com", "--allow-origin", "https://second.example.com", "--read-only-path", root, "--json", "--"}
+	out, _ := invokeGuidedCLI(t, exitSuccess, append(args, check...)...)
+	var envelope struct {
+		Result workflow.GuidedPreview `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(out), &envelope); err != nil || envelope.Result.Plan.Isolation == nil || len(envelope.Result.Plan.Isolation.Allow) != 2 || envelope.Result.Plan.Isolation.Network != "allowlist" {
+		t.Fatalf("repeatable capability parse failed: %s %v", out, err)
+	}
+	invokeGuidedCLI(t, exitValidation, "Inspect", "--repo", repo, "--network", "none", "--json")
+	invokeGuidedCLI(t, exitValidation, "Inspect", "--repo", repo, "--storage", "private", "--storage", "shared", "--json")
+	if _, err := os.Stat(catalog); !os.IsNotExist(err) {
+		t.Fatal("capability preview or refusal created run files")
 	}
 }
 

@@ -42,6 +42,8 @@ commands and provider tools retain trusted host authority. --allow-models permit
 provider-backed turns and their charges. Checks run owner-configured argv.
 Outputs are private and never replace existing files. Runs retain patches;
 only an explicit apply command integrates a selected result.
+Isolated runs defer CLI output until completion and check it in bounded memory
+against explicitly selected credentials; unsafe output is refused.
 Handoff creates a reviewed brief; --to queues an instruction through the existing
 broker without changing the receiver's permissions or delivery mode.
 See docs/workflows.md and examples/workflows/.`
@@ -53,6 +55,20 @@ func runWorkflow(args []string) int {
 }
 
 func runWorkflowIO(ctx context.Context, args []string, out, diagnostics io.Writer) int {
+	if len(args) > 0 && !(len(args) == 2 && helpArgument(args[1])) {
+		switch args[0] {
+		case "run", "mission", "watch", "lab":
+			return runCLIPublicationSession(ctx, out, diagnostics, true, func(ctx context.Context, session *cliPublicationSession) (context.Context, error) {
+				return prepareFlowCLIPublication(ctx, session, args)
+			}, func(ctx context.Context, out, diagnostics io.Writer) int {
+				return runWorkflowUnguardedIO(ctx, args, out, diagnostics)
+			})
+		}
+	}
+	return runWorkflowUnguardedIO(ctx, args, out, diagnostics)
+}
+
+func runWorkflowUnguardedIO(ctx context.Context, args []string, out, diagnostics io.Writer) int {
 	diagnostics = workflowDiagnosticWriter{diagnostics}
 	fail := func(code int, err error) int {
 		fmt.Fprintf(diagnostics, "flow: %q\n", err.Error())
@@ -112,7 +128,11 @@ func runWorkflowIO(ctx context.Context, args []string, out, diagnostics io.Write
 		if operation == "lab" && (repetitions < 1 || repetitions > 20) {
 			return fail(exitValidation, errors.New("repetitions must be 1–20"))
 		}
-		fmt.Fprintln(diagnostics, "Execution: trusted local host. Source changes stay separate; results are retained for inspection.")
+		if plan.Isolation != nil {
+			fmt.Fprintln(diagnostics, "Execution: required filesystem, PID and network isolation. Source integration remains explicit.")
+		} else {
+			fmt.Fprintln(diagnostics, "Execution: trusted local host. Source changes stay separate; results are retained for inspection.")
+		}
 		var result any
 		switch operation {
 		case "run":
@@ -145,14 +165,21 @@ func runWorkflowIO(ctx context.Context, args []string, out, diagnostics io.Write
 		checksFile := flags.String("checks", "", "JSON array of named checks with command argv")
 		output := flags.String("output", "", "new private verification JSON file")
 		containment := flags.String("containment", "process-group", "process-group or Linux pid-namespace containment")
+		storage := flags.String("storage", workflow.StoragePrivate, "private or legacy shared fingerprint storage")
 		if err := flags.Parse(args[1:]); err != nil {
 			return fail(exitValidation, err)
 		}
 		if flags.NArg() != 0 || *repository == "" || *checksFile == "" || *output == "" {
 			return fail(exitValidation, errors.New("check requires --repo DIR --checks FILE --output FILE"))
 		}
+		if !utf8.ValidString(*repository) || !utf8.ValidString(*checksFile) || !utf8.ValidString(*output) {
+			return fail(exitValidation, errors.New("check paths must be valid UTF-8 so retained evidence preserves their identity"))
+		}
 		if err := workflow.ValidateProcessContainment(*containment); err != nil {
 			return fail(exitValidation, err)
+		}
+		if *storage != workflow.StoragePrivate && *storage != workflow.StorageShared {
+			return fail(exitValidation, errors.New("storage must be private or shared"))
 		}
 		var checks []workflow.Check
 		if err := readWorkflowJSON(*checksFile, &checks); err != nil {
@@ -168,9 +195,20 @@ func runWorkflowIO(ctx context.Context, args []string, out, diagnostics io.Write
 			return fail(exitValidation, err)
 		}
 		defer file.Close()
+		ctx, err = workflow.PrepareProcessContainment(ctx, *containment)
+		if err != nil {
+			return fail(exitRuntime, err)
+		}
+		ctx, err = workflow.PrepareSnapshotStorage(ctx, *storage, *repository, *output+".git")
+		if err != nil {
+			return fail(exitRuntime, err)
+		}
 		verification, err := workflow.VerifyWithContainment(ctx, *repository, checks, *containment)
 		if writeErr := json.NewEncoder(file).Encode(verification); writeErr != nil {
 			return fail(exitRuntime, writeErr)
+		}
+		if syncErr := file.Sync(); syncErr != nil {
+			return fail(exitRuntime, fmt.Errorf("persist verification evidence: %w", syncErr))
 		}
 		if err == nil && !verification.Passed {
 			err = errors.New("declared checks failed or changed the verified content; inspect the retained verification")
@@ -357,7 +395,19 @@ func newWorkflowOutput(path string) (*os.File, error) {
 	if err != nil {
 		return nil, fmt.Errorf("output parent must exist: %w", err)
 	}
-	return os.OpenFile(filepath.Join(parent, filepath.Base(abs)), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	file, err := os.OpenFile(filepath.Join(parent, filepath.Base(abs)), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		return nil, err
+	}
+	directory, err := os.Open(parent)
+	if err == nil {
+		err = errors.Join(directory.Sync(), directory.Close())
+	}
+	if err != nil {
+		_ = file.Close()
+		return nil, fmt.Errorf("persist verification output reservation: %w", err)
+	}
+	return file, nil
 }
 
 func validateWorkflowCheckOutput(ctx context.Context, repository, output string) error {

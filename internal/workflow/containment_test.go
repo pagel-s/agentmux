@@ -74,7 +74,7 @@ func TestProcessContainmentRejectsUnsafePeerConfigurationBeforeAnyWork(t *testin
 		t.Fatalf("unsafe launcher peer was not rejected during whole-plan validation: %v", err)
 	}
 	output := filepath.Join(root, "run")
-	if _, err := Run(context.Background(), p, output, false); err == nil || !strings.Contains(err.Error(), "LD_PRELOAD") {
+	if _, err := Run(context.Background(), p, output, false); err == nil || !strings.Contains(err.Error(), "unsafe for the containment launcher") {
 		t.Fatalf("unsafe launcher configuration did not fail before admission: %v", err)
 	}
 	if _, err := os.Stat(output); !os.IsNotExist(err) {
