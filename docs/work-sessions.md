@@ -506,7 +506,7 @@ shared-memory inspection and versioned editing, role/profile setup, autonomy and
 admission controls, and the same live permission switches as the terminal
 dashboard. Board is the main focus pane. Graph shows directional message/ping/command
 connections and shared board/memory access; select a connection to adjust it.
-In the current source build, enabled connections automatically group connected
+In v0.12.0, enabled connections automatically group connected
 nodes. Denied preview edges do not affect arrangement. Dragging or **Shift+Arrow**
 pins a node; its position persists locally for that workspace and study attempt,
 including after topology changes. Unpinned nodes arrange around pins after a drag.

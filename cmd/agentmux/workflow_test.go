@@ -26,12 +26,14 @@ func workflowCLIFixture(t *testing.T) (string, string, workflow.Plan) {
 	}
 	git := func(args ...string) {
 		t.Helper()
-		cmd := exec.Command("git", append([]string{"-C", repo, "-c", "core.hooksPath=/dev/null", "-c", "user.name=Workflow Test", "-c", "user.email=workflow@example.invalid"}, args...)...)
+		cmd := exec.Command("git", append([]string{"-C", repo, "-c", "core.hooksPath=/dev/null", "-c", "maintenance.auto=false", "-c", "gc.auto=0", "-c", "user.name=Workflow Test", "-c", "user.email=workflow@example.invalid"}, args...)...)
 		if output, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("git %v: %s %v", args, output, err)
 		}
 	}
 	git("init", "-q")
+	git("config", "maintenance.auto", "false")
+	git("config", "gc.auto", "0")
 	if err := os.WriteFile(filepath.Join(repo, "README"), []byte("fixture\n"), 0600); err != nil {
 		t.Fatal(err)
 	}

@@ -6,8 +6,9 @@ Antigravity reviews the final revision, and the project checks run again. You
 receive a saved report and a patch in a separate Git worktree. Agentmux does not
 integrate that patch into your project until you explicitly apply it.
 
-This command is available in the current source preview. Build and install this
-checkout with `make install`; the earlier published binary predates this journey.
+Available in [Agentmux v0.12.0](getting-started/installation.md). To inspect a
+checked fixture before configuring providers, start with
+[`amx demo`](getting-started/first-result.md).
 
 [![Checked coding journey: preview, isolated result collection when selected, inspection and explicit application](assets/guide/workflow-journey.svg)](assets/guide/workflow-journey.svg)
 

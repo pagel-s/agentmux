@@ -1,39 +1,41 @@
 # Agentmux
 
-Run agent teams in tmux with explicit communication and memory permissions.
-Use native Claude/Codex/Pi/Antigravity terminals for human-led work, managed workers for
-bounded autonomous workflows, or the research runners for controlled experiments.
-For a coding request with implementation, fresh review and executable checks,
-use [`amx work`](working.md); inspect the retained result before explicitly
-applying it to your project.
+Run coding agents together, control what they share, and inspect checked changes
+before applying them to your project.
+
+## Get your first checked result
+
+[Install v0.12.0](getting-started/installation.md), then run:
+
+```sh
+amx demo
+```
+
+The demo makes a deterministic change in a disposable Git repository, checks it
+independently, and applies its patch only to that fixture. It retains reports and
+the patch for inspection. After installation it needs Git and a POSIX shell,
+with no provider account or model calls. Follow
+[your first checked result](getting-started/first-result.md) to inspect the
+evidence, then preview a live task with `amx work`.
+
+This fixture demonstrates workflow mechanics, not AI task quality.
 
 ## Choose your starting point
 
 | Goal | Guide | Execution starts when |
 | --- | --- | --- |
+| Inspect a checked fixture without configuring providers | [Your first checked result](getting-started/first-result.md) | Run `amx demo`; it changes only its generated repository |
 | Ask for one checked coding change | [Work on a task](working.md) | Add `--allow-models` after inspecting the preview |
 | Type directly in several native conversations | [Fresh-install walkthrough](getting-started/quickstart.md) | Start a workspace and use its native terminals |
 | Compare alternatives, build a mission or review changed snapshots | [Advanced workflows](workflows.md) | Run an owner-authored plan; provider turns require `--allow-models` |
 | Queue tasks or enable bounded autonomous teams | [Managed setup](managed-setup.md) | Launch a reviewed team configuration |
 | Run controlled cooperation or competition studies | [Research](research.md) | Run a declared study; model participants require explicit opt-in |
 
-`work` and `flow` require the current source build; the published v0.11.0 binary
-predates them. Follow [build from source](getting-started/installation.md#build-from-source)
-and run `make install` to use these commands. The
-[visual guide](visual-guide.md#ask-for-a-checked-coding-change) illustrates their
-preview, review, evidence and application boundaries.
-
-## Start here
-
-1. [Install the v0.11.0 release or build from source](getting-started/installation.md).
-2. [Explore the illustrated workflow guide](visual-guide.md): navigate the
-   terminal and web app, connect everyday sessions, and follow teams, automation
-   and research with screenshots and examples.
-3. [Try the fresh-install walkthrough](getting-started/quickstart.md): use two
-   native sessions, connect them, exchange context, and disconnect them again.
-4. Keep [work sessions](work-sessions.md) open for terminal keys, session
-   discovery, workspace switching and individual-session recovery. Use the local
-   web app for activity, tasks, shared-memory editing and permission controls.
+The [visual guide](visual-guide.md) illustrates the coding journey and the native
+terminal/web controls. [Work sessions](work-sessions.md) covers session discovery,
+workspace switching and individual-session recovery. A
+[source build](getting-started/installation.md#build-from-source) remains an
+alternative to release binaries.
 
 Keep the [everyday command reference](commands.md#everyday-work-sessions) handy
 for selecting named workspaces, adding or connecting sessions, and choosing a
@@ -61,6 +63,13 @@ describe enforced boundaries, reproducible checks and limits.
 - [Provider compatibility](provider-compatibility.md)
 - [Reproduce a mixed-harness scenario](mixed-harness-acceptance.md)
 - [Research](research.md) and [controlled studies](research-study.md)
+
+## Evaluate and contribute
+
+[Quality and evidence](quality.md) describes what the checks establish and what
+remains unproven. Use [matched workflow evaluations](evaluation.md) to measure
+task quality, time and cost.
+[Release validation](releasing.md) covers installable artifacts and release checks.
 
 ## Existing workspace mode
 

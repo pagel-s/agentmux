@@ -21,6 +21,8 @@ archives:
   - formats: [tar.gz]
     files:
       - README.md
+      - CONTRIBUTING.md
+      - SECURITY.md
       - docs/*.md
       - docs/*.json
       - docs/**/*
@@ -49,8 +51,11 @@ snapshot:
 release:
   prerelease: auto
   header: |
-    Terminal-first agent workspaces: native sessions, scoped collaboration,
-    a terminal and web control center, shared memory, dynamic teams and research.
+    Checked coding workflows and controlled collaboration across native agents.
+
+    Start with `amx demo`: a model-free first result in a private disposable
+    repository. This release includes `amx work` and `amx flow`, private workflow
+    evidence, explicit application and connected-session graph arrangement.
 
     The managed runtime and workbench remain experimental. Start with the
     [illustrated workflow guide](https://pagel-s.github.io/agentmux/visual-guide/)

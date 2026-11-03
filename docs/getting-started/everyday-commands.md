@@ -8,7 +8,8 @@ With several running workspaces, choose one or pass `-s NAME`.
 
 ## Ask for a checked coding change
 
-These commands require a [current source installation](installation.md#build-from-source).
+These commands are included in [v0.12.0](installation.md). For a first checked
+fixture with no provider setup, run [`amx demo`](first-result.md).
 From a Git project with an initial commit and the selected native CLIs installed:
 
 ```sh

@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## v0.12.0 - 2026-11-03
+
+- Add `amx demo`, a model-free first result using the actual private workflow
+  engine, independent checks and application only to a new disposable project.
+- Focus default CLI help on everyday tasks; retain full compatibility reference
+  in `amx help all` and add automation/legacy help topics.
+- Align installation and the first-result journey with the released workflow
+  commands. Include contribution and security reporting instructions.
+- Verify checksum-installed release archives on Linux and macOS; retain actual
+  first-run evidence before publication. Reject publication when draft assets
+  differ from the verified bytes.
+- Add reproducible matched comparison tooling and a first-user evaluation
+  protocol. Offline controls validate the harness without claiming model quality
+  or a productivity advantage.
+
 - Add `amx work` for a previewable coding, fresh-review, revision and acceptance
   journey with status/list/show commands scoped to each project and explicit
   application.

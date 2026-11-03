@@ -378,6 +378,10 @@ class Soak:
         repository = root / "project"
         repository.mkdir(mode=0o700)
         self.git(repository, "init", "-q")
+        # Keep strict source metadata checks free of fixture-owned detached
+        # maintenance, including Git versions using the older auto-GC path.
+        self.git(repository, "config", "--local", "maintenance.auto", "false")
+        self.git(repository, "config", "--local", "gc.auto", "0")
         (repository / "owner.txt").write_text("committed\n")
         (repository / ".gitignore").write_text("__pycache__/\n" + "".join("/" + name + "\n" for name in FAULT_MARKER_NAMES))
         self.git(repository, "add", ".")

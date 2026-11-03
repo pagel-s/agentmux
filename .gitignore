@@ -5,6 +5,7 @@ bin/
 .tools/
 dist/
 /sites/
+/site/
 .vscode/
 .codex
 *.test

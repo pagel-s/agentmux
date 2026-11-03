@@ -136,6 +136,8 @@ func run(args []string) int {
 		return runWorkflow(args[1:])
 	case "work":
 		return runGuidedWork(args[1:])
+	case "demo":
+		return runDemo(args[1:], os.Stdout, os.Stderr)
 	case "research":
 		return runResearch(args[1:])
 	case "provider":
@@ -190,8 +192,7 @@ func run(args []string) int {
 		fmt.Println(versionString())
 		return exitSuccess
 	case "help", "-h", "--help":
-		printUsage()
-		return exitSuccess
+		return runHelp(args[1:], os.Stdout, os.Stderr)
 	default:
 		fmt.Fprintf(os.Stderr, "error: unknown command %q\n\n", args[0])
 		printUsage()
@@ -2154,112 +2155,4 @@ func mustGetwd() string {
 		return "."
 	}
 	return wd
-}
-
-func printUsage() {
-	fmt.Println(`amx · Agentmux
-
-Run amx to open the current
-workspace or choose a running one. Short options: -s workspace, -p project,
--d detach on up/start, -j JSON on mode/delivery or ws/workspaces, -o web browser.
-Use -s before or after the command. Inside an owned tmux attachment, omitted
-workspace selectors use that attachment; outside, commands default to work.
-Creation with up/start always defaults to work unless a selector is supplied.
-
-Everyday shortcuts:
-  amx up -s daily -p ./project
-  amx a -s daily                 amx ui -s daily
-  amx split claude codex -s daily
-  amx unsplit codex -s daily
-  amx ls -s daily               amx ws
-  amx new --harness codex -p ./project -s daily
-  amx link claude codex -s daily
-  amx allow codex claude commands -s daily
-  amx mode claude auto -s daily
-Aliases: up=start, a/open=attach, ui=dashboard, ls=sessions, ws=workspaces,
-new=add, link=collaborate, unlink=disconnect, name=label, mode=delivery, archive=retire.
-Ctrl+K opens Actions; Ctrl+P switches sessions. Tab focuses sidebar/content.
-Left/Right switches views; Up/Down navigates the focused area.
-amx a restores the last live native terminal; amx ui opens the workbench.
-
-Everyday work sessions use dedicated tmux sockets. Use sessions/dashboard to inspect them;
-the legacy list/status commands below address the default tmux socket.
-
-Usage:
-  amx start [--project DIR] [--session work] [--detach]
-  amx add [NAME] --harness claude|codex|pi|antigravity --project DIR [--title "..."] [--role "..." | --native-only]
-  amx label ID "Fix login redirect" [--session work | --state DIR]
-  amx role ID "Current owner role" [--session work | --state DIR]
-  amx sessions [--session work | --state DIR]
-  amx workspaces [--json] [--register DIR]
-  amx relaunch ID [--resume ID|last|picker] [--session work | --state DIR]
-  amx delivery ID [manual|review|auto] [--approve CANDIDATE] [--session work | --state DIR]
-  amx allow|deny FROM TO commands|messages|pings [--session work | --state DIR]
-  amx connect OBSERVED_ID --name NAME [--session work | --state DIR]
-  amx collaborate AGENT AGENT [...] [--legacy-policy preserve|group] [--session work | --state DIR]
-  amx disconnect AGENT AGENT [...] [--session work | --state DIR]
-  amx retire ID [--session work | --state DIR]
-  amx isolate AGENT [...] [--session work | --state DIR]
-  amx remove AGENT [--session work | --state DIR]
-  amx attach [AGENT] [--session work | --state DIR]
-  amx dashboard [--session work | --state DIR]
-  amx web [--session work | --state DIR] [--open]
-  amx send AGENT "message" [--mode auto|note|instruction] [--session work | --state DIR]
-  amx reply TASK_OR_MESSAGE_ID "message" [--mode auto|note|instruction]
-      [--to AGENT | --board NAMESPACE] [--session work | --state DIR]
-  amx inbox [--session work | --state DIR]
-  amx board "note" [--group ID | --board NAMESPACE] [--session work | --state DIR]
-  amx team <list|create|edit|invite|remove|transfer|dissolve|join|leave|accept-owner|move> [options]
-  amx down [--session work | --state DIR]
-  amx templates
-  amx init <template> <path> [--force]
-  amx edit <path-or-session>
-  amx remember <session> <config>
-  amx pack <config> [<output.amx>]
-  amx tools [--format <openai|codex|gemini|claude>]
-  amx prompt [--provider <provider>] [--mode <cli-bridge|native-mcp>]
-  amx tool-call <tool-name> (--from-json <json> | --from-file <path> | --from-stdin)
-  amx mcp-server
-  amx managed <setup|up|down|restart|doctor|status|activity|init|serve|call|worker|remote|memory|trace|capsule|rotate> [options]
-  amx experiment <plan|run> <manifest> [options]
-  amx flow <run|mission|watch|lab|check|status|explain|handoff|report|apply> [options]
-  amx work "Describe the change" [--allow-models] [--repo DIR] -- CHECK [ARG...]
-  amx work <status|list|show|apply> [RUN_DIR|latest] [--repo DIR]
-  amx research <plan|run|analyze|status|watch|pause|resume|step|stop> <manifest-output-or-state> [options]
-  amx load <config> [--param key=value] [--attach|--no-attach] [--dry-run] [--replace] [--strict] [--verbose]
-  amx reload <config> [--param key=value] [--attach|--no-attach] [--dry-run] [--strict] [--verbose]
-  amx validate <config> [--param key=value] [--strict]
-  amx render <config> [--param key=value] [--strict]
-  amx list
-  amx dashboard <session>
-  amx status <session> [--json] [--pane <pane-name>] [--logs [N]]
-  amx inspect <session> <pane-name> [--json]
-  amx kv-set <session> <key> <value> [--json]
-  amx kv-get <session> <key> [--json]
-  amx kv-list <session> [--json]
-  amx kv-del <session> <key> [--json]
-  amx wait <session> <pane> <pattern> [--scope <output|visible>] [--timeout <duration>] [--json]
-  amx scale <session> <agent-name> <count> [--window <name>] [--json]
-  amx focus <session> <pane-name> [--json]
-  amx restart <session> <pane-name> [--json]
-  amx rerun <session> <pane-name> [--json]
-  amx stop <session> <pane-name> [--json]
-  amx kill <session> <pane-name> [--json]
-  amx capture <session> <pane-name> [--json] [--tail N] [--strip-empty]
-  amx send <session> <pane-name> [--json] [--no-enter] <command...>
-  amx doctor [<config>]
-  amx version`)
-
-	fmt.Println(`
-Starter flow:
-  amx start
-  amx attach claude
-  amx web --open
-
-Legacy workspace flow:
-  amx templates
-  amx init default my-workflow.yaml
-  amx init coding-starter coding.yaml
-  amx validate my-workflow.yaml
-  amx load my-workflow.yaml --replace --no-attach`)
 }

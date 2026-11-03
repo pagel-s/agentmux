@@ -26,7 +26,7 @@ def git(*args):
 
 
 def verify_source(tag, commit):
-    if not re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?", tag):
+    if not re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?", tag):
         raise ValueError("release tags must be version tags such as v0.11.0")
     if not re.fullmatch(r"[0-9a-f]{40}", commit) or git("rev-parse", "HEAD") != commit:
         raise ValueError("checkout does not match the workflow commit; publication was not started")

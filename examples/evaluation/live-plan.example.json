@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "mode": "live",
+  "source": {
+    "repository": "/absolute/path/to/trusted/task-repository",
+    "commit": "REPLACE_WITH_FULL_LOWERCASE_COMMIT_OBJECT_ID"
+  },
+  "repeats": 6,
+  "total_timeout_seconds": 18000,
+  "protocol": {
+    "purpose": "Template only; not a measured benchmark or a ready-to-run claim",
+    "hardware": "RECORD machine, OS, CPU/RAM and network conditions",
+    "budget": "DECLARE equal-budget or real-workflow comparison and provider-side limits",
+    "grading": "Freeze evaluator checks before runs; blind manual artifact grading",
+    "versions": "PIN all wrappers, tools, native CLI versions, models and settings before running"
+  },
+  "tasks": [
+    {
+      "id": "normalize",
+      "prompt": "Implement normalize(text) in normalize.py: trim, lowercase, and join whitespace-separated words with hyphens. Preserve the public API.",
+      "development_check": ["python3", "-m", "compileall", "-q", "."],
+      "checks": [
+        {
+          "id": "external-contract",
+          "argv": ["python3", "/absolute/path/to/agentmux/examples/evaluation/grade-normalize.py", "{repo}"],
+          "evaluator_files": ["/absolute/path/to/agentmux/examples/evaluation/grade-normalize.py"],
+          "timeout_seconds": 15
+        }
+      ]
+    }
+  ],
+  "arms": [
+    {
+      "id": "single-agent",
+      "argv": ["/absolute/path/to/your/pinned-single-agent-wrapper", "{repo}", "{task}", "{output}"],
+      "timeout_seconds": 600,
+      "provenance": "Record wrapper hash, CLI version, exact model, reasoning setting, native task/turn budget and auth route"
+    },
+    {
+      "id": "agentmux",
+      "argv": ["python3", "/absolute/path/to/agentmux/examples/evaluation/run-agentmux.py", "--binary", "/absolute/path/to/pinned/amx", "--repo", "{repo}", "--task", "{task}", "--output", "{output}", "--timeout", "8m", "--allow-models"],
+      "timeout_seconds": 600,
+      "provenance": "Record Agentmux commit, native CLI versions and exact coder/reviewer models; the adapter uses the selected binary's profile defaults"
+    },
+    {
+      "id": "competitor",
+      "argv": ["/absolute/path/to/your/pinned-competitor-wrapper", "{repo}", "{task}", "{output}"],
+      "timeout_seconds": 600,
+      "provenance": "Name and pin the competitor and wrapper; record model/budget parity and configuration differences"
+    }
+  ]
+}

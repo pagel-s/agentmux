@@ -6,10 +6,11 @@ directly with agents; the web app provides a larger view of relationships,
 shared context and evidence. Coding workflows also retain private offline HTML
 reports without requiring a running work-session broker or web app.
 
-The managed runtime and workbench are experimental. This guide follows
-the current source build. The interactive screenshots below were captured for
-v0.11.0; the newer `work` and `flow` commands require
-[building and installing the current source](getting-started/installation.md#build-from-source).
+The managed runtime and workbench are experimental. This guide describes
+[v0.12.0](getting-started/installation.md), including `amx work` and `amx flow`.
+The interactive screenshots below were captured for v0.11.0; later controls are
+described in the text. For a first checked fixture without provider setup,
+start with [`amx demo`](getting-started/first-result.md).
 Native providers must be
 installed and authenticated separately. A new installation does not replace
 an existing workspace's pinned controller; use a fresh workspace for all current
@@ -287,7 +288,7 @@ the list pages 50 entries at a time and supports arrows and Enter. Inspect the
 direction shown in the controls before changing it. The graph offers an overview
 of effective permissions; permission explanations remain the authority.
 
-In the current source build, enabled session connections and enabled shared-access
+In v0.12.0, enabled session connections and enabled shared-access
 links automatically group connected nodes. Denied preview edges do not affect
 placement. Drag a node, or focus it and use **Shift+Arrow**, to pin its position.
 Pins persist in this browser for the selected workspace and study attempt, and
@@ -300,7 +301,7 @@ recipient; proximity does not establish that agents actually cooperated.
 
 The graph shows at most 40 active sessions. Use the roster and paginated
 **List view** for larger workspaces. The screenshot above records the older
-v0.11.0 controls; automatic grouping and **Auto arrange** are source-build features.
+v0.11.0 controls; automatic grouping and **Auto arrange** are included in v0.12.0.
 
 ### Separate permission from delivery
 

@@ -57,6 +57,8 @@ class ReleaseGateTests(unittest.TestCase):
                 gate.verify_source("v0.11.0", SHA)
         with self.assertRaisesRegex(ValueError, "version tags"):
             gate.verify_source("v0.11.0\nunsafe", SHA)
+        with self.assertRaisesRegex(ValueError, "version tags"):
+            gate.verify_source("v0.11.0+unsupported-installer-metadata", SHA)
 
     @mock.patch.dict(os.environ, {"GITHUB_TOKEN": "private-fixture-token"})
     def test_only_404_means_not_published(self):

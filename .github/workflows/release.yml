@@ -15,6 +15,7 @@ concurrency:
 jobs:
   goreleaser:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -33,12 +34,32 @@ jobs:
         with:
           go-version: '1.24'
 
-      - name: Run GoReleaser
+      - name: Build and upload an unpublished draft
         if: steps.release.outputs.publish == 'true'
         uses: goreleaser/goreleaser-action@v5
         with:
           distribution: goreleaser
           version: v2.19.0
-          args: release --clean
+          args: release --clean --draft
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify the checksum-installed release and first result
+        if: steps.release.outputs.publish == 'true'
+        run: python3 scripts/smoke-release.py --artifact-dir dist --version "$GITHUB_REF_NAME" --output "$RUNNER_TEMP/agentmux-release-smoke"
+
+      - name: Publish only the verified draft assets
+        if: steps.release.outputs.publish == 'true'
+        run: python3 scripts/publish-release.py --repository "$GITHUB_REPOSITORY" --tag "$GITHUB_REF_NAME" --commit "$GITHUB_SHA" --artifact-dir dist --smoke-evidence "$RUNNER_TEMP/agentmux-release-smoke/smoke.json"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Preserve release verification evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-install-verification
+          path: ${{ runner.temp }}/agentmux-release-smoke
+          include-hidden-files: true
+          retention-days: 7
+          if-no-files-found: ignore

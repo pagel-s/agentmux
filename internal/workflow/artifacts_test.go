@@ -21,6 +21,8 @@ func fixtureRepo(t *testing.T) (string, string) {
 		t.Fatal(err)
 	}
 	fixtureGit(t, repo, "init", "-q")
+	fixtureGit(t, repo, "config", "maintenance.auto", "false")
+	fixtureGit(t, repo, "config", "gc.auto", "0")
 	fixtureGit(t, repo, "config", "user.email", "fixture@example.test")
 	fixtureGit(t, repo, "config", "user.name", "Fixture")
 	fixtureGit(t, repo, "config", "commit.gpgsign", "false")
@@ -33,7 +35,7 @@ func fixtureRepo(t *testing.T) (string, string) {
 
 func fixtureGit(t *testing.T, repo string, args ...string) string {
 	t.Helper()
-	cmd := exec.Command("git", append([]string{"-C", repo, "-c", "core.hooksPath=/dev/null"}, args...)...)
+	cmd := exec.Command("git", append([]string{"-C", repo, "-c", "core.hooksPath=/dev/null", "-c", "maintenance.auto=false", "-c", "gc.auto=0"}, args...)...)
 	cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1")
 	b, err := cmd.CombinedOutput()
 	if err != nil {

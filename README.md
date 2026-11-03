@@ -1,53 +1,73 @@
 # Agentmux
 
-Run Claude Code, Codex, Pi and native Antigravity in tmux with a shared communication board,
-private/shared memory, and explicit permissions between agents.
+Run coding agents together, control what they share, and inspect checked changes
+before applying them to your project. Agentmux works with Claude Code, Codex, Pi
+and Antigravity. The managed runtime and workbench are experimental.
 
-Use native interactive terminals for a human-led workday, managed workers for
-queued tasks and bounded autonomous workflows, or a mixture of both. Terminal
-and local web dashboards expose activity and the same live permission controls.
-The managed runtime and workbench are experimental.
+## Get your first checked result
 
-For an everyday coding-and-review journey, try
-`amx work "Fix the login redirect" -- go test ./...`. It previews Codex
-implementation, Antigravity review and checked results without starting models.
-Add `--allow-models` to run, then inspect with `amx work status` and explicitly
-apply with `amx work apply latest`. See [working on a task](docs/working.md).
+[Install v0.12.0](docs/getting-started/installation.md#install-a-published-binary-recommended)
+for Linux or macOS, then run:
+
+```sh
+amx demo
+```
+
+The demo creates a disposable Git project, makes a deterministic change, runs an
+independent check, and applies the checked patch **only to that fixture**. It
+prints the retained report and patch locations. After installation, it needs Git
+and a POSIX shell; no provider account, model calls, Python or tmux is needed.
+This demonstrates workflow mechanics, not AI task quality. Follow
+[your first checked result](docs/getting-started/first-result.md) to inspect the evidence.
+
+## Use it on your project
+
+Install and sign in to Codex and Antigravity, the default coder and reviewer.
+From a Git project with an initial commit, preview a task and its check:
+
+```sh
+amx work "Fix the login redirect" -- go test ./...
+```
+
+The preview starts no models and creates no run files. Replace `go test ./...`
+with your project's check. Add `--allow-models` to permit provider execution,
+which can incur charges:
+
+```sh
+amx work "Fix the login redirect" --allow-models -- go test ./...
+amx work status
+amx work show latest
+```
+
+Inspect the saved report and patch, then choose `amx work apply latest` to change
+your project. See [work on a task](docs/working.md) for provider choices, fresh
+reviews, deadlines and recovery. Each run retains private Git evidence;
+filesystem and network isolation require the explicit
+[Linux isolation option](docs/workflows.md#private-storage-and-full-isolation).
 
 [![Coding workflow: preview, bounded implementation and fresh review, saved evidence, explicit application](docs/assets/guide/workflow-journey.svg)](docs/visual-guide.md#ask-for-a-checked-coding-change)
 
-For revision-bound comparisons, checks, handoffs, snapshot review, missions and
-repeated team trials, see [the workflow guide](docs/workflows.md). Start with the
-command-only examples: `amx flow --help`.
+For several native conversations, use [work sessions](#start-a-work-session).
+For custom comparisons, missions and handoffs, see [advanced workflows](docs/workflows.md).
 
-New workflows use private Git snapshots and fresh review sessions. On Linux,
-`--isolation bubblewrap` also requires filesystem, process and network isolation;
-Codex and Claude run inside it, while Antigravity/Gemini can supply inference to
-isolated Pi tools. See the [controls and limits](docs/workflows.md#private-storage-and-full-isolation).
+## Install or update
 
-The new `work` and `flow` commands require the current source build until the
-next release. Run `make install` from this checkout to update your local `amx`.
-
-## Install
-
-Download **[v0.11.0](https://github.com/pagel-s/agentmux/releases/tag/v0.11.0)**
-for Linux or macOS, on x86-64 or ARM64. The
-[installation guide](docs/getting-started/installation.md#install-a-published-binary-recommended)
-provides a checksum-verified installer for the `amx` command; no Go
-toolchain is needed for the published binaries. The guide downloads the
-selected release over HTTPS and verifies its checksum before installation.
+The [installation guide](docs/getting-started/installation.md) provides a
+checksum-verified installer for Linux/macOS on x86-64 and ARM64, plus upgrade
+instructions. Published binaries need no Go toolchain.
 
 ### Build from source
 
-Requirements: Go 1.24+, Make, Python 3 and tmux 3.2+. Isolated agents and an isolated broker
-require Linux with working Bubblewrap namespaces. Everyday native sessions use trusted local execution to preserve your normal
-configuration; it provides no filesystem isolation. Isolated profiles are opt-in.
+Building requires Git, Make and Go 1.24+; `make install` also uses Python 3.
+Native sessions require tmux 3.2+. Isolated profiles require Linux with working
+Bubblewrap namespaces. Everyday native sessions use trusted local execution to
+preserve your normal configuration; isolation is opt-in.
 
 ```sh
 git clone https://github.com/pagel-s/agentmux.git
 cd agentmux
 make build
-./bin/amx doctor
+./bin/amx demo
 export PATH="$PWD/bin:$PATH"
 ```
 
@@ -68,7 +88,7 @@ For screenshots and practical journeys from everyday sessions to dynamic teams,
 competition studies and remote workers, read the
 [visual workflow guide](docs/visual-guide.md).
 
-For the complete first-run test, follow the [fresh-install
+For a complete native-session exercise, follow the [fresh-install
 walkthrough](docs/getting-started/quickstart.md). It uses a separate workspace
 and covers direct native interaction, opt-in collaboration, shared memory,
 revocation, web controls and cleanup with expected results at each step.
@@ -278,3 +298,7 @@ per-agent authorization.
 [Workspace quickstart](docs/getting-started/quickstart.md#existing-workspace-mode)
 · [Portable bundles](docs/tutorials/portable-bundles.md)
 · [Documentation](https://pagel-s.github.io/agentmux/)
+
+For development and evaluation, see [contributing](CONTRIBUTING.md),
+[security reporting](SECURITY.md), [quality and evidence](docs/quality.md), and
+[matched workflow comparisons](docs/evaluation.md).
