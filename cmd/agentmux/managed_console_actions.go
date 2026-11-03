@@ -182,6 +182,7 @@ func (m *console) openActions() {
 	add("Advanced new session", "new-advanced", m.tab, "")
 	add("Open native terminal", "enter", 1, need)
 	add("Session details", "o", 1, need)
+	add("Tasks for selected session", "session-tasks", 4, need)
 	add("Knowledge exposure ledger", "exposure", 1, need)
 	add("Rename session title", "L", 1, need)
 	add("Edit coordinated role", "V", 1, need)
@@ -342,8 +343,20 @@ func (m console) invokeMenuAction() (tea.Model, tea.Cmd) {
 	case "resolve-retry":
 		m.reviewTaskResolution("retry")
 	case "attention":
-		m.attentionOnly = !m.attentionOnly
+		m.attentionOnly = true
 		m.openSessionSwitcher()
+		return m, m.fetch
+	case "session-tasks":
+		m.taskEpoch++
+		m.taskRecipient = a.target
+		m.taskQuery, m.taskState = "", ""
+		m.taskAfter, m.taskCursor = "", ""
+		m.taskBack = nil
+		m.taskMore = false
+		m.task = 0
+		m.data.activity.Tasks = nil
+		m.data.taskPage = nil
+		m.contentFocus = true
 		return m, m.fetch
 	case "new-advanced":
 		m.startNewSession(true)
@@ -450,7 +463,7 @@ func (m *console) openResearchDetails() {
 }
 
 func (m console) menuActionReason(action consoleMenuAction) string {
-	read := action.key == "exposure" || action.key == "o" || action.key == "f" || action.key == "attention" || strings.HasPrefix(action.key, "study-") || action.key == "research-details"
+	read := action.key == "exposure" || action.key == "o" || action.key == "f" || action.key == "session-tasks" || action.key == "attention" || strings.HasPrefix(action.key, "study-") || action.key == "research-details"
 	if !read && (m.offline || m.busy) {
 		return "Reconnect and wait for pending changes"
 	}
@@ -465,6 +478,10 @@ func (m console) menuActionReason(action consoleMenuAction) string {
 	switch action.key {
 	case "N", "new-advanced", "attention", "f", "study-follow":
 		return ""
+	case "session-tasks":
+		if target == nil {
+			return "Select a session"
+		}
 	case "research-details":
 		if m.data.research == nil {
 			return "No research trial in this workspace"

@@ -24,11 +24,12 @@ import (
 
 const guidedWorkUsage = `Usage: amx work "Describe the change" [options] -- CHECK [ARG...]
        amx work "Describe the change" [options]
-       amx work status [RUN_DIR|latest] [--repo DIR] [--catalog DIR] [--json]
-       amx work list [--repo DIR] [--catalog DIR] [--json]
-       amx work show [RUN_DIR|latest] [--repo DIR] [--catalog DIR] [--json]
-       amx work apply [RUN_DIR|latest] [--repo DIR] [--catalog DIR] [--json]
-       amx work recover [RUN_DIR|latest] [--repo DIR] [--catalog DIR] [--json]
+       amx work status [RUN_ID|RUN_DIR|latest] [--repo DIR] [--catalog DIR] [--json]
+       amx work list [--repo DIR] [--catalog DIR] [--limit N] [--json]
+       amx work show [RUN_ID|RUN_DIR|latest] [--repo DIR] [--catalog DIR] [--json]
+       amx work show RUN_ID|RUN_DIR|latest [--repo DIR] [--catalog DIR] --open
+       amx work apply [RUN_ID|RUN_DIR|latest] [--repo DIR] [--catalog DIR] [--json]
+       amx work recover [RUN_ID|RUN_DIR|latest] [--repo DIR] [--catalog DIR] [--json]
 
 Preview is the default: it starts no models and writes no run files.
 Add --allow-models to execute Codex implementation, Antigravity review,
@@ -376,6 +377,14 @@ func runGuidedHistory(ctx context.Context, operation string, args []string, out,
 	repository := flags.String("repo", ".", "project directory")
 	catalog := flags.String("catalog", "", "private run catalog")
 	asJSON := flags.Bool("json", false, "machine-readable output")
+	limit := 0
+	openReport := false
+	if operation == "list" {
+		flags.IntVar(&limit, "limit", 0, "show the newest N runs; omitted lists complete history")
+	}
+	if operation == "show" {
+		flags.BoolVar(&openReport, "open", false, "open a fresh private report for an explicit run selector; cannot combine with --json")
+	}
 	*asJSON = guidedJSONRequested(flags, args)
 	positionals, err := parseGuidedFlags(flags, args)
 	encodedResult := false
@@ -396,9 +405,18 @@ func runGuidedHistory(ctx context.Context, operation string, args []string, out,
 		if len(positionals) > 0 {
 			return fail(exitValidation, errors.New("list takes no run selector"))
 		}
+		limited := false
+		flags.Visit(func(option *flag.Flag) { limited = limited || option.Name == "limit" })
+		if limited && (limit < 1 || limit > 1024) {
+			return fail(exitValidation, errors.New("limit must be between 1 and 1024; omit --limit for complete history"))
+		}
 		runs, err := workflow.ListRuns(ctx, *repository, *catalog)
 		if err != nil {
 			return fail(exitRuntime, err)
+		}
+		total := len(runs)
+		if limited && len(runs) > limit {
+			runs = runs[:limit]
 		}
 		if *asJSON {
 			encodedResult = true
@@ -408,15 +426,23 @@ func runGuidedHistory(ctx context.Context, operation string, args []string, out,
 		} else if len(runs) == 0 {
 			fmt.Fprintln(out, "No recorded work for this project. Preview your first task with amx work \"Describe the change\".")
 		} else {
-			fmt.Fprintln(out, "Recorded work for this project:")
-			for _, run := range runs {
-				fmt.Fprintf(out, "  %s · %s\n    %s\n    %s\n", guidedLine(run.State), guidedLine(run.Goal), guidedLine(run.StartedAt), guidedLine(run.Directory))
+			if len(runs) < total {
+				fmt.Fprintf(out, "Recorded work for this project (showing %d of %d):\n", len(runs), total)
+			} else {
+				fmt.Fprintln(out, "Recorded work for this project:")
 			}
+			for _, run := range runs {
+				fmt.Fprintf(out, "  %s · %s · %s\n    %s\n    %s\n", guidedLine(run.ID), guidedLine(run.State), guidedLine(run.Goal), guidedLine(run.StartedAt), guidedLine(run.Directory))
+			}
+			fmt.Fprintln(out, "Use the run ID with amx work status, show, apply or recover in this project.")
 		}
 		return exitSuccess
 	}
 	if len(positionals) > 1 {
-		return fail(exitValidation, errors.New("provide at most one run directory or latest"))
+		return fail(exitValidation, errors.New("provide at most one run ID, directory or latest"))
+	}
+	if openReport && (*asJSON || len(positionals) != 1 || strings.TrimSpace(positionals[0]) == "") {
+		return fail(exitValidation, errors.New("--open requires one explicit run ID, directory or latest and cannot be combined with --json"))
 	}
 	selector := "latest"
 	if len(positionals) == 1 {
@@ -476,8 +502,16 @@ func runGuidedHistory(ctx context.Context, operation string, args []string, out,
 		printGuidedSummary(out, summary)
 		if operation == "show" {
 			printGuidedPatch(out, summary)
-			if summary.ReportPath != "" {
-				fmt.Fprintf(out, "Open this saved report in your browser:\n%s\n", guidedLine(summary.ReportPath))
+			if openReport {
+				if err := openGuidedHistoryReport(ctx, directory, summary.ID, out); err != nil {
+					return fail(exitRuntime, err)
+				}
+			} else {
+				if command := guidedHistoryShowCommand(summary); command != "" {
+					fmt.Fprintf(out, "Open a fresh report in your browser:\n%s\n", command)
+				} else {
+					fmt.Fprintln(out, "Browser command omitted because a path contains display controls; inspect --json for exact paths.")
+				}
 			}
 		}
 	}
@@ -601,7 +635,7 @@ func guidedExecutionFlags(plan workflow.Plan) ([]string, bool) {
 }
 
 func printGuidedSummary(out io.Writer, summary workflow.WorkSummary) {
-	fmt.Fprintf(out, "\n%s\nTask: %s\nProject: %s\n", guidedLine(summary.Outcome), guidedLine(summary.Goal), guidedLine(summary.Repository))
+	fmt.Fprintf(out, "\n%s\nRun: %s\nTask: %s\nProject: %s\n", guidedLine(summary.Outcome), guidedLine(summary.ID), guidedLine(summary.Goal), guidedLine(summary.Repository))
 	fmt.Fprintf(out, "Process containment: %s\n", guidedLine(summary.ProcessContainment))
 	fmt.Fprintf(out, "Snapshot storage: %s\n", guidedLine(summary.Storage))
 	if summary.Isolation != "" {
@@ -640,6 +674,14 @@ func printGuidedSummary(out io.Writer, summary workflow.WorkSummary) {
 	if summary.ReportPath != "" {
 		fmt.Fprintf(out, "Report: %s\n", guidedLine(summary.ReportPath))
 	}
+}
+
+func guidedHistoryShowCommand(summary workflow.WorkSummary) string {
+	command := "amx work show " + guidedShellWord(summary.Directory) + " --repo " + guidedShellWord(summary.Repository) + " --open"
+	if guidedLine(command) != command {
+		return ""
+	}
+	return command
 }
 
 func startGuidedProgress(ctx context.Context, directory string, out io.Writer, register func(context.Context) error) func() {

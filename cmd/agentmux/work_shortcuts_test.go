@@ -34,6 +34,9 @@ func TestEverydayShortcutsPreserveIntentAndPayload(t *testing.T) {
 		{[]string{"mode", "-s", "poem", "claude", "--notes=false", "auto"}, []string{"delivery", "claude", "auto", "--session", "poem", "--notes=false"}},
 		{[]string{"new", "-s", "poem", "reviewer", "--harness", "codex", "--role", "--help"}, []string{"add", "reviewer", "--session", "poem", "--harness", "codex", "--role", "--help"}},
 		{[]string{"connect", "-s", "poem", "--name", "reviewer", "external-7"}, []string{"connect", "external-7", "--session", "poem", "--name", "reviewer"}},
+		{[]string{"-s", "poem", "context", "-j"}, []string{"context", "--json", "--session", "poem"}},
+		{[]string{"-s", "poem", "task", "task-1", "-j"}, []string{"task", "task-1", "--json", "--session", "poem"}},
+		{[]string{"tasks", "--query", "-s", "--status", "--state", "--after", "-j", "--limit", "4", "-j", "-s", "poem"}, []string{"tasks", "--query", "-s", "--status", "--state", "--after", "-j", "--limit", "4", "--json", "--session", "poem"}},
 	}
 	for _, tc := range cases {
 		before := append([]string(nil), tc.args...)
@@ -160,6 +163,95 @@ func TestAmxHomeWithPipeListsInsteadOfStartingModels(t *testing.T) {
 	var out, diag bytes.Buffer
 	if code := runWorkHome(strings.NewReader(""), &out, &diag); code != 0 || !strings.Contains(out.String(), "amx up -s NAME") {
 		t.Fatalf("home: %d %s %s", code, out.String(), diag.String())
+	}
+}
+
+func TestWorkspaceChooserFiltersDuplicateNamesByExactState(t *testing.T) {
+	m := workHome{width: 100, height: 24, rows: []workspaceListing{
+		{Session: "same", State: "/custom/alpha", Status: "running"},
+		{Session: "same", State: "/custom/beta", Status: "attention"},
+	}}
+	view := m.View()
+	for _, text := range []string{"same", "/custom/alpha", "/custom/beta", "running", "attention"} {
+		if !strings.Contains(view, text) {
+			t.Fatalf("chooser omitted %q: %s", text, view)
+		}
+	}
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+	m = next.(workHome)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("beta attention")})
+	m = next.(workHome)
+	if len(m.visibleRows()) != 1 || m.selectedState() != "/custom/beta" {
+		t.Fatalf("filter selected stale row: %+v", m)
+	}
+	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil || next.(workHome).chosen != "/custom/beta" {
+		t.Fatalf("opened wrong duplicate name: %+v", next)
+	}
+}
+
+func TestWorkspaceChooserFilterTextAndClearPreserveFocus(t *testing.T) {
+	m := workHome{rows: []workspaceListing{
+		{Session: "same", State: "/j/k/q"},
+		{Session: "same", State: "/prior-focus"},
+	}, selected: 1}
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+	m = next.(workHome)
+	for _, text := range []string{"j", "/", "k", "/", "q"} {
+		next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(text)})
+		if cmd != nil {
+			t.Fatalf("%q quit or opened while filtering", text)
+		}
+		m = next.(workHome)
+	}
+	if m.query != "j/k/q" || m.selectedState() != "/j/k/q" {
+		t.Fatalf("navigation keys were not literal filter text: %+v", m)
+	}
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlU})
+	m = next.(workHome)
+	if m.query != "" || m.selectedState() != "/prior-focus" {
+		t.Fatalf("clearing filter lost prior focus: %+v", m)
+	}
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyUp})
+	m = next.(workHome)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("prior-focus")})
+	m = next.(workHome)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlU})
+	m = next.(workHome)
+	if m.selectedState() != "/j/k/q" {
+		t.Fatalf("second query restored an old focus: %+v", m)
+	}
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("nothing matches")})
+	m = next.(workHome)
+	if next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter}); cmd != nil || next.(workHome).chosen != "" {
+		t.Fatal("empty filter opened a stale selection")
+	}
+}
+
+func TestAmxHomeInventoryPrioritizesActiveAndQuotesExactTargets(t *testing.T) {
+	rows := []workspaceListing{
+		{Session: "same", State: "/custom/saved1", Status: "stopped"},
+		{Session: "same", State: "/custom/it's active", Status: "running", Agents: 2},
+		{Session: "same", State: "/custom/saved2", Status: "stopped"},
+		{Session: "same", State: "/custom/saved3", Status: "stopped"},
+		{Session: "same", State: "/custom/saved4", Status: "stopped"},
+	}
+	var out bytes.Buffer
+	writeWorkHomeInventory(&out, rows, "dashboard")
+	text := out.String()
+	active := strings.Index(text, "same · running")
+	stopped := strings.Index(text, "same · stopped")
+	if active < 0 || stopped < 0 || active >= stopped {
+		t.Fatalf("active workspaces were buried: %s", text)
+	}
+	exact := managedlaunch.ShellCommand([]string{"amx", "ui", "--state", rows[1].State})
+	if !strings.Contains(text, exact) || !strings.Contains(text, "Saved (3 of 4)") || strings.Contains(text, "/custom/saved4") || !strings.Contains(text, "All workspaces: amx ws") {
+		t.Fatalf("home targets are ambiguous or saved inventory unbounded: %s", text)
+	}
+	out.Reset()
+	writeWorkHomeInventory(&out, rows[1:2], "attach")
+	if !strings.Contains(out.String(), managedlaunch.ShellCommand([]string{"amx", "a", "--state", rows[1].State})) {
+		t.Fatal("attach landing view suggested a different operation")
 	}
 }
 

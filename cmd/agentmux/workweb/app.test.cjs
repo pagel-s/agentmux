@@ -2840,6 +2840,92 @@ test("late history results cannot replace a newer query or leave its controls lo
   assert.match(f.node("task-history-status").textContent,/filters applied/);
 });
 
+test("direct session task inspection resets every filter and fences old recipient and repeated requests",async()=>{
+  const f=pollingContext(),requests=[];
+  vm.runInContext(source.slice(source.indexOf("function ageText("),source.indexOf("const submissionStorageKey=")),f.context);
+  const review={target:"a",version:4},draft={text:"Unsent message",reply:"exact-parent"};
+  Object.assign(f.context,{ownerActionReview:review,messageDrafts:new Map([["a",draft]]),taskAttention:"failed",renderGlobalHeading(){}});
+  vm.runInContext(source.slice(source.indexOf("function activateTab("),source.indexOf('$("board-filter").onchange')),f.context);
+  f.node("message").value=draft.text;
+  f.node("task-query").value="old query";
+  f.node("task-state-filter").value="failed";
+  f.node("task-attention-filter").value="failed";
+  Object.assign(f.context.taskHistory,{query:"old query",to:"a",state:"failed",cursor:"old-page",hasMore:true});
+  f.context.call=(operation,args)=>new Promise(resolve=>requests.push({operation,args,resolve}));
+  const oldRecipient=f.context.loadTaskHistory("reset");
+  const oldSameRecipient=f.context.inspectTasks("b");
+  const current=f.context.inspectTasks("b");
+  assert.equal(requests.length,3,"each explicit inspection starts one replacement request");
+  assert.ok(requests.every(request=>request.operation==="task.list"));
+  for(const request of requests.slice(1)) {
+    assert.equal(request.args.to,"b");
+    assert.equal(request.args.query,"");
+    assert.equal(request.args.state,"");
+    assert.equal(request.args.after,"");
+  }
+  assert.equal(f.context.taskAttention,"");
+  for(const id of ["task-query","task-state-filter","task-attention-filter"])assert.equal(f.node(id).value,"");
+  assert.equal(f.node("task-agent-filter").value,"b");
+  requests[2].resolve({tasks:[{...historyTask("current-b"),to:"b"}],cursor:"current-b",has_more:false});
+  await current;
+  requests[1].resolve({tasks:[{...historyTask("late-b"),to:"b"}],cursor:"late-b",has_more:true});
+  requests[0].resolve({tasks:[historyTask("late-a")],cursor:"late-a",has_more:true});
+  await Promise.all([oldRecipient,oldSameRecipient]);
+  assert.deepEqual([...f.context.taskHistory.tasks].map(task=>task.id),["current-b"]);
+  assert.equal(f.context.taskHistory.cursor,"current-b");
+  assert.equal(f.context.taskHistory.loading,false);
+  assert.equal(f.context.taskHistory.hasMore,false);
+  assert.equal(f.context.selected,"a");
+  assert.equal(f.context.tab,"tasks");
+  assert.equal(f.context.ownerActionReview,review);
+  assert.equal(f.context.messageDrafts.get("a"),draft);
+  assert.equal(f.node("message").value,draft.text);
+});
+
+test("complete attention summary opens exact historical recipient tasks beyond the loaded page",async()=>{
+  const f=pollingContext(),requests=[];
+  vm.runInContext(source.slice(source.indexOf("function ageText("),source.indexOf("const submissionStorageKey=")),f.context);
+  Object.assign(f.context,{renderGlobalHeading(){},taskSummary:{agents:[{agent:"retired-recipient",total:83,failed:2,uncertain:1,pending:0,running:0}],updatedAt:1}});
+  vm.runInContext(source.slice(source.indexOf("function activateTab("),source.indexOf('$("board-filter").onchange')),f.context);
+  f.context.snapshot.activity.tasks=[historyTask("unrelated-recent-task")];
+  f.context.call=async(operation,args)=>{requests.push({operation,args});return {tasks:[{...historyTask("retained-failure"),to:"retired-recipient",state:"failed"}],cursor:"retained-failure",has_more:false};};
+  f.context.renderAttentionQueue();
+  const row=f.node("attention-queue").children.find(node=>node.dataset.itemKey==="summary:retired-recipient");
+  assert.ok(row,"summary does not depend on the recent task page");
+  const inspect=row.querySelectorAll("button").find(button=>button.textContent==="Inspect tasks");
+  await inspect.onclick();
+  assert.equal(requests.length,1);
+  assert.equal(requests[0].operation,"task.list");
+  assert.equal(requests[0].args.to,"retired-recipient");
+  assert.equal(f.context.taskHistory.tasks[0].id,"retained-failure");
+  assert.equal(f.node("task-agent-filter").value,"retired-recipient");
+  assert.ok(f.node("task-agent-filter").options.some(option=>option.value==="retired-recipient"&&option.textContent.includes("historical recipient")));
+  assert.equal(f.context.selected,"a","historical inspection preserves the selected session and its drafts");
+});
+
+test("selected-session task action rejects a background target change before inspecting",async()=>{
+  const f=pollingContext(),notices=[],requests=[];
+  vm.runInContext(source.slice(source.indexOf("function ageText("),source.indexOf("const submissionStorageKey=")),f.context);
+  Object.assign(f.context,{quickNewSession(){},closeActionMenu(){}});
+  vm.runInContext(source.slice(source.indexOf("function availableActions("),source.indexOf("function openActionMenu(")),f.context);
+  f.context.notice=message=>notices.push(message);
+  f.context.activateTab=next=>{f.context.tab=next;};
+  f.context.call=async(operation,args)=>{requests.push({operation,args});return {tasks:[],has_more:false};};
+  f.context.renderActionMenu();
+  const action=f.node("action-results").children.find(node=>node.children[0]?.textContent==="Tasks for selected session");
+  assert.ok(action);
+  f.context.selected="b";
+  action.click();
+  assert.equal(requests.length,0);
+  assert.match(notices.at(-1),/Selected session changed/);
+  const current=f.node("action-results").children.find(node=>node.children[0]?.textContent==="Tasks for selected session");
+  current.click();
+  await Promise.resolve();
+  assert.equal(requests.length,1);
+  assert.equal(requests[0].operation,"task.list");
+  assert.equal(requests[0].args.to,"b");
+});
+
 test("failed history pagination publishes no partial refresh and retains the prior result",async()=>{
   const f=pollingContext();
   f.context.taskHistory.tasks=[historyTask("retained")];

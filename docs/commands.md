@@ -5,6 +5,9 @@ This guide explains what each command is for, when to use it, and the most usefu
 For a guided native-terminal workflow, see [work sessions](work-sessions.md).
 For original YAML pane-layout examples, see [recipes](recipes.md).
 
+`context`, `task`/`tasks`, `work list --limit` and `work show --open` are
+source-build additions after v0.12.0.
+
 ## Checked coding requests
 
 `demo`, `work` and `flow` are included in
@@ -18,7 +21,8 @@ independently of an interactive workspace's `-s NAME` selector.
 | `amx work "Change description" --allow-models -- CHECK [ARG...]` | Execute the bounded journey with the explicitly selected provider profiles |
 | `amx work status [RUN\|latest]` | Inspect recorded phases, checks, review and next action for the project |
 | `amx work show [RUN\|latest]` | Inspect the checked patch preview and retained HTML report path |
-| `amx work list` | List retained runs for the selected project |
+| `amx work list [--limit N]` | List retained runs and stable IDs for the selected project; omitted limit retains all history |
+| `amx work show RUN --open` | Render a fresh private HTML report from saved evidence and open it in the system browser |
 | `amx work apply [RUN\|latest]` | Revalidate and explicitly apply an approved result to the original project |
 | `amx work recover [RUN\|latest]` | Resolve an interrupted application's journal against exact source content without replaying its patch |
 
@@ -79,6 +83,9 @@ default workspace `work` and opens its workbench.
 | `amx add --harness claude --project DIR --title "Task"` | Start another native session; copy its printed stable ID |
 | `amx add --harness antigravity --native-only --project DIR` | Start native Antigravity without an injected Agentmux prompt |
 | `amx sessions` | List registered sessions and separately observed external terminals |
+| `amx context [--json]` | Explain the ordinary command target, selection source and runtime status without starting anything |
+| `amx task TASK_ID [--json]` | Read one delegated instruction, its result, version, delivery and recovery evidence |
+| `amx tasks [--to ID] [--status STATE] [--query TEXT] [--limit N] [--after TASK_ID] [--json]` | Search retained delegation history, newest first; copy the continuation command to read more |
 | `amx workspaces [--register DIR]` | Find named and remembered custom workspaces; register an older custom location |
 | `amx relaunch AGENT_ID [--resume ID\|last\|picker] [--native-launcher ABSOLUTE_PATH]` | Relaunch one exited native session, retaining its stable ID and healthy peers; optional launcher recovery applies only to trusted-local interactive sessions |
 | `amx delivery AGENT_ID [manual\|review\|auto] [--approve CANDIDATE_ID]` | Inspect native delivery evidence, set receiver mode, or approve an exact queued item; `--help` lists limits and subscriptions |

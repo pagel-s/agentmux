@@ -48,7 +48,9 @@ contain agents from unrelated projects; sharing a workspace grants no peer
 communication or shared-memory access by itself.
 
 In the dashboard, **Shift+N** inherits the selected session's provider and
-project. Its final review shows both. **Ctrl+O** while entering the optional
+project. Its final review shows both, plus the provider-default model and
+trusted local host execution; it does not copy an existing model override or
+sandbox. **Ctrl+O** while entering the optional
 title opens advanced settings, including the project directory. Cancelling
 the review starts no provider. A running conversation's project is not changed
 by relabeling it: add a new session when you want a different project.
@@ -133,6 +135,13 @@ Inside an owned attachment, an omitted workspace selector uses that exact
 workspace. Outside, bare `amx` or `amx a` uses the sole running workspace or
 shows a chooser when several are running. Commands with an explicit agent ID
 still use workspace `work` outside an attachment unless you provide `-s`.
+
+In source builds after v0.12.0, press `/` or Ctrl+F in the workspace chooser,
+then type to filter by name, path or status; arrows or Ctrl+N/P select a match, Ctrl+U clears and
+Enter opens the exact displayed workspace. Non-interactive `amx` shows active
+workspaces first and a short saved summary; `amx ws` retains the full inventory.
+`amx context [-s NAME]` prints the ordinary command target and its selection
+source without attaching or starting agents.
 
 `amx a` restores an attachment's last live agent when available, otherwise the
 workspace's last live selection. If none is available, it opens the workbench.

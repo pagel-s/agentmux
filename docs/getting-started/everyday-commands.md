@@ -6,10 +6,29 @@ starts no agents. `amx a` restores the last live native terminal in the selected
 workspace. If no terminal has been selected or it has closed, the workbench opens.
 With several running workspaces, choose one or pass `-s NAME`.
 
+The searchable chooser, `context`, `task`/`tasks`, bounded run lists and report
+opening described below are source-build features after v0.12.0.
+
+## Daily power-user loop
+
+| Goal | Short route |
+| --- | --- |
+| Resume | `amx a`; filter the workspace chooser by name, path or status |
+| Launch | **Shift+N** inherits the selected provider and project; review before starting |
+| Delegate | `amx send ID "Do this" --mode instruction -s NAME`; copy its printed inspection command |
+| Inspect | `amx task TASK_ID -s NAME`, or **Ctrl+K → Tasks for selected session** |
+| Recover | Read the task's delivery/receipt first; review the exact task/version in Tasks |
+
+Use `amx context` to see which workspace an ordinary command selects and why.
+It never starts or switches a workspace. Outside an attachment, bare `amx` and
+`amx a` offer running-workspace selection; commands with IDs still default to
+`work` unless you supply a selector. Keep `-s NAME` on scripts and copied commands.
+
 ## Ask for a checked coding change
 
-These commands are included in [v0.12.0](installation.md). For a first checked
-fixture with no provider setup, run [`amx demo`](first-result.md).
+The base checked workflow is included in [v0.12.0](installation.md); `--limit`
+and `--open` below require a newer source build. For a first checked fixture
+with no provider setup, run [`amx demo`](first-result.md).
 From a Git project with an initial commit and the selected native CLIs installed:
 
 ```sh
@@ -17,6 +36,8 @@ amx work "Fix the login redirect" -- go test ./...
 amx work "Fix the login redirect" --allow-models -- go test ./...
 amx work status
 amx work show latest
+amx work list --limit 10
+amx work show RUN_ID --open
 amx work apply latest
 ```
 
@@ -28,6 +49,11 @@ After an interrupted application, inspect and use `amx work recover latest` to
 resolve its journal without replaying the patch. See [work on a task](../working.md)
 for provider, isolation, deadlines and recovery details, or
 [advanced workflows](../workflows.md) for command-only comparisons and custom plans.
+
+Copy a stable run ID from `work list` when following up on older work. `--open`
+requires an explicit ID, directory or `latest`; it renders a fresh private HTML
+report from saved evidence and opens it with the system browser. It prints and
+retains the generated file if the opener fails. It never starts another run.
 
 `work` selects the Git project in the current directory (or `--repo DIR`). The
 interactive commands below select a running workspace with `-s NAME`; these are
@@ -83,11 +109,21 @@ Auto delivers eligible turns within the configured limits.
 amx send reviewer "Check the login proposal." --mode instruction -s work
 amx mode reviewer -j -s work
 amx mode reviewer --approve CANDIDATE_ID -s work
+amx tasks --to reviewer --status running -s work
+amx task TASK_ID -s work
 ```
 
 Copy the exact pending candidate ID from the status. A queued or submitted
 item does not prove the model executed it; inspect its receipt and native
 terminal. Provider-specific guarantees are in [native collaboration](../native-delivery.md).
+
+`tasks` searches retained history at the broker, newest first, with `--query`,
+`--status`, `--to` and `--limit` (1–200). Copy the printed **More** command for
+the next page, or add `-j` for JSON. `task` shows the exact instruction, result,
+version and available receipt/recovery evidence; these commands change no task
+state. In the workbench or web app, **Tasks for selected session** clears prior
+filters and opens that recipient's complete paginated history. Web attention
+rows also offer **Inspect tasks**, including for a retired recipient.
 
 ```sh
 amx mode reviewer manual -s work

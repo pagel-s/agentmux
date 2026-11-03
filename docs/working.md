@@ -180,7 +180,8 @@ one. Keep reports private because they contain task and code data.
 ```sh
 amx work status
 amx work show latest
-amx work list
+amx work list --limit 10
+amx work show RUN_ID --open
 ```
 
 These commands use the current Git project. `status` explains the recorded
@@ -189,8 +190,17 @@ the hash-checked patch preview and saved HTML report path. The preview is capped
 at 64 KiB, preserves code line breaks and escapes terminal control characters;
 truncated previews identify the full retained patch. Use the retained artifact
 or explicit apply command for integration, because displayed escapes are for
-inspection. These commands do not open a browser or start a model. `list`
-shows recorded runs for this project, newest first.
+inspection. Ordinary inspection starts no model and opens no browser. `list`
+shows stable run IDs for this project, newest first. Omit `--limit` to retain
+the full list; an explicit limit accepts 1–1024.
+
+In source builds after v0.12.0, `show RUN_ID --open` renders a fresh private,
+script-free HTML report from the selected run's saved evidence and asks the
+system browser to open it. Use an explicit ID, directory or `latest`; it
+resolves that selector once and never starts another run. Existing `report.html`
+is not opened. The generated file path is printed and retained even if the
+browser cannot open it. `--open` and `--json` cannot be combined. Stable IDs
+and `--limit` are also source-build additions after v0.12.0.
 
 Use an explicit directory or run ID to inspect another recorded attempt:
 
