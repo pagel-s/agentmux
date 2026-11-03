@@ -9,6 +9,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 35
 
     steps:
       - name: Checkout
@@ -43,7 +44,7 @@ jobs:
           AGENTMUX_MANAGED_INTEGRATION: '1'
           AGENTMUX_EXPERIMENT_INTEGRATION: '1'
           AGENTMUX_TMUX_DEBUG: '1'
-        run: go test -race -count=1 ./...
+        run: go test -race -count=1 -timeout=20m ./...
 
       - name: Verify workflow CLI journeys without provider calls
         run: python3 scripts/validate-workflows.py --binary bin/amx --output "$RUNNER_TEMP/agentmux-workflow-validation"
@@ -107,8 +108,9 @@ jobs:
   sandbox:
     # Keep isolation checks explicit and fail closed. A runner that cannot
     # establish the boundary must fail this job, rather than skip every check.
+    # Include real namespace/durability tests and the later mutation/soak stages.
     runs-on: ubuntu-22.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4

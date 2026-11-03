@@ -277,5 +277,5 @@ owner-selected runtime dependencies are part of that boundary.
 
 For individual comparisons, custom mission plans, exact handoff delivery,
 snapshot watchers and repeated trials, use [the advanced workflow
-guide](workflows.md). The [validation record](workflow-validation.md) identifies
-the actual tested build, provider selections, regressions and limits.
+guide](workflows.md). The [validation guide](workflow-validation.md) explains
+how to check your build, selected providers and isolation boundaries.

@@ -2,7 +2,7 @@
 
 Agentmux's CLI is **`amx`**. Native sessions require **tmux 3.2+** and the
 respective provider CLIs installed and authenticated separately. Published
-binaries need no Go toolchain. Python 3 runs the installer and acceptance scripts.
+binaries need no Go toolchain. Python 3 runs the installer and verification scripts.
 
 Choose the current source build below for [`amx work`](../working.md) and
 [`amx flow`](../workflows.md), including private workflow snapshots and full
@@ -16,9 +16,30 @@ workbench, native layouts, last-session attachment and the
 [illustrated workflows](../visual-guide.md). The managed runtime and workbench
 remain experimental.
 
-This repository is private: use `gh` authenticated with an account that has
-repository access (`gh auth login` if needed). Anonymous asset links return 404.
-With Python 3 and GitHub CLI installed:
+For publicly accessible release assets, download the versioned installer from
+GitHub, inspect it, then run it with Python 3. These commands also require `curl`.
+The installer downloads the matching platform archive and checksum manifest
+from the selected release. For assets that require authentication, use the
+GitHub CLI route below.
+
+```sh
+mkdir -p "$HOME/.local/bin"
+amx_release_dir="$(mktemp -d)"
+curl --fail --location --proto '=https' --tlsv1.2 \
+  https://raw.githubusercontent.com/pagel-s/agentmux/v0.11.0/scripts/install-release.py \
+  --output "$amx_release_dir/install-release.py"
+# Read the downloaded installer before running it.
+python3 "$amx_release_dir/install-release.py" --version v0.11.0 \
+  --destination "$HOME/.local/bin/amx"
+rm -r "$amx_release_dir"
+export PATH="$HOME/.local/bin:$PATH"
+amx version
+amx doctor
+```
+
+For access-controlled releases, authenticate GitHub CLI with an account that
+has repository access (`gh auth login` if needed), then download the assets and
+versioned installer before installation:
 
 ```sh
 mkdir -p "$HOME/.local/bin"
@@ -28,6 +49,7 @@ gh release download v0.11.0 --repo pagel-s/agentmux \
 gh api repos/pagel-s/agentmux/contents/scripts/install-release.py \
   --method GET -f ref=v0.11.0 --header 'Accept: application/vnd.github.raw+json' \
   > "$amx_release_dir/install-release.py"
+# Read the downloaded installer before running it.
 python3 "$amx_release_dir/install-release.py" --version v0.11.0 \
   --artifact-dir "$amx_release_dir" --destination "$HOME/.local/bin/amx"
 rm -r "$amx_release_dir"
@@ -43,16 +65,18 @@ executable is retained as an `amx.backup-*` file; the recognized old `agentmux`
 path is retired. Unrelated symlinks and commands are never silently replaced.
 A fresh installation creates only `amx`.
 
-GitHub CLI downloads all four archives and the checksum manifest; the installer
-selects the current platform. Archives retain the `agentmux_OS_ARCH.tar.gz`
-project name and contain `amx`, docs, examples and scripts. The current installer
-also accepts older archives whose executable is named `agentmux`. From a
-checkout, use `python3 scripts/install-release.py` with the same version,
-`--artifact-dir` and destination options.
+Archives retain the `agentmux_OS_ARCH.tar.gz` project name and contain `amx`,
+docs, examples and scripts. The installer also accepts older archives whose
+executable is named `agentmux`. To use already downloaded release assets, add
+`--artifact-dir /path/to/release-files`; the directory must include the matching
+platform archive and `checksums.txt`. From a checkout, run
+`python3 scripts/install-release.py` with the same version and destination options.
 
 A checksum checks consistency with the release manifest, not an independent
-signature. The installer's direct HTTPS mode does not read GitHub credentials;
-use authenticated downloads plus `--artifact-dir` for this private repository.
+signature. The direct HTTPS route works without a login when the release assets
+are publicly accessible. For access-controlled repositories, download the
+archive and checksum manifest using authenticated GitHub tooling, then use the
+checkout's installer with `--artifact-dir` as described above.
 
 Installation does not restart native sessions or replace a workspace's pinned
 controller. Reattach with the new `amx` for its updated dashboard. Follow the

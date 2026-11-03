@@ -353,8 +353,8 @@ It reports observable records, not hidden model reasoning or every external
 filesystem/network action. Owner-editable local evidence is not provider
 attestation.
 
-The [dated validation record](workflow-validation.md) records reproduced bugs,
-regression coverage, live Codex/Antigravity results and explicit limits.
+The [validation guide](workflow-validation.md) provides reproducible checks and
+explains the limits of command fixtures, provider checks and isolation tests.
 
 Plans and checks use strict JSON with unknown fields rejected. Repository paths
 are relative to the shell's working directory; `--repo` explicitly overrides the

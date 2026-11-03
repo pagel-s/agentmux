@@ -98,8 +98,17 @@ func TestWorkflowIsolationRealEarlyCredentialGitErrors(t *testing.T) {
 				if err := os.Mkdir(repo, 0700); err != nil {
 					t.Fatal(err)
 				}
-				pointer := "gitdir: " + filepath.Join(root, secret) + "\n"
-				fixtureWrite(t, filepath.Join(repo, ".git"), []byte(pointer))
+				fixtureGit(t, repo, "init", "-q")
+				// A missing gitdir diagnostic names either the pointer or its target
+				// depending on Git's version. An invalid numeric config value emits
+				// the selected value itself, without putting it in plan metadata.
+				config := "[core]\n\trepositoryformatversion = " + secret + "\n"
+				fixtureWrite(t, filepath.Join(repo, ".git", "config"), []byte(config))
+				metadata := privateSourceMetadata(t, repo)
+				_, gitErr := repositoryRoot(context.Background(), repo)
+				if gitErr == nil || !strings.Contains(gitErr.Error(), secret) {
+					t.Fatalf("fixture must produce an initial Git diagnostic containing the selected credential: %v", gitErr)
+				}
 				p := credentialGuardPlan(repo, secret)
 				if selection == "environment" {
 					p.Candidates[0].Harness = "codex"
@@ -118,9 +127,11 @@ func TestWorkflowIsolationRealEarlyCredentialGitErrors(t *testing.T) {
 				if !strings.Contains(err.Error(), "[redacted credential]") {
 					t.Fatalf("expected the initial Git diagnostic with a redacted credential: %v", err)
 				}
-				actual, err := os.ReadFile(filepath.Join(repo, ".git"))
-				if err != nil || string(actual) != pointer {
-					t.Fatalf("early refusal changed source metadata: %q %v", actual, err)
+				if expected := strings.ReplaceAll(gitErr.Error(), secret, "[redacted credential]"); err.Error() != expected {
+					t.Fatalf("early refusal did not preserve the redacted initial Git diagnostic: got %q, want %q", err, expected)
+				}
+				if privateSourceMetadata(t, repo) != metadata {
+					t.Fatal("early refusal changed source metadata")
 				}
 			})
 		}

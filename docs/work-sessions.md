@@ -340,8 +340,8 @@ Without `--project`, preset setup creates separate workspaces. JSON setup specs
 accept `interaction` and optional `workdir` per agent. Pi interactive sessions
 support configured compatible endpoints and selected authentication. Native
 Antigravity is available with `--native-only`; use its Pi bridge for injected
-coordination context. See the [provider acceptance matrix](provider-acceptance.md)
-for the distinction between native startup, actual inference and tool coverage.
+coordination context. See [provider compatibility](provider-compatibility.md)
+for supported routes and separate startup, inference and tool checks.
 
 ## Terminal dashboard
 

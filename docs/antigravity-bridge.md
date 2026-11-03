@@ -12,8 +12,8 @@ Use its stable ID to attach or configure manual coordination; native tools and
 history stay in that terminal. There is no verified native appended-system-role
 flag. The bridge below is the separate option for injected Agentmux context,
 isolated Pi tools and managed persistent turns. See [work sessions](work-sessions.md)
-and the [dated provider acceptance](provider-acceptance.md) for the precise
-native-startup and inference evidence.
+and [provider compatibility](provider-compatibility.md) for setup and
+verification steps.
 
 Antigravity's native CLI supports trusted-local fresh managed turns. Its native
 keyring and private history layout are not a verified independent sandbox
@@ -86,18 +86,11 @@ closed. This is a compatibility layer, not native OpenAI tool calling, native
 Antigravity session resume, vision, realtime streaming, or a claim that all
 OpenAI API features are implemented. SSE begins after the native turn completes.
 
-Validation on 2026-10-31 used Antigravity 1.4.12 and Pi 1.4.0:
+## Verify your installation
 
-- A native Flash trusted-local turn returned the fixed reply with zero tool
-  steps while all documented tool namespaces were denied.
-- Exactly two real `gemini-3.8-flash-low` bridge calls passed through separate
-  Bubblewrap Pi processes. The second turn recovered the exact private marker
-  from the first using the same native Pi session ID.
-- Actual isolated Pi against a fake native bridge response executed a validated
-  `bash` call only in its sandbox workspace, then returned the tool result. No
-  host tool ran in the inference bridge.
-
-Reproducible opt-ins:
+These opt-in checks separate isolated tool execution with a fake native process
+from two real inference turns. The live check requires an existing native login
+and consumes provider requests:
 
 ```sh
 # No provider calls: real Pi/Bubblewrap + fake native process

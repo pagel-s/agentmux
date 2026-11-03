@@ -10,7 +10,7 @@ For v2, Claude/Codex/Pi can receive appended coordination context; `--native-onl
 appends none. Native Antigravity requires `--native-only`, while its Pi bridge
 supports coordinated isolated work. Codex custom endpoints use Responses;
 Pi compatible endpoints use Chat Completions. See [managed setup](managed-setup.md)
-and [dated provider acceptance](provider-acceptance.md) for configuration and evidence.
+and [provider compatibility](provider-compatibility.md) for configuration and checks.
 
 For managed identities, native-auth snapshots, separate agent/broker sandboxes,
 and an opt-in real Claude/Codex/local-Pi workflow, see
@@ -35,7 +35,7 @@ Agentmux combines the persona file and operational coordination instructions int
 
 The [official CLI reference](https://code.claude.com/docs/en/cli-reference) documents these flags. The ordinary pane launcher remains an interactive terminal process; streaming input or interruption through the Agent SDK is a separate integration surface.
 
-Managed turns use `--safe-mode`, structured print output, and `--permission-mode dontAsk`. A coding role therefore needs an owner-approved native tool allowlist; role text alone does not grant tool permissions. For example, `command: [claude, --allowedTools, 'Read,Write,Edit,Bash']` enables those tools while retaining the managed adapter's safety flags. Narrow the Bash patterns for the task where practical. A structured permission denial fails the managed task even when the CLI exits zero. This configuration passed a real bounded coding turn with Claude Code 2.1.316; see the [Claude/Codex example](https://github.com/pagel-s/agentmux/blob/main/examples/managed/claude-codex.yaml) for trusted local login reuse and workspace setup. Local mode does not isolate those tools from host files.
+Managed turns use `--safe-mode`, structured print output, and `--permission-mode dontAsk`. A coding role therefore needs an owner-approved native tool allowlist; role text alone does not grant tool permissions. For example, `command: [claude, --allowedTools, 'Read,Write,Edit,Bash']` enables those tools while retaining the managed adapter's safety flags. Narrow the Bash patterns for the task where practical. A structured permission denial fails the managed task even when the CLI exits zero. See the [Claude/Codex example](https://github.com/pagel-s/agentmux/blob/main/examples/managed/claude-codex.yaml) for trusted local login reuse and workspace setup. Local mode does not isolate those tools from host files.
 
 ## Antigravity
 
@@ -51,7 +51,7 @@ Use `provider: pi`. Agentmux appends the persona and coordination instructions u
 
 The launcher does not install extensions, modify MCP configuration, or approve project resources automatically. Pi's [CLI reference](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/cli.md) and [RPC interface](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/rpc.md) describe the separate interactive and structured control surfaces. Installed versions can differ; CLI preflight checks the flags the launcher requires.
 
-For npm-installed Pi inside a managed bubblewrap sandbox, use an explicit Node executable and the real package entrypoint: `command: [/absolute/node, /absolute/pi-package/dist/bundle/cli.js]`. Declare that Node binary and the complete Pi package directory in `read_only_paths`. A host symlink such as `~/.local/bin/pi`, when mounted as a standalone file and invoked through another wrapper, loses its package-relative module paths. Its version check can pass while CLI help and actual turns fail. The managed acceptance fixture uses the explicit entrypoint; it does not mount a whole host home or change global installations.
+For npm-installed Pi inside a managed bubblewrap sandbox, use an explicit Node executable and the real package entrypoint: `command: [/absolute/node, /absolute/pi-package/dist/bundle/cli.js]`. Declare that Node binary and the complete Pi package directory in `read_only_paths`. A host symlink such as `~/.local/bin/pi`, when mounted as a standalone file and invoked through another wrapper, loses its package-relative module paths. Its version check can pass while CLI help and actual turns fail. Managed setup discovers the explicit entrypoint; it does not mount a whole host home or change global installations.
 
 ## Boundaries
 

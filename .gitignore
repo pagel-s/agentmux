@@ -4,7 +4,6 @@ bin/
 .tmp/
 .tools/
 dist/
-# The private hosted design is a separate workspace/repository.
 /sites/
 .vscode/
 .codex

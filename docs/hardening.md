@@ -199,7 +199,7 @@ process-tree memory limits are separately configurable and should account for
 tmpfs usage. No privileged host mounts, quota configuration, or policy changes
 are performed automatically.
 
-## Verified boundaries
+## Check the boundaries
 
 The local adversarial tests cover origin/Host/redirect/pin/SNI checks, ECH and
 non-TLS rejection, live-tunnel revocation, claim deduplication and uncertainty,
@@ -218,12 +218,11 @@ AGENTMUX_INTEGRATION_BINARY="$PWD/bin/agentmux" go test ./internal/egress ./inte
 The endpoint test proves allowed traffic succeeds through the proxy while a
 denied endpoint receives no request and direct/proxy-opt-out attempts fail. The
 disk test fills all three actual tmpfs mounts to `ENOSPC`, verifies read-only
-seed enforcement, and checks workspace/native-history publication. Both passed
-on the development Linux host. An enclosing container may deny namespaces;
-such a failure is not silently downgraded.
+seed enforcement, and checks workspace/native-history publication. An enclosing
+container may deny namespaces; such a failure is not silently downgraded.
 
 `TestRealManagedHardeningWorkerAndIsolatedBroker` additionally combines an
 isolated broker, allowlisted worker, capped capsule and session reservation in
-one actual managed task. It passed, including rejection of a second task before
-any further endpoint request. These proofs use local deterministic processes,
-not model quality or billing assumptions.
+one actual managed task and checks rejection of a second task before any
+further endpoint request. These tests use local deterministic processes and
+do not measure model quality or provider billing.

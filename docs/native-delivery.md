@@ -133,19 +133,17 @@ owner resolution; it is never replayed automatically. Managed/mixed workspaces
 retain their existing fail-closed shutdown behavior. Owner shutdown and configured
 runtime deadlines still take precedence over recovery.
 
-Installed native TUI tests use loopback/offline fake providers. Codex 0.166.0 and
-`@earendil-works/pi-coding-agent` 1.4.0 verify draft preservation and native
-completion; the Pi adapter requires its `agent_settled` lifecycle event.
-Older or unverifiable Pi versions keep the original native invocation with
-manual coordination instead of registering native completion support.
-Claude 2.1.316 was also tested
-for idle wakeup, retained drafts and a permission dialog that remained pending.
-Pi additionally passes the real broker/launcher workflow with two native sessions
-both locally and inside Bubblewrap. These bounded checks do not certify every
-provider/account configuration. Inspect the adapter's reported capabilities.
-No status claims a model understood an instruction or that its result is correct.
+## Check native delivery
 
-Reproduce the installed-harness checks without paid model requests:
+Installed native TUI tests use loopback/offline fake providers to exercise draft
+preservation, idle wakeup, permissions and completion receipts. Pi requires the
+`agent_settled` lifecycle event; older or unverifiable Pi versions keep the
+original native invocation with manual coordination. Inspect the adapter's
+reported capabilities for your installed CLI.
+
+These checks make no paid model requests. They verify the selected native
+integration, not every provider/account configuration. Delivery status does not
+show that a model understood an instruction or that its result is correct.
 
 ```sh
 make build

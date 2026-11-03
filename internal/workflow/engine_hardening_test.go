@@ -222,27 +222,51 @@ func TestWatchDetectsRawChangesEvenWhenGitNormalizationKeepsSameTree(t *testing.
 	fixtureGit(t, repo, "add", ".gitattributes")
 	fixtureGit(t, repo, "commit", "-qm", "normalization")
 	marker := filepath.Join(root, "started")
+	changedMarker := filepath.Join(root, "source-changed")
 	q, _ := json.Marshal(marker)
-	p := auditPlan(repo, []string{"python3", "-c", "from pathlib import Path; import time; Path(" + string(q) + ").write_text('started'); time.sleep(.3); print('reviewed')"})
+	changedQ, _ := json.Marshal(changedMarker)
+	p := auditPlan(repo, []string{"python3", "-c", "from pathlib import Path; import time; Path(" + string(q) + ").write_text('started')\nwhile not Path(" + string(changedQ) + ").exists(): time.sleep(.01)\nprint('reviewed')"})
+	p.TimeoutSeconds = 30
 	before, raw, err := contentState(context.Background(), repo)
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Snapshot setup may be slow under the race detector. Wait for the actual
+	// source write before finishing the review, with one bounded test context.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 	changed := make(chan error, 1)
 	go func() {
-		end := time.Now().Add(4 * time.Second)
-		for time.Now().Before(end) {
+		ticker := time.NewTicker(5 * time.Millisecond)
+		defer ticker.Stop()
+		for {
 			if _, err := os.Stat(marker); err == nil {
-				changed <- os.WriteFile(filepath.Join(repo, "file.txt"), []byte("base\r\n"), 0600)
+				err = os.WriteFile(filepath.Join(repo, "file.txt"), []byte("base\r\n"), 0600)
+				if err == nil {
+					err = os.WriteFile(changedMarker, []byte("changed"), 0600)
+				}
+				changed <- err
+				if err != nil {
+					cancel()
+				}
+				return
+			} else if !os.IsNotExist(err) {
+				changed <- err
+				cancel()
 				return
 			}
-			time.Sleep(5 * time.Millisecond)
+			select {
+			case <-ctx.Done():
+				changed <- ctx.Err()
+				return
+			case <-ticker.C:
+			}
 		}
-		changed <- context.DeadlineExceeded
 	}()
-	r, err := Watch(context.Background(), p, filepath.Join(root, "watch"), false, WatchOptions{IntervalSeconds: 1, MaxRuns: 1, TimeoutSeconds: 5})
+	r, err := Watch(ctx, p, filepath.Join(root, "watch"), false, WatchOptions{IntervalSeconds: 1, MaxRuns: 1, TimeoutSeconds: 30})
+	cancel()
 	if changeErr := <-changed; changeErr != nil {
-		t.Fatal(changeErr)
+		t.Fatalf("source change failed: %v; watch error: %v", changeErr, err)
 	}
 	if err != nil {
 		t.Fatal(err)
@@ -288,11 +312,47 @@ func TestMaximumMissionFanInKeepsAllReferencesWithinPromptLimit(t *testing.T) {
 
 func TestInterruptedVerificationRetainsFinalAttemptFailureEvidence(t *testing.T) {
 	repo, root := fixtureRepo(t)
+	marker := filepath.Join(root, "check-started")
+	encoded, err := json.Marshal(marker)
+	if err != nil {
+		t.Fatal(err)
+	}
 	p := auditPlan(repo, []string{"python3", "-c", "print('turn completed')"})
-	p.TimeoutSeconds = 1
-	p.Checks = []Check{{Name: "slow-check", Command: []string{"python3", "-c", "import time; time.sleep(30)"}, TimeoutSeconds: 30}}
-	r, err := Run(context.Background(), p, filepath.Join(root, "interrupted-check"), false)
-	if !errors.Is(err, context.DeadlineExceeded) || r.State != "interrupted" {
+	p.TimeoutSeconds = 60
+	p.Checks = []Check{{Name: "slow-check", Command: []string{"python3", "-c", "from pathlib import Path; import time; Path(" + string(encoded) + ").write_text('started'); time.sleep(30)"}, TimeoutSeconds: 30}}
+	// Cancel only after the check has entered. A short whole-plan deadline can
+	// expire during snapshot preparation on a loaded race-test runner, leaving
+	// no check evidence because verification correctly never began.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	started := make(chan error, 1)
+	go func() {
+		ticker := time.NewTicker(5 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			if _, err := os.Stat(marker); err == nil {
+				started <- nil
+				cancel()
+				return
+			} else if !os.IsNotExist(err) {
+				started <- err
+				cancel()
+				return
+			}
+			select {
+			case <-ctx.Done():
+				started <- fmt.Errorf("check did not start before cancellation: %w", ctx.Err())
+				return
+			case <-ticker.C:
+			}
+		}
+	}()
+	r, err := Run(ctx, p, filepath.Join(root, "interrupted-check"), false)
+	cancel()
+	if startErr := <-started; startErr != nil {
+		t.Fatal(startErr)
+	}
+	if !errors.Is(err, context.Canceled) || r.State != "interrupted" {
 		t.Fatalf("wrong interrupted outcome: %+v %v", r, err)
 	}
 	var full CandidateResult

@@ -6,7 +6,7 @@ complements the single-task [`experiment` pilot](experiments.md). Built-in
 environments are `public-goods-v1` and `trust-exchange-v1`; the exported `Scenario` / `Episode`
 interfaces separate owner-controlled mechanics from participant observations.
 See [exchange, reward pooling, and population mechanics](research-environments.md)
-and the [preregistered native pilot](research-study.md).
+and [planning a controlled study](research-study.md).
 
 ## Run the no-model protocol smoke
 

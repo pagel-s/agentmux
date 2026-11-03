@@ -34,8 +34,8 @@ Download **[v0.11.0](https://github.com/pagel-s/agentmux/releases/tag/v0.11.0)**
 for Linux or macOS, on x86-64 or ARM64. The
 [installation guide](docs/getting-started/installation.md#install-a-published-binary-recommended)
 provides a checksum-verified installer for the `amx` command; no Go
-toolchain is needed for the published binaries. This private repository requires
-authenticated GitHub access; the guide uses `gh` to download the release assets.
+toolchain is needed for the published binaries. The guide downloads the
+selected release over HTTPS and verifies its checksum before installation.
 
 ### Build from source
 
@@ -240,8 +240,8 @@ Claude, Codex, Pi and Antigravity have managed adapters. Codex supports explicit
 Responses endpoints; Pi connects to compatible Chat Completions endpoints,
 including Ollama/vLLM. The Antigravity bridge combines native local inference
 with isolated Pi tools/history. Provider and tool coverage vary: consult the
-[validation matrix](docs/provider-validation.md) and the [dated live provider
-acceptance](docs/provider-acceptance.md).
+[provider compatibility guide](docs/provider-compatibility.md) for supported
+routes, setup checks and integration limits.
 
 Try communication and terminal controls without any model calls:
 
@@ -257,15 +257,13 @@ Guides: [setup](docs/managed-setup.md), [managed runtime](docs/managed-runtime.m
 [remote workers](docs/remote-workers.md), [research](docs/research.md) and
 [controlled studies](docs/research-study.md).
 
-The [UAT gap closure record](docs/uat-gap-closure.md) maps the previous open points
-to implementation, regression coverage and explicit limits. Memory imports retain
-structured source claims; portable trace bundles verify an explicitly trusted
-owner exporter's signature. Neither establishes provider attestation or the
-truth of an agent's output.
+Memory imports retain structured source claims; portable trace bundles verify
+an explicitly trusted owner exporter's signature. Neither establishes provider
+attestation or the truth of an agent's output.
 
 The [trust model](docs/security-model.md) and
-[validation record](docs/release-validation.md) describe enforced boundaries,
-measured coverage and remaining evidence. Coordination permissions do not isolate
+[validation guide](docs/workflow-validation.md) describe enforced boundaries,
+reproducible checks and operational limits. Coordination permissions do not isolate
 files in a deliberately shared project, guarantee model correctness or provide
 a provider spending cap.
 

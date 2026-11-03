@@ -37,8 +37,10 @@ test-managed: build
 	GOCACHE=$(GOCACHE) AGENTMUX_MANAGED_INTEGRATION=1 AGENTMUX_EXPERIMENT_INTEGRATION=1 $(GO) test -race -count=1 ./cmd/agentmux ./internal/managed ./internal/managedlaunch ./internal/managedcheck ./internal/experiment
 
 # Requires Linux with working Bubblewrap namespaces; no isolation fallback.
+# Real namespace/durability fixtures share a package budget; allow slow CI
+# storage while keeping an explicit deadline for the complete package.
 test-sandbox: build
-	GOCACHE=$(GOCACHE) AGENTMUX_MANAGED_INTEGRATION=1 AGENTMUX_SANDBOX_INTEGRATION=1 AGENTMUX_INTEGRATION_BINARY="$(CURDIR)/$(BINARY)" $(GO) test -race -count=1 ./internal/managed ./internal/managedlaunch ./internal/capsule ./internal/egress ./internal/sandbox ./internal/workflow
+	GOCACHE=$(GOCACHE) AGENTMUX_MANAGED_INTEGRATION=1 AGENTMUX_SANDBOX_INTEGRATION=1 AGENTMUX_INTEGRATION_BINARY="$(CURDIR)/$(BINARY)" $(GO) test -race -count=1 -timeout=20m ./internal/managed ./internal/managedlaunch ./internal/capsule ./internal/egress ./internal/sandbox ./internal/workflow
 	python3 scripts/smoke-managed.py
 	python3 scripts/smoke-managed-team.py
 	python3 scripts/smoke-managed-interactive.py

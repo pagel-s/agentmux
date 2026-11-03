@@ -26,22 +26,45 @@ func TestAuditWatchDoesNotReportFailedReviewAsSuccessful(t *testing.T) {
 func TestAuditWatchFindingsBecomeSupersededWhenSourceChangesDuringReview(t *testing.T) {
 	repo, root := fixtureRepo(t)
 	marker := filepath.Join(root, "review-started")
-	p := auditPlan(repo, []string{"/bin/sh", "-c", "printf ready > '" + marker + "'; sleep 0.3; printf reviewed"})
+	changedMarker := filepath.Join(root, "source-changed")
+	p := auditPlan(repo, []string{"/bin/sh", "-c", "printf ready > '" + marker + "'; while [ ! -e '" + changedMarker + "' ]; do sleep 0.01; done; printf reviewed"})
+	p.TimeoutSeconds = 30
+	// Allow snapshot setup on a loaded race-test runner, and keep the review
+	// running until the source write completes instead of relying on a sleep.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 	changed := make(chan error, 1)
 	go func() {
-		deadline := time.Now().Add(4 * time.Second)
-		for time.Now().Before(deadline) {
+		ticker := time.NewTicker(10 * time.Millisecond)
+		defer ticker.Stop()
+		for {
 			if _, err := os.Stat(marker); err == nil {
-				changed <- os.WriteFile(filepath.Join(repo, "file.txt"), []byte("source moved\n"), 0600)
+				err = os.WriteFile(filepath.Join(repo, "file.txt"), []byte("source moved\n"), 0600)
+				if err == nil {
+					err = os.WriteFile(changedMarker, []byte("changed"), 0600)
+				}
+				changed <- err
+				if err != nil {
+					cancel()
+				}
+				return
+			} else if !os.IsNotExist(err) {
+				changed <- err
+				cancel()
 				return
 			}
-			time.Sleep(10 * time.Millisecond)
+			select {
+			case <-ctx.Done():
+				changed <- ctx.Err()
+				return
+			case <-ticker.C:
+			}
 		}
-		changed <- context.DeadlineExceeded
 	}()
-	r, err := Watch(context.Background(), p, filepath.Join(root, "watch"), false, WatchOptions{IntervalSeconds: 1, MaxRuns: 1, TimeoutSeconds: 5})
+	r, err := Watch(ctx, p, filepath.Join(root, "watch"), false, WatchOptions{IntervalSeconds: 1, MaxRuns: 1, TimeoutSeconds: 30})
+	cancel()
 	if changeErr := <-changed; changeErr != nil {
-		t.Fatal(changeErr)
+		t.Fatalf("source change failed: %v; watch error: %v", changeErr, err)
 	}
 	if err != nil {
 		t.Fatal(err)

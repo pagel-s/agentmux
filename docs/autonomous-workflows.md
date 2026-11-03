@@ -108,14 +108,9 @@ control. Role edits are also explicit owner CAS operations: managed workers
 capture the current role at their next task claim; an active native terminal
 receives a broker notice instead of injected input.
 
-## Acceptance
+## Reproduce a bounded workflow
 
-The dated result below is the 31 October 2026 autonomous workflow acceptance.
-The [1 November provider matrix](provider-acceptance.md) records later bounded
-connectivity/startup/endpoint checks separately; those do not rerun this complete
-five-turn workflow or establish a reliability rate.
-
-`scripts/smoke-managed-autonomy.py --binary bin/agentmux --allow-models` runs a
+`python3 scripts/smoke-managed-autonomy.py --binary bin/amx --allow-models` runs a
 bounded five-turn Claude/Codex workflow. It requires installed authenticated
 CLIs, working Bubblewrap, and user-systemd cgroup enforcement. It makes up to
 five real cloud turns; model calls are never automatically retried. All agents
@@ -152,13 +147,3 @@ verifier preflight is also available:
 ```sh
 python3 scripts/smoke-managed-models.py --check-fixtures
 ```
-
-The installed-CLI acceptance passed on 2026-10-31 with three persistent Claude
-turns, two persistent Codex turns, two observation wakeups and one initial owner
-goal. A broker restart preserved one queued ping, its cursor/version and the
-confirmed Codex session reference. Both agents ended with zero pending or
-in-flight work and exhausted their exact configured turn budgets. The separate
-oracle accepted six normalization cases, four invalid-element cases, a finite
-generator and fresh-output behavior; the owner verified all five tasks. The
-broker shut down cleanly. This is one integration result, not a reliability rate
-or a claim that every autonomous task will succeed.

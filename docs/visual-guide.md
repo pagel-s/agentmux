@@ -672,7 +672,7 @@ amx managed remote --state STATE --agent WORKER_ID --host SSH_ALIAS \
 Provision the remote harness, dependencies and selected credentials separately.
 The command forwards authenticated broker access, not the owner's credentials
 or source tree. It is not an automatic cluster scheduler or host-failure migration
-service. See [SSH workers and measured scale](remote-workers.md).
+service. See [SSH workers and broker scale](remote-workers.md).
 
 Current validation includes larger registries and broker actor workloads;
 those are not measurements of hundreds of simultaneous native model sessions.

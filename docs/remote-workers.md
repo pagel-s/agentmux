@@ -75,49 +75,18 @@ python3 scripts/benchmark-managed.py --output /tmp/broker-benchmark.json
 python3 scripts/soak-managed.py --output /tmp/soak-result.json
 ```
 
-On 2026-10-31 the cross-machine command-only check passed with an isolated local
-broker, an isolated local lead and an isolated remote worker. Board/memory
-handoff, peer/owner credential isolation and forbidden reverse instruction were
-verified; the final check also restarted the identical deployment with
-`--resume`, and all three tasks received owner verification. One local trace
-was anchored and verified. No provider/model calls were made. Initial deployment
-plus remote restart and two remote tasks took about 23 seconds in the final run.
+The remote smoke test exercises command-only board/memory handoff, credential
+separation, forbidden reverse instructions and resumption of an identical
+remote deployment. It makes no provider calls. Use a disposable remote directory
+and retain its report to inspect the boundaries on your selected host.
 
-The local broker benchmark used a 32-logical-CPU Linux x86_64 machine. Every
-agent ran 20 iterations of `board.post`, private `memory.put` and board
-`message.list`, through authenticated HTTP over a Unix socket to a sandboxed
-SQLite broker. All operations succeeded:
+The benchmark measures authenticated board/memory operations against a durable
+SQLite broker. Report host/storage conditions, workload, logical client count,
+latency and errors alongside any throughput measurement. Logical API clients do
+not represent simultaneous native model processes or maximum cluster capacity.
+Small teams remain the primary deployment target.
 
-| Logical agents | Operations | Ops/sec | p50 ms | p95 ms | p99 ms |
-| ---: | ---: | ---: | ---: | ---: | ---: |
-| 8 | 480 | 712.87 | 10.964 | 17.272 | 18.893 |
-| 32 | 1920 | 803.86 | 27.637 | 120.549 | 162.941 |
-| 128 | 7680 | 428.01 | 250.481 | 628.191 | 701.964 |
-
-The same script also ran directly on a separate 128-logical-CPU Linux x86_64
-host, after stopping the validation inference server, with zero errors:
-
-| Logical agents | Operations | Ops/sec | p50 ms | p95 ms | p99 ms |
-| ---: | ---: | ---: | ---: | ---: | ---: |
-| 8 | 480 | 167.59 | 49.980 | 72.363 | 137.378 |
-| 32 | 1920 | 131.91 | 248.600 | 413.934 | 444.559 |
-| 128 | 7680 | 77.10 | 1596.019 | 3121.154 | 3483.363 |
-
-More logical CPUs did not improve this serialized, durable workload. Host and
-storage conditions were not isolated experimentally; these two single runs do
-not identify the cause of their performance difference.
-
-These are one-run workload measurements, including SQLite commits. They show
-contention at 128 API actors; they do not measure 128 simultaneous native model
-processes, remote network latency, repeated confidence intervals or maximum
-cluster capacity. Small teams remain the primary deployment target.
-
-An earlier bounded soak passed 30 verified command turns in about 94 seconds, six clean
-restarts with the original deadline, verification of each completed trace, and
-one forced in-flight broker crash. The interrupted native process stopped,
-delivery remained uncertain without automatic replay, and the owner resolved
-it as failed. This is recovery evidence, not a multi-day uptime guarantee.
-The later 250-turn/50-restart local soak is recorded separately in
-[release validation](release-validation.md#follow-up-hardening-checks-2026-10-31).
-The SSH and benchmark numbers above are historical measurements of those runs,
-not throughput or availability guarantees for a current deployment.
+The bounded soak checks completed task anchors, broker restarts and an in-flight
+crash. Uncertain native work requires explicit resolution without automatic
+replay. Passing a finite check does not establish multi-day uptime, remote host
+failure migration or availability for other deployments.

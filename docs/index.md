@@ -42,8 +42,8 @@ collaboration group's board. For a repeated-round study, start with the
 
 The managed runtime and workbench are experimental. Broker permissions, native
 approvals, provider networking and filesystem isolation are separate boundaries.
-The [trust model](security-model.md) and [validation record](release-validation.md)
-describe measured coverage and limits.
+The [trust model](security-model.md) and [validation guide](workflow-validation.md)
+describe enforced boundaries, reproducible checks and limits.
 
 ## Configure and automate
 
@@ -58,10 +58,9 @@ describe measured coverage and limits.
 - [Hardening](hardening.md)
 - [Trace inspection and recovery](traces-and-recovery.md)
 - [Remote workers](remote-workers.md)
-- [Provider validation](provider-validation.md)
-- [Dated provider acceptance](provider-acceptance.md)
+- [Provider compatibility](provider-compatibility.md)
+- [Reproduce a mixed-harness scenario](mixed-harness-acceptance.md)
 - [Research](research.md) and [controlled studies](research-study.md)
-- [UAT gap closure and limits](uat-gap-closure.md)
 
 ## Existing workspace mode
 

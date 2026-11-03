@@ -79,14 +79,8 @@ nav:
       - Research: research.md
       - Pilot Runner: experiments.md
       - Controlled Studies: research-study.md
-      - Pilot Results: research-pilot-results.md
-      - Provider Validation: provider-validation.md
-      - Provider Acceptance: provider-acceptance.md
-      - Mixed Harness Acceptance: mixed-harness-acceptance.md
-      - Preview Validation: release-validation.md
-      - Usability and Failure Sweep: uat-sweep.md
-      - Twenty-Angle UAT (Historical): uat-20-angles.md
-      - UAT Gap Closure: uat-gap-closure.md
+      - Provider Compatibility: provider-compatibility.md
+      - Mixed Harness Scenario: mixed-harness-acceptance.md
       - Environments: research-environments.md
   - Reference:
       - Layout Configuration (v1): config-guide.md

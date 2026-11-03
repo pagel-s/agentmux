@@ -30,7 +30,7 @@ sharing a credential that gives more provider authority than that worker needs.
 | Live owner policy | Versioned overrides, independent collaboration contributions, isolation overlays and explicit review of ambiguous legacy grants | Group overlap, deny/reset, migration rollback and stale-version tests preserve unrelated intent. Roles and titles grant no authority. Local processes can still bypass API ACLs through host access. |
 | Dynamic organization | Owner-approved spawn templates, child permission subsets, finite spawn resources, consented membership and history floors | Spawn/team integration checks use real sandboxed workers. Team membership does not implicitly grant instruction authority. |
 | Execution attempts | Instance-bound leases checked before launch, during monitoring and before completion | Regressions replace a task lease before launch and while a real subprocess runs. Stale workers stop and cannot complete the replacement attempt. Monitoring cannot undo side effects already in progress. |
-| Native results | Required native completion records, strict protocol handling and complete stdin delivery | Recorded/fake native streams exercise missing, malformed and conflicting results. Installed provider smoke checks are listed separately in [provider validation](provider-validation.md); protocol fixtures do not certify every future CLI release. |
+| Native results | Required native completion records, strict protocol handling and complete stdin delivery | Recorded/fake native streams exercise missing, malformed and conflicting results. Installed provider smoke checks are listed separately in [provider compatibility](provider-compatibility.md); protocol fixtures do not certify every future CLI release. |
 | Filesystem and resources | Explicit mounts, separate histories, optional capped tmpfs capsules and cgroup limits | Actual namespace, ENOSPC, cgroup exhaustion and descendant cleanup checks are available. Requested unsupported boundaries fail closed. Cgroup checks require a delegated user manager and are distinct from namespace checks. |
 | Managed network destinations | Independent network namespace and an explicit destination proxy in allowlist mode | Integration checks reject direct routes and proxy opt-out. CONNECT/SNI checks leave encrypted HTTP authority and paths opaque. `network: host` grants host networking explicitly. |
 | Restart and uncertain delivery | Durable state, preserved deadlines, charged retry attempts and explicit owner resolution | The model-free soak injects a broker crash and rechecks completed task anchors after recovery. Operators must stop old processes and inspect side effects before requesting a retry. |
@@ -107,18 +107,18 @@ to verify game accounting and continuation without provider calls.
 CI runs these in a separate sandbox job whose namespace preflight must pass;
 unavailable isolation fails that job instead of silently omitting coverage.
 
-Workflow-specific regressions and bounded provider evidence are recorded in
+Reproducible workflow checks and provider opt-ins are described in
 [workflow validation](workflow-validation.md). Managed isolation checks do not
 establish that a separately configured workflow or provider will run correctly.
 
 `make test-resources` verifies actual cgroup controls on a suitable Linux host.
 Provider-native calls, SSH placement, multi-day operation and statistically
 powered behavioral studies need their own recorded runs. A green command-only
-suite does not establish those outcomes. See the [validation record](release-validation.md)
-for the measured scope and the [pilot record](research-pilot-results.md) for
-the original measurement confound and preserved results.
+suite does not establish those outcomes. Use the [provider compatibility
+guide](provider-compatibility.md) to check a selected integration, and the
+[study guide](research-study.md) to plan measurements and report limitations.
 
-## Remaining evidence work
+## Evaluating broader claims
 
 Comparative task quality needs matched single-agent and team baselines with
 independent artifact checks. Behavioral claims need validated extraction,
