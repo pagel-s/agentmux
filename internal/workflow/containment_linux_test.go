@@ -41,6 +41,9 @@ func TestProcessContainmentRealWorkflowRecordsPolicyAndContainsGitFilterDescenda
 	fixtureWrite(t, filter, []byte(helper))
 	fixtureGit(t, repo, "config", "filter.workflow-lifetime.clean", "python3 "+shellWord(filter))
 	p := comparePlan(repo, pythonCandidate("coder", "from pathlib import Path; Path('file.txt').write_text('fixed\\n'); print('done')"))
+	// Private snapshots read raw bytes without executing source filters. This
+	// regression exercises the legacy shared path where helpers still run.
+	p.Storage = StorageShared
 	p.ProcessContainment = PIDNamespace
 	r, err := Run(context.Background(), p, filepath.Join(root, "run"), false)
 	if err != nil {

@@ -6,8 +6,8 @@ extensions, MCP servers and native approval dialogs. `Prepare` creates a private
 per-invocation asset; `Run` executes inside the session's existing sandbox.
 It does not select RPC mode, rewrite configuration, or type terminal keystrokes.
 
-Verified against `@earendil-works/pi-coding-agent` **1.4.0**. The maintained Pi
-package provides the `agent_settled` lifecycle boundary this adapter requires.
+The adapter requires the maintained `@earendil-works/pi-coding-agent` package
+with the `agent_settled` lifecycle boundary (version 1.4.0 or later).
 `Run` probes only the known Pi entry point with `--version`, under a bounded
 timeout and output limit. Older, unparseable or unavailable versions retain the
 exact original terminal invocation with a manual-coordination warning and no

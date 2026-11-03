@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="840" height="230" viewBox="0 0 840 230" role="img" aria-labelledby="title description">
+  <title id="title">Legacy tmux blackboard</title>
+  <desc id="description">The planner writes current_task with kv-set to tmux session options. Researcher and writer panes read it with kv-get. This session-wide key-value store provides no per-agent access control.</desc>
+  <defs><marker id="a" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#69518c"/></marker></defs>
+  <rect width="840" height="230" rx="12" fill="#faf8ff"/>
+  <g fill="#ffffff" stroke="#c5b8dc" stroke-width="1.5"><rect x="25" y="80" width="175" height="60" rx="8"/><rect x="320" y="80" width="200" height="60" rx="8"/><rect x="650" y="25" width="165" height="60" rx="8"/><rect x="650" y="140" width="165" height="60" rx="8"/></g>
+  <g fill="none" stroke="#69518c" stroke-width="2" marker-end="url(#a)"><path d="M200 110H315"/><path d="M520 98L645 55"/><path d="M520 122L645 170"/></g>
+  <g font-family="system-ui, sans-serif" font-size="17" fill="#221b31" text-anchor="middle"><text x="112" y="116">Planner pane</text><text x="420" y="105">Tmux session</text><text x="420" y="127">options</text><text x="732" y="61">Researcher pane</text><text x="732" y="176">Writer pane</text></g>
+  <g font-family="system-ui, sans-serif" font-size="14" fill="#574b68"><text x="215" y="91">kv-set</text><text x="552" y="47">kv-get</text><text x="552" y="170">kv-get</text><text x="25" y="215">Session-wide KV: shared state without broker identities or per-agent authorization.</text></g>
+</svg>

@@ -35,10 +35,11 @@ func InspectApply(ctx context.Context, directory, candidateID string) (ApplyInsp
 	if err != nil {
 		return ApplyInspection{}, err
 	}
-	ctx, err = PrepareProcessContainment(ctx, r.ProcessContainment)
+	ctx, closeReport, err := ReportContext(ctx, r)
 	if err != nil {
 		return ApplyInspection{}, err
 	}
+	defer closeReport()
 	c, err := selectResult(r, candidateID)
 	if err != nil {
 		return ApplyInspection{}, err
@@ -69,7 +70,7 @@ func inspectApplication(ctx context.Context, r Report, c CandidateResult) (Apply
 		v.Note = "No application has been recorded for this patch."
 		return v, matching, nil
 	}
-	if c.FinalSnapshot == nil || !objectID(r.Snapshot.Tree) || !digestID(r.Snapshot.ContentSHA256) || !objectID(c.FinalSnapshot.Tree) || !digestID(c.FinalSnapshot.ContentSHA256) {
+	if c.FinalSnapshot == nil || !objectID(SourceSnapshot(r).Tree) || !digestID(SourceSnapshot(r).ContentSHA256) || !objectID(c.FinalSnapshot.Tree) || !digestID(c.FinalSnapshot.ContentSHA256) {
 		v.State = "unknown"
 		v.Note = "Application snapshots cannot establish exact source identity."
 		return v, matching, nil
@@ -80,7 +81,7 @@ func inspectApplication(ctx context.Context, r Report, c CandidateResult) (Apply
 		v.Note = "Source content could not be confirmed: " + err.Error()
 		return v, matching, nil
 	}
-	headMatches, err := sourceHEADMatches(ctx, r.Repository, r.Snapshot.BaseCommit)
+	headMatches, err := sourceHEADMatches(ctx, r.Repository, SourceSnapshot(r).BaseCommit)
 	if err != nil {
 		v.State = "unknown"
 		v.Note = "Source HEAD could not be confirmed: " + err.Error()
@@ -88,7 +89,7 @@ func inspectApplication(ctx context.Context, r Report, c CandidateResult) (Apply
 	}
 	v.SourceObservation = "diverged"
 	if headMatches {
-		if tree == r.Snapshot.Tree && raw == r.Snapshot.ContentSHA256 {
+		if tree == SourceSnapshot(r).Tree && raw == SourceSnapshot(r).ContentSHA256 {
 			v.SourceObservation = "matches_start"
 		} else if tree == c.FinalSnapshot.Tree && raw == c.FinalSnapshot.ContentSHA256 {
 			v.SourceObservation = "matches_final"
@@ -120,10 +121,11 @@ func RecoverApply(ctx context.Context, directory, candidateID string) (ApplyInsp
 	if err != nil {
 		return ApplyInspection{}, err
 	}
-	ctx, err = PrepareProcessContainment(ctx, r.ProcessContainment)
+	ctx, closeReport, err := ReportContext(ctx, r)
 	if err != nil {
 		return ApplyInspection{}, err
 	}
+	defer closeReport()
 	c, err := selectResult(r, candidateID)
 	if err != nil {
 		return ApplyInspection{}, err
@@ -231,10 +233,15 @@ func lockSourceApplication(ctx context.Context, repository string) (*os.File, er
 }
 
 func syncAppliedSource(ctx context.Context, r Report, final Snapshot) error {
-	paths, err := gitOutput(ctx, r.Repository, nil, "diff", "--name-only", "--no-renames", "-z", "--no-ext-diff", "--no-textconv", r.Snapshot.Commit, final.Tree, "--")
+	paths, err := snapshotGitOutput(ctx, SnapshotObjectRepository(final), final.Store != "", nil, "diff", "--name-only", "--no-renames", "-z", "--no-ext-diff", "--no-textconv", SourceSnapshot(r).Tree, final.Tree, "--")
 	if err != nil {
 		return err
 	}
+	root, err := os.OpenRoot(r.Repository)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
 	directories := map[string]bool{r.Repository: true}
 	for _, relative := range strings.Split(string(paths), "\x00") {
 		if relative == "" {
@@ -247,9 +254,12 @@ func syncAppliedSource(ctx context.Context, r Report, final Snapshot) error {
 		if !pathWithin(r.Repository, path) {
 			return errors.New("changed source path lies outside the repository")
 		}
-		info, statErr := os.Lstat(path)
-		if statErr == nil && info.Mode().IsRegular() {
-			f, err := openRegularFileMatching(path, info)
+		info, statErr := privateCurrentPathInfo(root, relative)
+		if statErr != nil {
+			return statErr
+		}
+		if info != nil && info.Mode().IsRegular() {
+			f, err := privateRootOpenRegular(root, relative, info)
 			if err != nil {
 				return err
 			}
@@ -258,19 +268,20 @@ func syncAppliedSource(ctx context.Context, r Report, final Snapshot) error {
 			if err := errors.Join(syncErr, closeErr); err != nil {
 				return err
 			}
-		} else if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
-			return statErr
-		} else if statErr == nil && info.Mode()&os.ModeSymlink == 0 {
+		} else if info != nil && info.IsDir() {
+			// A removed tracked file may now be a directory containing new
+			// selected files. Persist its directory entry as well.
+			directories[path] = true
+		} else if info != nil && info.Mode()&os.ModeSymlink == 0 {
 			return errors.New("applied source path is not a regular file or symlink")
 		}
-		for parent := filepath.Dir(path); pathWithin(r.Repository, parent); parent = filepath.Dir(parent) {
-			if info, err := os.Lstat(parent); err == nil && info.IsDir() && info.Mode()&os.ModeSymlink == 0 {
-				directories[parent] = true
-			} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+		for parent := filepath.Dir(relative); parent != "."; parent = filepath.Dir(parent) {
+			info, err := privateCurrentPathInfo(root, parent)
+			if err != nil {
 				return err
 			}
-			if parent == r.Repository {
-				break
+			if info != nil && info.IsDir() {
+				directories[filepath.Join(r.Repository, parent)] = true
 			}
 		}
 	}

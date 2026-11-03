@@ -70,6 +70,9 @@ func RequireApprovedReview(r Report) error {
 	if last == nil || !last.ReadOnly || last.State != "completed" || last.Review == nil || last.Review.Decision != "approve" {
 		return errors.New("work needs an approved final review before application")
 	}
+	if r.ReviewContext == "fresh" && last.ReviewContext != "fresh" {
+		return errors.New("final review lacks the required fresh context")
+	}
 	verdict := *last.Review
 	encoded, err := json.Marshal(verdict)
 	if err != nil {

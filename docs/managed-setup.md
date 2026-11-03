@@ -140,43 +140,31 @@ engine limit. Use a verified larger engine context or a compatible runtime.
 ## Provider coverage limits
 
 Managed Claude, Codex and Pi support private persistent conversations through
-their verified native stores. Interactive sessions use provider-native history
-selection instead. In the recorded acceptance, Antigravity 1.4.12 advertised structured turns and
-`--conversation`, and its local model catalog was successfully queried without
-generation. A subsequent explicitly authorized, 45-second bounded trusted-local
-turn with `gemini-3.8-flash-low` returned the exact acceptance reply successfully
-(five structured events, zero tool steps, 6821 input and seven output tokens).
-All documented tool namespaces were denied through per-session settings; no
-provider/global settings were changed. This proves a local native turn, not an
-isolated authentication or transcript boundary. Its [authentication documentation](https://antigravity.google/docs/install?tab=cli)
+explicit native session references. Interactive sessions use provider-native
+history selection instead.
+
+Direct managed Antigravity supports fresh trusted-local turns. Its
+[authentication documentation](https://antigravity.google/docs/install?tab=cli)
 uses the OS secure keyring/DBus for native login, while its
 [conversation guide](https://antigravity.google/docs/cli/conversations) describes
-workspace scoping without a verified independent private storage-root contract.
-Direct managed Antigravity supports fresh trusted-local turns; setup
-rejects isolated native auth and persistent conversation claims rather than
-exposing a whole host `.gemini` tree or session bus. Direct interactive
-Antigravity requires `native_only: true` and an empty role because its native
-role-injection interface is unsupported. For isolated persistent
-agents using Antigravity inference, choose `harness: antigravity-bridge` in setup
-and follow the [authenticated local bridge guide](antigravity-bridge.md). Pi
-provides their isolated tools/history while native authentication remains in
-the separate owner-controlled host inference service. The real two-turn path
-and actual Pi sandbox tool execution both passed acceptance tests.
+workspace scoping without an independent private storage-root contract that
+Agentmux can enforce. Setup rejects isolated native authentication and persistent
+conversation settings for that route. Direct interactive Antigravity requires
+`native_only: true` and an empty role because its native role-injection interface
+is unsupported.
 
-Metadata parsers and Pi transport have local fake-endpoint tests. A real
-owner-authorized Ollama 0.20.5 service was subsequently validated over a temporary
-SSH loopback forward using its cached `qwen2.5:14b`: discovery used `/api/show`,
-then two tools-off Pi processes inside Bubblewrap retained private conversation
-context. Exactly two upstream requests were admitted, each requesting at most
-64 output tokens. No weights, settings changes or service restarts were needed;
-the temporary forward was closed afterward. The service's observed native
-context remained 32,768 tokens. A separate private vLLM 0.32.0 CPU installation
-also passed authenticated metadata and two-process isolated Pi continuation with
-cached Qwen 0.5B weights, exactly two upstream requests and at most 64 requested
-output tokens each. Its initial test exposed and fixed a Pi context-reserve
-fixture mismatch; see the [provider validation matrix](provider-validation.md)
-for the regression, measured boundaries and cleanup. Tools were disabled in both
-engine acceptances. No weights are downloaded by setup.
+For isolated persistent agents using Antigravity inference, choose
+`harness: antigravity-bridge` in setup and follow the
+[authenticated local bridge guide](antigravity-bridge.md). Pi provides isolated
+tools/history while native authentication remains in a separate owner-controlled
+host inference service.
+
+Pi can connect to compatible Ollama/vLLM chat-completions endpoints. Configure
+the exact model ID, available context and expected tool support before running.
+Metadata and fake-endpoint tests verify configuration and protocol handling;
+only a real bounded provider task can check the chosen service/model. Setup
+never downloads model weights. See [provider compatibility](provider-compatibility.md)
+for the distinct startup, continuation and tool checks.
 
 The real Ollama test is opt-in and expects an existing service/model:
 

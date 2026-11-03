@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+- Add `amx work` for a previewable coding, fresh-review, revision and acceptance
+  journey with status/list/show commands scoped to each project and explicit
+  application.
+- Add `amx flow` comparisons, dependency missions, bounded snapshot review,
+  repeated laboratories, revision-bound checks, handoff briefs and offline reports.
+- Default workflow snapshots to private Git object stores. Add opt-in Linux
+  filesystem, PID and network isolation, explicit filtered credentials and
+  per-request HTTPS authority inspection; required boundaries fail closed.
+- Retain patch integrity and freshness evidence, journal source application,
+  and recover interrupted application without replaying a patch. See the
+  [workflow guide](docs/working.md) and [validation guide](docs/workflow-validation.md)
+  for reproducible checks and operational limits.
+- Automatically group connected web graph nodes while preserving manually pinned
+  positions for each workspace/study attempt. **Auto arrange** releases pins and
+  refits; unchanged topology stays still through refreshes and selection.
+
 ## v0.11.0 - 2026-11-02
 
 - Reject stale release retries whose commit no longer matches the tag, serialize
@@ -34,7 +52,7 @@ availability guarantee.
 - Illustrated workflow guide with terminal and web screenshots, everyday session
   navigation, a worked poem collaboration, dynamic teams, research and scaling.
 
-- A further usability sweep fixes loading-modal input capture, stale native
+- Fix loading-modal input capture, stale native
   focus, old-controller history compatibility, large-list navigation, exact
   permanent-team impact reviews, recovery of expired deliveries, memory
   replacement/import races, and Pi transport receipt truth. Final-phase research
@@ -66,12 +84,10 @@ availability guarantee.
 - Consented dynamic-team ownership/moves, capacity explanations, live admission
   controls, observable research steering, role/profile treatments and supported
   primary outcomes/counterbalancing.
-- Worker/native-completion, recovery, scale and asynchronous-editor fixes from
-  bounded UAT. See the [closure record](docs/uat-gap-closure.md) and
-  [dated provider acceptance](docs/provider-acceptance.md) for measured evidence
-  and limits.
+- Fix worker/native completion, recovery, scale and asynchronous editor behavior.
+  See [provider compatibility](docs/provider-compatibility.md) for setup and limits.
 - A complete fresh-install acceptance walkthrough, synchronized command help,
-  current sample launches, authenticated private-release installation, and strict
+  current sample launches, checksum-verified release installation, and strict
   documentation builds in CI.
 
 For installation and a complete first-run test, use the
@@ -79,7 +95,7 @@ For installation and a complete first-run test, use the
 
 ## v0.9.0 - 2026-03-31
 
-Ninth private release, introducing **Native LLM Providers** and the **JIT Shell Compiler**.
+Ninth release, introducing **Native LLM Providers** and the **JIT Shell Compiler**.
 
 - Implemented **Native Provider Support**: Agentmux now natively understands `claude`, `gemini`, `openai`, and `gptme`.
 - Added **JIT Shell Compiler**: Automatically compiles optimized CLI commands for specific LLM providers, injecting personas and tool schemas.
@@ -89,7 +105,7 @@ Ninth private release, introducing **Native LLM Providers** and the **JIT Shell 
 
 ## v0.8.0 - 2026-03-31
 
-Eighth private release, enabling **Native LLM Awareness** and coordination tool-calling.
+Eighth release, enabling **Native LLM Awareness** and coordination tool-calling.
 
 - Added **`agentmux tools`**: Generates JSON Schemas for all coordination primitives (kv-store, wait, scale), enabling native LLM function-calling.
 - Added **`agentmux prompt`**: Generates a standardized environment-awareness system prompt for AI agents.
@@ -98,7 +114,7 @@ Eighth private release, enabling **Native LLM Awareness** and coordination tool-
 
 ## v0.7.0 - 2026-03-29
 
-Seventh private release of Agentmux, introducing the **Agentic Team Protocol** for coordination and portable session sharing.
+Seventh release of Agentmux, introducing the **Agentic Team Protocol** for coordination and portable session sharing.
 
 - Added **Mission Control (TUI Dashboard)**: a real-time, full-screen dashboard for monitoring agents and the shared Blackboard.
 - Implemented **Blackboard (KV-Store)**: a shared memory layer for agent coordination using tmux session options.
@@ -110,8 +126,8 @@ Seventh private release of Agentmux, introducing the **Agentic Team Protocol** f
 - Added `supervisor-demo` and `research-team` examples showcasing multi-agent orchestration.
 
 ## v0.6.0 - 2026-03-29
-...
-Sixth private release of Agentmux, focused on config reuse, team workflows, and professional packaging.
+
+Sixth release of Agentmux, focused on config reuse, team workflows, and professional packaging.
 
 - Added `include:` top-level field for splitting configurations and sharing common agents, params, and environment variables across files.
 - Implemented recursive config loading with Parent-Wins merging precedence and circular inclusion detection.
@@ -124,7 +140,7 @@ Sixth private release of Agentmux, focused on config reuse, team workflows, and 
 
 ## v0.5.0 - 2026-03-29
 
-Fifth private release of Agentmux, focused on non-destructive session management and deep live inspection.
+Fifth release of Agentmux, focused on non-destructive session management and deep live inspection.
 
 - Implemented a non-destructive reconciliation engine for `reload`, surgically updating panes and metadata instead of killing the entire session.
 - Added support for window renaming and layout re-syncing during session reconciliation.
@@ -134,7 +150,7 @@ Fifth private release of Agentmux, focused on non-destructive session management
 - Refined `status` output formatting for better readability and detail.
 
 ## v0.4.0 - 2026-03-24
-...
+
 - Added `status --pane <name>` for targeted single-pane inspection in both human-readable and JSON output.
 - Added `capture --tail N` for smaller, automation-friendly pane reads.
 - Added `capture --strip-empty` for cleaner script-facing reads from shell panes with blank terminal filler rows.
@@ -146,7 +162,7 @@ Fifth private release of Agentmux, focused on non-destructive session management
 
 ## v0.3.0 - 2026-03-23
 
-Third private release of Agentmux, focused on session reload and richer pane lifecycle behavior.
+Third release of Agentmux, focused on session reload and richer pane lifecycle behavior.
 
 - Added `reload` as the workflow command for recreating an existing session from config, with guards against self-replacing the current tmux session.
 - Added configurable pane `on_exit` behavior with `shell`, `remain`, `restart`, and `kill`.
@@ -156,7 +172,7 @@ Third private release of Agentmux, focused on session reload and richer pane lif
 
 ## v0.2.0 - 2026-03-23
 
-Second private release of Agentmux, focused on live pane-oriented workspace management.
+Second release of Agentmux, focused on live pane-oriented workspace management.
 
 - Stable pane names as first-class runtime identifiers.
 - Live pane commands: `status`, `focus`, `restart`, `rerun`, `stop`, `kill`, `capture`, and `send`.
@@ -167,7 +183,7 @@ Second private release of Agentmux, focused on live pane-oriented workspace mana
 
 ## v0.1.0 - 2026-03-23
 
-Initial private release of Agentmux.
+Initial release of Agentmux.
 
 - Declarative YAML config for tmux sessions, windows, panes, params, hooks, and reusable agents.
 - Validation, `render`, `dry-run`, `doctor`, and strict-mode warnings for safer config authoring.

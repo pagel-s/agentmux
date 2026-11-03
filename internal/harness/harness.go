@@ -32,11 +32,19 @@ type Spec struct {
 	HomeFiles []HomeFile
 	// SessionDirs are explicit per-agent writable transcript stores. They never
 	// include authentication/config directories or another agent's history.
-	SessionDirs  []SessionDir
+	SessionDirs []SessionDir
+	// ExtraFiles are explicit controller-owned capabilities for an outer
+	// namespace launcher. Native requests cannot name arbitrary descriptors.
+	ExtraFiles   []*os.File
 	conversation *Conversation
 }
 
-type HomeFile struct{ Source, Target string }
+type HomeFile struct {
+	Source, Target string
+	// Descriptor is a controller-owned sealed anonymous credential capability.
+	// Namespace wrappers bind that one object; no host login directory is exposed.
+	Descriptor *os.File
+}
 type SessionDir struct{ Source, Target string }
 
 // Request selects a harness and supplies a single fresh turn. Command is an
@@ -148,7 +156,7 @@ func Build(req Request) (Spec, error) {
 	overrides := make(map[string]string, len(req.Env)+2)
 	for key, value := range req.Env {
 		if !validEnvName(key) || strings.ContainsRune(value, 0) {
-			return Spec{}, fmt.Errorf("invalid environment variable %q", key)
+			return Spec{}, errors.New("environment variables require valid names and values without NUL")
 		}
 		overrides[key] = value
 	}
@@ -160,7 +168,7 @@ func Build(req Request) (Spec, error) {
 			credential, ok = os.LookupEnv(req.APIKeyEnv)
 		}
 		if !ok || credential == "" {
-			return Spec{}, fmt.Errorf("credential environment variable %s is not set", req.APIKeyEnv)
+			return Spec{}, errors.New("selected credential environment variable is not set")
 		}
 	}
 
@@ -223,7 +231,7 @@ func Build(req Request) (Spec, error) {
 			spec.Args = append(spec.Args, "--no-tools")
 		}
 	default:
-		return Spec{}, fmt.Errorf("unsupported managed harness %q (supported: command, claude, codex, antigravity, pi)", req.Harness)
+		return Spec{}, errors.New("unsupported managed harness (supported: command, claude, codex, antigravity, pi)")
 	}
 	if name != "command" {
 		if req.Model != "" {

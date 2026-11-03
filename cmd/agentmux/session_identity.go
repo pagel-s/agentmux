@@ -86,7 +86,8 @@ func (m console) sessionMatches() []sessionMatch {
 		}
 		title := sessionTitle(a)
 		detail := fmt.Sprintf("%s · %s · %s · added %s\n%s", a.ID, a.Config.Harness, sessionOrigin(a), sessionAdded(a.CreatedAt), a.Config.Workdir)
-		if matches(title + " " + detail + " " + a.Config.Role) {
+		search := strings.Join([]string{title, a.ID, a.Config.Harness, sessionOrigin(a), a.Config.Workdir, a.Config.Role}, " ")
+		if matches(search) {
 			out = append(out, sessionMatch{agent: i, observation: -1, title: title, detail: detail})
 		}
 	}
@@ -96,7 +97,8 @@ func (m console) sessionMatches() []sessionMatch {
 		}
 		title := observedTitle(v)
 		detail := fmt.Sprintf("%s · %s · %s · started %s\n%s · %s", v.ID, v.Harness, v.TTY, sessionAdded(v.StartedAt), v.Project, v.TmuxSession)
-		if matches(title + " " + detail) {
+		search := strings.Join([]string{title, v.ID, v.Harness, v.TTY, v.Project, v.TmuxSession}, " ")
+		if matches(search) {
 			out = append(out, sessionMatch{agent: -1, observation: i, title: title, detail: detail})
 		}
 	}

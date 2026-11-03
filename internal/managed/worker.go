@@ -116,7 +116,7 @@ func RunWorker(ctx context.Context, opts WorkerOptions) error {
 		for _, rule := range agent.Egress.Allow {
 			rules = append(rules, egress.Endpoint{Origin: rule.Origin, IPs: append([]string(nil), rule.IPs...)})
 		}
-		proxy, err := egress.Start(ctx, egressSocket, rules)
+		proxy, err := egress.StartLegacy(ctx, egressSocket, rules)
 		if err != nil {
 			return errors.New("worker egress policy could not be enforced")
 		}

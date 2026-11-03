@@ -30,13 +30,25 @@ func TestLabFreezesSourceRotatesOrderAndKeepsOriginalIntegrationTarget(t *testin
 		if err != nil {
 			t.Fatal(err)
 		}
-		if run.Snapshot.Tree != r.Snapshot.Tree || run.Repository != repo || run.Snapshot.Repository != repo {
+		source := SourceSnapshot(run)
+		if run.Snapshot.Tree != r.Snapshot.Tree || run.Repository != repo || source.Repository != repo || source.BaseCommit != r.Snapshot.BaseCommit {
 			t.Fatalf("trial lost pinned original source: %+v", run)
+		}
+		if run.Storage == StoragePrivate && (run.Snapshot.Repository != filepath.Join(r.Output, "baseline") || run.IntegrationSnapshot == nil || run.Snapshot.Store != filepath.Join(trial.Output, "git")) {
+			t.Fatalf("trial lost its independent execution provenance: %+v", run)
 		}
 	}
 	data, _ := os.ReadFile(filepath.Join(repo, "file.txt"))
 	if string(data) != "base\n" {
 		t.Fatal("lab changed original project")
+	}
+	index := fixtureGit(t, repo, "diff", "--cached", "--binary")
+	if result, err := Apply(context.Background(), r.Runs[0].Output, "a"); err != nil || !result.Applied || result.Uncertain {
+		t.Fatalf("laboratory result did not integrate into its original source: %+v %v", result, err)
+	}
+	data, _ = os.ReadFile(filepath.Join(repo, "file.txt"))
+	if string(data) != "fixed\n" || fixtureGit(t, repo, "diff", "--cached", "--binary") != index {
+		t.Fatal("laboratory integration changed the wrong files or staging")
 	}
 }
 

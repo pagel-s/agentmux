@@ -12,11 +12,16 @@ outcomes, role/personality treatments and counterbalanced factorial designs.
 Those are distinct manifest schemas; research fields are not accepted by an
 `experiment` manifest.
 
+For coding alternatives with retained patches and executable checks, use
+[`amx flow run` or `amx flow lab`](workflows.md). For one implementation and
+fresh-review journey, use [`amx work`](working.md). These coding workflows use
+separate plans and do not create experimental payoff observations.
+
 The included command fixtures validate orchestration and scoring. They do not
 produce evidence about agent cooperation, competition, or personality.
 
 ```sh
-go build -o /tmp/agentmux ./cmd/agentmux
+go build -o /tmp/amx ./cmd/agentmux
 /tmp/amx experiment plan examples/experiments/pilot.yaml
 /tmp/amx experiment run examples/experiments/pilot.yaml --output /tmp/amx-pilot
 ```

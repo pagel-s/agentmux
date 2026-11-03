@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -35,6 +36,29 @@ type Options struct {
 	Timeout       time.Duration
 	MaxConcurrent int
 	MaxRequests   int
+	// Wrap is an explicit controller-owned process lifetime boundary. Native
+	// inference still uses trusted host authentication; model tools stay denied.
+	Wrap            func(harness.Spec) (harness.Spec, error)
+	ReapDescendants bool
+	// Observe receives private lifecycle evidence before native admission and
+	// after completion. Errors fail closed; keys, headers and native stderr are
+	// never included. Callers must keep these records outside agent mounts.
+	Observe func(Evidence) error
+}
+
+type Evidence struct {
+	Index               int64             `json:"index"`
+	Phase               string            `json:"phase"`
+	Model               string            `json:"model"`
+	Input               string            `json:"input"`
+	InputSHA256         string            `json:"input_sha256"`
+	StartedAt           string            `json:"started_at"`
+	FinishedAt          string            `json:"finished_at,omitempty"`
+	NativeEvents        []json.RawMessage `json:"native_events,omitempty"`
+	Text                string            `json:"text,omitempty"`
+	Usage               json.RawMessage   `json:"usage,omitempty"`
+	ErrorClass          string            `json:"error_class,omitempty"`
+	CredentialsRedacted bool              `json:"credentials_redacted,omitempty"`
 }
 
 type Bridge struct {
@@ -43,7 +67,17 @@ type Bridge struct {
 	models   map[string]bool
 	permits  chan struct{}
 	requests atomic.Int64
+	mu       sync.Mutex
+	closed   bool
+	active   sync.WaitGroup
+	lifetime context.Context
+	cancel   context.CancelFunc
 }
+
+// Requests includes admitted and over-limit authenticated completion attempts.
+// It reveals no prompts, keys or provider-native private history.
+func (b *Bridge) Requests() int64 { return b.requests.Load() }
+
 type completionRequest struct {
 	Model      string            `json:"model"`
 	Messages   []json.RawMessage `json:"messages"`
@@ -108,12 +142,42 @@ func New(opts Options) (*Bridge, error) {
 		}
 		models[model] = true
 	}
+	if _, err := harness.Build(harness.Request{Harness: "antigravity", Model: opts.Models[0], Command: opts.Command, Env: opts.Env, Conversation: &harness.Conversation{Mode: "fresh"}}); err != nil {
+		return nil, fmt.Errorf("bridge requires fresh native inference: %w", err)
+	}
 	keyHash := sha256.Sum256([]byte(opts.Key))
 	opts.Key = ""
-	return &Bridge{opts: opts, key: keyHash, models: models, permits: make(chan struct{}, opts.MaxConcurrent)}, nil
+	lifetime, cancel := context.WithCancel(context.Background())
+	return &Bridge{opts: opts, key: keyHash, models: models, permits: make(chan struct{}, opts.MaxConcurrent), lifetime: lifetime, cancel: cancel}, nil
+}
+
+// Shutdown revokes new requests, interrupts active native calls and waits for
+// their final evidence callbacks. It never retries interrupted inference.
+func (b *Bridge) Shutdown(ctx context.Context) error {
+	b.mu.Lock()
+	b.closed = true
+	b.cancel()
+	b.mu.Unlock()
+	done := make(chan struct{})
+	go func() { b.active.Wait(); close(done) }()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (b *Bridge) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	b.mu.Lock()
+	if b.closed {
+		b.mu.Unlock()
+		http.Error(w, "inference service is closed", http.StatusServiceUnavailable)
+		return
+	}
+	b.active.Add(1)
+	b.mu.Unlock()
+	defer b.active.Done()
 	w.Header().Set("Cache-Control", "no-store")
 	if !strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") {
 		http.Error(w, "authentication required", http.StatusUnauthorized)
@@ -190,11 +254,14 @@ func (b *Bridge) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if string(request.ToolChoice) == "\"none\"" {
 		request.Tools = nil
 	}
-	if b.requests.Add(1) > int64(b.opts.MaxRequests) {
+	index := b.requests.Add(1)
+	if index > int64(b.opts.MaxRequests) {
 		http.Error(w, "inference request allowance exhausted", http.StatusTooManyRequests)
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), b.opts.Timeout)
+	stop := context.AfterFunc(b.lifetime, cancel)
+	defer stop()
 	defer cancel()
 	dir, err := os.MkdirTemp("", "agentmux-agy-inference-")
 	if err != nil {
@@ -207,6 +274,14 @@ func (b *Bridge) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "conversation exceeds prompt limit", 400)
 		return
 	}
+	digest := sha256.Sum256([]byte(prompt))
+	evidence := Evidence{Index: index, Phase: "starting", Model: request.Model, Input: prompt, InputSHA256: hex.EncodeToString(digest[:]), StartedAt: time.Now().UTC().Format(time.RFC3339Nano)}
+	if b.opts.Observe != nil {
+		if err := b.opts.Observe(evidence); err != nil {
+			http.Error(w, "native inference admission evidence could not be retained; no provider call was started", http.StatusServiceUnavailable)
+			return
+		}
+	}
 	command := append(append([]string(nil), b.opts.Command...), "--settings", denySettings, "--print-timeout", b.opts.Timeout.String())
 	env := map[string]string{"BROWSER": "/bin/false", "AGY_CLI_DISABLE_AUTO_UPDATE": "true"}
 	for key, value := range b.opts.Env {
@@ -215,7 +290,7 @@ func (b *Bridge) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// These cannot be changed by a request or an owner-provided environment.
 	env["BROWSER"] = "/bin/false"
 	env["AGY_CLI_DISABLE_AUTO_UPDATE"] = "true"
-	result, err := harness.Run(ctx, harness.Request{Harness: "antigravity", Model: request.Model, Prompt: prompt, Command: command, Workdir: dir, Env: env, OnEvent: func(raw json.RawMessage) error {
+	result, err := harness.Run(ctx, harness.Request{Harness: "antigravity", Model: request.Model, Prompt: prompt, Command: command, Workdir: dir, Env: env, Conversation: &harness.Conversation{Mode: "fresh"}, Wrap: b.opts.Wrap, ReapDescendants: b.opts.ReapDescendants, OnEvent: func(raw json.RawMessage) error {
 		var event struct {
 			Step struct {
 				Type string `json:"step_type"`
@@ -227,31 +302,57 @@ func (b *Bridge) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		return nil
 	}})
+	evidence.Phase = "finished"
+	evidence.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	evidence.NativeEvents = result.Events
+	evidence.Text = result.Text
+	evidence.Usage = result.Usage
+	if err != nil {
+		evidence.ErrorClass = "native_failure"
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			evidence.ErrorClass = "interrupted"
+		}
+		if errors.Is(err, harness.ErrProtocol) {
+			evidence.ErrorClass = "invalid_native_protocol"
+		}
+		if errors.Is(err, harness.ErrToolDenied) {
+			evidence.ErrorClass = "denied_tools"
+		}
+		if errors.Is(err, harness.ErrOutputLimit) {
+			evidence.ErrorClass = "output_limit"
+		}
+	}
+	var parsed response
+	if err == nil {
+		if len(result.Text) > MaxResponseBytes {
+			evidence.ErrorClass = "output_limit"
+			err = errors.New("native response exceeds inference limit")
+		} else if parsed, err = parseResponse(result.Text, request.Tools); err != nil {
+			evidence.ErrorClass = "invalid_tool_response"
+		}
+	}
+	if b.opts.Observe != nil {
+		if observeErr := b.opts.Observe(evidence); observeErr != nil {
+			http.Error(w, "native inference completed but its final evidence could not be retained; request was not replayed", http.StatusBadGateway)
+			return
+		}
+	}
 	if err != nil {
 		http.Error(w, "native inference failed; request was not retried", http.StatusBadGateway)
-		return
-	}
-	if len(result.Text) > MaxResponseBytes {
-		http.Error(w, "native response exceeds inference limit", http.StatusBadGateway)
-		return
-	}
-	response, err := parseResponse(result.Text, request.Tools)
-	if err != nil {
-		http.Error(w, "native tool response failed schema validation", http.StatusBadGateway)
 		return
 	}
 	identifier := "chatcmpl-agentmux-" + randomID()
 	usage := usageFields(result.Usage)
 	if !request.Stream {
-		writeJSON(w, map[string]any{"id": identifier, "object": "chat.completion", "created": time.Now().Unix(), "model": request.Model, "choices": []any{map[string]any{"index": 0, "message": response.message(), "finish_reason": response.finishReason()}}, "usage": usage})
+		writeJSON(w, map[string]any{"id": identifier, "object": "chat.completion", "created": time.Now().Unix(), "model": request.Model, "choices": []any{map[string]any{"index": 0, "message": parsed.message(), "finish_reason": parsed.finishReason()}}, "usage": usage})
 		return
 	}
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("X-Accel-Buffering", "no")
-	chunk := map[string]any{"id": identifier, "object": "chat.completion.chunk", "created": time.Now().Unix(), "model": request.Model, "choices": []any{map[string]any{"index": 0, "delta": response.message(), "finish_reason": nil}}}
+	chunk := map[string]any{"id": identifier, "object": "chat.completion.chunk", "created": time.Now().Unix(), "model": request.Model, "choices": []any{map[string]any{"index": 0, "delta": parsed.message(), "finish_reason": nil}}}
 	data, _ := json.Marshal(chunk)
 	fmt.Fprintf(w, "data: %s\n\n", data)
-	chunk["choices"] = []any{map[string]any{"index": 0, "delta": map[string]any{}, "finish_reason": response.finishReason()}}
+	chunk["choices"] = []any{map[string]any{"index": 0, "delta": map[string]any{}, "finish_reason": parsed.finishReason()}}
 	chunk["usage"] = usage
 	data, _ = json.Marshal(chunk)
 	fmt.Fprintf(w, "data: %s\n\ndata: [DONE]\n\n", data)

@@ -755,6 +755,9 @@ h1 {
   stroke-width: 1.2;
   rx: 4;
 }
+.graph-node.pinned rect {
+  stroke-dasharray: 4 3;
+}
 .graph-node.selected rect {
   stroke: #c6a3ff;
   stroke-width: 2;

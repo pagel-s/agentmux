@@ -7,6 +7,8 @@ let graphMode = "agents",
   graphPositions = {},
   graphDrag = null,
   graphLayoutSession = "",
+  graphAutomaticSignature = "",
+  graphAutomaticPositions = {},
   graphDrawSignature = "";
 let graphViewport = null, graphFit = true, graphListView = false, graphOriginKey = "", connectionQuery = "";
 const connectionPageSize=50;
@@ -46,6 +48,83 @@ function graphDefaultPosition(index, count, mode) {
     return { x: 120 + (index % 5) * 180, y: 86 + Math.floor(index / 5) * 104 };
   const angle = (2 * Math.PI * index) / Math.max(count, 1) - Math.PI / 2;
   return { x: 480 + 300 * Math.cos(angle), y: 290 + 200 * Math.sin(angle) };
+}
+function graphSessionIdentity() {
+  return JSON.stringify([snapshot.runtime.session, snapshotIdentity()]);
+}
+function graphLayoutStorageKey() {
+  return "agentmux-layout-" + graphSessionIdentity();
+}
+function graphTopologyPairs(nodes, edges) {
+  const keys = new Set(nodes.map(node => node.key)), pairs = new Set();
+  for (const edge of edges) {
+    if (!edge.enabled || edge.source === edge.target || !keys.has(edge.source) || !keys.has(edge.target)) continue;
+    pairs.add(JSON.stringify([edge.source, edge.target].sort()));
+  }
+  return [...pairs].sort().map(pair => JSON.parse(pair));
+}
+function graphConnectedLayout(nodes, pairs, pins = {}) {
+  const keys = nodes.map(node => node.key).sort(), adjacency = new Map(keys.map(key => [key, new Set()]));
+  for (const [from, to] of pairs) {
+    adjacency.get(from)?.add(to);
+    adjacency.get(to)?.add(from);
+  }
+  const compare = (a, b) => adjacency.get(b).size - adjacency.get(a).size || (a < b ? -1 : a > b ? 1 : 0);
+  const unseen = new Set(keys), components = [];
+  while (unseen.size) {
+    const first = [...unseen].sort(compare)[0], queue = [first], component = [];
+    unseen.delete(first);
+    for (let index = 0; index < queue.length; index++) {
+      const key = queue[index];
+      component.push(key);
+      for (const neighbor of [...adjacency.get(key)].sort(compare)) {
+        if (!unseen.delete(neighbor)) continue;
+        queue.push(neighbor);
+      }
+    }
+    components.push(component);
+  }
+  components.sort((a, b) => b.length - a.length || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+  const preferred = new Map();
+  let left = 30, top = 30, shelfHeight = 0;
+  for (const component of components) {
+    const columns = Math.min(5, Math.ceil(Math.sqrt(component.length))), width = columns * 180, height = Math.ceil(component.length / columns) * 104;
+    if (left > 30 && left + width > 930) { left = 30; top += shelfHeight + 24; shelfHeight = 0; }
+    component.forEach((key, index) => preferred.set(key, {x:left + 90 + index % columns * 180, y:top + 52 + Math.floor(index / columns) * 104}));
+    left += width + 24;
+    shelfHeight = Math.max(shelfHeight, height);
+  }
+  const result = {}, occupied = [];
+  for (const key of keys) {
+    const point = pins[key];
+    if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) continue;
+    result[key] = {x:point.x, y:point.y};
+    occupied.push(result[key]);
+  }
+  const overlaps = point => occupied.some(other => Math.abs(point.x-other.x) < 164 && Math.abs(point.y-other.y) < 80);
+  // Each placed card can obstruct at most four of these slots. This finite
+  // pool therefore always has a vacant slot, including around manual pins.
+  const slots = Array.from({length:keys.length * 4 + 5}, (_, index) => ({x:120 + index % 5 * 180, y:82 + Math.floor(index / 5) * 104}));
+  for (const component of components) for (const key of component) {
+    if (result[key]) continue;
+    let point = preferred.get(key);
+    if (overlaps(point)) {
+      point = [...slots].sort((a, b) => (a.x-point.x)**2 + (a.y-point.y)**2 - (b.x-point.x)**2 - (b.y-point.y)**2 || a.y-b.y || a.x-b.x).find(candidate => !overlaps(candidate));
+    }
+    result[key] = {x:point.x, y:point.y};
+    occupied.push(result[key]);
+  }
+  return result;
+}
+function arrangeGraphNodes(nodes, edges) {
+  const keys = nodes.map(node => node.key).sort(), pairs = graphTopologyPairs(nodes, edges), pins = {};
+  for (const key of keys) if (graphPositions[key]) pins[key] = graphPositions[key];
+  const signature = JSON.stringify([graphLayoutSession, graphMode, keys, pairs, pins]);
+  if (!graphDrag?.key && signature !== graphAutomaticSignature) {
+    graphAutomaticPositions = graphConnectedLayout(nodes, pairs, pins);
+    graphAutomaticSignature = signature;
+  }
+  nodes.forEach((node, index) => Object.assign(node, graphPositions[node.key] || graphAutomaticPositions[node.key] || graphDefaultPosition(index, nodes.length, graphMode)));
 }
 function graphPoint(event, matrix) {
   const point = $("interaction-graph").createSVGPoint();
@@ -108,13 +187,18 @@ function graphInspector() {
 }
 async function renderGraph() {
   if (!snapshot || tab !== "graph") return;
-  if (graphLayoutSession !== snapshot.runtime.session) {
-    graphLayoutSession = snapshot.runtime.session;
+  const identity = graphSessionIdentity();
+  if (graphLayoutSession !== identity) {
+    graphLayoutSession = identity;
     graphPositions = {};
+    graphAutomaticSignature = graphDrawSignature = graphVersion = "";
+    graphAutomaticPositions = {};
+    graphCache.clear();
+    graphDrag = null;
     graphFit = true;
     try {
       const saved = JSON.parse(
-        localStorage.getItem("agentmux-layout-" + graphLayoutSession) || "{}",
+        localStorage.getItem(graphLayoutStorageKey()) || (!snapshotIdentity() && localStorage.getItem("agentmux-layout-" + snapshot.runtime.session)) || "{}",
       );
       for (const [key, p] of Object.entries(saved))
         if (p && Number.isFinite(p.x) && Number.isFinite(p.y))
@@ -125,6 +209,7 @@ async function renderGraph() {
     } catch {}
   }
   const signature = JSON.stringify([
+    identity,
     snapshot.boundaries.version,
     snapshot.teams || [],
     graphAgents().map((a) => a.id),
@@ -138,6 +223,7 @@ async function renderGraph() {
         agents.map((a) => call("boundaries.get", { agent: a.id })),
       );
       const current = JSON.stringify([
+        graphSessionIdentity(),
         snapshot.boundaries.version,
         snapshot.teams || [],
         graphAgents().map((a) => a.id),
@@ -160,6 +246,7 @@ async function renderGraph() {
 function drawGraph() {
   if (!snapshot || tab !== "graph") return;
   const signature = JSON.stringify([
+    graphSessionIdentity(),
     graphVersion,
     graphMode,
     selected,
@@ -177,58 +264,6 @@ function drawGraph() {
     nodes = [],
     edges = [];
   const viewState = captureViewState(svg);
-  const scopeCount =
-    (snapshot.boundaries.boards || []).length +
-    (snapshot.boundaries.memory || []).length;
-  graphHeight =
-    graphMode === "scopes"
-      ? Math.max(
-          580,
-          95 + Math.max(0, agents.length - 1) * 100 + 80,
-          140 + Math.max(0, scopeCount - 1) * 130 + 80,
-        )
-      : Math.max(
-          580,
-          agents.length > 12
-            ? 146 + (Math.ceil(agents.length / 5) - 1) * 104
-            : 580,
-        );
-  for (const position of Object.values(graphPositions))
-    graphHeight = Math.max(graphHeight, position.y + 60);
-  applyGraphViewport();
-  svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
-  svg.style.height = "100%";
-  svg.style.minWidth = "0";
-  const defs = svgNode("defs"),
-    pattern = svgNode("pattern", {
-      id: "grid",
-      width: 24,
-      height: 24,
-      patternUnits: "userSpaceOnUse",
-    });
-  pattern.append(svgNode("circle", { cx: 1, cy: 1, r: 0.7, fill: "#2e243c" }));
-  defs.append(pattern);
-  const marker = svgNode("marker", {
-    id: "arrow",
-    viewBox: "0 0 10 10",
-    refX: 9,
-    refY: 5,
-    markerWidth: 6,
-    markerHeight: 6,
-    orient: "auto-start-reverse",
-  });
-  marker.append(
-    svgNode("path", { d: "M 0 0 L 10 5 L 0 10 z", fill: "#a98cc9" }),
-  );
-  defs.append(marker);
-  svg.replaceChildren(
-    defs,
-    svgNode("rect", {
-      width: graphWidth,
-      height: graphHeight,
-      fill: "url(#grid)",
-    }),
-  );
   for (let i = 0; i < agents.length; i++) {
     const a = agents[i],
       fallback = graphDefaultPosition(i, agents.length, graphMode);
@@ -314,6 +349,42 @@ function drawGraph() {
       }
     }
   }
+  arrangeGraphNodes(nodes, edges);
+  graphHeight = Math.max(580, ...nodes.map(node => node.y + 70));
+  applyGraphViewport();
+  svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+  svg.style.height = "100%";
+  svg.style.minWidth = "0";
+  const defs = svgNode("defs"),
+    pattern = svgNode("pattern", {
+      id: "grid",
+      width: 24,
+      height: 24,
+      patternUnits: "userSpaceOnUse",
+    });
+  pattern.append(svgNode("circle", { cx: 1, cy: 1, r: 0.7, fill: "#2e243c" }));
+  defs.append(pattern);
+  const marker = svgNode("marker", {
+    id: "arrow",
+    viewBox: "0 0 10 10",
+    refX: 9,
+    refY: 5,
+    markerWidth: 6,
+    markerHeight: 6,
+    orient: "auto-start-reverse",
+  });
+  marker.append(
+    svgNode("path", { d: "M 0 0 L 10 5 L 0 10 z", fill: "#a98cc9" }),
+  );
+  defs.append(marker);
+  svg.replaceChildren(
+    defs,
+    svgNode("rect", {
+      width: graphWidth,
+      height: graphHeight,
+      fill: "url(#grid)",
+    }),
+  );
   const positions = new Map(nodes.map((n) => [n.key, n]));
   for (const edge of edges) {
     const from = positions.get(edge.source),
@@ -393,7 +464,8 @@ function drawGraph() {
       class:
         "graph-node" +
         (node.source === selected ? " selected" : "") +
-        (node.scope ? " scope" : ""),
+        (node.scope ? " scope" : "") +
+        (graphPositions[node.key] ? " pinned" : ""),
       transform: `translate(${node.x},${node.y})`,
       "data-node": node.key,
       "data-focus-x": node.x,
@@ -450,7 +522,7 @@ function drawGraph() {
   $("graph-limit").textContent =
     (snapshot.agents || []).filter((a) => a.state === "active").length > 40
       ? "40 active sessions shown, including selected session and recipient"
-      : "Drag nodes · drag background to pan · +/− zoom · 0 fits";
+      : "Connections group automatically · drag or Shift+arrows to pin · Auto arrange releases pins";
   $("graph-agents").classList.toggle("active", graphMode === "agents");
   $("graph-scopes").classList.toggle("active", graphMode === "scopes");
   restoreViewState(svg, viewState);
@@ -459,7 +531,7 @@ function drawGraph() {
 function saveGraphLayout() {
   try {
     localStorage.setItem(
-      "agentmux-layout-" + snapshot.runtime.session,
+      graphLayoutStorageKey(),
       JSON.stringify(graphPositions),
     );
   } catch {}
@@ -510,7 +582,11 @@ graph.addEventListener("pointerup", (event) => {
   graphDrag = null;
   graph.releasePointerCapture(event.pointerId);
   if (drag.moved) {
-    if (!drag.pan) saveGraphLayout();
+    if (!drag.pan) {
+      saveGraphLayout();
+      graphAutomaticSignature = graphDrawSignature = "";
+      drawGraph();
+    }
     return;
   }
   if (drag.pan) return;

@@ -30,6 +30,8 @@ type WorkSummary struct {
 	Outcome               string           `json:"outcome"`
 	Repository            string           `json:"repository"`
 	ProcessContainment    string           `json:"process_containment"`
+	Storage               string           `json:"storage"`
+	Isolation             string           `json:"isolation,omitempty"`
 	Directory             string           `json:"directory"`
 	StartedAt             string           `json:"started_at"`
 	FinishedAt            string           `json:"finished_at,omitempty"`
@@ -73,6 +75,14 @@ func Summarize(ctx context.Context, directory string) (WorkSummary, error) {
 func summarizeReport(ctx context.Context, r Report) (s WorkSummary) {
 	s = WorkSummary{ID: r.ID, Goal: r.Goal, State: r.State, Repository: r.Repository, Directory: r.Output, StartedAt: r.StartedAt, FinishedAt: r.FinishedAt, Error: r.Error, Phases: []PhaseSummary{}, Files: []ChangedFile{}, ReviewState: "not_recorded", NextCommand: "amx flow explain " + shellWord(r.Output)}
 	s.ProcessContainment = r.ProcessContainment
+	s.Storage = r.Storage
+	if s.Storage == "" {
+		s.Storage = StorageShared
+	}
+	if r.Isolation != nil {
+		s.Isolation = r.Isolation.Mode
+	}
+	source := SourceSnapshot(r)
 	if s.ProcessContainment == "" {
 		s.ProcessContainment = "process-group"
 	}
@@ -142,16 +152,17 @@ func summarizeReport(ctx context.Context, r Report) (s WorkSummary) {
 			}
 		}
 	}
-	prepared, containmentErr := PrepareProcessContainment(ctx, r.ProcessContainment)
+	prepared, closeContext, containmentErr := ReportContext(ctx, r)
 	if containmentErr != nil {
 		s.SourceFreshnessError = containmentErr.Error()
 		s.ResultFreshnessError = containmentErr.Error()
-		s.Outcome = "Required process containment is unavailable"
-		s.NextAction = "Inspect saved evidence and restore the recorded containment before checking freshness or applying work. " + containmentErr.Error()
+		s.Outcome = "Required execution context is unavailable"
+		s.NextAction = "Inspect saved evidence and restore the recorded storage and isolation before checking freshness or applying work. " + containmentErr.Error()
 		return s
 	}
+	defer closeContext()
 	ctx = prepared
-	if objectID(r.Snapshot.Tree) && digestID(r.Snapshot.ContentSHA256) {
+	if objectID(source.Tree) && digestID(source.ContentSHA256) {
 		tree, raw, err := contentState(ctx, r.Repository)
 		if err != nil {
 			s.SourceFreshnessError = err.Error()
@@ -160,7 +171,7 @@ func summarizeReport(ctx context.Context, r Report) (s WorkSummary) {
 			if headErr != nil {
 				s.SourceFreshnessError = headErr.Error()
 			} else {
-				fresh := tree == r.Snapshot.Tree && raw == r.Snapshot.ContentSHA256 && head == r.Snapshot.BaseCommit
+				fresh := tree == source.Tree && raw == source.ContentSHA256 && head == source.BaseCommit
 				s.SourceFresh = &fresh
 			}
 		}
@@ -181,8 +192,8 @@ func summarizeReport(ctx context.Context, r Report) (s WorkSummary) {
 			}
 		}
 	}
-	if final != nil && objectID(final.Tree) && objectID(r.Snapshot.Commit) {
-		files, truncated, err := changedFiles(ctx, r.Repository, r.Snapshot.Commit, final.Tree)
+	if final != nil && objectID(final.Tree) && objectID(source.Tree) {
+		files, truncated, err := changedFiles(ctx, SnapshotObjectRepository(*final), source.Tree, final.Tree)
 		s.Files, s.FilesTruncated = files, truncated
 		if err != nil {
 			s.FilesError = err.Error()
@@ -278,7 +289,7 @@ func summarizeReport(ctx context.Context, r Report) (s WorkSummary) {
 		return s
 	}
 	if len(s.Files) == 0 {
-		if final.Tree != r.Snapshot.Tree || final.ContentSHA256 != r.Snapshot.ContentSHA256 {
+		if final.Tree != source.Tree || final.ContentSHA256 != source.ContentSHA256 {
 			s.Outcome = "Changes need manual inspection"
 			s.NextAction = "The checked content changed without a representable Git file diff. Inspect the retained worktree before integration."
 			return s

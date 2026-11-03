@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"strings"
 	"sync/atomic"
@@ -31,6 +32,7 @@ func run(ctx context.Context, req Request, spec Spec) (Result, error) {
 	defer cancel()
 	cmd := exec.CommandContext(runCtx, spec.Binary, spec.Args...)
 	cmd.Dir, cmd.Env = spec.Workdir, spec.Env
+	cmd.ExtraFiles = append([]*os.File(nil), spec.ExtraFiles...)
 	cmd.WaitDelay = shutdownGrace
 	configureProcess(cmd)
 	var stderr diagnosticBuffer

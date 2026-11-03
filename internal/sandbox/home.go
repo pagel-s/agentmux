@@ -27,6 +27,9 @@ func homeMounts(files []HomeFile, workspace, state, credential, socket string) (
 		if !homeTargets[file.Target] || seen[file.Target] {
 			return nil, fmt.Errorf("isolated home file requires a unique supported credential target")
 		}
+		if file.Descriptor != nil {
+			return nil, fmt.Errorf("anonymous credential descriptors require the workflow namespace launcher")
+		}
 		source, err := realPath(file.Source, "isolated home credential copy", false)
 		if err != nil {
 			return nil, fmt.Errorf("isolated home credential copy is unavailable")

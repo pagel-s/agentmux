@@ -17,26 +17,29 @@ import (
 	"agentmux/internal/harness"
 )
 
-// Plan is an owner-controlled, finite workflow. Local execution has the same
-// filesystem authority as its owner; a worktree is not a sandbox.
+// Plan is an owner-controlled, finite workflow. Filesystem and network authority
+// are constrained only when the explicit isolation policy is required.
 type Plan struct {
-	Kind               string      `json:"kind,omitempty"`
-	Version            int         `json:"version"`
-	Repository         string      `json:"repository"`
-	Goal               string      `json:"goal"`
-	Execution          string      `json:"execution"`
-	ProcessContainment string      `json:"process_containment,omitempty"`
-	Mode               string      `json:"mode,omitempty"`
-	Candidates         []Candidate `json:"candidates"`
-	Checks             []Check     `json:"checks"`
-	Steps              []Step      `json:"steps,omitempty"`
-	TimeoutSeconds     int         `json:"timeout_seconds,omitempty"`
-	MaxAttempts        int         `json:"max_attempts,omitempty"`
-	MaxParallel        int         `json:"max_parallel,omitempty"`
+	Kind               string            `json:"kind,omitempty"`
+	Storage            string            `json:"storage,omitempty"`
+	Isolation          *IsolationOptions `json:"isolation,omitempty"`
+	Version            int               `json:"version"`
+	Repository         string            `json:"repository"`
+	Goal               string            `json:"goal"`
+	Execution          string            `json:"execution"`
+	ProcessContainment string            `json:"process_containment,omitempty"`
+	Mode               string            `json:"mode,omitempty"`
+	Candidates         []Candidate       `json:"candidates"`
+	Checks             []Check           `json:"checks"`
+	Steps              []Step            `json:"steps,omitempty"`
+	TimeoutSeconds     int               `json:"timeout_seconds,omitempty"`
+	MaxAttempts        int               `json:"max_attempts,omitempty"`
+	MaxParallel        int               `json:"max_parallel,omitempty"`
 	expectedTree       string
 	expectedContent    string
 	requireResult      bool
 	requireReadOnly    bool
+	requireFreshReview bool
 }
 
 type Candidate struct {
@@ -64,6 +67,9 @@ type Step struct {
 }
 
 type CandidateResult struct {
+	ReviewContext        string          `json:"review_context,omitempty"`
+	RuntimeHarness       string          `json:"runtime_harness,omitempty"`
+	CredentialsRedacted  bool            `json:"credentials_redacted,omitempty"`
 	Review               *ReviewResult   `json:"review,omitempty"`
 	ReviewTruncated      bool            `json:"review_truncated,omitempty"`
 	NativeEventsPath     string          `json:"native_events_path,omitempty"`
@@ -111,31 +117,46 @@ type StepResult struct {
 }
 
 type Report struct {
-	Kind                 string            `json:"kind,omitempty"`
-	Version              int               `json:"version"`
-	ID                   string            `json:"id"`
-	Mode                 string            `json:"mode"`
-	Goal                 string            `json:"goal"`
-	Execution            string            `json:"execution"`
-	ProcessContainment   string            `json:"process_containment,omitempty"`
-	State                string            `json:"state"`
-	Repository           string            `json:"repository"`
-	Output               string            `json:"output"`
-	StartedAt            string            `json:"started_at"`
-	FinishedAt           string            `json:"finished_at,omitempty"`
-	Error                string            `json:"error,omitempty"`
-	Snapshot             Snapshot          `json:"snapshot"`
-	Candidates           []CandidateResult `json:"candidates,omitempty"`
-	Steps                []StepResult      `json:"steps,omitempty"`
-	Verification         *Verification     `json:"verification,omitempty"`
-	Worktree             string            `json:"worktree,omitempty"`
-	Patch                string            `json:"patch,omitempty"`
-	PatchSHA256          string            `json:"patch_sha256,omitempty"`
-	FinalSnapshot        *Snapshot         `json:"final_snapshot,omitempty"`
-	DiagnosticsTruncated bool              `json:"diagnostics_truncated,omitempty"`
+	ReviewContext        string                          `json:"review_context,omitempty"`
+	Kind                 string                          `json:"kind,omitempty"`
+	Storage              string                          `json:"storage,omitempty"`
+	Isolation            *IsolationOptions               `json:"isolation,omitempty"`
+	BridgeUsage          map[string]IsolationBridgeUsage `json:"bridge_usage,omitempty"`
+	Version              int                             `json:"version"`
+	ID                   string                          `json:"id"`
+	Mode                 string                          `json:"mode"`
+	Goal                 string                          `json:"goal"`
+	Execution            string                          `json:"execution"`
+	ProcessContainment   string                          `json:"process_containment,omitempty"`
+	State                string                          `json:"state"`
+	Repository           string                          `json:"repository"`
+	Output               string                          `json:"output"`
+	StartedAt            string                          `json:"started_at"`
+	FinishedAt           string                          `json:"finished_at,omitempty"`
+	Error                string                          `json:"error,omitempty"`
+	Snapshot             Snapshot                        `json:"snapshot"`
+	IntegrationSnapshot  *Snapshot                       `json:"integration_snapshot,omitempty"`
+	Candidates           []CandidateResult               `json:"candidates,omitempty"`
+	Steps                []StepResult                    `json:"steps,omitempty"`
+	Verification         *Verification                   `json:"verification,omitempty"`
+	Worktree             string                          `json:"worktree,omitempty"`
+	Patch                string                          `json:"patch,omitempty"`
+	PatchSHA256          string                          `json:"patch_sha256,omitempty"`
+	FinalSnapshot        *Snapshot                       `json:"final_snapshot,omitempty"`
+	DiagnosticsTruncated bool                            `json:"diagnostics_truncated,omitempty"`
 }
 
 type RunReport = Report
+
+// SourceSnapshot is the owner-visible integration baseline. Laboratory trials
+// retain their exact execution snapshot while separately addressing integration
+// to the original project and its original HEAD.
+func SourceSnapshot(r Report) Snapshot {
+	if r.IntegrationSnapshot != nil {
+		return *r.IntegrationSnapshot
+	}
+	return r.Snapshot
+}
 
 var workflowID = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$`)
 
@@ -163,6 +184,12 @@ func validateReport(directory string, r Report) error {
 	if r.Kind != "" && r.Kind != "work" {
 		return invalid("unknown workflow kind")
 	}
+	if r.Storage != "" && r.Storage != StoragePrivate && r.Storage != StorageShared {
+		return invalid("unknown snapshot storage policy")
+	}
+	if r.ReviewContext != "" && r.ReviewContext != "fresh" {
+		return invalid("unknown review context policy")
+	}
 	if r.ProcessContainment != "" && r.ProcessContainment != ProcessGroups && r.ProcessContainment != PIDNamespace {
 		return invalid("unknown process containment policy")
 	}
@@ -179,6 +206,27 @@ func validateReport(directory string, r Report) error {
 	}
 	if r.Output != actual {
 		return invalid("output does not identify the directory being inspected")
+	}
+	if r.Storage == StoragePrivate && r.Snapshot.Commit != "" && r.Snapshot.Store != filepath.Join(actual, "git") {
+		return invalid("private starting snapshot is outside its run store")
+	}
+	if r.Storage == StoragePrivate && r.Snapshot.Commit != "" && !digestID(r.Snapshot.IgnoreSHA256) {
+		return invalid("private starting snapshot lacks its pinned ignore policy")
+	}
+	if r.Storage == StoragePrivate && r.Snapshot.Commit != "" && !digestID(r.Snapshot.SelectionSHA256) {
+		return invalid("private starting snapshot lacks its pinned path selection")
+	}
+	if r.IntegrationSnapshot != nil {
+		source := *r.IntegrationSnapshot
+		if r.Mode != "compare" || !strings.HasPrefix(filepath.Base(actual), "trial-") || source.Tree != r.Snapshot.Tree || source.ContentSHA256 != r.Snapshot.ContentSHA256 || source.Repository != r.Repository || r.Snapshot.BaseCommit != source.Commit {
+			return invalid("laboratory integration lineage does not match its execution snapshot")
+		}
+		if r.Storage == StoragePrivate && (source.Store != filepath.Join(filepath.Dir(actual), "git") || source.IgnoreSHA256 != r.Snapshot.IgnoreSHA256 || !digestID(source.SelectionSHA256)) {
+			return invalid("laboratory integration baseline is outside its parent store")
+		}
+	}
+	if r.Isolation != nil && (r.Isolation.Mode != "bubblewrap" || r.Storage != StoragePrivate || r.ProcessContainment != PIDNamespace) {
+		return invalid("isolated result lacks private storage and required PID containment")
 	}
 	if _, err := time.Parse(time.RFC3339Nano, r.StartedAt); err != nil {
 		return invalid("missing or malformed start time")
@@ -208,18 +256,43 @@ func validateReport(directory string, r Report) error {
 		return invalid("result collections do not match mode")
 	}
 	seen := map[string]bool{}
+	validateVerificationPolicy := func(v *Verification, worktree string) error {
+		if v == nil {
+			return nil
+		}
+		if r.Storage == StoragePrivate && (v.Storage != StoragePrivate || v.Store != filepath.Join(worktree, ".git") || v.IgnoreSHA256 != r.Snapshot.IgnoreSHA256 || !digestID(v.IgnoreSHA256) || !digestID(v.SelectionSHA256)) {
+			return invalid("verification does not use its private store and pinned ignore policy")
+		}
+		if r.Isolation != nil && v.Isolation != r.Isolation.Mode {
+			return invalid("verification does not use the recorded filesystem isolation")
+		}
+		return nil
+	}
 	validCandidate := func(id string, c CandidateResult, verifierOnly bool) error {
 		if !workflowID.MatchString(id) || seen[id] {
 			return invalid("invalid or duplicate result ID")
 		}
 		seen[id] = true
 		switch c.State {
-		case "pending", "running", "not_started", "failed", "uncertain", "completed", "verified", "checks_failed", "interrupted", "stale", "empty_result", "review_invalid", "review_modified", "changes_requested":
+		case "pending", "running", "not_started", "failed", "uncertain", "completed", "verified", "checks_failed", "interrupted", "stale", "empty_result", "review_invalid", "review_modified", "changes_requested", "credential_leak":
 		default:
 			return invalid("unknown candidate state")
 		}
 		if c.Worktree == "" {
 			return invalid("candidate has no worktree")
+		}
+		if r.Storage == StoragePrivate {
+			if !pathWithin(actual, c.Worktree) || c.Worktree == actual {
+				return invalid("private candidate worktree lies outside its run")
+			}
+			for _, snapshot := range []*Snapshot{c.StartingSnapshot, c.FinalSnapshot} {
+				if snapshot != nil && (snapshot.Repository != c.Worktree || snapshot.Store != filepath.Join(c.Worktree, ".git") || snapshot.IgnoreSHA256 != r.Snapshot.IgnoreSHA256 || !digestID(snapshot.IgnoreSHA256) || !digestID(snapshot.SelectionSHA256)) {
+					return invalid("private candidate snapshot does not identify its independent store")
+				}
+			}
+		}
+		if err := validateVerificationPolicy(c.Verification, c.Worktree); err != nil {
+			return err
 		}
 		if r.ProcessContainment == PIDNamespace && c.Verification != nil && c.Verification.ProcessContainment != PIDNamespace {
 			return invalid("candidate verification does not use the recorded PID containment")
@@ -240,6 +313,9 @@ func validateReport(directory string, r Report) error {
 		}
 	}
 	for _, s := range r.Steps {
+		if r.ReviewContext == "fresh" && s.Review != nil && s.ReviewContext != "fresh" {
+			return invalid("structured review lacks fresh-context evidence")
+		}
 		if err := validCandidate(s.ID, s.CandidateResult, s.Harness == ""); err != nil {
 			return err
 		}
@@ -247,12 +323,19 @@ func validateReport(directory string, r Report) error {
 	if r.ProcessContainment == PIDNamespace && r.Verification != nil && r.Verification.ProcessContainment != PIDNamespace {
 		return invalid("final verification does not use the recorded PID containment")
 	}
+	if err := validateVerificationPolicy(r.Verification, r.Worktree); err != nil {
+		return err
+	}
 	if r.State == "completed" {
 		if err := RequireApprovedReview(r); err != nil {
 			return invalid(err.Error())
 		}
-		if !objectID(r.Snapshot.Commit) || !objectID(r.Snapshot.Tree) || !objectID(r.Snapshot.BaseCommit) || !digestID(r.Snapshot.ContentSHA256) || r.Repository != r.Snapshot.Repository {
+		source := SourceSnapshot(r)
+		if !objectID(r.Snapshot.Commit) || !objectID(r.Snapshot.Tree) || !objectID(source.Commit) || !objectID(source.BaseCommit) || !digestID(r.Snapshot.ContentSHA256) || r.Repository != source.Repository {
 			return invalid("completed result has no valid starting snapshot")
+		}
+		if r.Storage == StoragePrivate && r.Mode == "mission" && (r.FinalSnapshot == nil || r.FinalSnapshot.Repository != r.Worktree || r.FinalSnapshot.Store != filepath.Join(r.Worktree, ".git") || r.FinalSnapshot.IgnoreSHA256 != r.Snapshot.IgnoreSHA256 || !digestID(r.FinalSnapshot.SelectionSHA256)) {
+			return invalid("private mission result does not identify its independent store")
 		}
 		if r.Mode == "compare" {
 			if len(r.Candidates) == 0 {
@@ -326,13 +409,34 @@ func DecodeJSON(data []byte, target any) error {
 	d := json.NewDecoder(bytes.NewReader(data))
 	d.DisallowUnknownFields()
 	if err := d.Decode(target); err != nil {
-		return err
+		return workflowJSONError(err)
 	}
 	var extra any
 	if err := d.Decode(&extra); err != io.EOF {
 		return errors.New("workflow file must contain exactly one JSON object")
 	}
 	return nil
+}
+
+// Decoding precedes credential loading, including for pure plan previews.
+// Keep useful error categories and offsets without reflecting untrusted keys
+// or values, which can themselves contain a selected native credential.
+func workflowJSONError(err error) error {
+	var syntax *json.SyntaxError
+	if errors.As(err, &syntax) {
+		return fmt.Errorf("invalid workflow JSON syntax at byte %d", syntax.Offset)
+	}
+	var fieldType *json.UnmarshalTypeError
+	if errors.As(err, &fieldType) {
+		return fmt.Errorf("invalid workflow JSON field type at byte %d", fieldType.Offset)
+	}
+	if strings.HasPrefix(err.Error(), "json: unknown field ") {
+		return errors.New("workflow JSON contains an unknown field")
+	}
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return errors.New("incomplete workflow JSON")
+	}
+	return errors.New("workflow JSON could not be decoded")
 }
 
 func validateJSONKeys(data []byte) error {
@@ -350,7 +454,7 @@ func validateJSONKeys(data []byte) error {
 		}
 		t, err := d.Token()
 		if err != nil {
-			return err
+			return workflowJSONError(err)
 		}
 		delim, container := t.(json.Delim)
 		if !container {
@@ -362,7 +466,7 @@ func validateJSONKeys(data []byte) error {
 			for d.More() {
 				keyToken, err := d.Token()
 				if err != nil {
-					return err
+					return workflowJSONError(err)
 				}
 				key, ok := keyToken.(string)
 				if !ok {
@@ -370,7 +474,7 @@ func validateJSONKeys(data []byte) error {
 				}
 				folded := foldedJSONKey(key)
 				if seen[folded] {
-					return fmt.Errorf("duplicate JSON object key %q", key)
+					return errors.New("duplicate JSON object key")
 				}
 				seen[folded] = true
 				if err = value(depth + 1); err != nil {
@@ -379,7 +483,7 @@ func validateJSONKeys(data []byte) error {
 			}
 			end, err := d.Token()
 			if err != nil {
-				return err
+				return workflowJSONError(err)
 			}
 			if end != json.Delim('}') {
 				return errors.New("invalid JSON object")
@@ -392,7 +496,7 @@ func validateJSONKeys(data []byte) error {
 			}
 			end, err := d.Token()
 			if err != nil {
-				return err
+				return workflowJSONError(err)
 			}
 			if end != json.Delim(']') {
 				return errors.New("invalid JSON array")
@@ -426,7 +530,14 @@ func foldedJSONKey(key string) string {
 }
 
 func normalized(p Plan) Plan {
+	p.Isolation = NormalizedIsolation(p.Isolation)
+	if p.Storage == "" {
+		p.Storage = StoragePrivate
+	}
 	p.ProcessContainment = normalizedContainment(p.ProcessContainment)
+	if p.Isolation != nil && p.Isolation.Mode == "bubblewrap" {
+		p.ProcessContainment = PIDNamespace
+	}
 	if p.Mode == "" {
 		p.Mode = "compare"
 	}
@@ -444,6 +555,9 @@ func normalized(p Plan) Plan {
 
 func ValidatePlan(p Plan) error {
 	p = normalized(p)
+	if p.Storage != StoragePrivate && p.Storage != StorageShared {
+		return errors.New("snapshot storage must be private or shared")
+	}
 	if p.Kind != "" && p.Kind != "work" {
 		return errors.New("unknown workflow kind")
 	}
@@ -451,7 +565,7 @@ func ValidatePlan(p Plan) error {
 		return errors.New("workflow version must be 1")
 	}
 	if p.Execution != "local" {
-		return errors.New("execution must explicitly be local (trusted host execution; worktrees do not isolate processes)")
+		return errors.New("execution must explicitly be local; process and filesystem isolation are configured separately")
 	}
 	if err := ValidateProcessContainment(p.ProcessContainment); err != nil {
 		return err
@@ -475,21 +589,23 @@ func ValidatePlan(p Plan) error {
 		return errors.New("choose 1–16 candidates")
 	}
 	ids := map[string]bool{}
-	for _, c := range p.Candidates {
+	// Validation must not echo metadata: native authentication files are
+	// deliberately unread here, so their secret values cannot be redacted yet.
+	for i, c := range p.Candidates {
 		if !workflowID.MatchString(c.ID) || ids[c.ID] {
-			return fmt.Errorf("invalid or duplicate candidate ID %q", c.ID)
+			return fmt.Errorf("candidate %d has an invalid or duplicate ID", i+1)
 		}
 		ids[c.ID] = true
 		switch c.Harness {
-		case "command", "claude", "codex", "pi", "antigravity":
+		case "command", "claude", "codex", "pi", "antigravity", "antigravity-bridge":
 		default:
-			return fmt.Errorf("unsupported harness %q", c.Harness)
+			return fmt.Errorf("candidate %d has an unsupported harness (supported: command, claude, codex, pi, antigravity, antigravity-bridge)", i+1)
 		}
 		if c.Harness == "command" && (len(c.Command) == 0 || c.Command[0] == "") {
-			return fmt.Errorf("candidate %s requires command argv", c.ID)
+			return fmt.Errorf("candidate %d requires command argv", i+1)
 		}
 		if len(c.Command) > 64 || len(c.Prompt) > 128<<10 || c.TimeoutSeconds < 0 || c.TimeoutSeconds > 600 {
-			return fmt.Errorf("candidate %s exceeds prompt/argv/time bounds", c.ID)
+			return fmt.Errorf("candidate %d exceeds prompt/argv/time bounds", i+1)
 		}
 		for _, a := range c.Command {
 			if strings.ContainsRune(a, 0) || len(a) > 16<<10 {
@@ -497,27 +613,37 @@ func ValidatePlan(p Plan) error {
 			}
 		}
 		if len(c.Env) > 256 {
-			return fmt.Errorf("candidate %s has too many environment values", c.ID)
+			return fmt.Errorf("candidate %d has too many environment values", i+1)
 		}
 		for key, value := range c.Env {
 			if len(key) > 128 || len(value) > 128<<10 {
-				return fmt.Errorf("candidate %s environment exceeds bounds", c.ID)
+				return fmt.Errorf("candidate %d environment exceeds bounds", i+1)
 			}
 		}
 		if len(c.Model) > 1024 || len(c.BaseURL) > 8192 || len(c.APIKeyEnv) > 128 {
-			return fmt.Errorf("candidate %s metadata exceeds bounds", c.ID)
+			return fmt.Errorf("candidate %d metadata exceeds bounds", i+1)
 		}
 		// Build validates argv/environment without writing files or launching a
 		// provider. Reject every invalid peer before any candidate can execute.
-		spec, err := harness.Build(harness.Request{Harness: c.Harness, Model: c.Model, Command: c.Command, Env: c.Env, BaseURL: c.BaseURL, APIKeyEnv: c.APIKeyEnv, Workdir: p.Repository})
+		buildHarness := c.Harness
+		if buildHarness == "antigravity-bridge" {
+			if p.Isolation == nil || p.Isolation.Mode != "bubblewrap" || !strings.HasPrefix(c.Model, "gemini-") || c.BaseURL != "" || c.APIKeyEnv != "" {
+				return errors.New("Antigravity bridge requires isolated execution, an explicit Gemini model, and controller-owned endpoint authentication")
+			}
+			buildHarness = "pi"
+		}
+		spec, err := harness.Build(harness.Request{Harness: buildHarness, Model: c.Model, Command: c.Command, Env: c.Env, BaseURL: c.BaseURL, APIKeyEnv: c.APIKeyEnv, Conversation: &harness.Conversation{Mode: "fresh"}, Workdir: p.Repository})
 		if err != nil {
-			return fmt.Errorf("candidate %s configuration: %w", c.ID, err)
+			return fmt.Errorf("candidate %d configuration: %w", i+1, err)
 		}
 		if wrap := processContainmentWrapper(p.ProcessContainment); wrap != nil {
 			if _, err := wrap(spec); err != nil {
-				return fmt.Errorf("candidate %s containment configuration: %w", c.ID, err)
+				return fmt.Errorf("candidate %d containment configuration: %w", i+1, err)
 			}
 		}
+	}
+	if err := ValidateIsolation(p); err != nil {
+		return err
 	}
 	if len(p.Checks) < 1 || len(p.Checks) > 32 {
 		return errors.New("choose 1–32 independent checks")
@@ -572,41 +698,41 @@ func orderedSteps(p Plan) ([]Step, error) {
 		candidates[c.ID] = true
 	}
 	steps := map[string]Step{}
-	for _, s := range p.Steps {
+	for i, s := range p.Steps {
 		if !workflowID.MatchString(s.ID) {
-			return nil, fmt.Errorf("invalid step ID %q", s.ID)
+			return nil, fmt.Errorf("step %d has an invalid ID", i+1)
 		}
 		if _, ok := steps[s.ID]; ok {
-			return nil, errors.New("duplicate step ID")
+			return nil, fmt.Errorf("step %d has a duplicate ID", i+1)
 		}
 		if s.Candidate != "" && !candidates[s.Candidate] || s.Candidate == "" && !s.Verify {
-			return nil, fmt.Errorf("step %s must reference one candidate or be a verify step", s.ID)
+			return nil, fmt.Errorf("step %d must reference one candidate or be a verify step", i+1)
 		}
 		if s.RequireResult && s.Candidate == "" {
-			return nil, fmt.Errorf("step %s cannot require result text from a verifier-only step", s.ID)
+			return nil, fmt.Errorf("step %d cannot require result text from a verifier-only step", i+1)
 		}
 		if (s.ReadOnly || s.Review || s.GateReview) && s.Candidate == "" {
-			return nil, fmt.Errorf("step %s requires an agent for review controls", s.ID)
+			return nil, fmt.Errorf("step %d requires an agent for review controls", i+1)
 		}
 		if s.Review && (!s.ReadOnly || !s.RequireResult) {
-			return nil, fmt.Errorf("step %s review must be read_only and require_result", s.ID)
+			return nil, fmt.Errorf("step %d review must be read_only and require_result", i+1)
 		}
 		if s.Review && s.Verify {
-			return nil, fmt.Errorf("step %s must keep structured review and verification in separate phases", s.ID)
+			return nil, fmt.Errorf("step %d must keep structured review and verification in separate phases", i+1)
 		}
 		if s.GateReview && !s.Review {
-			return nil, fmt.Errorf("step %s review gate requires a structured review", s.ID)
+			return nil, fmt.Errorf("step %d review gate requires a structured review", i+1)
 		}
 		if len(s.Goal) > 128<<10 {
 			return nil, errors.New("step goal exceeds bounds")
 		}
 		steps[s.ID] = s
 	}
-	for _, s := range p.Steps {
+	for i, s := range p.Steps {
 		seen := map[string]bool{}
 		for _, dep := range s.DependsOn {
 			if _, ok := steps[dep]; !ok || dep == s.ID || seen[dep] {
-				return nil, fmt.Errorf("invalid dependency for %s", s.ID)
+				return nil, fmt.Errorf("step %d has an invalid dependency", i+1)
 			}
 			seen[dep] = true
 		}

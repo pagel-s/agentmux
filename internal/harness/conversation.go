@@ -89,14 +89,74 @@ func validConversationID(name, id string) bool {
 	return true
 }
 
+// A native subcommand can dispatch before (and ignore) the controller's print,
+// protocol and session flags. Conversation-managed callers only select launch
+// options; the adapter owns the native operation itself.
+func nativeConversationSubcommand(name, argument string) bool {
+	var commands string
+	switch name {
+	case "claude":
+		commands = "agents attach auth auto-mode doctor gateway import install logs mcp plugin plugins purge respawn rm setup-token stop kill ultrareview update upgrade"
+	case "codex":
+		commands = "agents exec e review login logout mcp plugin app-server remote-control completion update doctor sandbox debug apply a resume queue archive delete migrate-rollouts migrate-nfs-db unarchive fork cloud exec-server features help"
+	case "antigravity":
+		commands = "agent agents changelog help install mcp mic-serve models plugin plugins remote-control update"
+	case "pi":
+		commands = "install remove uninstall update list config auth mcp"
+	}
+	for _, command := range strings.Fields(commands) {
+		if argument == command {
+			return true
+		}
+	}
+	return false
+}
+
 func configureConversation(req Request, spec *Spec, env map[string]string) error {
 	if req.Conversation == nil {
 		return nil
 	}
 	c := *req.Conversation
+	// Explicit fresh callers must not be able to select a native transcript
+	// through the owner argv. Nil keeps the trusted-local compatibility API.
+	fresh := c.Mode == "" || c.Mode == "fresh"
+	commandArgs := req.Command
+	if len(commandArgs) != 0 {
+		commandArgs = commandArgs[1:]
+	}
+	for _, arg := range commandArgs {
+		flag := strings.SplitN(arg, "=", 2)[0]
+		selectsSession := false
+		switch flag {
+		case "--continue", "--resume", "--conversation", "--conversation-id", "--session-id", "--session", "--session-dir", "--fork-session", "--fork", "--from-pr", "--teleport", "--cloud", "--remote", "--attach", "--attach-session", "--bg", "--background", "--desktop", "--remote-control", "--environment", "--tmux", "--worktree", "--ide", "--chrome", "--cd", "--cwd", "--directory", "--project", "--new-project", "--exec", "--interactive", "-C", "-w":
+			selectsSession = true
+		}
+		if strings.HasPrefix(flag, "--remote-") {
+			selectsSession = true
+		}
+		if spec.Name == "antigravity" && (flag == "--prompt-interactive" || flag == "-i") {
+			selectsSession = true
+		}
+		if nativeConversationSubcommand(spec.Name, arg) {
+			selectsSession = true
+		}
+		shortSession := spec.Name != "codex" && (strings.HasPrefix(flag, "-r") && !strings.HasPrefix(flag, "--") || strings.HasPrefix(flag, "-c") && !strings.HasPrefix(flag, "--"))
+		// Native parsers may expand clusters such as Claude's -pc into
+		// --print --continue. Require long options for compact/attached forms
+		// instead of guessing where each provider consumes an option value.
+		if strings.HasPrefix(arg, "-") && !strings.HasPrefix(arg, "--") && len(arg) > 2 {
+			shortSession = true
+		}
+		if selectsSession || shortSession || !fresh && (flag == "--no-session" || flag == "--no-session-persistence" || flag == "--ephemeral") {
+			return errors.New("owner command conflicts with controller-managed native conversation selection")
+		}
+	}
 	if c.Mode == "" || c.Mode == "fresh" {
 		if c.ID != "" || c.Dir != "" {
 			return errors.New("fresh conversation must not supply a native ID or directory")
+		}
+		if spec.Name == "codex" {
+			spec.Args = append(spec.Args, "--ephemeral")
 		}
 		return nil
 	}
@@ -105,12 +165,6 @@ func configureConversation(req Request, spec *Spec, env map[string]string) error
 	}
 	if c.Mode != "create" && c.Mode != "resume" {
 		return errors.New("conversation mode must be fresh, create, or resume")
-	}
-	for _, arg := range req.Command {
-		flag := strings.SplitN(arg, "=", 2)[0]
-		if flag == "--continue" || flag == "--resume" || flag == "--session-id" || flag == "--session" || flag == "--session-dir" || flag == "--no-session" || flag == "--no-session-persistence" || flag == "--ephemeral" || flag == "--fork-session" || flag == "--fork" || (spec.Name != "codex" && (flag == "-c" || flag == "-r")) {
-			return errors.New("owner command conflicts with controller-managed native conversation selection")
-		}
 	}
 	if c.Mode == "resume" && !validConversationID(spec.Name, c.ID) || c.ID != "" && !validConversationID(spec.Name, c.ID) {
 		return errors.New("invalid exact native conversation ID")

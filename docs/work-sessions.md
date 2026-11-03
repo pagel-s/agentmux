@@ -6,6 +6,12 @@ workspace `work`; select a session and press Enter to type into its native CLI.
 F1 returns to the workbench. A workspace contains sessions and an owner
 coordination service (the broker).
 
+For a coding request that runs through implementation, fresh reviews and checks
+without a persistent terminal workspace, use [`amx work`](working.md). Its
+saved patch is applied explicitly. [`amx flow`](workflows.md) provides advanced
+comparisons, missions and handoffs; those runs do not join this workspace or
+inherit its permissions automatically.
+
 Use `interaction: interactive` per agent for a native terminal; omit it for
 managed task execution. Both modes share the coordination broker and its permissions.
 Each agent has one terminal/worker lock. Changing interaction mode requires a
@@ -334,8 +340,8 @@ Without `--project`, preset setup creates separate workspaces. JSON setup specs
 accept `interaction` and optional `workdir` per agent. Pi interactive sessions
 support configured compatible endpoints and selected authentication. Native
 Antigravity is available with `--native-only`; use its Pi bridge for injected
-coordination context. See the [provider acceptance matrix](provider-acceptance.md)
-for the distinction between native startup, actual inference and tool coverage.
+coordination context. See [provider compatibility](provider-compatibility.md)
+for supported routes and separate startup, inference and tool checks.
 
 ## Terminal dashboard
 
@@ -499,8 +505,14 @@ follow-ups with explicit intent, complete searchable task history, cancellation,
 shared-memory inspection and versioned editing, role/profile setup, autonomy and
 admission controls, and the same live permission switches as the terminal
 dashboard. Board is the main focus pane. Graph shows directional message/ping/command
-connections and shared board/memory access; select a connection to adjust it. Nodes
-can be moved with dragging or arrow keys, and layouts persist in the browser.
+connections and shared board/memory access; select a connection to adjust it.
+In the current source build, enabled connections automatically group connected
+nodes. Denied preview edges do not affect arrangement. Dragging or **Shift+Arrow**
+pins a node; its position persists locally for that workspace and study attempt,
+including after topology changes. Unpinned nodes arrange around pins after a drag.
+**Auto arrange** releases pins and refits; **Fit** only adjusts the viewport.
+Ordinary refreshes, title changes and selection do not rearrange an unchanged
+visible topology. Arrangement does not write permissions or establish cooperation.
 Fit and zoom controls work by keyboard and on narrow screens; native terminal
 input remains in tmux.
 Spawned agents retain inherited delegation limits; live overlay edits currently

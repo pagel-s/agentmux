@@ -6,6 +6,32 @@ starts no agents. `amx a` restores the last live native terminal in the selected
 workspace. If no terminal has been selected or it has closed, the workbench opens.
 With several running workspaces, choose one or pass `-s NAME`.
 
+## Ask for a checked coding change
+
+These commands require a [current source installation](installation.md#build-from-source).
+From a Git project with an initial commit and the selected native CLIs installed:
+
+```sh
+amx work "Fix the login redirect" -- go test ./...
+amx work "Fix the login redirect" --allow-models -- go test ./...
+amx work status
+amx work show latest
+amx work apply latest
+```
+
+The first command previews without model calls or run files. The second starts
+bounded coding, fresh review and checks in a retained private worktree. Inspect
+`status`, `show` and the saved HTML report before choosing `apply`; application
+rechecks freshness and changes your project without committing or pushing it.
+After an interrupted application, inspect and use `amx work recover latest` to
+resolve its journal without replaying the patch. See [work on a task](../working.md)
+for provider, isolation, deadlines and recovery details, or
+[advanced workflows](../workflows.md) for command-only comparisons and custom plans.
+
+`work` selects the Git project in the current directory (or `--repo DIR`). The
+interactive commands below select a running workspace with `-s NAME`; these are
+separate selectors.
+
 ## Open and manage sessions
 
 ```sh

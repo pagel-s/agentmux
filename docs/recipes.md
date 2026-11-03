@@ -97,7 +97,6 @@ Good runtime loop:
 Related files:
 
 - [`testdata/examples/ai-dev.yaml`](https://github.com/pagel-s/agentmux/blob/main/testdata/examples/ai-dev.yaml)
-- [`dogfood.yaml`](https://github.com/pagel-s/agentmux/blob/main/dogfood.yaml)
 
 ## Review Session
 

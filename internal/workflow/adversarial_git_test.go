@@ -128,6 +128,7 @@ func TestAdversarialApplyPreviewRejectsNormalizedResult(t *testing.T) {
 	fixtureGit(t, repo, "add", ".gitattributes")
 	fixtureGit(t, repo, "commit", "-qm", "attributes")
 	p := Plan{Version: 1, Repository: repo, Execution: "local", Goal: "Write fixed CRLF", TimeoutSeconds: 30, Candidates: []Candidate{{ID: "fix", Harness: "command", Command: []string{"python3", "-c", "from pathlib import Path; Path('file.txt').write_bytes(b'fixed\\r\\n')"}}}, Checks: []Check{{Name: "bytes", Command: []string{"python3", "-c", "from pathlib import Path; assert Path('file.txt').read_bytes() == b'fixed\\r\\n'"}}}}
+	p.Storage = StorageShared // Legacy conversions must still be refused.
 	dir := filepath.Join(root, "run")
 	if _, err := Run(context.Background(), p, dir, false); err != nil {
 		t.Fatal(err)

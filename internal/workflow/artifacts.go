@@ -38,15 +38,18 @@ func mutateMetadata(ctx context.Context, action func() error) error {
 // It contains no authentication files other than any the owner has put in Git's
 // selected project contents. Ignored, untracked files are not copied.
 type Snapshot struct {
-	Repository    string `json:"repository"`
-	BaseCommit    string `json:"base_commit"`
-	Commit        string `json:"commit"`
-	Tree          string `json:"tree"`
-	CreatedAt     string `json:"created_at"`
-	PatchSHA256   string `json:"patch_sha256"`
-	ContentSHA256 string `json:"content_sha256"`
-	SelectedFiles int    `json:"selected_files,omitempty"`
-	SelectedBytes int64  `json:"selected_bytes,omitempty"`
+	Repository      string `json:"repository"`
+	Store           string `json:"store,omitempty"`
+	IgnoreSHA256    string `json:"ignore_sha256,omitempty"`
+	SelectionSHA256 string `json:"selection_sha256,omitempty"`
+	BaseCommit      string `json:"base_commit"`
+	Commit          string `json:"commit"`
+	Tree            string `json:"tree"`
+	CreatedAt       string `json:"created_at"`
+	PatchSHA256     string `json:"patch_sha256"`
+	ContentSHA256   string `json:"content_sha256"`
+	SelectedFiles   int    `json:"selected_files,omitempty"`
+	SelectedBytes   int64  `json:"selected_bytes,omitempty"`
 }
 
 // Capture makes a new private destination containing snapshot.json and
@@ -54,6 +57,11 @@ type Snapshot struct {
 // A dedicated refs/agentmux/snapshots reference retains the snapshot against Git
 // garbage collection. No source branch is moved.
 func Capture(ctx context.Context, repository, destination string) (Snapshot, error) {
+	if private, err := privateStorageForRepository(ctx, repository); err != nil {
+		return Snapshot{}, err
+	} else if private != nil {
+		return capturePrivate(ctx, repository, destination, *private)
+	}
 	var s Snapshot
 	repo, err := repositoryRoot(ctx, repository)
 	if err != nil {
@@ -126,6 +134,9 @@ func Capture(ctx context.Context, repository, destination string) (Snapshot, err
 // CreateWorktree checks out the pinned contents in a detached worktree. It
 // never checks out or resets the source directory, and never invokes Git hooks.
 func CreateWorktree(ctx context.Context, s Snapshot, path string) error {
+	if s.Store != "" {
+		return createPrivateWorktree(ctx, s, path)
+	}
 	repo, err := repositoryRoot(ctx, s.Repository)
 	if err != nil {
 		return err
@@ -182,7 +193,14 @@ func ExportPatch(ctx context.Context, s Snapshot, worktree, output string) error
 	if err != nil {
 		return err
 	}
-	patch, err := gitOutput(ctx, repo, nil, "diff", "--binary", "--full-index", "--no-ext-diff", "--no-textconv", s.Commit, tree, "--")
+	var patch []byte
+	if private, privateErr := privateStorageForRepository(ctx, repo); privateErr != nil {
+		return privateErr
+	} else if private != nil {
+		patch, err = privateCommandOutput(ctx, private.Store, privateGitArgs(private.Store), nil, "diff", "--binary", "--full-index", "--no-ext-diff", "--no-textconv", s.Tree, tree, "--")
+	} else {
+		patch, err = gitOutput(ctx, repo, nil, "diff", "--binary", "--full-index", "--no-ext-diff", "--no-textconv", s.Commit, tree, "--")
+	}
 	if err != nil {
 		return err
 	}
@@ -203,7 +221,18 @@ func validateSnapshot(ctx context.Context, repo string, s Snapshot) error {
 	if len(s.ContentSHA256) != 64 {
 		return errors.New("snapshot lacks an exact-content digest; capture a new snapshot")
 	}
-	tree, err := gitText(ctx, repo, nil, "rev-parse", "--verify", s.Commit+"^{tree}")
+	if s.Store != "" {
+		if marker, err := validatePrivateStore(ctx, s.Store); err != nil {
+			return err
+		} else if !digestID(s.IgnoreSHA256) || marker.IgnoreSHA256 != s.IgnoreSHA256 {
+			return errors.New("private snapshot ignore policy differs from recorded evidence")
+		}
+		if _, err := readPrivateSelection(ctx, snapshotStorage{Store: s.Store}, s.SelectionSHA256); err != nil {
+			return err
+		}
+		repo = s.Store
+	}
+	tree, err := snapshotGitText(ctx, repo, s.Store != "", "rev-parse", "--verify", s.Commit+"^{tree}")
 	if err != nil {
 		return err
 	}
@@ -233,11 +262,23 @@ func repositoryRoot(ctx context.Context, path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if root, matched, err := privateRepositoryRoot(ctx, abs); matched || err != nil {
+		return root, err
+	}
+	if storage := snapshotStorageFromContext(ctx); storage != nil && storage.Policy == StoragePrivate && abs != storage.Source && !pathWithin(storage.Source, abs) {
+		return "", errors.New("private worktree metadata is missing or redirected")
+	}
 	root, err := gitText(ctx, abs, nil, "rev-parse", "--show-toplevel")
 	if err != nil {
 		return "", err
 	}
-	return filepath.EvalSymlinks(root)
+	root, err = filepath.EvalSymlinks(root)
+	if err == nil {
+		if storage := snapshotStorageFromContext(ctx); storage != nil && storage.Policy == StoragePrivate && root != storage.Source {
+			return "", errors.New("private snapshot source repository identity changed")
+		}
+	}
+	return root, err
 }
 
 func newOutsidePath(repo, path string) (string, error) {
@@ -275,6 +316,11 @@ func contentState(ctx context.Context, repo string) (string, string, error) {
 }
 
 func contentStateSelection(ctx context.Context, repo string, selection *SnapshotSelection) (string, string, error) {
+	if private, err := privateStorageForRepository(ctx, repo); err != nil {
+		return "", "", err
+	} else if private != nil {
+		return privateContentState(ctx, repo, *private, selection)
+	}
 	// Admission happens before git add can write new blobs into the source
 	// object store. The raw fingerprint below checks the same limits again,
 	// because unrelated writers do not participate in this observation.
@@ -495,17 +541,44 @@ func (b *limitedOutput) Write(p []byte) (int, error) {
 }
 
 func gitOutput(ctx context.Context, repo string, env []string, args ...string) ([]byte, error) {
+	if SnapshotStoragePolicy(ctx) == StoragePrivate {
+		if err := rejectPrivatePromisorSource(ctx, repo); err != nil {
+			return nil, err
+		}
+	}
+	return gitOutputCommand(ctx, repo, env, args...)
+}
+
+// Effective config reads cannot trigger lazy object retrieval. Refuse promisor
+// repositories before object-reading plumbing, including on Git versions predating
+// GIT_NO_LAZY_FETCH. No transport or source metadata mutation is permitted.
+func rejectPrivatePromisorSource(ctx context.Context, repo string) error {
+	_, err := gitOutputCommand(ctx, repo, nil, "config", "--includes", "--get-regexp", `^(extensions\.partialclone|remote\..*\.promisor)$`)
+	if err == nil {
+		return errors.New("private snapshots do not support partial-clone or promisor repositories")
+	}
+	var exit *exec.ExitError
+	if errors.As(err, &exit) && exit.ExitCode() == 1 {
+		return nil
+	}
+	return err
+}
+
+func privateGitDenyEnvironment(entry string) bool {
+	switch entry {
+	case "GIT_TERMINAL_PROMPT=0", "GIT_CONFIG_NOSYSTEM=1", "GIT_NO_LAZY_FETCH=1", "GIT_ALLOW_PROTOCOL=", "GIT_NO_REPLACE_OBJECTS=1":
+		return true
+	}
+	return false
+}
+
+func gitOutputCommand(ctx context.Context, repo string, env []string, args ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
 	argv := append([]string{"-C", repo, "-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false"}, args...)
 	cmd := exec.CommandContext(ctx, "git", argv...)
 	configureGitProcess(cmd)
-	for _, entry := range os.Environ() {
-		if !strings.HasPrefix(entry, "GIT_") {
-			cmd.Env = append(cmd.Env, entry)
-		}
-	}
-	cmd.Env = append(cmd.Env, "GIT_TERMINAL_PROMPT=0")
+	cmd.Env = cleanGitEnvironment()
 	cmd.Env = append(cmd.Env, env...)
 	if err := wrapGitProcess(ctx, cmd); err != nil {
 		return nil, err

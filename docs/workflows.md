@@ -6,17 +6,25 @@ missions with dependencies, evidence explanations and repeated comparisons.
 It complements native tmux sessions and the managed broker. It does not replace
 their identity, permission, delivery or recovery controls.
 
+These commands require the current source build (`make install`); the published
+v0.11.0 binary predates them. For one coding request with defaults for
+implementation, fresh reviews and acceptance checks, start with
+[`amx work`](working.md). For a visual map of execution and explicit source
+application, see the [illustrated journey](visual-guide.md#ask-for-a-checked-coding-change).
+
 Workflow file handling is supported on the published Linux/macOS platforms.
 Input reads reject symlinks and special files, use bounded nofollow/nonblocking
 opens, and reject changed-file reads. Other platforms refuse workflow input
 until a platform-safe opener has been implemented and validated.
 
-Every plan explicitly chooses `"execution": "local"`. Commands, checks and native
-provider tools execute with trusted host authority; a separate Git worktree is
-not a filesystem or network sandbox. These workflows do not inherit a managed
-worker's Bubblewrap configuration. Use trusted owner-authored plans. Provider
-turns require `--allow-models`; command plans and checks can execute arbitrary
-owner-selected code without that flag.
+Every plan explicitly chooses `"execution": "local"`. Without full isolation,
+commands, checks and native provider tools execute with trusted host authority;
+a separate Git worktree does not restrict filesystem or network access.
+Workflows do not inherit a managed worker's Bubblewrap configuration. Select
+[full workflow isolation](#private-storage-and-full-isolation) explicitly when
+required. Use trusted owner-authored plans. Provider turns require
+`--allow-models`; command plans and checks can execute owner-selected code
+without that flag, within the selected isolation policy.
 
 ## Try the complete journey without model calls
 
@@ -149,10 +157,11 @@ A step with `"verify": true` and no candidate runs the declared checks. Combined
 with a candidate, it runs that turn and checks the result before successors;
 `max_attempts` permits bounded corrections after a completed turn fails checks.
 Missing dependencies, duplicate IDs and cycles are rejected before execution.
-Steps run in dependency order in one mission worktree, with preceding result
-summaries supplied as context. The declared final checks run before the mission
-can finish successfully. The original project stays separate until explicit
-application.
+Steps run in dependency order in one mission worktree. Implementation steps
+receive preceding result summaries as context. Structured review steps receive
+the task, criteria and current files without predecessor narratives or earlier
+reviews. The declared final checks run before the mission can finish
+successfully. The original project stays separate until explicit application.
 
 `timeout_seconds` bounds the plan; candidate timeouts can shorten individual
 turns. `max_attempts` is finite and bounded. Failed acceptance checks may allow
@@ -169,8 +178,9 @@ amx flow watch examples/workflows/shadow.json --repo /tmp/amx-flow-project --out
 
 Watch polls the selected source and reviews stable changed content once per
 eligible revision, using separate retained worktrees. The source is not edited
-by the orchestration engine. Trusted local reviewer tools still have their
-normal host authority. Configure review commands and checks accordingly.
+by the orchestration engine. Without full isolation, trusted local reviewer
+tools retain their normal host authority. Configure review commands and checks
+accordingly.
 Repeated unchanged content does not start another reviewer turn. Each run keeps
 its own findings and verification; a later revision supersedes earlier evidence.
 
@@ -198,14 +208,137 @@ comparable budgets and enough repetitions. Reported provider usage may be absent
 or have provider-specific meanings; it is not an inferred bill. The existing
 [research runner](research.md) supplies separate controlled-study capabilities.
 
-## Evidence, storage and limits
+## Private storage and full isolation
+
+New plans default to `"storage": "private"`. The run has its own snapshot Git
+store, and candidates have independent object stores with no source alternates
+or shared hardlinks. Source objects, refs, configuration and index remain
+unchanged while collecting and running work. Explicit application may leave its
+coordination file `.git/agentmux-apply.lock`; it preserves the source index and
+Git objects. `"storage": "shared"` opts into legacy source-object retention.
+Older saved reports retain their recorded behavior.
+Private selection uses exact case-sensitive paths and raw file contents,
+overriding mutable Git path settings. Verification binds selected files;
+untracked ignored build artifacts are neither included nor applied.
+Private snapshots and verifications pin a content-addressed path manifest, so
+worker commits, index changes or ignore changes cannot hide starting or checked
+paths. Missing or damaged private selection evidence is refused.
+Keep each fork's sibling `<worktree>.selection.json` with its run: standalone
+checks use it to restore the controller's starting path set. Private records
+require `selection_sha256`; shared legacy records keep their existing format.
+The cumulative manifest is limited to 200,000 paths and 32 MiB of path names;
+current selected contents remain limited to 100,000 files and 512 MiB.
+Private preparation refuses partial-clone and promisor repositories before
+reading objects. Use a complete local repository; capture never downloads missing
+objects into the source or starts a remote transport.
+Native workflow profiles cannot select saved sessions. Non-Codex `-c` and `-r`
+are reserved as session controls; compact short-option forms are also refused.
+Use long options and script files for interpreter wrappers. Owner-selected
+wrappers remain trusted to honor the fresh-session contract.
+
+For full Linux isolation, add these fields to a private plan:
+
+```json
+{
+  "storage": "private",
+  "isolation": {
+    "mode": "bubblewrap",
+    "network": "none",
+    "read_only_paths": ["/opt/selected-runtime"],
+    "home_bytes": 67108864,
+    "temp_bytes": 67108864
+  }
+}
+```
+
+This is a plan fragment, not a complete executable plan. Full isolation requires
+working Bubblewrap user/PID/mount/network namespaces and capped private tmpfs;
+there is no weaker fallback. Tools can write their candidate workspace. Review
+workspaces are read-only. Acceptance checks may create build output in their
+assigned worktree but cannot change selected content without failing verification;
+they receive no credentials or network. System runtime files and explicitly selected read-only dependencies are
+exposed; the original home, source project and unrelated host files are absent
+from native tool access. The trusted Go controller reads the original source
+and grants its own Git helper source writes only during explicit admitted apply.
+Original sources may be linked Git worktrees. Only trusted controller Git receives
+their exact read-only admin/common directories; tools and checks do not receive
+those directories. Sources, Git metadata and private run state that overlap a
+default system runtime mount are refused, since that mount would expose them.
+Read-only runtime dependencies must also stay outside original source/input
+trees. Source paths cannot be used to bypass snapshot selection.
+
+Native inference can use `"network": "allowlist"` with
+`"allow": [{"origin": "https://inference.example"}]`. Origins are exact scheme,
+host and port. DNS resolves once at startup, rejects non-public addresses unless
+explicitly pinned with `"ips"`, and the relay enforces the selected destination.
+Proxy settings alone are insufficient: direct networking is denied by the
+namespace. HTTPS uses a trusted per-turn inspecting proxy with an ephemeral CA.
+Every HTTP/1.1 Host and HTTP/2 authority must match the granted origin; upstream
+TLS hostname and certificate verification remains enabled. Only the public CA
+is mounted read-only, and standard client trust variables (including
+`CODEX_CA_CERTIFICATE`, `SSL_CERT_FILE`, Node, requests, curl and Git variables)
+point to it. The CA signing key stays in memory. Certificate-pinned, mutual-TLS
+and clients with incompatible custom trust fail closed; opaque tunnels and HTTP
+upgrades are refused. Forwarded requests have a ten-minute total lifetime,
+including uploads and streamed responses; shorter run deadlines still apply.
+Existing managed-mode networking retains its separately documented
+[CONNECT/SNI destination boundary](hardening.md). Checks have neither egress nor
+provider auth even when a native candidate has grants. Runtime HOME/tmp sizes
+are enforceable; workspace growth
+does not have a hard disk quota.
+
+Select native credentials explicitly per candidate:
+
+```json
+{
+  "auth": {
+    "coder": {"file": "/private/codex-auth.json"},
+    "reviewer": {"file": "/private/pi-auth.json", "provider": "selected-provider"}
+  }
+}
+```
+
+`auth` belongs inside `isolation`. It accepts supported filtered Codex, Claude
+or Pi credentials and hands them to only the selected candidate through sealed
+anonymous data mounted read-only. The source and exposed runtime dependencies
+cannot contain the selected original login. No original host login directory
+or ambient provider environment is implicitly imported.
+
+Selected credential values are pinned before snapshots and evidence are created.
+Diagnostics can be redacted, but identifiers, schema fields and verification
+results keep their meaning. If a selected value collides with those fields or
+with final JSON/HTML bytes, publication fails closed. Very short values can make
+even a fixed diagnostic unsafe, so a nonzero exit may have no printable error.
+The isolated CLI defers stdout and diagnostics until the operation finishes so
+it can check credentials selected by later child turns too. This buffer is
+limited to 64 MiB; exceeding it cancels execution and refuses publication.
+Retained run evidence remains available during execution.
+
+Direct Antigravity’s native tools are unavailable in full isolation. Select
+`"harness": "antigravity-bridge"` and an explicit `gemini-…` model instead.
+Pi tools then run inside the capsule; a host adapter supplies inference only
+using its existing Antigravity login. It receives no workspace tool authority.
+The plan must select allowlist networking for this bridge. Its private bridge
+endpoint is granted by the controller; `bridge_max_requests` defaults to 32
+and is bounded to 1–10,000. Retained `bridge_usage` records admission and
+rejections. `bridge_command` and `relay_executable` can explicitly select
+trusted adapter/relay executables. They are owner configuration, not model
+tool permissions. A request count is not a monetary cap.
+
+## Evidence and limits
 
 Plans may set `"process_containment": "pid-namespace"` to require the Linux
 Bubblewrap lifetime boundary for native tools, checks and Git helpers, including
 watcher and laboratory snapshots. The default is `"process-group"`. Required PID
 containment is probed before execution and never silently downgraded. It preserves
-trusted host filesystem/network authority; it is not the managed capsule sandbox.
-Standalone verification accepts `--containment pid-namespace` too.
+trusted host filesystem/network authority unless `isolation` is also selected.
+Standalone verification accepts `--containment pid-namespace` too. The
+standalone `flow check` defaults to `--storage private` and retains its
+independent fingerprint store beside the requested output at `OUTPUT.git`.
+Keep that store with the verification record for later freshness checks.
+`--storage shared` explicitly selects legacy source-object behavior. The
+standalone check command provides process containment; use a full isolated plan
+with acceptance checks to require filesystem and network isolation as well.
 
 `amx flow recover RUN_DIR --candidate ID` inspects and resolves an interrupted
 application's durable journal against exact source HEAD/content. It does not
@@ -220,8 +353,8 @@ It reports observable records, not hidden model reasoning or every external
 filesystem/network action. Owner-editable local evidence is not provider
 attestation.
 
-The [dated validation record](workflow-validation.md) records reproduced bugs,
-regression coverage, live Codex/Antigravity results and explicit limits.
+The [validation guide](workflow-validation.md) provides reproducible checks and
+explains the limits of command fixtures, provider checks and isolation tests.
 
 Plans and checks use strict JSON with unknown fields rejected. Repository paths
 are relative to the shell's working directory; `--repo` explicitly overrides the
@@ -233,6 +366,8 @@ dependencies through your own environment or reproducible setup.
 Put the new private run directory outside the source repository. Retained
 worktrees and Git snapshot objects are intentional evidence and consume disk;
 this version does not delete them automatically. Keep them for review or remove
-owned detached worktrees deliberately with Git after preserving needed results.
+owned run directories deliberately after preserving needed results. Legacy
+shared runs may also retain source Git worktree registrations and snapshot refs;
+manage those with Git rather than deleting arbitrary source metadata.
 No workflow automatically commits, pushes, publishes, spends additional turns
 after its limits, or grants an agent broader broker authority.

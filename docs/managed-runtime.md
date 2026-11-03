@@ -1,10 +1,16 @@
 # Managed teams and durable coordination
 
-Agentmux now has an opt-in managed mode alongside the existing tmux workspace mode. Managed mode gives each logical agent a separate credential, enforces message and memory permissions in a coordination service, and stores durable tasks in SQLite. It is a developer-first foundation for mixed-harness teams.
+Agentmux supports opt-in managed teams alongside native tmux workspaces. Managed mode gives each logical agent a separate credential, enforces message and memory permissions in a coordination service, and stores durable tasks in SQLite.
 
 The existing `load`, `render`, pane launchers, and v1 workspace YAML remain available. Managed configuration uses `version: 2` and `mode: managed`; use `amx managed up` for automatic startup, or `managed init` for manual service control. Do not pass it to `amx load`.
 
-## Implemented capabilities
+For a single coding request with fresh reviews, executable checks and a retained
+patch, use [`amx work`](working.md). For owner-authored comparisons, missions
+and handoffs, use [`amx flow`](workflows.md). Those journeys have separate plans,
+result storage and isolation settings; starting a managed team does not enable
+workflow isolation.
+
+## Capabilities
 
 - Authenticated operations over a private Unix socket; agent identity comes from its credential rather than a caller-supplied name.
 - Shared boards with exact read/write ACLs, direct messages, stored pings, and separately authorized instructions.
@@ -237,7 +243,7 @@ The adapter uses the configured API base exactly; it does not append `/v1` or sw
 
 `sandbox: local` runs trusted processes as the current OS user. Separate workdirs and API credentials provide organization, but do not stop such a process reading host files or another agent's credentials. Use this mode for development and trusted workflows. API ACLs are meaningful only while the caller cannot bypass the API through host access.
 
-`sandbox: bubblewrap` requests kernel-enforced worker isolation. It must not fall back to local execution when the executable, user namespaces, mounts, or network policy are unavailable. `network: none` isolates networking; `network: host` deliberately allows unrestricted host networking. `network: allowlist` supports exact approved HTTP/HTTPS origins through a private proxy and namespace-local relay, including explicitly approved local inference endpoints. Clients must support the supplied proxy settings; incompatible clients fail to connect without a host-network fallback. See [exact network destinations](hardening.md#exact-network-destinations) for configuration, DNS/IP rules and protocol limits. A real namespace probe passed on the implementation host after running outside the enclosing development sandbox. Validate the complete isolation setup on each deployment machine before relying on it.
+`sandbox: bubblewrap` requests kernel-enforced worker isolation. It must not fall back to local execution when the executable, user namespaces, mounts, or network policy are unavailable. `network: none` isolates networking; `network: host` deliberately allows unrestricted host networking. `network: allowlist` supports exact approved HTTP/HTTPS origins through a private proxy and namespace-local relay, including explicitly approved local inference endpoints. Clients must support the supplied proxy settings; incompatible clients fail to connect without a host-network fallback. See [exact network destinations](hardening.md#exact-network-destinations) for configuration, DNS/IP rules and protocol limits. Validate the complete isolation setup on each deployment machine before relying on it.
 
 The broker is a separate process with a private state directory. Use `amx managed serve --state DIRECTORY --sandbox bubblewrap` to isolate the broker with a minimal environment, no network namespace access, its private state mounted for persistence, and the Agentmux binary mounted read-only. It fails when the requested kernel isolation is unavailable. Without that flag, the broker runs as a normal trusted host process. Do not expose its complete state directory, owner credential, host tmux socket, container-management socket, or peer home directories to an isolated agent. A Node-based harness may need an explicit Node executable/CLI path in `command` and narrowly selected package dependencies in `read_only_paths`; do not mount the whole host home merely to make a wrapper work.
 
@@ -302,33 +308,40 @@ On broker restart, a turn that may already have reached a harness becomes uncert
 
 Configured limits bound message sizes, stored work, runtime, and durable storage/request counts. The defaults include 30000 durable records and 50000 cached requests. Capacity is reserved for active task completion, cancellation, stopped-process acknowledgements, agent revocation, and team membership cleanup, so ordinary writes cannot consume the slots needed to finish those transitions. They are not guaranteed provider-spend caps. Harness token and cost reports are observations with provider-specific coverage. API list/response limits can require narrower pages. When storage limits are reached, the owner should export/archive state or start a new session; the runtime does not silently delete the request records required for reliable retries.
 
-## Validation scope
+## Verify a deployment
 
-The acceptances below describe their recorded fixtures. Later provider and UAT
-checks are tracked separately; their versions and networking choices are not
-requirements or capability limits for every current deployment.
-
-The real three-sandbox handoff smoke test passed: a network-isolated broker and two separately isolated agents exchanged board messages and shared memory, enforced instruction hierarchy, hid peer/owner credentials, and produced two owner-verified task results. Reproduce it on a Linux host with working bubblewrap and a built binary:
+Start with model-free checks on a Linux host with working Bubblewrap and a built
+binary. These exercise actual broker/worker namespaces and coordination:
 
 ```bash
-python3 scripts/smoke-managed.py --binary bin/agentmux
+python3 scripts/smoke-managed.py --binary bin/amx
+python3 scripts/smoke-managed-team.py --binary bin/amx
 ```
 
-The supervised dynamic-team smoke test also passed with a sandboxed broker, two sandboxed static agents, and a separately sandboxed spawned worker. It checks delegated board and memory access, task execution, invitation consent, stale-version conflicts, since-join history, nonmember denials, removal/leave/dissolution, the lifetime spawn limit, observed worker termination after revocation, and restart without renewing the deadline or replaying submitted work:
+The handoff scenario checks board/memory exchange, instruction hierarchy,
+credential separation and independent task verification. The dynamic-team
+scenario adds a spawned worker, invitation consent, stale-version conflicts,
+since-join history, nonmember denials, removal/leave/dissolution, lifetime spawn
+limits and restart behavior.
 
-```bash
-python3 scripts/smoke-managed-team.py --binary bin/agentmux
-```
+Automated regressions use fake harness processes and local transports for
+protocol failures, permission denials, handoffs and recovery. Installed-Pi
+opt-ins can check RPC framing and sandbox writes against a fake local endpoint;
+these do not establish compatibility with a real model service.
 
-Automated coverage uses fake harness processes and local transports so protocol failures, permission denials, task handoffs, and recovery can be checked without paid calls. Installed Pi also passed an opt-in RPC test against a temporary localhost OpenAI-compatible SSE endpoint, and a basic cached Qwen CPU inference smoke test through that same interface.
+To exercise real provider turns, follow the
+[mixed-harness scenario](mixed-harness-acceptance.md) or
+[bounded autonomous workflow](autonomous-workflows.md#reproduce-a-bounded-workflow).
+They require explicit model opt-in and selected native authentication. Review
+each scenario's networking, tool permissions and resource requirements before
+starting. An inference service outside worker resource groups remains a
+separately trusted component.
 
-Separate bounded real Codex and Claude coding tasks ran through managed startup with a sandboxed broker and trusted local workers using existing local authentication. Codex's result passed its five unit tests and 1000 independent randomized checks. Claude's interval-merging result passed 11 unit tests, 1000 independent doubled-coordinate coverage checks, and a separate graph-component oracle over 3642 valid cases and three invalid cases. Both results were explicitly owner-verified, followed by clean managed shutdown. Claude used the explicit `Read,Write,Edit,Bash` allowlist with `safe-mode` and `dontAsk`.
-
-The [mixed-harness sandbox acceptance](mixed-harness-acceptance.md) also passed with a real Claude lead, Codex coder, and Pi reviewer backed by cached local Qwen 1.5B inference. The broker and all three harnesses ran in separate Bubblewrap sandboxes under normal tmux supervision. Each turn had enforced 2 GiB/one-CPU/256-task cgroups and open-file/CPU-time limits. Claude delegated through authenticated board, memory, and instruction calls; Codex published a hashed source artifact through scoped memory; Pi received only the lead-supplied artifact and completed an analysis-only review. A separate credential-free, network-disabled verifier checked normalization, type errors, finite iterables, nonmutation, and fresh outputs before owner-verifying the coding task. Reverse authority and unauthorized board/artifact reads were denied. The initial pending task retained its ID and version across a broker restart without resubmission, and managed shutdown completed cleanly.
-
-The acceptance explicitly uses `codex_sandbox: external` because this host forbids nested user namespaces. Native login originals, peer credentials, owner state, and unrelated owner environment values were absent from each model sandbox. Actual native auth readiness was checked with networking disabled. A real installed-Pi/local-fake-endpoint regression now checks prompt-time credential-store writes, full RPC completion, and generated configuration cleanup inside Bubblewrap; help alone had missed that runtime requirement. Known standalone Codex companion binaries are also checked before startup.
-
-Those coding and mixed-harness acceptances used `network: host`; the local inference server remained a separately trusted provider outside worker resource groups, and that mixed-harness run included no Antigravity turn. Later bounded Ollama/vLLM and Antigravity acceptances are recorded separately in [provider validation](provider-validation.md). They establish their measured paths, not broad model quality, production engine support, complete hidden-model context coverage, or a comprehensive sandbox security audit. Current destination controls and trace guarantees are described in [hardening](hardening.md) and [traces and recovery](traces-and-recovery.md).
+See [provider compatibility](provider-compatibility.md) for supported routes,
+[hardening](hardening.md) for destination/resource controls and
+[traces and recovery](traces-and-recovery.md) for audit limits. A successful
+scenario verifies its configured task and boundaries; it does not establish
+model quality, a provider spending cap or comprehensive sandbox security.
 
 The opt-in real tmux lifecycle test also covers startup, a durable command task, ordered shutdown, idempotent shutdown, and another attempt preserving submitted work:
 

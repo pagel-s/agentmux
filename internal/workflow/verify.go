@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -17,15 +18,21 @@ type Check struct {
 	TimeoutSeconds int      `json:"timeout_seconds,omitempty"`
 }
 type CheckResult struct {
-	Name           string   `json:"name"`
-	Command        []string `json:"command"`
-	Passed         bool     `json:"passed"`
-	ExitCode       int      `json:"exit_code"`
-	Output         string   `json:"output,omitempty"`
-	Error          string   `json:"error,omitempty"`
-	DurationMillis int64    `json:"duration_millis"`
+	CredentialsRedacted bool     `json:"credentials_redacted,omitempty"`
+	Name                string   `json:"name"`
+	Command             []string `json:"command"`
+	Passed              bool     `json:"passed"`
+	ExitCode            int      `json:"exit_code"`
+	Output              string   `json:"output,omitempty"`
+	Error               string   `json:"error,omitempty"`
+	DurationMillis      int64    `json:"duration_millis"`
 }
 type Verification struct {
+	Storage             string        `json:"storage,omitempty"`
+	Store               string        `json:"store,omitempty"`
+	IgnoreSHA256        string        `json:"ignore_sha256,omitempty"`
+	SelectionSHA256     string        `json:"selection_sha256,omitempty"`
+	Isolation           string        `json:"isolation,omitempty"`
 	ProcessContainment  string        `json:"process_containment,omitempty"`
 	Repository          string        `json:"repository"`
 	Tree                string        `json:"tree"`
@@ -57,6 +64,10 @@ func VerifyWithContainment(ctx context.Context, repository string, checks []Chec
 	if err != nil {
 		return Verification{}, err
 	}
+	prepared, err = SnapshotContextForRepository(prepared, repository)
+	if err != nil {
+		return Verification{}, err
+	}
 	return verifyPrepared(prepared, repository, checks)
 }
 
@@ -85,8 +96,18 @@ func validateVerificationChecks(checks []Check) error {
 	return nil
 }
 
-func verifyPrepared(ctx context.Context, repository string, checks []Check) (Verification, error) {
-	var v Verification
+func verifyPrepared(ctx context.Context, repository string, checks []Check) (v Verification, verifyErr error) {
+	defer func() {
+		if verifyErr != nil {
+			v.Passed = false
+		}
+		verifyErr = redactEarlyIsolationError(ctx, verifyErr)
+		if _, err := sanitizeIsolationEvidence(ctx, &v); err != nil {
+			v.Passed = false
+			verifyErr = errors.Join(verifyErr, err)
+		}
+		verifyErr = redactEarlyIsolationError(ctx, verifyErr)
+	}()
 	if err := validateVerificationChecks(checks); err != nil {
 		return v, err
 	}
@@ -94,11 +115,15 @@ func verifyPrepared(ctx context.Context, repository string, checks []Check) (Ver
 	if err != nil {
 		return v, err
 	}
+	ctx, err = SnapshotContextForRepository(ctx, repo)
+	if err != nil {
+		return v, err
+	}
 	tree, content, err := contentState(ctx, repo)
 	if err != nil {
 		return v, err
 	}
-	v = Verification{ProcessContainment: contextProcessContainment(ctx), Repository: repo, Tree: tree, EndingTree: tree, ContentSHA256: content, EndingContentSHA256: content, Passed: true, StartedAt: time.Now().UTC().Format(time.RFC3339Nano), Checks: []CheckResult{}}
+	v = Verification{Storage: SnapshotStoragePolicy(ctx), Store: SnapshotObjectStore(ctx), IgnoreSHA256: SnapshotIgnoreSHA256(ctx), SelectionSHA256: snapshotSelectionSHA256(ctx), Isolation: IsolationMode(ctx), ProcessContainment: contextProcessContainment(ctx), Repository: repo, Tree: tree, EndingTree: tree, ContentSHA256: content, EndingContentSHA256: content, Passed: true, StartedAt: time.Now().UTC().Format(time.RFC3339Nano), Checks: []CheckResult{}}
 	for _, check := range checks {
 		seconds := check.TimeoutSeconds
 		if seconds == 0 {
@@ -106,9 +131,23 @@ func verifyPrepared(ctx context.Context, repository string, checks []Check) (Ver
 		}
 		checkCtx, cancel := context.WithTimeout(ctx, time.Duration(seconds)*time.Second)
 		start := time.Now()
-		result, runErr := harness.Run(checkCtx, harness.Request{Harness: "command", Command: append([]string(nil), check.Command...), Workdir: repo, ReapDescendants: true, Wrap: processContainmentWrapper(contextProcessContainment(ctx))})
+		request := harness.Request{Harness: "command", Command: append([]string(nil), check.Command...), Workdir: repo, ReapDescendants: true, Wrap: processContainmentWrapper(contextProcessContainment(ctx))}
+		request, closeRequest, prepareErr := IsolationCheckRequest(checkCtx, repo, request)
+		if prepareErr != nil {
+			cancel()
+			return v, prepareErr
+		}
+		result, runErr := harness.Run(checkCtx, request)
+		result, redacted, redactErr := redactIsolationNativeResult(checkCtx, result)
+		runErr = errors.Join(runErr, redactErr)
+		if runErr != nil {
+			original := runErr.Error()
+			runErr = RedactIsolationError(checkCtx, "", runErr)
+			redacted = redacted || runErr.Error() != original
+		}
+		closeRequest()
 		cancel()
-		r := CheckResult{Name: check.Name, Command: append([]string(nil), check.Command...), Passed: runErr == nil, DurationMillis: time.Since(start).Milliseconds(), Output: truncateDiagnostic(result.Text), ExitCode: 0}
+		r := CheckResult{CredentialsRedacted: redacted, Name: check.Name, Command: append([]string(nil), check.Command...), Passed: runErr == nil, DurationMillis: time.Since(start).Milliseconds(), Output: truncateDiagnostic(result.Text), ExitCode: 0}
 		if runErr != nil {
 			r.ExitCode = -1
 			var exit *exec.ExitError
@@ -159,6 +198,44 @@ func IsFresh(ctx context.Context, repository string, v Verification) (bool, erro
 		return false, err
 	}
 	ctx = prepared
+	if v.Isolation != "" {
+		if v.Isolation != "bubblewrap" || v.Storage != StoragePrivate || v.Store == "" {
+			return false, errors.New("verification requires an unavailable or incomplete filesystem isolation policy")
+		}
+		if existing := isolationFromContext(ctx); existing != nil {
+			if existing.opts.Mode != v.Isolation {
+				return false, errors.New("verification isolation differs from its active required boundary")
+			}
+		} else {
+			// A freshness check starts no provider and needs no credentials or
+			// network. Bind only its own recorded private repository/cache. A
+			// normal repository's .git lives within its selected worktree, so
+			// use that worktree's private parent as the containment state root.
+			state := filepath.Dir(v.Store)
+			if filepath.Base(v.Store) == ".git" {
+				state = filepath.Dir(state)
+			}
+			var closeIsolation func()
+			ctx, closeIsolation, err = prepareIsolation(ctx, &IsolationOptions{Mode: v.Isolation}, repository, state, nil, true, nil)
+			if err != nil {
+				return false, err
+			}
+			defer closeIsolation()
+		}
+	}
+	if v.Storage == StoragePrivate {
+		if v.Store == "" || !digestID(v.IgnoreSHA256) || !digestID(v.SelectionSHA256) {
+			return false, errors.New("private verification lacks its pinned store, ignore policy or path selection")
+		}
+		ctx, err = SnapshotContext(ctx, Snapshot{Repository: repository, Store: v.Store, IgnoreSHA256: v.IgnoreSHA256, SelectionSHA256: v.SelectionSHA256})
+		if err != nil {
+			return false, err
+		}
+	}
+	ctx, err = SnapshotContextForRepository(ctx, repository)
+	if err != nil {
+		return false, err
+	}
 	repo, err := repositoryRoot(ctx, repository)
 	if err != nil {
 		return false, err

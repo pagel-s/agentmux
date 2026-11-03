@@ -68,6 +68,9 @@ func contextProcessContainment(ctx context.Context) string {
 // Both controller Git and child tools may execute owner-configured helpers.
 // Apply the same requested lifetime boundary to those Git processes too.
 func wrapGitProcess(ctx context.Context, cmd *exec.Cmd) error {
+	if IsolationMode(ctx) == "bubblewrap" {
+		return WrapIsolatedGit(ctx, cmd)
+	}
 	wrap := processContainmentWrapper(contextProcessContainment(ctx))
 	if wrap == nil {
 		return nil

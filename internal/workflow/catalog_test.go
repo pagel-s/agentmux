@@ -241,13 +241,11 @@ func TestCatalogLatestUsesChronologicalRFC3339Times(t *testing.T) {
 			if err := RegisterRun(ctx, report.Repository, catalog, dir); err != nil {
 				t.Fatal(err)
 			}
-			newer := report
-			newer.ID += "-later"
-			newer.Output = filepath.Join(filepath.Dir(dir), "later")
-			newer.StartedAt = times[1]
-			if err := os.Mkdir(newer.Output, 0700); err != nil {
+			newer, err := Run(ctx, comparePlan(report.Repository, pythonCandidate("fix", "from pathlib import Path; Path('file.txt').write_text('fixed\\n'); print('fixed')")), filepath.Join(filepath.Dir(dir), "later"), false)
+			if err != nil {
 				t.Fatal(err)
 			}
+			newer.StartedAt = times[1]
 			if err := saveJSON(filepath.Join(newer.Output, "report.json"), newer); err != nil {
 				t.Fatal(err)
 			}

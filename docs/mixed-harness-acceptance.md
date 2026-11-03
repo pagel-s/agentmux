@@ -1,11 +1,9 @@
-# Mixed harness sandbox acceptance
+# Reproduce a mixed-harness sandbox scenario
 
-This documents one explicit three-worker integration scenario and its
-reproduction requirements. Its recorded 31 October 2026 run is summarized in
-[provider validation](provider-validation.md#what-the-developer-workflows-established).
-The later [provider acceptance](provider-acceptance.md) separates additional
-connectivity, endpoint and native-startup checks from this complete coding
-workflow. For everyday interactive sessions, start with [work sessions](work-sessions.md).
+This guide runs a three-worker integration scenario with explicit isolation and
+an independent artifact check. Check [provider compatibility](provider-compatibility.md)
+before starting provider turns. For everyday interactive sessions, start with
+[work sessions](work-sessions.md).
 
 `scripts/smoke-managed-models.py` runs one real Claude lead turn, one real Codex
 coding turn, and one Pi turn against an already running local model. The broker
@@ -36,9 +34,8 @@ real wrapper; local workers cannot select it. The native CLI's
 the already isolated process. It adds no approval-bypass flag and grants no
 access to unmounted host files or credentials. Ordinary Codex configurations
 retain native `workspace-write` sandboxing by default, with no automatic
-fallback. On the validation host, native tools could not create their additional
-nested user namespace; actual nongenerative native tool execution passed under
-the explicit external policy. No host security policy was changed.
+fallback. Use the external policy deliberately when the host cannot support
+Codex's nested native sandbox; it still requires a working outer boundary.
 
 Claude and Codex need existing login credential files. By default the script
 uses `~/.claude/.credentials.json` and `~/.codex/auth.json`. Each must be an owned

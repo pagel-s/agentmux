@@ -9,13 +9,16 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
+	"agentmux/internal/egress"
 	"agentmux/internal/workflow"
 )
 
@@ -39,6 +42,15 @@ Options:
   --check-timeout 1m  Deadline per acceptance check, from 1s to 10m
   --attempts 2     Bounded implementation correction attempts
   --containment process-group  Use process-group or Linux pid-namespace containment
+  --storage private  Use private snapshots, or explicitly select legacy shared storage
+  --isolation bubblewrap  Require filesystem and network isolation on Linux
+  --network none    Isolated network: none or allowlist
+  --allow-origin ORIGIN  Exact allowed inference origin (repeatable)
+  --read-only-path DIR  Selected runtime dependency (repeatable)
+  --auth ID=FILE    Explicit isolated credential file for coder/reviewer (repeatable)
+  --auth-provider ID=NAME  Provider entry in an isolated Pi credential file
+  --coder codex    Coding profile: codex, claude, antigravity or antigravity-bridge
+  --reviewer NAME  Review profile (default: Antigravity, bridge when isolated)
   --dry-run        Preview even when --allow-models is supplied
   --allow-models   Permit provider turns and their charges
   --json           Print a machine-readable result instead of prose
@@ -48,11 +60,19 @@ Without an explicit check, supported unambiguous Go/npm project checks are detec
 Commands and native tools use trusted local authority. Worktrees separate files;
 they are not a sandbox. Applying a result is always a separate explicit action.
 Interrupted work is retained and never automatically replayed.
+Isolated previews and runs inspect selected auth before output. Their CLI output
+is deferred until completion and checked in bounded memory; unsafe output is refused.
 See docs/working.md.`
 
 // The executable fixes its provider choices. Tests may replace them with
 // transparent command fixtures without exposing a provider-bypass CLI flag.
 var configureGuidedWork = func(options workflow.GuidedOptions) workflow.GuidedOptions { return options }
+
+type guidedValues []string
+
+func (v *guidedValues) String() string         { return strings.Join(*v, ",") }
+func (v *guidedValues) Set(value string) error { *v = append(*v, value); return nil }
+func (v *guidedValues) AllowRepeated() bool    { return true }
 
 func runGuidedWork(args []string) int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -61,6 +81,14 @@ func runGuidedWork(args []string) int {
 }
 
 func runGuidedWorkIO(ctx context.Context, args []string, out, diagnostics io.Writer) int {
+	return runCLIPublicationSession(ctx, out, diagnostics, false, func(ctx context.Context, session *cliPublicationSession) (context.Context, error) {
+		return prepareGuidedCLIPublication(ctx, session, args)
+	}, func(ctx context.Context, out, diagnostics io.Writer) int {
+		return runGuidedWorkUnguardedIO(ctx, args, out, diagnostics)
+	})
+}
+
+func runGuidedWorkUnguardedIO(ctx context.Context, args []string, out, diagnostics io.Writer) int {
 	diagnostics = workflowDiagnosticWriter{diagnostics}
 	if len(args) == 0 || len(args) == 1 && helpArgument(args[0]) || len(args) == 2 && helpArgument(args[1]) {
 		fmt.Fprintln(out, guidedWorkUsage)
@@ -79,6 +107,16 @@ func runGuidedWorkIO(ctx context.Context, args []string, out, diagnostics io.Wri
 	checkTimeout := flags.Duration("check-timeout", time.Minute, "deadline per acceptance check")
 	attempts := flags.Int("attempts", 2, "bounded implementation correction attempts")
 	containment := flags.String("containment", "process-group", "process-group or Linux pid-namespace containment")
+	storage := flags.String("storage", "private", "private or legacy shared snapshot storage")
+	isolation := flags.String("isolation", "", "required bubblewrap filesystem and network isolation")
+	network := flags.String("network", "", "none or allowlist for isolated execution")
+	coder := flags.String("coder", "codex", "coding provider profile")
+	reviewer := flags.String("reviewer", "", "review provider profile")
+	var origins, readOnlyPaths, authFiles, authProviders guidedValues
+	flags.Var(&origins, "allow-origin", "exact allowed inference origin")
+	flags.Var(&readOnlyPaths, "read-only-path", "selected read-only runtime dependency")
+	flags.Var(&authFiles, "auth", "candidate ID=absolute credential file")
+	flags.Var(&authProviders, "auth-provider", "candidate ID=Pi provider name")
 	dryRun := flags.Bool("dry-run", false, "preview without starting models")
 	allowModels := flags.Bool("allow-models", false, "allow provider turns and charges")
 	asJSON := flags.Bool("json", false, "machine-readable output")
@@ -111,6 +149,10 @@ func runGuidedWorkIO(ctx context.Context, args []string, out, diagnostics io.Wri
 	if *checkTimeout < time.Second || *checkTimeout > 10*time.Minute || *checkTimeout%time.Second != 0 {
 		return fail(exitValidation, errors.New("check-timeout requires whole seconds within 1s–10m"))
 	}
+	isolationOptions, err := guidedIsolationOptions(*isolation, *network, origins, readOnlyPaths, authFiles, authProviders)
+	if err != nil {
+		return fail(exitValidation, err)
+	}
 	explicitOutput := *output != ""
 	if !explicitOutput {
 		*output, err = workflow.SuggestedOutput(ctx, *repository, *catalog)
@@ -118,7 +160,11 @@ func runGuidedWorkIO(ctx context.Context, args []string, out, diagnostics io.Wri
 			return fail(exitValidation, err)
 		}
 	}
-	options := configureGuidedWork(workflow.GuidedOptions{Repository: *repository, ProcessContainment: *containment, Goal: positionals[0], Output: *output, CheckCommand: check, TimeoutSeconds: int(*timeout / time.Second), MaxAttempts: *attempts, CheckTimeoutSeconds: int(*checkTimeout / time.Second)})
+	options := configureGuidedWork(workflow.GuidedOptions{Repository: *repository, Storage: *storage, Isolation: isolationOptions, CoderHarness: *coder, ReviewerHarness: *reviewer, ProcessContainment: *containment, Goal: positionals[0], Output: *output, CheckCommand: check, TimeoutSeconds: int(*timeout / time.Second), MaxAttempts: *attempts, CheckTimeoutSeconds: int(*checkTimeout / time.Second)})
+	ctx, err = selectGuidedCLIOptions(ctx, options)
+	if err != nil {
+		return exitRuntime
+	}
 	preview, err := workflow.PrepareGuided(ctx, options)
 	if err != nil {
 		return fail(exitValidation, err)
@@ -193,6 +239,67 @@ func splitGuidedCheck(args []string) ([]string, []string) {
 	return args, nil
 }
 
+func guidedIsolationOptions(mode, network string, origins, dependencies, files, providers []string) (*workflow.IsolationOptions, error) {
+	if mode == "" {
+		if network != "" || len(origins)+len(dependencies)+len(files)+len(providers) > 0 {
+			return nil, errors.New("network, credentials and dependency capabilities require --isolation bubblewrap")
+		}
+		return nil, nil
+	}
+	if mode != "bubblewrap" {
+		return nil, errors.New("isolation must be bubblewrap")
+	}
+	if network == "" {
+		network = "none"
+		if len(origins) > 0 {
+			network = "allowlist"
+		}
+	}
+	o := &workflow.IsolationOptions{Mode: mode, Network: network, Auth: map[string]workflow.IsolationAuth{}}
+	for _, origin := range origins {
+		if !utf8.ValidString(origin) {
+			return nil, errors.New("allowed origins must be valid UTF-8")
+		}
+		o.Allow = append(o.Allow, egress.Endpoint{Origin: origin})
+	}
+	for _, path := range dependencies {
+		if !utf8.ValidString(path) {
+			return nil, errors.New("dependency paths must be valid UTF-8")
+		}
+		absolute, err := filepath.Abs(path)
+		if err != nil {
+			return nil, err
+		}
+		o.ReadOnlyPaths = append(o.ReadOnlyPaths, absolute)
+	}
+	for _, value := range files {
+		id, file, ok := strings.Cut(value, "=")
+		if !ok || id == "" || file == "" || !utf8.ValidString(value) {
+			return nil, errors.New("auth requires an exact candidate ID=credential file")
+		}
+		if _, exists := o.Auth[id]; exists {
+			return nil, errors.New("choose one isolated credential file per candidate")
+		}
+		absolute, err := filepath.Abs(file)
+		if err != nil {
+			return nil, err
+		}
+		o.Auth[id] = workflow.IsolationAuth{File: absolute}
+	}
+	seen := map[string]bool{}
+	for _, value := range providers {
+		id, provider, ok := strings.Cut(value, "=")
+		auth, exists := o.Auth[id]
+		if !ok || !exists || provider == "" || seen[id] || !utf8.ValidString(value) {
+			return nil, errors.New("auth-provider requires one ID=provider for an existing auth selection")
+		}
+		seen[id] = true
+		auth.Provider = provider
+		o.Auth[id] = auth
+	}
+	return workflow.NormalizedIsolation(o), nil
+}
+
 // Permit flags around the one quoted goal/selector while retaining every check
 // argument after -- exactly as supplied. Unknown flags fail before any work.
 func parseGuidedFlags(flags *flag.FlagSet, args []string) ([]string, error) {
@@ -209,7 +316,8 @@ func parseGuidedFlags(flags *flag.FlagSet, args []string) ([]string, error) {
 		if f == nil {
 			return nil, fmt.Errorf("unknown option %q", arg)
 		}
-		if seen[name] {
+		repeated, mayRepeat := f.Value.(interface{ AllowRepeated() bool })
+		if seen[name] && !(mayRepeat && repeated.AllowRepeated()) {
 			return nil, fmt.Errorf("option --%s was supplied more than once; choose one value", name)
 		}
 		seen[name] = true
@@ -401,12 +509,19 @@ func printGuidedPreview(out io.Writer, preview workflow.GuidedPreview, catalog s
 	fmt.Fprintf(out, "Check timeout: %s\n", time.Duration(preview.Plan.Checks[0].TimeoutSeconds)*time.Second)
 	fmt.Fprintf(out, "Snapshot: %d selected files · %d bytes (limits: %d files, %d bytes)\n", preview.Selection.Files, preview.Selection.Bytes, workflow.MaxSnapshotFiles, workflow.MaxSnapshotBytes)
 	fmt.Fprintf(out, "Process containment: %s\nExecution: %s\n", guidedLine(preview.Plan.ProcessContainment), guidedLine(preview.Authority))
+	fmt.Fprintf(out, "Snapshot storage: %s · reviews: fresh context\n", guidedLine(preview.Plan.Storage))
 	fmt.Fprintln(out, "Preview only. No models started and no run files were written.")
 	if forced {
 		fmt.Fprintln(out, "Remove --dry-run to execute the approved request.")
 		return
 	}
+	executionFlags, representable := guidedExecutionFlags(preview.Plan)
+	if !representable {
+		fmt.Fprintln(out, "To execute, add --allow-models before -- in your original command; retain all configured capabilities.")
+		return
+	}
 	values := append([]string{preview.Plan.Goal, preview.Repository, preview.Output, catalog}, preview.Plan.Checks[0].Command...)
+	values = append(values, executionFlags...)
 	for _, value := range values {
 		if value != guidedLine(value) {
 			fmt.Fprintln(out, "To execute, add --allow-models before -- in your original command. Control characters above are escaped for display.")
@@ -425,6 +540,9 @@ func printGuidedPreview(out io.Writer, preview workflow.GuidedPreview, catalog s
 	if preview.Plan.ProcessContainment != "" && preview.Plan.ProcessContainment != "process-group" {
 		fmt.Fprint(out, " --containment "+guidedShellWord(preview.Plan.ProcessContainment))
 	}
+	for _, arg := range executionFlags {
+		fmt.Fprint(out, " "+guidedShellWord(arg))
+	}
 	fmt.Fprintf(out, " --timeout %s --check-timeout %s --attempts %d --", time.Duration(preview.Plan.TimeoutSeconds)*time.Second, time.Duration(preview.Plan.Checks[0].TimeoutSeconds)*time.Second, preview.Plan.MaxAttempts)
 	for _, arg := range preview.Plan.Checks[0].Command {
 		fmt.Fprint(out, " "+guidedShellWord(arg))
@@ -432,9 +550,63 @@ func printGuidedPreview(out io.Writer, preview workflow.GuidedPreview, catalog s
 	fmt.Fprintln(out)
 }
 
+// A suggested command must retain every capability. Advanced plan-only options
+// have no CLI spelling, so those previews refer back to the original request.
+func guidedExecutionFlags(plan workflow.Plan) ([]string, bool) {
+	args := []string{"--storage", plan.Storage}
+	for i, candidate := range plan.Candidates {
+		if i > 1 {
+			return nil, false
+		}
+		if candidate.Harness == "command" { // explicit embedded fixture/profile
+			continue
+		}
+		role := "--coder"
+		if i == 1 {
+			role = "--reviewer"
+		}
+		args = append(args, role, candidate.Harness)
+	}
+	if plan.Isolation == nil {
+		return args, true
+	}
+	o := plan.Isolation
+	defaults := workflow.NormalizedIsolation(&workflow.IsolationOptions{})
+	if o.HomeBytes != defaults.HomeBytes || o.TempBytes != defaults.TempBytes || o.BridgeMaxRequests != defaults.BridgeMaxRequests || len(o.BridgeCommand) > 0 || o.RelayExecutable != "" {
+		return nil, false
+	}
+	args = append(args, "--isolation", o.Mode, "--network", o.Network)
+	for _, endpoint := range o.Allow {
+		if len(endpoint.IPs) > 0 {
+			return nil, false
+		}
+		args = append(args, "--allow-origin", endpoint.Origin)
+	}
+	for _, path := range o.ReadOnlyPaths {
+		args = append(args, "--read-only-path", path)
+	}
+	ids := make([]string, 0, len(o.Auth))
+	for id := range o.Auth {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		auth := o.Auth[id]
+		args = append(args, "--auth", id+"="+auth.File)
+		if auth.Provider != "" {
+			args = append(args, "--auth-provider", id+"="+auth.Provider)
+		}
+	}
+	return args, true
+}
+
 func printGuidedSummary(out io.Writer, summary workflow.WorkSummary) {
 	fmt.Fprintf(out, "\n%s\nTask: %s\nProject: %s\n", guidedLine(summary.Outcome), guidedLine(summary.Goal), guidedLine(summary.Repository))
 	fmt.Fprintf(out, "Process containment: %s\n", guidedLine(summary.ProcessContainment))
+	fmt.Fprintf(out, "Snapshot storage: %s\n", guidedLine(summary.Storage))
+	if summary.Isolation != "" {
+		fmt.Fprintf(out, "Filesystem isolation: %s\n", guidedLine(summary.Isolation))
+	}
 	for _, phase := range summary.Phases {
 		fmt.Fprintf(out, "  %s: %s\n", guidedPhaseLabel(phase.ID), guidedStateLabel(phase.State))
 	}

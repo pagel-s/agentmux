@@ -9,6 +9,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 35
 
     steps:
       - name: Checkout
@@ -43,7 +44,7 @@ jobs:
           AGENTMUX_MANAGED_INTEGRATION: '1'
           AGENTMUX_EXPERIMENT_INTEGRATION: '1'
           AGENTMUX_TMUX_DEBUG: '1'
-        run: go test -race -count=1 ./...
+        run: go test -race -count=1 -timeout=20m ./...
 
       - name: Verify workflow CLI journeys without provider calls
         run: python3 scripts/validate-workflows.py --binary bin/amx --output "$RUNNER_TEMP/agentmux-workflow-validation"
@@ -51,8 +52,27 @@ jobs:
       - name: Verify guided work journey with protocol fixtures
         run: python3 scripts/validate-workflows.py --binary bin/amx --output "$RUNNER_TEMP/agentmux-guided-validation" --guided
 
+      - name: Verify explicit legacy shared-storage compatibility
+        run: python3 scripts/validate-workflows.py --binary bin/amx --output "$RUNNER_TEMP/agentmux-shared-validation" --storage shared
+
       - name: Verify workflow acceptance evidence cannot report false success
         run: python3 scripts/test-validate-workflows.py
+
+      - name: Verify workflow soak admission, audit and cleanup safety
+        run: python3 scripts/test-soak-workflows.py
+
+      - name: Preserve failed model-free workflow acceptance evidence
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: model-free-workflow-acceptance-failure-evidence
+          path: |
+            ${{ runner.temp }}/agentmux-workflow-validation
+            ${{ runner.temp }}/agentmux-guided-validation
+            ${{ runner.temp }}/agentmux-shared-validation
+          include-hidden-files: true
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Fuzz the workflow configuration boundary
         run: go test ./internal/workflow -run '^$' -fuzz '^FuzzWorkflowPlanRoundTrip$' -fuzztime=20s -parallel=2
@@ -88,8 +108,9 @@ jobs:
   sandbox:
     # Keep isolation checks explicit and fail closed. A runner that cannot
     # establish the boundary must fail this job, rather than skip every check.
+    # Include real namespace/durability tests and the later mutation/soak stages.
     runs-on: ubuntu-22.04
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -133,8 +154,38 @@ jobs:
           AGENTMUX_TMUX_DEBUG: '1'
         run: make test-sandbox
 
+      - name: Verify workflow oracle mutations and cleanup with actual isolation
+        env:
+          AGENTMUX_SANDBOX_INTEGRATION: '1'
+          AGENTMUX_INTEGRATION_BINARY: '${{ github.workspace }}/bin/amx'
+          AGENTMUX_WORKFLOW_TEST_EVIDENCE_ROOT: '${{ runner.temp }}/agentmux-workflow-regression-evidence'
+        run: python3 scripts/test-soak-workflows.py
+
       - name: Verify guided workflow with required PID containment
         run: python3 scripts/validate-workflows.py --binary bin/amx --output "$RUNNER_TEMP/agentmux-guided-pid-validation" --guided --containment pid-namespace
+
+      - name: Verify guided and advanced workflows with full isolation
+        run: |
+          python3 scripts/validate-workflows.py --binary bin/amx --output "$RUNNER_TEMP/agentmux-guided-full-validation" --guided --storage private --isolation bubblewrap
+          python3 scripts/validate-workflows.py --binary bin/amx --output "$RUNNER_TEMP/agentmux-flow-full-validation" --storage private --isolation bubblewrap
+
+      - name: Verify isolated workflow fault and recovery soak without providers
+        run: python3 scripts/soak-workflows.py --binary bin/amx --output "$RUNNER_TEMP/agentmux-workflow-soak" --iterations 1 --duration-seconds 300 --containment pid-namespace --storage private --isolation bubblewrap
+
+      - name: Preserve failed model-free workflow evidence
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: model-free-workflow-failure-evidence
+          path: |
+            ${{ runner.temp }}/agentmux-guided-pid-validation
+            ${{ runner.temp }}/agentmux-guided-full-validation
+            ${{ runner.temp }}/agentmux-flow-full-validation
+            ${{ runner.temp }}/agentmux-workflow-soak
+            ${{ runner.temp }}/agentmux-workflow-regression-evidence
+          include-hidden-files: true
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Preserve failed sandbox tmux client-view diagnostics
         if: failure()

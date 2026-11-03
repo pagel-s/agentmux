@@ -26,7 +26,7 @@ func TestPiSandboxBridgeExecutesToolOnlyInsideAgent(t *testing.T) {
 	if os.Getenv("AGENTMUX_PI_SANDBOX_LIVE") != "1" {
 		t.Skip("set AGENTMUX_PI_SANDBOX_LIVE=1 for actual Pi/Bubblewrap with fake agy")
 	}
-	opts := agybridge.Options{Key: bridgeTestKey, Models: []string{"exact-flash"}, Command: []string{os.Args[0], "-test.run=TestNativeProcess", "--"}, Env: map[string]string{"AGENTMUX_AGY_BRIDGE_HELPER": "1", "AGENTMUX_AGY_BRIDGE_TOOL_FIXTURE": "1"}, Timeout: 10 * time.Second, MaxRequests: 2}
+	opts := agybridge.Options{Key: bridgeTestKey, Models: []string{"exact-flash"}, Command: []string{os.Args[0], "--test.run=TestNativeProcess", "--"}, Env: map[string]string{"AGENTMUX_AGY_BRIDGE_HELPER": "1", "AGENTMUX_AGY_BRIDGE_TOOL_FIXTURE": "1"}, Timeout: 10 * time.Second, MaxRequests: 2}
 	request, stop, count := piBridgeRequest(t, opts, true)
 	defer stop()
 	request.Prompt = "Use the declared bash tool to write the bridge acceptance marker, then report success."

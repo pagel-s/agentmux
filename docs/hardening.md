@@ -46,7 +46,13 @@ rejected; an owner must select a literal address or supply explicit `ips` for a
 private service. An IP-literal origin cannot pin another address. Explicit pins
 also avoid changes in DNS answers during the worker's lifetime.
 
-For HTTPS CONNECT, the proxy checks the requested host/port and a bounded TLS
+This section describes managed-mode networking. Full
+`work`/`flow` isolation instead uses the inspecting proxy described in the
+[workflow guide](workflows.md#private-storage-and-full-isolation). It checks each
+HTTP/1.1 Host and HTTP/2 authority inside HTTPS using an ephemeral public CA;
+the managed proxy below keeps HTTPS opaque.
+
+For HTTPS CONNECT, the managed-mode proxy checks the requested host/port and a bounded TLS
 ClientHello's SNI before opening the upstream. Other SNI names, non-TLS tunnels,
 and encrypted ClientHello are rejected. HTTP authority mismatches and proxy
 credentials forwarded to upstream services are rejected/removed. The proxy
@@ -193,7 +199,7 @@ process-tree memory limits are separately configurable and should account for
 tmpfs usage. No privileged host mounts, quota configuration, or policy changes
 are performed automatically.
 
-## Verified boundaries
+## Check the boundaries
 
 The local adversarial tests cover origin/Host/redirect/pin/SNI checks, ECH and
 non-TLS rejection, live-tunnel revocation, claim deduplication and uncertainty,
@@ -212,12 +218,11 @@ AGENTMUX_INTEGRATION_BINARY="$PWD/bin/agentmux" go test ./internal/egress ./inte
 The endpoint test proves allowed traffic succeeds through the proxy while a
 denied endpoint receives no request and direct/proxy-opt-out attempts fail. The
 disk test fills all three actual tmpfs mounts to `ENOSPC`, verifies read-only
-seed enforcement, and checks workspace/native-history publication. Both passed
-on the development Linux host. An enclosing container may deny namespaces;
-such a failure is not silently downgraded.
+seed enforcement, and checks workspace/native-history publication. An enclosing
+container may deny namespaces; such a failure is not silently downgraded.
 
 `TestRealManagedHardeningWorkerAndIsolatedBroker` additionally combines an
 isolated broker, allowlisted worker, capped capsule and session reservation in
-one actual managed task. It passed, including rejection of a second task before
-any further endpoint request. These proofs use local deterministic processes,
-not model quality or billing assumptions.
+one actual managed task and checks rejection of a second task before any
+further endpoint request. These tests use local deterministic processes and
+do not measure model quality or provider billing.

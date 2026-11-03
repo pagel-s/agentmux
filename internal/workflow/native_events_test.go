@@ -17,7 +17,9 @@ func TestWorkflowRetainsNativeEventsForSuccessAndFailure(t *testing.T) {
 			repo, root := fixtureRepo(t)
 			// A transparent protocol fixture, not an installed provider or model.
 			fixture := fmt.Sprintf("import json,sys; sys.stdin.read(); print(json.dumps({'event':'result','result':{'status':%q,'response':'Recorded fixture response','usage':{'input_tokens':1,'output_tokens':2}}}), flush=True)", status)
-			plan := Plan{Version: 1, Execution: "local", Repository: repo, Goal: "Read the fixture", TimeoutSeconds: 10, Candidates: []Candidate{{ID: "fixture", Harness: "antigravity", Command: []string{"python3", "-c", fixture}}}, Checks: []Check{{Name: "base", Command: []string{"python3", "-c", "from pathlib import Path; assert Path('file.txt').read_text()=='base\\n'"}}}}
+			fixturePath := filepath.Join(root, "native-fixture.py")
+			fixtureWrite(t, fixturePath, []byte(fixture))
+			plan := Plan{Version: 1, Execution: "local", Repository: repo, Goal: "Read the fixture", TimeoutSeconds: 10, Candidates: []Candidate{{ID: "fixture", Harness: "antigravity", Command: []string{"python3", fixturePath}}}, Checks: []Check{{Name: "base", Command: []string{"python3", "-c", "from pathlib import Path; assert Path('file.txt').read_text()=='base\\n'"}}}}
 			dir := filepath.Join(root, "run")
 			report, err := Run(context.Background(), plan, dir, true)
 			if (err == nil) != (status == "SUCCESS") {

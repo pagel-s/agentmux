@@ -44,6 +44,15 @@ background refreshes preserve your current focus. Attention filters
 show recorded review, delivery blockage, uncertainty and failure; they do not
 infer whether a model is thinking or waiting at an unreported native prompt.
 
+The current source web graph automatically groups enabled connections and
+shared-access links. Drag or **Shift+Arrow** pins a node; local pins survive
+connection changes for that workspace/study attempt. **Auto arrange** releases
+pins and refits, while **Fit** preserves them. An unchanged visible topology
+stays still through polling, title changes and selection. Denied preview edges
+do not influence grouping, and arranging nodes changes no permissions. Use
+**List view** to inspect exact directions or work beyond the graph's 40-session
+display limit.
+
 ## Connect and disconnect precisely
 
 ```sh

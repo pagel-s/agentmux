@@ -13,6 +13,16 @@ import (
 
 const testKey = "test-private-bridge-key-12345678901234567890"
 
+func TestBridgeRefusesNativeTranscriptSelectionBeforeAdmission(t *testing.T) {
+	for _, args := range [][]string{{"--continue"}, {"--conversation", "saved-review"}, {"--conversation=saved-review"}, {"-c"}} {
+		opts := fakeOptions()
+		opts.Command = append([]string{"agy"}, args...)
+		if _, err := New(opts); err == nil || !strings.Contains(err.Error(), "fresh native inference") {
+			t.Fatalf("bridge admitted native history: %v", err)
+		}
+	}
+}
+
 func TestNativeProcess(t *testing.T) {
 	if os.Getenv("AGENTMUX_AGY_BRIDGE_HELPER") != "1" {
 		return
@@ -65,7 +75,7 @@ func TestNativeProcess(t *testing.T) {
 }
 
 func fakeOptions() Options {
-	return Options{Key: testKey, Models: []string{"exact-flash"}, Command: []string{os.Args[0], "-test.run=TestNativeProcess", "--"}, Env: map[string]string{"AGENTMUX_AGY_BRIDGE_HELPER": "1"}, Timeout: 2 * time.Second, MaxRequests: 10}
+	return Options{Key: testKey, Models: []string{"exact-flash"}, Command: []string{os.Args[0], "--test.run=TestNativeProcess", "--"}, Env: map[string]string{"AGENTMUX_AGY_BRIDGE_HELPER": "1"}, Timeout: 2 * time.Second, MaxRequests: 10}
 }
 func requestBridge(b *Bridge, body, key string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest("POST", "http://127.0.0.1/v1/chat/completions", strings.NewReader(body))
@@ -181,5 +191,105 @@ func TestBridgeListenRejectsPublicAndWildcardAddresses(t *testing.T) {
 			listener.Close()
 			t.Fatal("non-loopback bind accepted")
 		}
+	}
+}
+
+func TestBridgeLifecycleEvidenceAndClosedAdmission(t *testing.T) {
+	for _, scenario := range []string{"success", "failure", "invalid-schema", "admission-failure"} {
+		t.Run(scenario, func(t *testing.T) {
+			opts := fakeOptions()
+			marker := t.TempDir() + "/started"
+			opts.Env["AGENTMUX_AGY_BRIDGE_MARKER"] = marker
+			wantClass := ""
+			switch scenario {
+			case "failure":
+				opts.Env["AGENTMUX_AGY_BRIDGE_FAIL"] = "1"
+				wantClass = "native_failure"
+			case "invalid-schema":
+				opts.Env["AGENTMUX_AGY_BRIDGE_REPLY"] = `{"type":"tool_calls","calls":[{"name":"undeclared","arguments":{}}]}`
+				wantClass = "invalid_tool_response"
+			}
+			var evidence []Evidence
+			opts.Observe = func(e Evidence) error {
+				evidence = append(evidence, e)
+				if scenario == "admission-failure" {
+					return fmt.Errorf("fixture disk failure")
+				}
+				return nil
+			}
+			b, err := New(opts)
+			if err != nil {
+				t.Fatal(err)
+			}
+			result := requestBridge(b, chat, testKey)
+			if scenario == "admission-failure" {
+				if result.Code != 503 || len(evidence) != 1 {
+					t.Fatalf("admission evidence: %d %+v", result.Code, evidence)
+				}
+				if _, err := os.Stat(marker); !os.IsNotExist(err) {
+					t.Fatal("provider started before admission evidence")
+				}
+			} else {
+				if len(evidence) != 2 || evidence[0].Phase != "starting" || evidence[1].Phase != "finished" || evidence[1].InputSHA256 != evidence[0].InputSHA256 || evidence[1].ErrorClass != wantClass || evidence[1].FinishedAt == "" {
+					t.Fatalf("incomplete lifecycle evidence: %+v", evidence)
+				}
+				if strings.Contains(fmt.Sprint(evidence), "private-native-credential-value") {
+					t.Fatal("private stderr entered evidence")
+				}
+				if scenario == "success" && (result.Code != 200 || len(evidence[1].NativeEvents) == 0 || len(evidence[1].Usage) == 0) {
+					t.Fatal("native execution evidence missing")
+				}
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			if err := b.Shutdown(ctx); err != nil {
+				t.Fatal(err)
+			}
+			if result := requestBridge(b, chat, testKey); result.Code != 503 {
+				t.Fatal("closed bridge admitted inference")
+			}
+		})
+	}
+}
+
+func TestBridgeShutdownWaitsForInterruptedNativeEvidence(t *testing.T) {
+	opts := fakeOptions()
+	opts.Timeout = 10 * time.Second
+	marker := t.TempDir() + "/started"
+	opts.Env["AGENTMUX_AGY_BRIDGE_MARKER"] = marker
+	opts.Env["AGENTMUX_AGY_BRIDGE_WAIT"] = "1"
+	var finished Evidence
+	opts.Observe = func(e Evidence) error {
+		if e.Phase == "finished" {
+			finished = e
+		}
+		return nil
+	}
+	b, err := New(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan *httptest.ResponseRecorder, 1)
+	go func() { done <- requestBridge(b, chat, testKey) }()
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		if _, err := os.Stat(marker); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("native fixture never started")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := b.Shutdown(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if finished.Phase != "finished" || finished.ErrorClass != "interrupted" {
+		t.Fatalf("shutdown returned before final interruption evidence: %+v", finished)
+	}
+	if result := <-done; result.Code != 502 {
+		t.Fatalf("interruption claimed success: %d", result.Code)
 	}
 }

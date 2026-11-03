@@ -5,6 +5,53 @@ This guide explains what each command is for, when to use it, and the most usefu
 For a guided native-terminal workflow, see [work sessions](work-sessions.md).
 For original YAML pane-layout examples, see [recipes](recipes.md).
 
+## Checked coding requests
+
+`work` and `flow` require a current [source installation](getting-started/installation.md#build-from-source);
+they are newer than the published v0.11.0 binary. Both select a Git project,
+independently of an interactive workspace's `-s NAME` selector.
+
+| Command | Use it to |
+| --- | --- |
+| `amx work "Change description" -- CHECK [ARG...]` | Preview implementation, fresh review and checks without models or run files |
+| `amx work "Change description" --allow-models -- CHECK [ARG...]` | Execute the bounded journey with the explicitly selected provider profiles |
+| `amx work status [RUN\|latest]` | Inspect recorded phases, checks, review and next action for the project |
+| `amx work show [RUN\|latest]` | Inspect the checked patch preview and retained HTML report path |
+| `amx work list` | List retained runs for the selected project |
+| `amx work apply [RUN\|latest]` | Revalidate and explicitly apply an approved result to the original project |
+| `amx work recover [RUN\|latest]` | Resolve an interrupted application's journal against exact source content without replaying its patch |
+
+Use `--repo DIR` for another Git project and `--catalog DIR` for a custom private
+history. `--output DIR` selects a new result directory outside the project; its
+parent must already exist. Run `amx work --help` for profile, deadline, attempt,
+storage, containment and isolation controls. Checks after `--` are literal argv;
+use a check script when shell logic is required. See [work on a task](working.md)
+for the complete journey and [its visual overview](visual-guide.md#ask-for-a-checked-coding-change).
+
+## Advanced workflow plans
+
+| Command | Use it to |
+| --- | --- |
+| `amx flow run PLAN.json --repo DIR --output RUN` | Compare independent candidates from one captured revision |
+| `amx flow mission PLAN.json --repo DIR --output RUN` | Execute bounded dependency steps and final acceptance checks |
+| `amx flow watch PLAN.json --repo DIR --output RUN` | Review stable changed snapshots within duration and run-count limits |
+| `amx flow lab PLAN.json --repo DIR --output RUN --repetitions 3` | Repeat comparisons against a pinned starting snapshot with rotated order |
+| `amx flow check --repo DIR --checks CHECKS.json --output FILE` | Record revision-bound executable checks and a private sibling `FILE.git` fingerprint store |
+| `amx flow status RUN`, `amx flow explain RUN` | Read the saved report, or explain evidence with patch integrity and current freshness |
+| `amx flow report RUN --output FILE.html` | Render a private offline report to a new file |
+| `amx flow handoff RUN [--candidate ID] --output FILE.md` | Save a private revision-bound handoff brief |
+| `amx flow apply RUN [--candidate ID]` | Explicitly apply the selected checked result |
+| `amx flow recover RUN [--candidate ID]` | Inspect and resolve an interrupted application |
+
+Provider turns require `--allow-models`; command-only plans and checks can execute
+owner-selected code without that flag. Plans are strict JSON and choose
+`"execution": "local"`. Private Git storage is the default and does not confine
+trusted host execution. Select `--isolation bubblewrap` for `work`, or a private
+plan's `isolation` object for `flow`, to require filesystem, PID and network
+boundaries on Linux. Required boundaries fail closed. Application is separate
+from execution and never commits or pushes. See [advanced workflows](workflows.md)
+for model-free examples, plan fields, exact saved-brief delivery and limitations.
+
 ## Everyday work sessions
 
 Use `make install` for the `amx` command. The [short command reference](getting-started/everyday-commands.md)
@@ -57,9 +104,11 @@ An observed terminal must be connected before its registered ID can be used for
 collaboration. A prepared bridge does not mean the agent read the pasted setup;
 external sessions keep their original terminals for typing.
 
-These commands select workspace `work` by default, regardless of your current
-directory. For another workspace use `--session NAME` on each command, or select
-its exact directory with `--state DIR`. For example:
+Outside an owned attachment, these interactive commands select workspace `work`
+by default, regardless of your current directory. Inside an owned attachment,
+they infer its checked workspace identity as described above. For another
+workspace use `--session NAME` on each command, or select its exact directory
+with `--state DIR`. For example:
 
 ```sh
 amx start --session review --project /path/to/project
