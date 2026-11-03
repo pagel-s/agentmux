@@ -1265,6 +1265,7 @@ function renderTasks() {
   $("load-more-tasks").disabled = taskHistory.loading || !connected;
   const recipients = $("task-agent-filter"), priorRecipient = recipients.value;
   const recipientOptions = [["", "All recipients"], ...(snapshot.agents || []).map(a => [a.id, sessionReference(a.id)])];
+  if (taskHistory.to && !recipientOptions.some(([id]) => id === taskHistory.to)) recipientOptions.push([taskHistory.to, sessionReference(taskHistory.to) + " · historical recipient"]);
   if (JSON.stringify([...recipients.options].map(o => [o.value,o.textContent])) !== JSON.stringify(recipientOptions)) {
     recipients.replaceChildren(...recipientOptions.map(([id,label]) => { const option = el("option","",label); option.value=id; return option; }));
     recipients.value = priorRecipient || taskHistory.to;
@@ -3771,6 +3772,22 @@ function receiverDeliveryExplanation(id,key) {
   return nativeDeliveryHint(id);
 }
 function inspectReceiver(id) {const receiver=snapshot?.agents?.find(agent=>agent.id===id);if(!receiver){notice("Receiver "+id+" is outside the active registry. Its historical tasks and exposure receipts remain searchable; include retired sessions in Sessions to review its metadata.",true);return;}const interactive=receiver.config.interaction==="interactive";selectAgent(id);activateTab("agent");const panel=$(interactive?"native-delivery":"worker-runtime");panel.setAttribute("tabindex","-1");panel.focus({preventScroll:true});}
+function inspectTasks(id) {
+  if (!id || !connected || researchSavedOffline) { notice("Reconnect to inspect this recipient's complete task history.", true); return; }
+  taskHistory.query = taskHistory.state = "";
+  taskHistory.to = id;
+  taskHistory.tasks = [];
+  taskHistory.cursor = "";
+  taskHistory.hasMore = false;
+  taskAttention = "";
+  $("task-query").value = $("task-state-filter").value = $("task-attention-filter").value = "";
+  // Reset starts a new epoch even if an earlier recipient request is pending.
+  // Selection and unrelated drafts stay bound to their existing session.
+  const pending = loadTaskHistory("reset");
+  $("task-agent-filter").value = id;
+  activateTab("tasks");
+  return pending;
+}
 function taskAttentionKind(task) {
   if(taskRecovery(task).actions.length||["uncertain","cancel_uncertain"].includes(task.delivery)||task.native?.phase==="uncertain")return "uncertain";
   if(task.state==="failed"||task.native?.phase==="failed")return "failed";
@@ -3788,8 +3805,8 @@ function renderAttentionQueue() {
   if(taskSummary.updatedAt){
     panel.append(el("h3","","Recorded task outcomes · complete retained history"));
     for(const summary of taskSummary.agents.filter(row=>row.failed||row.uncertain||row.pending)){
-      const row=el("article","attention-row"),inspect=el("button","quiet","Inspect receiver delivery");row.dataset.itemKey="summary:"+summary.agent;inspect.type="button";inspect.dataset.focusKey="summary:"+summary.agent;inspect.onclick=()=>inspectReceiver(summary.agent);
-      row.append(el("strong","",sessionReference(summary.agent)),el("p","session-note",summary.total+" total · "+summary.failed+" failed · "+summary.uncertain+" uncertain · "+summary.pending+" pending · "+summary.running+" running. Pending alone does not prove delivery is blocked."),inspect);panel.append(row);
+      const row=el("article","attention-row"),tasks=el("button","quiet","Inspect tasks"),inspect=el("button","quiet","Inspect receiver delivery");row.dataset.itemKey="summary:"+summary.agent;tasks.type="button";tasks.dataset.focusKey="summary-tasks:"+summary.agent;tasks.onclick=()=>inspectTasks(summary.agent);inspect.type="button";inspect.dataset.focusKey="summary:"+summary.agent;inspect.onclick=()=>inspectReceiver(summary.agent);
+      row.append(el("strong","",sessionReference(summary.agent)),el("p","session-note",summary.total+" total · "+summary.failed+" failed · "+summary.uncertain+" uncertain · "+summary.pending+" pending · "+summary.running+" running. Pending alone does not prove delivery is blocked."),tasks,inspect);panel.append(row);
     }
   }
   const statuses={...(snapshot.native_statuses||{}),...(snapshot.native?.agent?{[snapshot.native.agent]:snapshot.native}:{})};
@@ -3896,6 +3913,7 @@ function availableActions() {
   const add=(label,run,shortcut="",reason="",target=selected)=>actions.push({label,run,shortcut,reason,target});
   for(const [key,label] of [["activity","Board & inbox"],["agent","Session detail & receiver delivery"],["tasks","Tasks & recovery"],["memory","Shared memory"],["graph","Connections"],["teams","Owner groups & agent teams"],["sessions","Sessions & workspaces"],["terminals","Existing terminals & bridge setup"],["research","Research study"]])if(key!=="research"||snapshot?.research)add("Open "+label,()=>activateTab(key));
   add("New session",quickNewSession,"Ctrl Shift N",ready?"":"Wait for the current workspace to reconnect");
+  add("Tasks for selected session",()=>inspectTasks(selected),"",ready&&agent?"":"Current session is loading or offline");
   for(const [id,label] of [["focus-terminal","Focus native terminal"],["copy-attach","Copy attach command"],["edit-title","Rename session"],["close-agent","Review close session subtree"],["relaunch-agent","Relaunch exited session"],["graph-edit","Connect sessions"]])add(label,()=>$(id).click(),"",!ready?"Current session is loading or offline":$(id).hidden?"Unavailable for this session":$(id).disabled?$(id).title||"Unavailable for the selected session":"");
   for(const item of snapshot?.agents||[])add("Select "+sessionTitle(item),()=>selectAgent(item.id),"", "",item.id);
   return actions;

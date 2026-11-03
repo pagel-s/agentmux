@@ -6,4 +6,5 @@ type consoleTaskPage struct {
 	After            string
 	Cursor           string
 	More             bool
+	Epoch            uint64
 }

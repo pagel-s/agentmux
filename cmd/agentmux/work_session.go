@@ -28,6 +28,7 @@ type workOptions struct {
 	args                                     []string
 	view                                     string
 	popup                                    bool
+	selectionSource                          string
 }
 
 func hasWorkSessionFlag(args []string) bool {
@@ -158,22 +159,7 @@ func parseWorkOptionsWithStorage(args []string, allowNamedState bool) (workOptio
 	if !allowNamedState && seen["session"] && seen["state"] {
 		return o, errors.New("choose either --session or --state to select a workspace, not both; no action was taken")
 	}
-	var err error
-	if !allowNamedState && !seen["session"] && !seen["state"] {
-		current, found, problem := ownedWorkContext(os.Getenv("TMUX"), contextTMux)
-		if problem != nil {
-			return o, problem
-		}
-		if found {
-			o.state, o.session = current.state, current.session
-		}
-	}
-	if o.state == "" {
-		o.state, err = defaultWorkState(o.session)
-	} else {
-		o.state, err = filepath.Abs(expandUserPath(o.state))
-	}
-	return o, err
+	return resolveWorkSelection(o, seen["session"], seen["state"], !allowNamedState)
 }
 
 func workCall(ctx context.Context, client *managed.Client, op string, args any) (json.RawMessage, error) {
@@ -519,6 +505,9 @@ Legacy raw pane input remains: amx send SESSION PANE -- COMMAND.`)
 			audience = "board " + o.board
 		}
 		fmt.Fprintf(out, "%s queued for %s: %s\n", kind, audience, id)
+		if kind == "Instruction" {
+			printWorkTaskCommand(out, "Inspect", []string{"amx", "task", id, "--state", o.state})
+		}
 		if kind == "Message" {
 			fmt.Fprintln(out, "Interactive agent: read its broker inbox, or talk directly with:", managedlaunch.ShellCommand([]string{"amx", "attach", target, "--state", o.state}))
 		}
@@ -533,7 +522,7 @@ Legacy raw pane input remains: amx send SESSION PANE -- COMMAND.`)
 						fmt.Fprintln(out, "Automatic note delivery is off; this note stays in the broker inbox.")
 					}
 					if kind == "Instruction" && v.Status.Mode == "review" {
-						fmt.Fprintln(out, "Approve the exact item in Agents (Shift+A) or with amx delivery", target, "--approve", id)
+						printWorkTaskCommand(out, "Approve the exact item in Agents (Shift+A) or with", []string{"amx", "delivery", target, "--approve", id, "--state", o.state})
 					}
 				}
 			}

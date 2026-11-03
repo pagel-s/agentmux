@@ -4,6 +4,9 @@ Agentmux keeps each native conversation interactive. The terminal is the main
 work surface; the local black/purple web app provides observation and reviewed
 control. Both surfaces identify actions by stable session ID.
 
+The new shortcuts below are available in source builds after v0.12.0. They
+retain the same explicit permissions, delivery policies and recovery reviews.
+
 ## Upgrade an existing workspace
 
 `make install` updates the `amx` executable. New workspaces use the
@@ -24,8 +27,12 @@ one only after its conversations are finished.
 - **Ctrl+K** opens searchable Actions. Search for rename, budget, delivery,
   attention, disconnect, archive or recovery. Each action shows its target and
   explains unavailable actions.
+  **Tasks for selected session** opens that exact recipient's retained history
+  and clears old search, state and attention filters. Later replies from a
+  previous selection cannot replace the new history.
 - **Shift+N** creates another session using the selected provider and project.
-  Enter an optional task title and review the launch. Advanced settings remain
+  Enter an optional task title and review the launch, including the provider's
+  default model and trusted local host execution. Advanced settings remain
   available through Actions.
 - **F1** returns from a native terminal to that attachment's workbench. Focus
   follows the exact native session; editing drafts keep their original target.
@@ -34,6 +41,11 @@ one only after its conversations are finished.
   late results and returns to the unchanged draft or review.
   Interactive handoff uses the outer attachment, preserving previous dashboards
   and other clients. A standalone observer shows an exact attach command.
+
+Press `/` or Ctrl+F in the running-workspace chooser to search names, exact state paths and status.
+With a search active, ordinary letters are search text; use arrows or Ctrl+N/P
+to navigate, Ctrl+U to clear and Esc to cancel. `amx context` explains the
+workspace an ordinary CLI command selects, with exact attach/inspect commands.
 
 The web Actions menu invokes the same kinds of session operations. Sessions,
 Existing terminals and Connections use the same meaning across surfaces.
@@ -91,6 +103,9 @@ Uncertain task recovery reviews the exact task/version and allowed fail/retry
 choice. Expired execution leases also appear in owner recovery and attention,
 while recorded delivery state remains unchanged. Expired cancellation permits
 fail resolution only; deadlines can also rule out retry.
+Use `amx task TASK_ID -s NAME` to read those distinct fields from the CLI.
+Web attention summaries link to the exact recipient's tasks, even after the
+recipient leaves the active roster. Opening history never resolves anything.
 A retry is another execution and can repeat side effects. The web retains an
 unconfirmed submission's identity across reconnect so checking/replaying the
 same submission does not silently create a second instruction. Editing a

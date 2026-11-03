@@ -94,6 +94,10 @@ func run(args []string) int {
 		return runWorkRelaunch(args[1:], os.Stdout, os.Stderr)
 	case "delivery":
 		return runWorkDelivery(args[1:], os.Stdout, os.Stderr)
+	case "context":
+		return runWorkContext(args[1:], os.Stdout, os.Stderr)
+	case "task", "tasks":
+		return runWorkTasks(args[0], args[1:], os.Stdout, os.Stderr)
 	case "connect":
 		return runWorkConnect(args[1:], os.Stdout, os.Stderr)
 	case "add":

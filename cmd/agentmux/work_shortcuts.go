@@ -26,7 +26,7 @@ var workAliases = map[string]string{
 
 func workCommand(command string) bool {
 	switch command {
-	case "start", "attach", "dashboard", "sessions", "workspaces", "add", "collaborate", "disconnect", "isolate", "label", "delivery", "role", "web", "send", "reply", "inbox", "board", "down", "remove", "retire", "connect", "relaunch", "allow", "deny", "split", "unsplit":
+	case "start", "attach", "dashboard", "sessions", "workspaces", "context", "task", "tasks", "add", "collaborate", "disconnect", "isolate", "label", "delivery", "role", "web", "send", "reply", "inbox", "board", "down", "remove", "retire", "connect", "relaunch", "allow", "deny", "split", "unsplit":
 		return true
 	}
 	return false
@@ -126,7 +126,7 @@ func normalizeWorkCLI(input []string) ([]string, error) {
 				name = "--detach"
 			}
 		case "-j":
-			if command == "delivery" || command == "workspaces" {
+			if command == "delivery" || command == "workspaces" || command == "context" || command == "task" || command == "tasks" {
 				name = "--json"
 			}
 		case "-o":
@@ -198,7 +198,7 @@ func checkedWorkSelectors(args []string) ([]string, error) {
 
 func workOptionValue(name string) bool {
 	switch name {
-	case "--session", "--state", "--config", "--project", "--sandbox", "--view", "--group", "--board", "--legacy-policy", "--mode", "--to", "--resume", "--native-launcher", "--harness", "--role", "--title", "--model", "--auth-file", "--auth-provider", "--name", "--approve", "--max-turns", "--max-hops", "--cooldown", "--port", "--register":
+	case "--session", "--state", "--config", "--project", "--sandbox", "--view", "--group", "--board", "--legacy-policy", "--mode", "--to", "--resume", "--native-launcher", "--harness", "--role", "--title", "--model", "--auth-file", "--auth-provider", "--name", "--approve", "--max-turns", "--max-hops", "--cooldown", "--port", "--register", "--limit", "--after", "--query", "--status":
 		return true
 	}
 	return false
@@ -274,7 +274,7 @@ func runWorkHomeOperation(operation string, in io.Reader, out, diagnostics io.Wr
 	}
 	if found {
 		if !terminal {
-			fmt.Fprintf(out, "Current workspace: %s\nOpen: amx ui --state %s\n", consoleContent(current.session, 100), consoleContent(current.state, 500))
+			fmt.Fprintf(out, "Current workspace: %s\nState: %s\nOpen: %s\n", consoleContent(current.session, 100), consoleContent(current.state, 1000), displayWorkCommand(workHomeCommand(operation, current.state)))
 			return exitSuccess
 		}
 		return runWorkSession(operation, []string{"--state", current.state}, in, out, diagnostics)
@@ -294,14 +294,10 @@ func runWorkHomeOperation(operation string, in io.Reader, out, diagnostics io.Wr
 		return runWorkSession(operation, []string{"--state", live[0].State}, in, out, diagnostics)
 	}
 	if len(live) == 0 || !terminal {
-		fmt.Fprintln(out, "amx · workspaces")
-		for _, row := range rows {
-			fmt.Fprintf(out, "  %s · %s · %d sessions\n", consoleContent(row.Session, 100), row.Status, row.Agents)
-		}
-		fmt.Fprintln(out, "Open: amx ui -s NAME\nNew workspace: amx up -s NAME")
+		writeWorkHomeInventory(out, rows, operation)
 		return exitSuccess
 	}
-	model, err := tea.NewProgram(workHome{rows: live, height: 24, width: 80}, tea.WithInput(in), tea.WithOutput(out), tea.WithAltScreen()).Run()
+	model, err := tea.NewProgram(workHome{rows: live, operation: operation, height: 24, width: 80}, tea.WithInput(in), tea.WithOutput(out), tea.WithAltScreen()).Run()
 	if err != nil {
 		fmt.Fprintln(diagnostics, "error:", err)
 		return exitRuntime
@@ -312,29 +308,164 @@ func runWorkHomeOperation(operation string, in io.Reader, out, diagnostics io.Wr
 	return exitSuccess
 }
 
+func workHomeCommand(operation, state string) string {
+	command := "ui"
+	if operation == "attach" {
+		command = "a"
+	}
+	return managedlaunch.ShellCommand([]string{"amx", command, "--state", state})
+}
+
+// Never label escaped or truncated argv as a copyable command. JSON views
+// retain exact values when a path or filter contains terminal display controls.
+func displayWorkCommand(command string) string {
+	if consoleContent(command, len(command)) != command || strings.ContainsAny(command, "\n\r\t") {
+		return "copyable command omitted because an argument contains display controls; use JSON for exact values."
+	}
+	return command
+}
+
+// Keep the landing view useful after a long history of stopped workspaces.
+// The complete inventory remains available through amx ws.
+func writeWorkHomeInventory(out io.Writer, rows []workspaceListing, operation string) {
+	var active, saved []workspaceListing
+	for _, row := range rows {
+		if row.Status == "running" || row.Status == "attention" {
+			active = append(active, row)
+		} else {
+			saved = append(saved, row)
+		}
+	}
+	fmt.Fprintln(out, "amx · workspaces")
+	writeRow := func(row workspaceListing) {
+		fmt.Fprintf(out, "  %s · %s · %d sessions\n    %s\n    %s\n", consoleContent(row.Session, 100), consoleContent(row.Status, 100), row.Agents, consoleContent(row.State, 1000), displayWorkCommand(workHomeCommand(operation, row.State)))
+		if row.Problem != "" {
+			fmt.Fprintln(out, "    "+consoleContent(row.Problem, 300))
+		}
+	}
+	if len(active) > 0 {
+		fmt.Fprintf(out, "Active (%d):\n", len(active))
+		for _, row := range active {
+			writeRow(row)
+		}
+	} else {
+		fmt.Fprintln(out, "No running workspaces.")
+	}
+	if len(saved) > 0 {
+		count := min(3, len(saved))
+		fmt.Fprintf(out, "Saved (%d of %d):\n", count, len(saved))
+		for _, row := range saved[:count] {
+			writeRow(row)
+		}
+	}
+	fmt.Fprintln(out, "All workspaces: amx ws\nTarget details: amx context\nNew workspace: amx up -s NAME")
+}
+
 type workHome struct {
 	rows          []workspaceListing
 	selected      int
 	chosen        string
+	operation     string
+	query         string
+	filtering     bool
+	filterFocus   string
 	height, width int
 }
 
 func (m workHome) Init() tea.Cmd { return nil }
+
+func (m workHome) visibleRows() []workspaceListing {
+	words := strings.Fields(strings.ToLower(m.query))
+	if len(words) == 0 {
+		return m.rows
+	}
+	var rows []workspaceListing
+	for _, row := range m.rows {
+		text := strings.ToLower(row.Session + " " + row.State + " " + row.Status)
+		match := true
+		for _, word := range words {
+			if !strings.Contains(text, word) {
+				match = false
+				break
+			}
+		}
+		if match {
+			rows = append(rows, row)
+		}
+	}
+	return rows
+}
+
+func (m workHome) selectedState() string {
+	rows := m.visibleRows()
+	if m.selected < 0 || m.selected >= len(rows) {
+		return ""
+	}
+	return rows[m.selected].State
+}
+
+func (m *workHome) setQuery(query string) {
+	focus := m.selectedState()
+	if strings.TrimSpace(m.query) == "" && strings.TrimSpace(query) != "" {
+		m.filterFocus = focus
+	}
+	m.query = query
+	if strings.TrimSpace(query) == "" && m.filterFocus != "" {
+		focus = m.filterFocus
+	}
+	m.selected = 0
+	for i, row := range m.visibleRows() {
+		if row.State == focus {
+			m.selected = i
+			break
+		}
+	}
+}
+
 func (m workHome) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if size, ok := msg.(tea.WindowSizeMsg); ok {
 		m.height, m.width = size.Height, size.Width
 	}
 	if key, ok := msg.(tea.KeyMsg); ok {
+		rows := m.visibleRows()
 		switch key.String() {
-		case "up", "k":
-			m.selected = max(0, m.selected-1)
-		case "down", "j":
-			m.selected = max(0, min(len(m.rows)-1, m.selected+1))
-		case "esc", "q", "ctrl+c":
+		case "esc", "ctrl+c":
 			return m, tea.Quit
 		case "enter":
-			if len(m.rows) > 0 {
-				m.chosen = m.rows[m.selected].State
+			if chosen := m.selectedState(); chosen != "" {
+				m.chosen = chosen
+				return m, tea.Quit
+			}
+		case "up", "ctrl+p":
+			m.selected = max(0, m.selected-1)
+		case "down", "ctrl+n":
+			m.selected = max(0, min(len(rows)-1, m.selected+1))
+		default:
+			if m.filtering {
+				switch key.Type {
+				case tea.KeyRunes:
+					m.setQuery(m.query + string(key.Runes))
+				case tea.KeySpace:
+					m.setQuery(m.query + " ")
+				case tea.KeyBackspace, tea.KeyCtrlH:
+					runes := []rune(m.query)
+					if len(runes) > 0 {
+						m.setQuery(string(runes[:len(runes)-1]))
+					}
+				case tea.KeyCtrlU:
+					m.setQuery("")
+				}
+				return m, nil
+			}
+			switch key.String() {
+			case "/", "ctrl+f":
+				m.filterFocus = m.selectedState()
+				m.filtering = true
+			case "k":
+				m.selected = max(0, m.selected-1)
+			case "j":
+				m.selected = max(0, min(len(rows)-1, m.selected+1))
+			case "q":
 				return m, tea.Quit
 			}
 		}
@@ -343,17 +474,34 @@ func (m workHome) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 func (m workHome) View() string {
 	var b strings.Builder
-	b.WriteString(consoleAccent.Render("amx · choose workspace") + "\n\n")
+	rows := m.visibleRows()
+	b.WriteString(consoleAccent.Render("amx · choose workspace") + "\n")
+	if m.filtering {
+		fmt.Fprintf(&b, "Filter: %s▏ · %d/%d\n\n", consoleContent(m.query, 200), len(rows), len(m.rows))
+	} else {
+		fmt.Fprintf(&b, "%d active workspaces · / filters name, state or status\n\n", len(rows))
+	}
 	count := max(1, (m.height-5)/3)
 	first := max(0, m.selected-count+1)
-	for i := first; i < len(m.rows) && i < first+count; i++ {
-		row := m.rows[i]
-		text := fmt.Sprintf("  %s · %d sessions", consoleContent(row.Session, 100), row.Agents)
+	for i := first; i < len(rows) && i < first+count; i++ {
+		row := rows[i]
+		text := fmt.Sprintf("  %s · %s · %d sessions", consoleContent(row.Session, 100), consoleContent(row.Status, 100), row.Agents)
 		if i == m.selected {
 			text = consoleSelected.Render("› " + strings.TrimSpace(text))
 		}
-		fmt.Fprintf(&b, "%s\n  %s\n\n", text, consoleMuted.Render(consoleContent(row.State, 200)))
+		fmt.Fprintf(&b, "%s\n  %s\n\n", text, consoleMuted.Render(consoleMiddle(row.State, max(28, m.width-2))))
 	}
-	b.WriteString("↑/↓ choose · Enter opens workbench · Esc cancels\n")
+	if len(rows) == 0 {
+		b.WriteString("No matching workspaces. Ctrl+U clears the filter.\n\n")
+	}
+	open := "workbench"
+	if m.operation == "attach" {
+		open = "terminal"
+	}
+	if m.filtering {
+		fmt.Fprintf(&b, "↑/↓ choose · Enter opens %s · Ctrl+U clears · Esc cancels\n", open)
+	} else {
+		fmt.Fprintf(&b, "↑/↓ or j/k choose · Enter opens %s · / filters · Esc cancels\n", open)
+	}
 	return consoleClip(b.String(), max(30, m.width), max(8, m.height))
 }

@@ -58,6 +58,10 @@ func Explain(directory string) (Explanation, error) {
 	if err != nil {
 		return Explanation{}, err
 	}
+	return explainReport(directory, r)
+}
+
+func explainReport(directory string, r Report) (Explanation, error) {
 	source := SourceSnapshot(r)
 	e := Explanation{Version: 1, ID: r.ID, Goal: r.Goal, Mode: r.Mode, State: r.State, BaseCommit: source.BaseCommit, StartingTree: source.Tree, StartingContentSHA256: source.ContentSHA256, Items: []EvidenceItem{}, Coverage: "Owner-recorded workflow inputs, results, snapshots and checks. This is not provider attestation, hidden reasoning, or a complete record of external activity. Freshness is checked when this explanation is read. Credential-redacted native frames are explicitly labelled; their digest identifies the saved redacted evidence."}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)

@@ -73,7 +73,7 @@ func TestConsoleControlCenterQuickNewInheritsAndReviews(t *testing.T) {
 	if cmd != nil || m.busy || m.ownerReview == nil || m.composer != "" {
 		t.Fatal("first confirmation launched instead of reviewing")
 	}
-	for _, s := range []string{"pi", "/work/alice", "Optional title"} {
+	for _, s := range []string{"pi", "/work/alice", "Optional title", "Model: provider default", "Execution: trusted local host"} {
 		if !strings.Contains(m.ownerReview.body, s) {
 			t.Fatalf("review hides %q", s)
 		}

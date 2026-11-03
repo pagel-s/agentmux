@@ -914,7 +914,7 @@ func (m console) nativeDraftNext() (tea.Model, tea.Cmd) {
 			draft := m.newNative
 			m.composer = ""
 			m.text = nil
-			m.ownerReview = &consoleOwnerReview{operation: "launch-native", title: "Review new native session", body: fmt.Sprintf("Title: %s\nProvider: %s\nProject: %s\nNative only: %t\n\nA fresh stable ID is generated. Enter launches; Esc returns without starting a provider. Use Actions → Advanced new session to edit provider, project, profile and role.", draft.title, draft.provider, draft.project, draft.nativeOnly)}
+			m.ownerReview = &consoleOwnerReview{operation: "launch-native", title: "Review new native session", body: fmt.Sprintf("Title: %s\nProvider: %s\nModel: provider default\nProject: %s\nExecution: trusted local host\nNative only: %t\n\nA fresh stable ID is generated. Enter launches; Esc returns without starting a provider. Use Actions → Advanced new session to edit provider, project, profile and role.", draft.title, draft.provider, draft.project, draft.nativeOnly)}
 			return m, nil
 		}
 		m.compose("new-provider", "claude / codex / pi / antigravity", "", m.newNative.provider)

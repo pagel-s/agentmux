@@ -91,6 +91,7 @@ type console struct {
 	taskQuery, taskAfter, taskCursor                      string
 	taskBack                                              []string
 	taskMore                                              bool
+	taskEpoch                                             uint64
 	state                                                 string
 	client                                                *managed.Client
 	agents                                                []managed.AgentInfo
@@ -195,7 +196,7 @@ func (m console) fetch() tea.Msg {
 	focusID, focusRevision, focusSequence := consumeConsoleFocusOrdered(m.state)
 	var d consoleData
 	if m.tab == 4 {
-		d = fetchWorkSnapshot(m.state, m.client, m.selectedID(), &consoleTaskPage{Query: m.taskQuery, After: m.taskAfter, Recipient: m.taskRecipient, State: m.taskState})
+		d = fetchWorkSnapshot(m.state, m.client, m.selectedID(), &consoleTaskPage{Query: m.taskQuery, After: m.taskAfter, Recipient: m.taskRecipient, State: m.taskState, Epoch: m.taskEpoch})
 	} else {
 		d = fetchWorkSnapshot(m.state, m.client, m.selectedID())
 	}
@@ -615,8 +616,9 @@ func (m console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				taskID = m.data.activity.Tasks[m.task].ID
 			}
 			if m.tab == 4 {
-				if msg.taskPage == nil || msg.taskPage.Query != m.taskQuery || msg.taskPage.After != m.taskAfter || msg.taskPage.Recipient != m.taskRecipient || msg.taskPage.State != m.taskState {
+				if msg.taskPage == nil || msg.taskPage.Epoch != m.taskEpoch || msg.taskPage.Query != m.taskQuery || msg.taskPage.After != m.taskAfter || msg.taskPage.Recipient != m.taskRecipient || msg.taskPage.State != m.taskState {
 					msg.activity.Tasks = m.data.activity.Tasks
+					msg.taskPage = m.data.taskPage
 				} else {
 					m.taskCursor = msg.taskPage.Cursor
 					m.taskMore = msg.taskPage.More

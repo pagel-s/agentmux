@@ -3,6 +3,17 @@
 ## Unreleased
 
 - License Agentmux under MIT and include the license in release archives.
+- Make the workspace chooser searchable and show active workspaces first in
+  non-interactive home output. Add read-only `amx context` to explain the exact
+  selected workspace and its runtime status.
+- Add `amx task ID` and filtered, paginated `amx tasks`; delegation prints an
+  exact workspace-scoped inspection command. Task state, delivery and recovery
+  evidence remain distinct.
+- Open a selected session's complete task history directly from TUI/web Actions
+  and web attention summaries. Reject stale history replies after navigation.
+  Quick launch review explicitly shows the model default and host execution.
+- Show stable checked-work run IDs, support bounded `work list --limit N`, and
+  open a fresh local report with `work show RUN_ID --open`.
 
 ## v0.12.0 - 2026-11-03
 

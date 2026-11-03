@@ -15,6 +15,8 @@ Start here:
   amx a [ID]                   Open a native terminal (or restore the last one)
   amx add --harness codex --project DIR
   amx sessions                 List sessions; amx opens the workbench
+  amx context                  Show the selected workspace and why
+  amx task ID                  Inspect a delegated task and its delivery
   amx collaborate claude codex  Connect selected agents
   amx web --open               Open the local dashboard
   amx down                     Stop the current workspace
@@ -54,6 +56,8 @@ func runHelp(args []string, out, diagnostics io.Writer) int {
   amx demo                         Model-free checked change in a fixture repo
   amx work "Change" -- CHECK        Preview a coding and fresh-review workflow
   amx work status [RUN_DIR|latest]  Inspect saved progress and evidence
+  amx work list --limit 10          Find recent stable run IDs
+  amx work show RUN_ID --open       Open a freshly rendered local report
   amx work apply [RUN_DIR|latest]   Explicitly apply a checked result
   amx flow --help                   Plans, comparisons, missions and recovery
   amx managed setup --help          Configure a managed team
@@ -93,7 +97,7 @@ func printAllUsage(out io.Writer) {
 
 Run amx to open the current
 workspace or choose a running one. Short options: -s workspace, -p project,
--d detach on up/start, -j JSON on mode/delivery or ws/workspaces, -o web browser.
+-d detach on up/start, -j JSON on delivery, workspaces, context, task/tasks; -o web browser.
 Use -s before or after the command. Inside an owned tmux attachment, omitted
 workspace selectors use that attachment; outside, commands default to work.
 Creation with up/start always defaults to work unless a selector is supplied.
@@ -124,6 +128,9 @@ Usage:
   amx label ID "Fix login redirect" [--session work | --state DIR]
   amx role ID "Current owner role" [--session work | --state DIR]
   amx sessions [--session work | --state DIR]
+  amx context [--json] [--session work | --state DIR]
+  amx task TASK_ID [--json] [--session work | --state DIR]
+  amx tasks [--to ID] [--status STATE] [--query TEXT] [--limit N] [--after TASK_ID] [--json] [--session work | --state DIR]
   amx workspaces [--json] [--register DIR]
   amx relaunch ID [--resume ID|last|picker] [--session work | --state DIR]
   amx delivery ID [manual|review|auto] [--approve CANDIDATE] [--session work | --state DIR]
@@ -157,7 +164,9 @@ Usage:
   amx experiment <plan|run> <manifest> [options]
   amx flow <run|mission|watch|lab|check|status|explain|handoff|report|apply> [options]
   amx work "Describe the change" [--allow-models] [--repo DIR] -- CHECK [ARG...]
-  amx work <status|list|show|apply> [RUN_DIR|latest] [--repo DIR]
+  amx work <status|show|apply|recover> [RUN_ID|RUN_DIR|latest] [--repo DIR]
+  amx work list [--limit N] [--repo DIR]
+  amx work show RUN_ID|RUN_DIR|latest --open [--repo DIR]
   amx research <plan|run|analyze|status|watch|pause|resume|step|stop> <manifest-output-or-state> [options]
   amx load <config> [--param key=value] [--attach|--no-attach] [--dry-run] [--replace] [--strict] [--verbose]
   amx reload <config> [--param key=value] [--attach|--no-attach] [--dry-run] [--strict] [--verbose]

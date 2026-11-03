@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"os"
@@ -60,12 +61,28 @@ func RenderReportTo(directory, path string) (string, error) {
 // bytes and output paths, before creating an export. Rendering can introduce a
 // selected literal through HTML entities even when the input JSON was safe.
 func RenderReportToContext(ctx context.Context, directory, path string) (output string, renderErr error) {
+	return renderReportToContext(ctx, directory, path, "")
+}
+
+// RenderRunReportToContext binds a fresh export to the identity selected by its
+// caller. The report and explanation use the same validated saved record.
+func RenderRunReportToContext(ctx context.Context, directory, path, expectedID string) (string, error) {
+	if expectedID == "" {
+		return "", errors.New("an exact run ID is required to open its report")
+	}
+	return renderReportToContext(ctx, directory, path, expectedID)
+}
+
+func renderReportToContext(ctx context.Context, directory, path, expectedID string) (output string, renderErr error) {
 	defer func() { renderErr = redactEarlyIsolationError(ctx, renderErr) }()
 	r, err := LoadReport(directory)
 	if err != nil {
 		return "", err
 	}
-	e, err := Explain(directory)
+	if expectedID != "" && r.ID != expectedID {
+		return "", errors.New("selected run identity changed; inspect its current evidence before opening")
+	}
+	e, err := explainReport(directory, r)
 	if err != nil {
 		return "", err
 	}
