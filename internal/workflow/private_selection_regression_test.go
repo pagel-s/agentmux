@@ -15,7 +15,7 @@ Path('file.txt').write_bytes(b'fixed\n')
 Path('.gitignore').write_bytes(b'file.txt\nignored-build\n')
 subprocess.run(['git', 'rm', '--cached', 'file.txt'], check=True)
 subprocess.run(['git', 'add', '.gitignore'], check=True)
-subprocess.run(['git', '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test', 'commit', '-qm', 'worker commits and ignores a starting path'], check=True)
+subprocess.run(['git', '-c', 'maintenance.auto=false', '-c', 'gc.auto=0', '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test', 'commit', '-qm', 'worker commits and ignores a starting path'], check=True)
 print('committed metadata; checked working bytes remain present')
 `
 

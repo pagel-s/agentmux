@@ -66,6 +66,27 @@ class WorkflowSoakTests(unittest.TestCase):
         options.update(extra)
         return SimpleNamespace(**options)
 
+    def test_fixture_disables_automatic_maintenance_before_first_commit(self):
+        with tempfile.TemporaryDirectory(prefix="amx-soak-maintenance-") as temporary:
+            root = Path(temporary)
+            runner = SOAK.Soak(self.arguments(root, self.executable(root, "raise SystemExit(1)\n")))
+            git = runner.git
+            commits = []
+
+            def inspect_first_commit(repository, *arguments):
+                if "commit" in arguments:
+                    for key, expected in (("maintenance.auto", b"false"), ("gc.auto", b"0")):
+                        self.assertEqual(git(repository, "config", "--local", "--get", key).strip(), expected,
+                                         key + " must be set before any fixture commit")
+                    commits.append(repository)
+                return git(repository, *arguments)
+
+            with mock.patch.object(runner, "git", side_effect=inspect_first_commit):
+                repository = runner.project(root)
+            self.assertEqual(commits, [repository])
+            self.assertEqual(runner.git(repository, "config", "--local", "--get", "maintenance.auto").strip(), b"false")
+            self.assertEqual(runner.git(repository, "config", "--local", "--get", "gc.auto").strip(), b"0")
+
     def test_integration_evidence_defaults_to_temporary_cleanup(self):
         with mock.patch.dict(os.environ):
             os.environ.pop("AGENTMUX_WORKFLOW_TEST_EVIDENCE_ROOT", None)

@@ -124,7 +124,8 @@ def remaining_time(deadline):
 
 def git(repo, *arguments, deadline=None):
     result = subprocess.run(["git", "--no-optional-locks", "-c", "core.hooksPath=/dev/null",
-                             "-c", "core.fsmonitor=false", "-C", str(repo), *arguments],
+                             "-c", "core.fsmonitor=false", "-c", "maintenance.auto=false",
+                             "-c", "gc.auto=0", "-C", str(repo), *arguments],
                             env=git_environment(), stdin=subprocess.DEVNULL,
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             timeout=30 if deadline is None else min(30, remaining_time(deadline)))

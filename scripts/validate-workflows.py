@@ -1036,6 +1036,10 @@ def run_validation(args, binary, output, summary, processes):
         repo = output / name
         repo.mkdir(mode=0o700)
         git(repo, "init", "-q")
+        # Quiesce fixture-owned Git writers before the first commit. Strict
+        # metadata fingerprints must not race detached automatic maintenance.
+        git(repo, "config", "--local", "maintenance.auto", "false")
+        git(repo, "config", "--local", "gc.auto", "0")
         (repo / "README").write_text("Disposable Agentmux validation project\n")
         (repo / ".gitignore").write_text("__pycache__/\n")
         if implementation:

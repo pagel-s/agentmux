@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from types import SimpleNamespace
 import unittest
 from unittest import mock
 
@@ -59,6 +60,40 @@ def completed_comparison_fixture_source(mutation=""):
 
 
 class ValidationEvidenceTests(unittest.TestCase):
+    def test_fixture_disables_automatic_maintenance_before_first_commit(self):
+        class FirstCommitObserved(Exception):
+            pass
+
+        with tempfile.TemporaryDirectory(prefix="amx-validator-maintenance-") as temporary:
+            output = Path(temporary)
+            processes = VALIDATOR.ValidationProcesses()
+            launch = processes.launch
+            commits = []
+
+            def inspect_first_commit(command, **options):
+                if "commit" in command:
+                    repository = Path(command[command.index("-C") + 1])
+                    for key, expected in (("maintenance.auto", b"false"), ("gc.auto", b"0")):
+                        actual = subprocess.run(
+                            ["git", "-C", str(repository), "config", "--local", "--get", key],
+                            env=options["env"], capture_output=True, check=True, timeout=10,
+                        ).stdout.strip()
+                        self.assertEqual(actual, expected, key + " must be set before any fixture commit")
+                    commits.append(repository)
+                    raise FirstCommitObserved()
+                return launch(command, **options)
+
+            try:
+                with mock.patch.object(processes, "launch", side_effect=inspect_first_commit), \
+                        self.assertRaises(FirstCommitObserved):
+                    VALIDATOR.run_validation(
+                        SimpleNamespace(native=False, isolation="none", diagnose_antigravity=False),
+                        Path(sys.executable).resolve(), output, {}, processes,
+                    )
+            finally:
+                processes.cleanup()
+            self.assertEqual(commits, [output / "project"])
+
     def test_complete_comparison_refuses_malformed_and_unbound_revision_pins(self):
         cases = [
             ("", True),

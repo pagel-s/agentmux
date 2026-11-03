@@ -148,7 +148,7 @@ func executeDemo(ctx context.Context, root, git, shell string, out io.Writer) (r
 	}
 	gitEnv := []string{"PATH=" + os.Getenv("PATH"), "HOME=" + home, "XDG_CONFIG_HOME=" + home, "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=" + os.DevNull, "GIT_TERMINAL_PROMPT=0", "LC_ALL=C", "GIT_AUTHOR_NAME=Agentmux Demo", "GIT_AUTHOR_EMAIL=demo@localhost", "GIT_COMMITTER_NAME=Agentmux Demo", "GIT_COMMITTER_EMAIL=demo@localhost"}
 	gitRun := func(args ...string) (string, error) {
-		command := exec.CommandContext(ctx, git, append([]string{"-c", "core.hooksPath=" + os.DevNull, "-c", "core.fsmonitor=false", "-C", record.Repository}, args...)...)
+		command := exec.CommandContext(ctx, git, append([]string{"-c", "core.hooksPath=" + os.DevNull, "-c", "core.fsmonitor=false", "-c", "maintenance.auto=false", "-c", "gc.auto=0", "-C", record.Repository}, args...)...)
 		command.Env = gitEnv
 		command.WaitDelay = time.Second
 		data, err := command.CombinedOutput()
@@ -165,7 +165,7 @@ func executeDemo(ctx context.Context, root, git, shell string, out io.Writer) (r
 	}
 	// Local settings keep fixture selection independent of owner ignore rules,
 	// line-ending preferences and hooks without changing any owner configuration.
-	for key, value := range map[string]string{"core.excludesFile": emptyConfig, "core.attributesFile": emptyConfig, "core.autocrlf": "false", "core.hooksPath": os.DevNull, "commit.gpgsign": "false"} {
+	for key, value := range map[string]string{"core.excludesFile": emptyConfig, "core.attributesFile": emptyConfig, "core.autocrlf": "false", "core.hooksPath": os.DevNull, "commit.gpgsign": "false", "maintenance.auto": "false", "gc.auto": "0"} {
 		if _, err := gitRun("config", "--local", key, value); err != nil {
 			return err
 		}
