@@ -6,6 +6,7 @@ import io
 import json
 import os
 from pathlib import Path
+import subprocess
 from types import SimpleNamespace
 import tempfile
 import unittest
@@ -61,6 +62,27 @@ class SubscriptionPilotTests(unittest.TestCase):
     def test_preparation_freezes_external_graders_without_starting_any_actor(self):
         with tempfile.TemporaryDirectory(prefix="amx-pilot-controls-") as temporary:
             root = Path(temporary)
+            # Preparation needs a real exact source commit, but must not depend
+            # on the checkout containing the live pilot's historical pin.
+            repository = root / "repository"
+            repository.mkdir()
+            environment = {key: value for key, value in os.environ.items()
+                           if not PILOT.DISALLOWED_ENV.fullmatch(key) and not key.startswith("GIT_")}
+            environment.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull)
+
+            def git(*arguments):
+                return subprocess.run(
+                    ["git", "-C", str(repository), "-c", "core.hooksPath=" + os.devnull,
+                     "-c", "user.name=Subscription Pilot Fixture", "-c", "user.email=fixture@example.invalid",
+                     "-c", "commit.gpgSign=false", *arguments],
+                    env=environment, check=True, capture_output=True, text=True, timeout=10,
+                ).stdout.strip()
+
+            git("init", "--quiet", "--template=")
+            (repository / "README.md").write_text("Disposable subscription preparation fixture.\n")
+            git("add", "README.md")
+            git("commit", "--quiet", "-m", "Create preparation fixture")
+            commit = git("rev-parse", "HEAD")
             marker = root / "actor-started"
             executable = root / "fixture-tool"
             executable.write_text("#!" + os.sys.executable + "\nimport sys\nfrom pathlib import Path\n"
@@ -70,14 +92,16 @@ class SubscriptionPilotTests(unittest.TestCase):
                                   "else:Path(" + repr(str(marker)) + ").touch();raise SystemExit(90)\n")
             executable.chmod(0o700)
             output = root / "study"
-            argv = ["prepare", "--output", str(output)]
+            argv = ["prepare", "--output", str(output), "--repository", str(repository), "--commit", commit]
             for name in ("codex", "claude", "amx", "go"):
                 argv += ["--" + name, str(executable)]
-            with mock.patch.dict(os.environ, {key: value for key, value in os.environ.items() if not PILOT.DISALLOWED_ENV.fullmatch(key)}, clear=True), contextlib.redirect_stdout(io.StringIO()):
+            with mock.patch.dict(os.environ, environment, clear=True), contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(PILOT.main(argv), 0)
             self.assertFalse(marker.exists())
             manifest = PILOT.load_manifest(output / "pilot.json")
             plan = json.loads((output / "plan.json").read_text())
+            self.assertEqual(manifest["source_commit"], commit)
+            self.assertEqual(plan["source"], {"repository": str(repository), "commit": commit})
             self.assertEqual(plan["repeats"] * len(plan["tasks"]) * len(plan["arms"]), 6)
             self.assertTrue(all(arm["timeout_seconds"] == 480 for arm in plan["arms"]))
             self.assertEqual(output.stat().st_mode & 0o777, 0o700)
