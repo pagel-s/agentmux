@@ -59,6 +59,39 @@ class SubscriptionPilotTests(unittest.TestCase):
             with self.subTest(override=override), self.assertRaises(ValueError):
                 PILOT.native_arguments("claude", ["--print", override], manifest)
 
+    def test_fresh_native_argv_normalizes_forced_booleans(self):
+        manifest = {"models": {"codex": "pinned-codex", "claude": "pinned-claude"}}
+        # Actual fresh-conversation argv assembled by the Go native harnesses.
+        fixtures = {
+            "codex": (["exec", "--json", "--color", "never", "--sandbox", "workspace-write",
+                       "--model", "old-codex", "--ephemeral", "-"],
+                      ("--ignore-user-config", "--ignore-rules", "--ephemeral")),
+            "claude": (["--safe-mode", "--print", "--input-format", "stream-json", "--output-format",
+                        "stream-json", "--verbose", "--no-session-persistence", "--permission-mode", "dontAsk",
+                        "--model", "old-claude"], ("--safe-mode", "--strict-mcp-config")),
+        }
+        for provider, (fresh, forced) in fixtures.items():
+            for supplied in (fresh, [fresh[0], *forced, *forced, *fresh[1:]]):
+                with self.subTest(provider=provider, supplied=supplied):
+                    args = PILOT.native_arguments(provider, supplied, manifest)
+                    for flag in forced:
+                        self.assertEqual(args.count(flag), 1)
+                    self.assertEqual(args.count("--model"), 1)
+                    self.assertEqual(args[args.index("--model") + 1], manifest["models"][provider])
+                    self.assertNotIn("old-" + provider, args)
+                    if provider == "codex":
+                        self.assertEqual(args[args.index("--sandbox") + 1], "workspace-write")
+                        self.assertIn('forced_login_method="chatgpt"', args)
+                        self.assertIn('model_provider="openai"', args)
+                        self.assertEqual(args[-1], "-")
+                    else:
+                        self.assertEqual(args[args.index("--permission-mode") + 1], "dontAsk")
+                        self.assertEqual(args[args.index("--setting-sources") + 1], "")
+                        self.assertEqual(args[args.index("--mcp-config") + 1], '{"mcpServers":{}}')
+            for flag in forced:
+                with self.subTest(provider=provider, disabled=flag), self.assertRaises(ValueError):
+                    PILOT.native_arguments(provider, [*fresh, flag + "=false"], manifest)
+
     def test_preparation_freezes_external_graders_without_starting_any_actor(self):
         with tempfile.TemporaryDirectory(prefix="amx-pilot-controls-") as temporary:
             root = Path(temporary)

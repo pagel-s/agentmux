@@ -131,6 +131,21 @@ def strip_model(arguments):
     return result
 
 
+def strip_forced_booleans(arguments, flags):
+    """The wrapper emits these enabled flags once; preserve literal prompt data."""
+    result, literal = [], False
+    for value in arguments:
+        if value == "--":
+            literal = True
+        if not literal:
+            require(not any(value.startswith(flag + "=") for flag in flags),
+                    "pinned boolean options accept only their forced enabled form")
+            if value in flags:
+                continue
+        result.append(value)
+    return result
+
+
 def native_arguments(provider, arguments, manifest):
     arguments = strip_model(arguments)
     if provider == "codex":
@@ -145,13 +160,16 @@ def native_arguments(provider, arguments, manifest):
                 require(index + 1 < len(arguments) and arguments[index + 1] in {"workspace-write", "read-only"}, "pilot requires native sandbox")
             if value.startswith("--sandbox="):
                 require(value.split("=", 1)[1] in {"workspace-write", "read-only"}, "pilot requires native sandbox")
-        return ["exec", "--ignore-user-config", "--ignore-rules", "--ephemeral",
+        forced = ("--ignore-user-config", "--ignore-rules", "--ephemeral")
+        arguments = strip_forced_booleans(arguments[1:], forced)
+        return ["exec", *forced,
                 "-c", 'forced_login_method="chatgpt"', "-c", 'model_provider="openai"',
                 "-c", 'approval_policy="never"', "-c", 'model_reasoning_effort="medium"',
-                "-c", "features.multi_agent=false", "--model", manifest["models"]["codex"], *arguments[1:]]
+                "-c", "features.multi_agent=false", "--model", manifest["models"]["codex"], *arguments]
     forbidden = ("--bare", "--settings", "--setting-sources", "--fallback-model", "--betas", "--plugin-dir", "--mcp-config", "--resume", "--continue", "--agents")
     require(not any(value == flag or value.startswith(flag + "=") for value in arguments for flag in forbidden),
             "Claude invocation attempted to override the pinned subscription profile")
+    arguments = strip_forced_booleans(arguments, ("--safe-mode", "--strict-mcp-config"))
     return ["--safe-mode", "--setting-sources", "", "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}',
             "--model", manifest["models"]["claude"], "--effort", "medium", *arguments]
 

@@ -44,6 +44,25 @@ security audit. The [subscription pilot](evaluation.md) has frozen contract
 graders and route guards; preparation and metadata checks alone are not measured
 model or competitor outcomes.
 
+A [subscription-route smoke](assets/quality/subscription-smoke-2026-11-03.json)
+completed a newly authored Go exercise in 86.541 seconds using Codex 0.166.0
+with ChatGPT authentication and Claude Code 2.1.317 with first-party Pro
+subscription authentication. Four native CLI sessions ran. Controller checks and
+the frozen external grader passed; the confirmed patch applied only to the
+fixture and independently reproduced its final files. Observed process cleanup
+was clean. The record identifies the source build, rather than claiming that a
+later release archive was used.
+
+Both model reviews approved without findings and reported not running tests.
+Their approvals are separate from controller and external test evidence. The
+preceding duplicate-flag setup failure remains recorded. The workflow's `sonnet`
+profile was overridden by the pinned `claude-sonnet-5-5` request; the provider's
+resolved model and inference-request count remain unknown. This small route
+check establishes no comparative productivity or long-term reliability result.
+It also identifies a future optimization: avoid the response and second-review
+turns after an exact initial approval, with explicit skip evidence and unchanged
+final checks, review freshness and application guards.
+
 Use [workflow validation](workflow-validation.md) for engineering checks,
 [evaluation](evaluation.md) for usability and comparative task studies, and
 [release verification](releasing.md) for the bytes delivered to users.
