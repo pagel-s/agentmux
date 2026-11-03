@@ -75,11 +75,11 @@ Full acceptance uses a freshly built Agentmux binary, the production broker,
 managed launcher, two actual Pi TUI workers and disposable tmux sessions:
 
 ```sh
-go build -o bin/agentmux ./cmd/agentmux
-python3 internal/nativebridge/pi/testdata/native_broker.py --binary bin/agentmux
-python3 internal/nativebridge/pi/testdata/native_broker.py --binary bin/agentmux --sandbox bubblewrap
-python3 internal/nativebridge/pi/testdata/native_broker.py --binary bin/agentmux --recovery
-python3 internal/nativebridge/pi/testdata/native_broker.py --binary bin/agentmux --sandbox bubblewrap --recovery
+go build -o bin/amx ./cmd/agentmux
+python3 internal/nativebridge/pi/testdata/native_broker.py --binary bin/amx
+python3 internal/nativebridge/pi/testdata/native_broker.py --binary bin/amx --sandbox bubblewrap
+python3 internal/nativebridge/pi/testdata/native_broker.py --binary bin/amx --recovery
+python3 internal/nativebridge/pi/testdata/native_broker.py --binary bin/amx --sandbox bubblewrap --recovery
 ```
 
 Both variants cover Manual, exact Review approval, Auto, draft preservation,

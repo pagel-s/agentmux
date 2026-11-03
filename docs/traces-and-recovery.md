@@ -82,9 +82,24 @@ an agent are not performed. A missing/invalid source stops new claims.
 An interactive native process retains its prepared snapshot until exit;
 relaunch it when a refreshed source must be loaded.
 
-Use `managed activity`, `managed status`, `task.list`, `task.get` and
-`conversation.get` to inspect state. Delivery uncertainty is preserved after a
-broker crash or transport loss. Stop old workers before any owner resolution:
+With a running broker, current source builds provide direct owner inspection:
+
+```sh
+amx tasks --status running --state STATE
+amx task TASK_ID --state STATE
+amx task TASK_ID --open --state STATE
+```
+
+`--open` pins the exact task in the workbench, including older tasks and retired
+recipients. It shows recorded delivery, current recovery evidence and the
+explicit task/version review; opening never retries or resolves the task.
+These shortcuts are additions after v0.12.0. Trace verification and bundle
+inspection above also work without a running broker.
+
+The lower-level `managed activity`, `managed status`, `task.list`, `task.get`
+and `conversation.status` remain available for inspecting state. Delivery
+uncertainty is preserved after a broker crash or transport loss. Stop old
+workers before any owner resolution:
 
 ```bash
 amx managed down --state STATE

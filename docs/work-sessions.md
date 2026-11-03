@@ -17,6 +17,11 @@ managed task execution. Both modes share the coordination broker and its permiss
 Each agent has one terminal/worker lock. Changing interaction mode requires a
 new launch definition/run rather than a second process sharing a conversation.
 
+Current source builds add `amx context`, `amx task` / `tasks`, exact task opening
+with `task ID --open`, the searchable running-workspace chooser and direct
+session task history in Actions. These additions are newer than the published
+v0.12.0 binaries; see [installation](getting-started/installation.md#build-from-source).
+
 ## Recognize sessions throughout the day
 
 Use a task title such as “Fix login redirect” to recognize a conversation. Titles
@@ -41,7 +46,8 @@ In the terminal press Ctrl+P (or `/`) to find a session by task, project,
 provider, ID or terminal location. Enter opens the exact native terminal; Tab
 selects it in the workbench; Esc cancels. Discovered terminals open details
 for their original terminal instead. `L` edits the selected task
-title. `N` asks what you are working on and generates an ID automatically. In the
+title. `N` asks for an optional title and reviews a new generated ID using the
+selected session's provider, project and coordinated/native-only choice. In the
 web app use **Find a session**, **Rename**, and **Sessions**. Titles are labels,
 not role instructions; editing one never restarts the native conversation.
 When adding a session, `--harness` selects Claude Code, Codex, Pi or prompt-free
@@ -65,8 +71,12 @@ current role when claiming the next task. Native conversations stay running and
 receive an informational inbox notice; `managed call identity` returns the
 current role and `role_version`. Manual mode leaves it in the broker inbox;
 Review/Auto can deliver an attributed role/boundary notice through the native
-adapter. Roles grant no broker permissions. **N** includes an explicit
-coordinated/native-only profile choice before the optional role step.
+adapter. Roles grant no broker permissions. In the quick **N** flow, **Ctrl+O**
+opens advanced provider, project, coordinated/native-only and role settings;
+Actions also exposes **Advanced new session**. The quick review explicitly shows
+the provider-default model and trusted local host execution. It does not copy
+an existing model override or sandbox; use explicit CLI launch flags for those
+choices.
 
 | Name or ID | Where to use it |
 | --- | --- |
@@ -93,7 +103,9 @@ amx web --open
 ```
 
 `start --detach` starts without attachment. Commands accept `--session NAME` or
-`--state DIRECTORY`; the default session is `work`. These are alternative selectors
+`--state DIRECTORY`. Inside an owned tmux attachment, an omitted selector uses
+that verified workspace; outside, ordinary commands default to `work`.
+`start` always defaults to `work` when no selector is given. These are alternative selectors
 for existing workspaces: supplying both is rejected. `start` may combine them to
 name a workspace stored in a custom directory. Do not reuse a saved session
 for a different project or definition. `down` stops owned agents and broker in
@@ -152,8 +164,8 @@ path. A failed or exhausted live check reports unknown instead of inventing a
 stopped process; opening an unknown workspace attempts observation without starting
 agents.
 
-The current directory does not select a workspace for later commands. If you
-used `start --session api`, keep using `--session api`, including on `add`,
+The current directory does not select a workspace for later commands. Outside
+an owned attachment, if you used `start --session api`, keep using `--session api`, including on `add`,
 `sessions`, `connect`, `attach`, `web` and `down`. For a second workspace:
 
 ```sh
@@ -162,6 +174,14 @@ amx start --session billing --project /path/to/billing
 amx attach codex --session billing
 amx dashboard --session billing
 ```
+
+With a current source build, `amx context --session billing` explains the target,
+selection source and runtime status without attaching or starting agents.
+Bare `amx` / `amx a` outside an attachment uses a sole running workspace or
+offers a running-workspace chooser. In that chooser, `/` or Ctrl+F starts a
+name/path/status filter, arrows or Ctrl+N/P choose a result, Ctrl+U clears and
+Enter opens its exact state path. This selection does not change the default
+for later ID-based commands in an unrelated shell.
 
 If `start` reports a different saved project, use `attach --session NAME` to
 reopen that workspace, or choose a fresh name for the new project. If you only
@@ -176,11 +196,28 @@ normal tmux keys and last-session reattachment, see
 [terminal folders and layouts](terminal-workflow.md). Tab switches sidebar/content
 focus; ↑/↓ navigates that focused area and ←/→ changes views.
 
-Tasks in both consoles browse the complete broker history. In the terminal,
+Tasks in both consoles browse complete retained broker history. In the terminal,
 `PgDn` loads older records, `PgUp` returns toward newer records and `f` searches
 instructions, results or IDs; an empty search clears the filter. Web Tasks offers
 search, recipient/state filters and Load older. These pages do not include human
 turns typed only into a native provider's own conversation UI.
+
+Current source builds also expose direct CLI inspection:
+
+```sh
+amx tasks --to codex --query "login" --limit 25 --session billing
+amx task TASK_ID --session billing
+amx task TASK_ID --open --session billing
+```
+
+`tasks` pages retained history newest first; its **More** command preserves the
+workspace and filters. `task --open` loads the exact task directly, even when
+it is older than the first page or its recipient is retired. It shows the
+current task/version, instruction, result and delivery/recovery evidence.
+**Ctrl+K** opens recovery actions when available; confirmation keeps the exact
+task/version. Opening never retries, resolves, cancels or approves a task.
+Terminal/web Actions offers **Tasks for selected session** to reset old filters
+and open that recipient's history. Web attention rows also offer **Inspect tasks**.
 
 The coding preset preserves the normal local Claude/Codex environment, tools,
 skills, MCP configuration, native approval prompts, login and history. It does
@@ -238,7 +275,7 @@ teams; neither operation bypasses those teams' membership rules.
 
 For several independent groups, save the **Group**, **Board**, and **Memory**
 values printed by each `collaborate` call. The web app lists them in
-**Teams → Owner collaboration groups**; select the exact board in the Board
+**Groups & teams → Owner collaboration groups**; select the exact board in the Board
 view or the exact memory namespace in Memory.
 
 ```sh
@@ -352,18 +389,20 @@ active view and selected record; the footer shows the actions available there.
 Use Left/Right or a view number to switch between all eight views.
 Tab changes sidebar/content focus. Up/Down navigates the focused area.
 Connections and Teams use h/l or Alt-Left/Alt-Right for their recipient/target.
+Below 100 columns, the terminal labels **Connections** as **Links** and
+**Existing terminals** as **Existing**; their view numbers and controls stay the same.
 In an editor, printable characters are text;
 use **Ctrl-G** for help and **Esc** to cancel before using navigation shortcuts.
 
 | Key | Action |
 | --- | --- |
 | ↑/↓ or j/k | Navigate the focused sidebar or content |
-| Enter | Focus its tracked terminal; an exited native CLI opens a same-ID relaunch review. Outside tmux, open an independent attachment |
+| Enter | Open the focused native terminal or content reader; an exited native CLI opens a same-ID relaunch review. Outside tmux, open an independent attachment |
 | Ctrl+P or / | Find by task, project, provider, ID or terminal location; Enter opens native, Tab selects here, Esc cancels |
 | Shift+L | Edit the selected session's human task title; empty clears |
 | Shift+V | Edit its coordinated role with CAS; prompt-free native sessions reject injected roles |
 | Ctrl+K | Search and invoke Actions with exact targets and unavailable reasons |
-| Shift+N | Quick new session using selected provider/project; optional title then review |
+| Shift+N | Quick new session using selected provider/project/profile; optional title, then review model default and host execution; Ctrl+O opens advanced settings |
 | Ctrl+W / Shift+W | Choose another workspace; an attachment hands off interactively and retains prior drafts |
 | Shift+U | Deliberately relaunch the selected exited owned native session |
 | ? / Ctrl-G | Open context help outside an editor / while editing or reviewing |
@@ -378,8 +417,10 @@ use **Ctrl-G** for help and **Esc** to cancel before using navigation shortcuts.
 | e / t in Teams | Edit team name/mission / propose the selected member as owner; acceptance is separate |
 | b / v in Teams | Compose to its board / inspect its shared memory as owner |
 | [ / ] in Events; Home | Inspect an event; return to following the newest event |
+| PgDn / PgUp / Shift+F in Board or Events | Page older / newer retained broker history / search within its scope |
+| g in Events | Toggle all events versus the selected session's events |
 | P / R / S / T in Events | Research pause / resume / one phase / stop, each with a reason and separate review |
-| Shift+N / x | Add a native session with an explicit profile / revoke the selected session and descendants; owned shutdown is requested |
+| x | Revoke the selected session and descendants after review; owned shutdown is requested |
 | s / b | Compose a direct message/instruction or selected shared-board note |
 | + / − in Board | Select an allowed board namespace |
 | Enter / Esc in composer | Submit / cancel; Alt-Enter inserts a newline |
@@ -389,7 +430,7 @@ use **Ctrl-G** for help and **Esc** to cancel before using navigation shortcuts.
 | [ / ] then r in Board | Select a message and reply |
 | h/l or Alt+←/→ in Connections | Select the recipient for the selected sender |
 | c / d in Connections | Connect selected sender/recipient in a group / make sender independent |
-| c in Sessions | Prepare a bridge for the selected observed terminal; paste setup manually |
+| c in Existing terminals | Prepare a bridge for the selected observed terminal; paste setup manually |
 | m / p / i in Connections | Toggle messages / pings / commands |
 | Shift+M / Shift+P / Shift+I in Connections | Reset the selected explicit override to the underlying effective policy |
 | [ / ] in Memory | Select a board or memory namespace |
@@ -399,14 +440,15 @@ use **Ctrl-G** for help and **Esc** to cancel before using navigation shortcuts.
 | e / n in memory entries | Edit an existing entry / create a key and value |
 | [ / ] in Tasks | Select a task in the loaded history page |
 | PgDn / PgUp / f in Tasks | Load older / newer history pages / search all task instructions, results or IDs |
+| y / z in Tasks | Toggle recipient / cycle state; an explicit filter leaves a CLI-opened exact-task view |
 | r / c in Tasks | Follow up / cancel |
-| o in Board, Agents, Memory, Tasks, Sessions, Teams or Events | Open the selected loaded content in a frozen, read-only reader |
+| o in Board, Sessions, Memory, Tasks, Existing terminals, Teams or Events | Open the selected loaded content in a frozen, read-only reader |
 | ↑/↓ or j/k in the reader | Scroll one line |
 | PgUp / PgDn; Home / End in the reader | Scroll a page; jump to the start / end |
 | Esc / q / o in the reader | Return to the previous view while keeping the observer open |
 | Ctrl-R outside a composer | Restore the last failed message, board, memory, role or new-session draft for review |
 | Ctrl-R inside a memory/role editor | Review the latest saved value/version alongside the retained draft; adopting a version does not save |
-| Shift+B in Board or Agents | Review four agent admission-budget fields, then confirm with the current resource version |
+| Shift+B in Board or Sessions | Review four agent admission-budget fields, then confirm with the current resource version |
 | a | Pause/resume configured autonomy; does not stop in-flight work |
 | q | Detach from the persistent workbench, or close a popup/standalone view; team stays running |
 
@@ -430,10 +472,10 @@ shows an exact attach command for native input in another server.
 Use `o` when a preview is too short. The reader keeps the selected record and
 its loaded text fixed while activity refreshes, so scrolling cannot switch to a
 different result. Tasks show the result first, followed by the instruction and
-provenance/reported trace. Agents shows session details and a loaded terminal
+provenance/reported trace. The Sessions view shows session details and a loaded terminal
 preview or unconfirmed external-bridge setup. Memory shows the selected entry,
 destination author and asserted source claims, or full boundary details;
-Sessions can show loaded bridge setup, and Teams/Events show full record details.
+Existing terminals can show loaded bridge setup, and Teams/Events show full record details.
 Previously loaded content remains readable offline. The reader does not fetch
 older history; close and reopen it to read a refreshed record. Control and
 mutation keys are inactive while reading.
@@ -457,8 +499,9 @@ Offline or failed reviews retain the draft without adopting a new version.
 Human input goes directly to the native CLI, including its normal approval
 prompts. Broker messages do not inject keystrokes or impersonate user input.
 In the default Manual mode, ask an interactive agent to read its broker inbox.
-For integrated Claude, Codex and Pi sessions, choose Review or Auto in Agents
-or with `amx delivery ID review|auto` to enable attributed native turns.
+For integrated Claude, Codex and Pi sessions, choose Review or Auto in terminal
+**Sessions** or web **Session detail**, or use `amx delivery ID review|auto` to
+enable attributed native turns.
 Sender Commands permission and receiver delivery mode are separate. See
 [native delivery](native-delivery.md) for approvals, subscriptions, lifecycle
 evidence, limits and provider-specific capabilities.
@@ -501,10 +544,10 @@ Ctrl-C stops the web process independently of the team. Never give its private
 owner link to agents.
 
 The app offers agent selection, read-only terminal previews, recent messages,
-follow-ups with explicit intent, complete searchable task history, cancellation,
+follow-ups with explicit intent, searchable retained message/event/task history, cancellation,
 shared-memory inspection and versioned editing, role/profile setup, autonomy and
 admission controls, and the same live permission switches as the terminal
-dashboard. Board is the main focus pane. Graph shows directional message/ping/command
+dashboard. Board is the main focus pane. **Connections** shows directional message/ping/command
 connections and shared board/memory access; select a connection to adjust it.
 In v0.12.0, enabled connections automatically group connected
 nodes. Denied preview edges do not affect arrangement. Dragging or **Shift+Arrow**
@@ -518,8 +561,10 @@ input remains in tmux.
 Spawned agents retain inherited delegation limits; live overlay edits currently
 apply to configured agents and owner-added native/bridged sessions. The graph
 displays at most 40 active agents, keeping selected identities visible; the roster
-reads every broker registry page. Recent activity is bounded to 40 records per
-category, while Tasks separately pages the complete broker task history. Copy
+reads every broker registry page. Recent activity snapshots are bounded to 40
+records per category; Board, Events and Tasks separately search/page retained
+broker history. Current source Actions opens the selected session's task history,
+and attention rows offer **Inspect tasks** for historical recipients too. Copy
 the attach command or focus an existing tmux window for native
 input. Terminal emulation remains in tmux.
 
@@ -582,7 +627,7 @@ its pending destination invitation and both current team versions.
 
 `capacity.get {}` and `identity.capacity` report the caller's remaining lifetime
 spawns/teams, depth, team slots, templates and admission reasons; the owner can
-inspect a selected agent. A snapshot reserves no capacity. **B** in Board/Agents
+inspect a selected agent. A snapshot reserves no capacity. **Shift+B** in Board/Sessions
 reviews the selected agent's four admission-budget fields; the web uses the same
 CAS broker rules. Lower-level owner `capacity.update` can edit complete agent or
 session admission-budget objects and shorten the admission deadline. It cannot
@@ -605,9 +650,12 @@ skipping their guarantees. Bubblewrap host/none networking and process resource
 limits remain available. Managed workers retain existing hardening features.
 Native tool output in terminal/history is not a complete immutable broker trace.
 
-Dashboards page the agent registry, task history and memory entries. Board/Event
-activity remains a bounded recent window; these are not complete native-provider
-transcripts or an unlimited activity archive.
+Dashboards page the agent registry, retained message/event/task history and
+memory entries. Board/Event searches and pages are scoped at the broker before
+pagination. An older controller without those history APIs exposes only a
+labeled partial recent snapshot, never a complete search or older page.
+Retained broker history is not a native-provider transcript or an unlimited
+archive of external activity.
 The owner-added registry is limited to 200 definitions, and owner collaboration
 groups to 128 lifetime groups. Permission overlays are limited to 4,096 explicit
 edge/scope overrides. Switches
@@ -629,9 +677,9 @@ context until the participant accepts. Team namespace access follows actual
 membership, including parent-delegation and revocation fences. Membership changes
 invalidate displayed permission versions immediately.
 
-The Agent view distinguishes automatic admission state from accepted work still
-executing, reports pending/used turn counts and persistent-history fences, and
-shows parent/template/children for spawned workers. Events report observed actor,
+Terminal **Sessions** and web **Session detail** distinguish automatic admission
+state from accepted work still executing, report pending/used turn counts and
+persistent-history fences, and show parent/template/children for spawned workers. Events report observed actor,
 subject and membership changes rather than inventing an agent's intent.
 
 Research and legacy experiment workers run headlessly. Their consoles expose

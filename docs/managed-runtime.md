@@ -31,7 +31,9 @@ Interactive `native_only: true` sessions require an empty role and omit Agentmux
 
 ## Try it without a model
 
-Build the executable using the repository's normal build flow, or run `go build -o bin/agentmux ./cmd/agentmux`. These examples use `./bin/amx` from the repository root. No provider credentials or model calls are needed for the `/bin/cat` demo.
+Run `make build` from the repository root, or build directly with
+`go build -o bin/amx ./cmd/agentmux`. These examples use `./bin/amx`. No provider
+credentials or model calls are needed for the `/bin/cat` demo.
 
 Check setup, then start the complete team detached:
 
@@ -108,6 +110,13 @@ When `--state` is omitted, `up` uses `.agentmux-state/SESSION` under the current
 Each run uses its own private `STATE/tmux.sock`, with an attempt ID on the session and tracked panes. It does not connect to the user's default tmux server. A supervisor watches the authenticated agent registry and adds windows for newly spawned agents. Worker or broker crashes are observed rather than automatically restarted. The owner workbench shows the roster, native terminal previews, coordination content, tasks, shared memory, and live permission controls. It is a content-sensitive owner surface; agents must not receive its credential. For a metadata summary, use `managed status --watch`.
 
 Use `managed activity --state DIRECTORY` for a content-sensitive owner JSON snapshot of recent messages, task results/failures, events, and reported usage. Add `--watch` for a bounded terminal view; model and message text is quoted to escape terminal controls and Unicode direction controls. This view always uses the state's owner credential, includes private coordination content, and is not an agent-facing API. The default workbench also uses the owner credential and displays coordination content. See [interactive work sessions](work-sessions.md) for its shortcuts and native terminal workflow.
+
+Current source builds also provide `amx tasks --state DIRECTORY` for filtered,
+paginated retained task history, and `amx task TASK_ID --state DIRECTORY` for
+one exact record. Add `--open` to open that task directly in the workbench,
+including an older task or retired recipient. Opening changes no task state;
+recovery still needs an explicit review of the exact task/version. These
+shortcuts are additions after v0.12.0; `managed call` remains available.
 
 `down` interrupts owned worker processes first, waits for their terminal processes to exit, and then stops the broker and supervisor. It removes only the attempt's tracked session. If termination or ownership cannot be confirmed, it reports attention and leaves the broker available for inspection. A stale stop request cannot stop a new attempt. Durable tasks and memory remain on disk. `restart` performs an explicit ordered stop/start; it does not silently retry uncertain deliveries or reset the persisted runtime budget. After a run's budget expires, start a new state directory for a new run.
 
@@ -349,4 +358,6 @@ The opt-in real tmux lifecycle test also covers startup, a durable command task,
 AGENTMUX_MANAGED_INTEGRATION=1 go test -race ./internal/managedlaunch
 ```
 
-Build `bin/agentmux` first, or set `AGENTMUX_TEST_BINARY` to an absolute built executable path. Add `AGENTMUX_SANDBOX_INTEGRATION=1` to include the real spawned bubblewrap worker test; it requires a host with usable user namespaces.
+Run `make build` first, or set `AGENTMUX_TEST_BINARY` to an absolute built
+executable path. Add `AGENTMUX_SANDBOX_INTEGRATION=1` to include the real spawned
+Bubblewrap worker test; it requires a host with usable user namespaces.

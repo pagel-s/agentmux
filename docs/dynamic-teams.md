@@ -5,7 +5,7 @@ invite collaborators. These features are off unless explicitly configured.
 Roles and self-declared leadership never grant runtime authority.
 
 Agent-created teams use invitations and participant consent. They are separate
-from owner-created collaboration groups configured with `collaborate`/Graph;
+from owner-created collaboration groups configured with `collaborate`/Connections;
 see [live permissions](live-permissions.md). Both expose scoped boards/memory,
 but joining a team never grants instruction authority. Everyday interactive
 sessions can keep their native terminals throughout; [work sessions](work-sessions.md)
@@ -217,7 +217,7 @@ Owner inspection includes each member's effective access; each participant sees
 only its own `self_access` reason and blocking ancestor. Recorded membership
 alone never asserts effective authority.
 
-The web **Teams** view edits names/purposes, reviews invitations and ownership
+The web **Groups & teams** view edits names/purposes, reviews invitations and ownership
 proposals, and accepts an ownership proposal addressed to the human `$owner`.
 It never accepts on an agent's behalf. Drafts retain their original version;
 concurrent edits require explicit version review or discard before saving.
@@ -237,7 +237,7 @@ amx managed call capacity.get --credential-file /tmp/amx-teams/owner.json \
   --json '{"agent":"lead"}'
 ```
 
-The web **Agent** view exposes these values and separately reviews changes to
+The web **Session detail** view exposes these values and separately reviews changes to
 effective session/agent admission budgets and a shorter admission deadline.
 The owner response for `capacity.get {}` includes the effective session budget;
 an inspected agent response includes its effective agent budget. All edits use

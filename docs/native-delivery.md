@@ -35,7 +35,7 @@ amx attach codex --session collaboration-test
 Review approves one exact item under the current policy version. A changed
 policy invalidates earlier approvals. For an owner-authored test instruction,
 no peer command grant is needed. To let Claude instruct Codex, enable the
-direction **Claude → Codex → Commands** in Connections/Graph, then ask Claude
+direction **Claude → Codex → Commands** in Connections, then ask Claude
 to use `instruct` through its authenticated broker CLI.
 
 Choose **Auto** explicitly to receive eligible turns without each approval:
@@ -147,13 +147,13 @@ show that a model understood an instruction or that its result is correct.
 
 ```sh
 make build
-AGENTMUX_INTEGRATION_BINARY="$PWD/bin/agentmux" \
+AGENTMUX_INTEGRATION_BINARY="$PWD/bin/amx" \
   AGENTMUX_CODEX_NATIVE_INTEGRATION=1 go test -race ./internal/nativebridge/codex
 AGENTMUX_CLAUDE_NATIVE_INTEGRATION=1 go test -race ./internal/nativebridge/claude
 AGENTMUX_PI_NATIVE_LIVE=1 go test -race ./internal/nativebridge/pi
-python3 internal/nativebridge/pi/testdata/native_broker.py --binary bin/agentmux
-python3 internal/nativebridge/pi/testdata/native_broker.py --binary bin/agentmux --sandbox bubblewrap
-python3 internal/nativebridge/pi/testdata/native_broker.py --binary bin/agentmux --sandbox bubblewrap --recovery
+python3 internal/nativebridge/pi/testdata/native_broker.py --binary bin/amx
+python3 internal/nativebridge/pi/testdata/native_broker.py --binary bin/amx --sandbox bubblewrap
+python3 internal/nativebridge/pi/testdata/native_broker.py --binary bin/amx --sandbox bubblewrap --recovery
 ```
 
 These require their installed CLIs. The full Pi workflow uses isolated profiles

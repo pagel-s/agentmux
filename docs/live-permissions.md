@@ -112,7 +112,7 @@ ceilings below permanently reserved usage fail without changing anything. New
 session ceilings validate every current agent and spawn template. No edit
 refunds a failed, cancelled or uncertain attempt, and launch configuration stays
 immutable. The same effective limits govern readiness and transactional claims.
-The terminal Agents view uses **B** for a four-field, reviewed agent-budget editor.
+The terminal **Sessions** view uses **B** for a four-field, reviewed agent-budget editor.
 
 `capacity.update {"version":2,"admission_seconds":300}` can shorten admission
 runtime from now. It cannot extend the existing process/run deadline or a previous

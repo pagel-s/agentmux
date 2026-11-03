@@ -1,0 +1,160 @@
+{
+  "schema": 1,
+  "captured_at_utc": "2026-11-03T19:51:42.881665+00:00",
+  "source_commit": "725ef1e6194b4615edcaa724168f324b104ec372",
+  "binary_version": "amx v0.12.0-9-g725ef1e (commit: 725ef1e, built: 2026-11-03)",
+  "binary_sha256": "82f18277253503c63284f06966f06b938ca51b50841ef97f527dde43d3fb64b6",
+  "browser_version": "156.0.8078.4",
+  "model_calls": 0,
+  "capture_dependencies": {
+    "python": "3.12.14",
+    "playwright": "1.64.1",
+    "pillow": "13.0.0",
+    "rich": "15.0.0"
+  },
+  "data": "Disposable scripted command-only workspace and research fixtures. Owner-supplied text, not model output. No live user workspace was used.",
+  "terminal_rendering": "Actual live tmux ANSI capture; empty trailing rows cropped; fixture label outside the captured app.",
+  "uncertainty": "A real command worker claimed an instruction, was stopped by the owner and retired after exit. Broker-retained uncertain delivery is shown without resolving or retrying.",
+  "retired_recipient": {
+    "id": "recovery",
+    "state": "retired"
+  },
+  "execution": "Explicit trusted-local command fixtures for workspace, research broker and participants. These captures do not validate filesystem/network isolation.",
+  "checked_report": "amx demo applied only to its generated fixture; amx flow report RUN --output NEWFILE.html then freshly rendered the retained evidence for capture.",
+  "reproduce": "make build; install Python playwright pillow rich and Playwright Chromium; python scripts/capture-docs.py --binary bin/amx",
+  "cleanup": {
+    "tracked_web_and_runner_processes_exited": true,
+    "owned_broker_connections_closed": true,
+    "owned_tmux_servers_stopped": true
+  },
+  "images": [
+    {
+      "file": "terminal-board.jpg",
+      "surface": "live tmux ANSI capture",
+      "fixture": "command-only workspace",
+      "sha256": "7ea1a0cbd669d4d35de6c2aa16bfa9ea84e4adb4e3296c714e9475ccbab2071a",
+      "width": 1435,
+      "height": 988
+    },
+    {
+      "file": "terminal-switcher.jpg",
+      "surface": "live tmux ANSI capture",
+      "fixture": "command-only workspace",
+      "sha256": "94cffa140fdc555037e1ea5ed40e6c7aa73998170760833ef86941e5640adc8a",
+      "width": 1435,
+      "height": 484
+    },
+    {
+      "file": "terminal-actions.jpg",
+      "surface": "live tmux ANSI capture",
+      "fixture": "command-only workspace",
+      "sha256": "5fdd7a7f8800cf6fcc288faabb498dae034345036d6a0f429f5c85f3d5f348e5",
+      "width": 1435,
+      "height": 340
+    },
+    {
+      "file": "terminal-connections.jpg",
+      "surface": "live tmux ANSI capture",
+      "fixture": "command-only workspace",
+      "sha256": "25bd180760d84d9c0bea7566ed2089aff10fa849ba4f13e391389c465a0ef791",
+      "width": 1435,
+      "height": 988
+    },
+    {
+      "file": "terminal-task-recovery.jpg",
+      "surface": "live tmux ANSI capture",
+      "fixture": "command-only workspace",
+      "sha256": "5828a111a54b8e3c17b01e454216349e0df7961750387ca3b243d5bb01e27bbb",
+      "width": 1435,
+      "height": 988
+    },
+    {
+      "file": "web-board.jpg",
+      "surface": "live browser content",
+      "fixture": "command-only owner/agent board posts",
+      "sha256": "1b41c064a99f0e15326075ac935e19f2ca45de35be64e6ef426014c990ec1c3c",
+      "width": 1440,
+      "height": 960
+    },
+    {
+      "file": "web-connections.jpg",
+      "surface": "live browser content",
+      "fixture": "current automatic graph arrangement and controls",
+      "sha256": "f984c297dd2d22f622da4ad53bfe066bff7ce8d08fbc59c5b439a4ca66cc7def",
+      "width": 1440,
+      "height": 960
+    },
+    {
+      "file": "web-teams.jpg",
+      "surface": "live browser content",
+      "fixture": "scripted consented API triage team",
+      "sha256": "c9a8c83fd6291306bd8e9d0596d46fddb01235241c624db1fb23dbade652be88",
+      "width": 1440,
+      "height": 960
+    },
+    {
+      "file": "web-groups.jpg",
+      "surface": "live browser content",
+      "fixture": "owner-configured independent collaboration pairs",
+      "sha256": "57f1cc66c40299e35db05a52414b9e4602f41ec74170810a1b966c97d3774b9f",
+      "width": 1440,
+      "height": 960
+    },
+    {
+      "file": "web-memory.jpg",
+      "surface": "live browser content",
+      "fixture": "real shared memory version and retrieval provenance",
+      "sha256": "068bf6f7aecaf456b50e8183304389a5fa9834d0bb33c376e2150f3d62237be0",
+      "width": 1440,
+      "height": 960
+    },
+    {
+      "file": "web-tasks.jpg",
+      "surface": "live browser content",
+      "fixture": "verified, failed, pending and owner-stopped uncertain command tasks",
+      "sha256": "d32e6696056e313e10b2fcb5e8fec8e89b795d1b0635b76b66aff3e604c969ab",
+      "width": 1440,
+      "height": 960
+    },
+    {
+      "file": "web-session-tasks.jpg",
+      "surface": "live browser content",
+      "fixture": "direct selected-recipient task history action",
+      "sha256": "b3c801f43c4d594574a165b0b8e83654da7ccf0ee8d15091b6d4bd15ff03b235",
+      "width": 1440,
+      "height": 960
+    },
+    {
+      "file": "web-research.jpg",
+      "surface": "live browser content",
+      "fixture": "actual deterministic public-goods fixture; one completed phase, paused before decisions",
+      "sha256": "cbfa38e64b295c8b2bffbb0ec45ebf6dd5a29084c97bb74365a50a8d822ba938",
+      "width": 1440,
+      "height": 960
+    },
+    {
+      "file": "web-research-control.jpg",
+      "surface": "live browser content",
+      "fixture": "unsubmitted reasoned intervention review",
+      "sha256": "9e9789162a54412d82f95b284e8eab4362bfee2b0647cfa9b1be7de5d7ed56e9",
+      "width": 1440,
+      "height": 960
+    },
+    {
+      "file": "web-research-teams.jpg",
+      "surface": "live browser content",
+      "fixture": "actual scripted Alice/Bob consent; Charlie outside pair",
+      "sha256": "818ae1f7a6c6d364664f5e298708ce69d5bab07e0ad8461785cde4f8790d6aa0",
+      "width": 1440,
+      "height": 960
+    },
+    {
+      "file": "checked-work-report.jpg",
+      "surface": "live browser content",
+      "fixture": "actual amx demo report; deterministic command checks and fixture-only application, no model quality claim",
+      "sha256": "78d91f2ad404a2f7a21071db0a604c6f0fe50d27ff53fa345397ab125bd56a5e",
+      "width": 1440,
+      "height": 1080
+    }
+  ]
+}

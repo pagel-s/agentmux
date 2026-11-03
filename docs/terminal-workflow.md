@@ -13,7 +13,7 @@ current view's content. The purple header says where **Up/Down** acts.
 | --- | --- | --- |
 | Sessions sidebar | Select another agent | Open its native terminal |
 | Board | Select a message | Read the full message |
-| Links | Select a recipient; sidebar selects the sender | Open the selected sender's native terminal |
+| Connections / Links | Select a recipient; sidebar selects the sender | Open the selected sender's native terminal |
 | Memory | Select a namespace or entry | Open entries or read the selected entry |
 | Tasks | Select a task | Read the task and its result |
 | Existing terminals | Select an observed terminal | Show its original terminal details |

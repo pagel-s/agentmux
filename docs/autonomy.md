@@ -77,7 +77,7 @@ amx managed call capacity.get --credential-file STATE/owner.json \
 ```
 
 Replace `STATE` and `reviewer` with the actual workspace directory and stable
-agent ID. The terminal workbench and web **Agent** view expose the same status;
+agent ID. The terminal workbench and web **Session detail** view expose the same status;
 web also reviews effective token/cost admission edits separately from pause.
 
 Read the latest `autonomy.status {"agent":"reviewer"}` and pass its version to `autonomy.control`:

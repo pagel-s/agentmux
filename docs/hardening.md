@@ -211,7 +211,8 @@ Opt-in integration tests exercise real Bubblewrap namespaces without model
 calls:
 
 ```sh
-AGENTMUX_INTEGRATION_BINARY="$PWD/bin/agentmux" go test ./internal/egress ./internal/capsule \
+make build
+AGENTMUX_INTEGRATION_BINARY="$PWD/bin/amx" go test ./internal/egress ./internal/capsule \
   -run 'TestRealNamespaceProxyCannotBypassAllowlist|TestRealCapsuleENOSPCAndHistoryCheckpoint' -count=1
 ```
 

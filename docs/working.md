@@ -10,7 +10,20 @@ Available in [Agentmux v0.12.0](getting-started/installation.md). To inspect a
 checked fixture before configuring providers, start with
 [`amx demo`](getting-started/first-result.md).
 
-[![Checked coding journey: preview, isolated result collection when selected, inspection and explicit application](assets/guide/workflow-journey.svg)](assets/guide/workflow-journey.svg)
+[![Actual offline report from the model-free demo, showing saved checks and the retained change](assets/guide/checked-work-report.jpg?v=78d91f2ad404)](getting-started/first-result.md)
+
+The report above comes from `amx demo`, a deterministic fixture with no model
+calls. For your own task, the daily sequence is:
+
+| Step | Command | What happens |
+| --- | --- | --- |
+| Preview | `amx work "Change" -- CHECK` | Review the plan without starting models |
+| Run | Add `--allow-models` before `--` | Implement, review and check in a retained worktree |
+| Inspect | `amx work show RUN_ID --open` | Read fresh report evidence and the patch |
+| Apply | `amx work apply RUN_ID` | Recheck and apply the selected result explicitly |
+
+Use a current source build for the run-ID listing and report opening; the base
+journey is available in v0.12.0. See [inspection](#inspect-the-result) for older releases.
 
 The five execution phases retain checks and review evidence. Failed or uncertain
 work remains available to inspect; it does not become an approved application.

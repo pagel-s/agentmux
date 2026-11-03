@@ -37,6 +37,13 @@ workspace switching and individual-session recovery. A
 [source build](getting-started/installation.md#build-from-source) remains an
 alternative to release binaries.
 
+Current `main` includes daily power-user shortcuts beyond the published
+v0.12.0 release: `amx context` explains the selected workspace, `amx tasks`
+searches retained delegation history, and `amx task ID --open -s NAME` opens
+the exact task's evidence and recovery controls. Both terminal and web Actions
+offer **Tasks for selected session**. Build from source for these controls;
+see [everyday commands](getting-started/everyday-commands.md) for the five daily loops.
+
 Keep the [everyday command reference](commands.md#everyday-work-sessions) handy
 for selecting named workspaces, adding or connecting sessions, and choosing a
 collaboration group's board. For a repeated-round study, start with the

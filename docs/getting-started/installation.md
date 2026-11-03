@@ -12,6 +12,12 @@ provides Linux/macOS binaries for x86-64 and ARM64. It includes `amx demo`,
 [`amx work`](../working.md), [`amx flow`](../workflows.md) and native terminal
 sessions. The managed runtime and workbench remain experimental.
 
+Current `main` has newer daily controls: `amx context`, `amx task` / `tasks`,
+exact task opening with `task ID --open`, a searchable running-workspace chooser,
+and `work list --limit` / `work show --open`. Use the
+[source installation](#build-from-source) for these features. The v0.12.0
+archives are unchanged and do not contain them.
+
 For publicly accessible release assets, download the versioned installer from
 GitHub, inspect it, then run it with Python 3. These commands also require `curl`.
 The installer downloads the matching platform archive and checksum manifest
@@ -58,8 +64,9 @@ amx demo
 SHA256 and the executable version before atomically installing `amx`. A previous
 `amx → agentmux` shortcut is migrated to a real `amx` executable. Its exact old
 executable is retained as an `amx.backup-*` file; the recognized old `agentmux`
-path is retired. Unrelated symlinks and commands are never silently replaced.
-A fresh installation creates only `amx`.
+path is retired. Unrecognized symlink destinations are refused. Replacing an
+existing regular executable requires the explicit `--replace` flag and retains
+its previous inode as a backup. A fresh installation creates only `amx`.
 
 `amx demo` prints the location of its disposable repository and retained check,
 patch and report evidence. See [your first checked result](first-result.md) for
@@ -132,6 +139,8 @@ Check the source workflow commands after installation:
 amx demo
 amx work --help
 amx flow --help
+amx task --help
+amx context --help
 ```
 
 `amx work "Describe the change" -- CHECK [ARG...]` previews a checked coding
