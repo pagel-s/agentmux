@@ -9,6 +9,11 @@ integrate that patch into your project until you explicitly apply it.
 This command is available in the current source preview. Build and install this
 checkout with `make install`; the earlier published binary predates this journey.
 
+[![Checked coding journey: preview, isolated result collection when selected, inspection and explicit application](assets/guide/workflow-journey.svg)](assets/guide/workflow-journey.svg)
+
+The five execution phases retain checks and review evidence. Failed or uncertain
+work remains available to inspect; it does not become an approved application.
+
 ## Preview your first request
 
 From an existing Git project with an initial commit:

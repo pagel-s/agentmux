@@ -14,6 +14,11 @@ Responses endpoint conformance. It explicitly distinguishes genuine local
 Transformers/Ollama inference from the earlier vLLM-specific evidence below.
 Neither table is a guarantee for an untested account, tool/MCP or model version.
 
+For the newer `amx work` and `amx flow` coding journeys, use the separate
+[workflow validation record](workflow-validation.md). Its fresh-review, tool
+permission and full-isolation evidence is distinct from this managed provider
+matrix; a successful managed turn does not establish a workflow's configuration.
+
 | Harness or service | Measured version | Structured protocol | Persistence evidence | Tool evidence and boundary |
 | --- | --- | --- | --- | --- |
 | Claude Code | 2.1.316 | Print mode, stream-JSON input/output; result/permission-denial inspection | Three confirmed turns in one private native conversation, across worker processes and a broker restart | Real coding and authenticated team coordination inside Bubblewrap; explicit `Read,Write,Edit,Bash` allowlist, `safe-mode`, `dontAsk`; independent owner verification |

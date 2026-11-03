@@ -16,6 +16,11 @@ claims live steering support. By default each turn starts fresh; an explicit
 requests per agent and provides a deadline; a ten-minute fallback applies if a
 longer or absent deadline would otherwise leave a process unattended.
 
+`Conversation{Mode: "fresh"}` rejects native session-selection controls in
+owner argv and gives Codex `--ephemeral`. It cannot include an ID or transcript
+directory. A nil `Conversation` retains the trusted caller compatibility path,
+so it does not perform these explicit fresh-session argument checks.
+
 `Conversation{Mode: "create"|"resume", ID, Dir}` supports Claude Code, Codex,
 and Pi. `Capabilities(name)` reports this explicitly; Antigravity and command
 harnesses reject persistence instead of pretending they resumed. Claude/Pi
@@ -48,6 +53,13 @@ this choice only for a Codex worker with enforced Bubblewrap isolation and
 never selects it automatically after a native sandbox failure. Native approval
 handling is not bypassed globally, and no host policy is changed. This supports
 hosts that disallow nested user namespaces while retaining the outer boundary.
+
+The owner-driven [`work`/`flow` runner](../../docs/workflows.md) uses this package
+with its own fresh-session, process-containment and isolation policy. It rejects
+native resume/continue controls and uses ephemeral Codex sessions. Those are
+caller guarantees: this package still supports the explicit managed
+`Conversation` contract above. Workflow full isolation selects its inspecting
+egress proxy separately from the managed destination proxy.
 
 | Harness | Input / completion | Endpoint and authentication |
 | --- | --- | --- |

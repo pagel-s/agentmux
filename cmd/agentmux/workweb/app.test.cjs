@@ -1727,6 +1727,239 @@ function graphKeyboardContext() {
   return { ...f, canvas };
 }
 
+function graphLayoutContext(ids = ["a", "b", "c", "d", "e", "f"]) {
+  const f = graphKeyboardContext(), storage = new Map(), policies = new Map(), reads = [];
+  f.context.snapshot.agents = ids.map(id => ({id, state:"active", config:{harness:"command"}}));
+  f.context.localStorage = {getItem:key => storage.get(key) || null, setItem:(key, value) => storage.set(key, value)};
+  const setConnections = connections => {
+    const version = f.context.snapshot.boundaries.version + 1;
+    for (const id of ids) policies.set(id, {
+      agent:id, version, boards:[], memory:[],
+      targets:connections.filter(([from]) => from === id).map(([, to, actions]) => ({to, actions:actions || ["message.send"]})),
+    });
+    f.context.snapshot.boundaries = policies.get(f.context.selected) || policies.get(ids[0]);
+  };
+  f.context.call = async (operation, args) => {
+    assert.equal(operation, "boundaries.get", "graph layout must only read permissions");
+    reads.push(args.agent);
+    return policies.get(args.agent);
+  };
+  setConnections([]);
+  return {...f, storage, policies, reads, setConnections};
+}
+
+function graphNodePositions(f) {
+  return Object.fromEntries(f.node("interaction-graph").querySelectorAll("[data-node]")
+    .map(node => [node.dataset.node, {x:Number(node.dataset.focusX), y:Number(node.dataset.focusY)}])
+    .sort(([a], [b]) => a.localeCompare(b)));
+}
+
+function assertGraphCardsDoNotOverlap(positions) {
+  const entries = Object.entries(positions);
+  for (let index = 0; index < entries.length; index++) {
+    const [key, point] = entries[index];
+    assert.ok(Number.isFinite(point.x) && Number.isFinite(point.y), key + " has finite coordinates");
+    assert.ok(point.x >= 80 && point.x <= 880 && point.y >= 50, key + " stays within readable graph bounds");
+    for (const [otherKey, other] of entries.slice(0, index))
+      assert.ok(Math.abs(point.x-other.x) >= 144 || Math.abs(point.y-other.y) >= 56,
+        key + " overlaps " + otherKey);
+  }
+}
+
+test("connected graph layout is deterministic across input order, reverse edges and duplicate permissions", () => {
+  const f = graphKeyboardContext(), nodes = "abcdefgh".split("").map(id => ({key:"agent:" + id}));
+  const edge = (source, target, enabled = true) => ({source:"agent:" + source, target:"agent:" + target, enabled});
+  const edges = [edge("a", "h"), edge("h", "c"), edge("b", "g"), edge("e", "f")];
+  const layout = (n, e) => JSON.parse(JSON.stringify(f.context.graphConnectedLayout(n, f.context.graphTopologyPairs(n, e))));
+  const expected = layout(nodes, edges);
+  const reordered = [nodes[6], nodes[2], nodes[7], nodes[0], nodes[4], nodes[1], nodes[5], nodes[3]];
+  const redundant = [...edges].reverse().flatMap(value => [value, {...value, source:value.target, target:value.source}, value]);
+  redundant.push(edge("a", "b", false), edge("a", "a"), edge("a", "outside"));
+  assert.deepEqual(layout(reordered, redundant), expected,
+    "permission direction, duplicates and denied or missing endpoints must not rearrange cards");
+  assertGraphCardsDoNotOverlap(expected);
+});
+
+test("adding and removing a connection visibly groups its sessions and restores automatic placement", async () => {
+  const f = graphLayoutContext();
+  await f.context.renderGraph();
+  const before = graphNodePositions(f), distance = positions => Math.hypot(positions["agent:a"].x-positions["agent:d"].x, positions["agent:a"].y-positions["agent:d"].y);
+  f.setConnections([["a", "d"]]);
+  await f.context.renderGraph();
+  const connected = graphNodePositions(f);
+  assert.ok(distance(connected) < distance(before), "newly connected sessions should move closer together");
+  assert.notDeepEqual(connected, before);
+  assert.equal(f.node("interaction-graph").querySelectorAll(".edge-hit").length, 1);
+  assertGraphCardsDoNotOverlap(connected);
+  assert.equal(f.storage.size, 0, "automatic positions must not become persisted manual pins");
+  f.setConnections([]);
+  await f.context.renderGraph();
+  assert.deepEqual(graphNodePositions(f), before);
+  assert.equal(f.writes.length, 0);
+});
+
+test("forty connected cards remain readable around exact manual pins", () => {
+  const f = graphKeyboardContext(), nodes = Array.from({length:40}, (_, index) => ({key:"agent:" + String(index).padStart(2, "0")}));
+  const edges = nodes.flatMap((node, index) => index % 4 ? [{source:nodes[index-index%4].key, target:node.key, enabled:true}] : []);
+  const pins = {"agent:00":{x:120,y:82}, "agent:07":{x:300,y:82}, "agent:18":{x:880,y:905}};
+  const positions = JSON.parse(JSON.stringify(f.context.graphConnectedLayout(nodes, f.context.graphTopologyPairs(nodes, edges), pins)));
+  assert.equal(Object.keys(positions).length, 40);
+  for (const [key, point] of Object.entries(pins)) assert.deepEqual(positions[key], point, "manual placement must remain exact");
+  assertGraphCardsDoNotOverlap(positions);
+});
+
+test("denied inspector previews and selection or metadata polls do not jitter graph geometry", async () => {
+  const ids = "abcdefghijklmnopqr".split(""), f = graphLayoutContext(ids), connections = [["a", "p"], ["b", "q"], ["c", "r"]];
+  f.setConnections(connections);
+  await f.context.renderGraph();
+  const before = graphNodePositions(f);
+  f.context.graphPick("a", "r");
+  assert.ok(f.node("interaction-graph").querySelectorAll(".graph-edge").some(node => node.classList.contains?.("denied") || node.className.split(" ").includes("denied")));
+  assert.deepEqual(graphNodePositions(f), before, "a denied preview must not create layout attraction");
+  f.context.selected = "l";
+  f.context.peer = "k";
+  f.context.snapshot.boundaries = f.policies.get("l");
+  vm.runInContext("graphSelection = null", f.context);
+  await f.context.renderGraph();
+  assert.deepEqual(graphNodePositions(f), before, "selection changes graph traversal order without changing topology");
+  f.setConnections(connections);
+  f.context.snapshot.teams = [{id:"metadata-only", name:"Renamed team", version:9, state:"active", members:["a", "p"]}];
+  f.context.snapshot.agents[0].title = "Changed title";
+  await f.context.renderGraph();
+  assert.deepEqual(graphNodePositions(f), before, "an unchanged enabled topology must survive policy and team refreshes");
+  assert.equal(f.writes.length, 0);
+});
+
+test("shared-access layout ignores selected-agent denied scope previews", async () => {
+  const f = graphLayoutContext();
+  for (const policy of f.policies.values()) policy.boards = [
+    {name:"shared-alpha", read:policy.agent === "a" || policy.agent === "f", write:false},
+    {name:"shared-beta", read:policy.agent === "b", write:policy.agent === "e"},
+    {name:"denied-scope", read:false, write:false},
+  ];
+  vm.runInContext('graphMode = "scopes"', f.context);
+  await f.context.renderGraph();
+  const before = graphNodePositions(f);
+  assert.ok(before["board:shared-alpha"] && before["board:denied-scope"]);
+  assertGraphCardsDoNotOverlap(before);
+  f.context.selected = "c";
+  f.context.snapshot.boundaries = f.policies.get("c");
+  await f.context.renderGraph();
+  assert.deepEqual(graphNodePositions(f), before);
+  assert.equal(f.writes.length, 0);
+});
+
+test("pointer and keyboard movement pin cards through topology changes and Auto arrange releases them", async () => {
+  const f = graphLayoutContext();
+  f.setConnections([["a", "f"]]);
+  await f.context.renderGraph();
+  const svg = f.node("interaction-graph"), original = graphNodePositions(f);
+  svg.createSVGPoint = () => ({x:0, y:0, matrixTransform() {return {x:this.x, y:this.y};}});
+  svg.getScreenCTM = () => ({inverse:() => ({})});
+  svg.setPointerCapture = () => {};
+  svg.releasePointerCapture = () => {};
+  const dragged = svg.querySelectorAll("[data-node]").find(node => node.dataset.node === "agent:d"), origin = original["agent:d"];
+  dragged.transform = {baseVal:{consolidate:() => ({matrix:{e:origin.x, f:origin.y}})}};
+  svg.listeners.pointerdown({target:dragged, pointerId:1, clientX:origin.x, clientY:origin.y});
+  svg.listeners.pointermove({pointerId:1, clientX:850, clientY:350});
+  const during = graphNodePositions(f);
+  for (const [key, point] of Object.entries(original)) if (key !== "agent:d") assert.deepEqual(during[key], point, "other cards stay still during a drag");
+  svg.listeners.pointerup({pointerId:1});
+  const pointerPin = graphNodePositions(f)["agent:d"];
+  assert.deepEqual(pointerPin, {x:850,y:350});
+  const keyboard = svg.querySelectorAll("[data-node]").find(node => node.dataset.node === "agent:a"), keyboardOrigin = graphNodePositions(f)["agent:a"];
+  keyboard.focus();
+  keyboard.onkeydown({key:"ArrowDown", shiftKey:true, preventDefault(){}});
+  const keyboardPin = {x:keyboardOrigin.x, y:keyboardOrigin.y+12};
+  assert.deepEqual(graphNodePositions(f)["agent:a"], keyboardPin);
+  assert.equal(f.document.activeElement.dataset.node, "agent:a");
+  f.setConnections([["a", "f"], ["b", "e"]]);
+  await f.context.renderGraph();
+  const pinned = graphNodePositions(f);
+  assert.deepEqual(pinned["agent:d"], pointerPin);
+  assert.deepEqual(pinned["agent:a"], keyboardPin);
+  assertGraphCardsDoNotOverlap(pinned);
+  assert.deepEqual(Object.keys(JSON.parse([...f.storage.values()][0])).sort(), ["agent:a", "agent:d"], "only manual moves are persisted");
+  f.node("graph-zoom-in").click();
+  f.node("graph-reset").click();
+  const fresh = graphLayoutContext();
+  fresh.setConnections([["a", "f"], ["b", "e"]]);
+  await fresh.context.renderGraph();
+  assert.deepEqual(graphNodePositions(f), graphNodePositions(fresh), "Auto arrange restores current automatic topology layout");
+  assert.equal(f.node("graph-zoom").textContent, "100%");
+  assert.deepEqual(JSON.parse([...f.storage.values()][0]), {});
+  assert.equal(svg.querySelectorAll(".pinned").length, 0);
+  assert.equal(f.writes.length, 0);
+});
+
+test("in-flight graph policies cannot cross equal-version workspace or study-attempt switches", async () => {
+  for (const transition of ["workspace", "study-attempt"]) {
+    const f = graphLayoutContext(), requests = [], notices = [];
+    if (transition === "study-attempt") f.context.snapshot.study_attempt = "attempt-a";
+    f.context.notice = message => notices.push(message);
+    f.context.call = (operation, args) => {
+      assert.equal(operation, "boundaries.get");
+      return new Promise(resolve => requests.push({agent:args.agent, resolve}));
+    };
+    const old = f.context.renderGraph();
+    assert.equal(requests.length, f.context.snapshot.agents.length);
+    if (transition === "workspace") f.context.snapshot.runtime.session = "another-workspace";
+    else f.context.snapshot.study_attempt = "attempt-b";
+    await f.context.renderGraph();
+    for (const request of requests) request.resolve({...f.policies.get(request.agent), targets:request.agent === "a" ? [{to:"d", actions:["message.send"]}] : []});
+    await old;
+    assert.equal(vm.runInContext("graphCache.size", f.context), 0, transition + " must reject the previous route's policy results");
+    assert.equal(f.node("interaction-graph").querySelectorAll(".edge-hit").length, 0);
+    assert.ok(notices.some(message => /changed while loading/.test(message)));
+    const next = f.context.renderGraph(), currentRequests = requests.slice(f.context.snapshot.agents.length);
+    assert.equal(currentRequests.length, f.context.snapshot.agents.length, "the new route must fetch its own policies");
+    for (const request of currentRequests) request.resolve(f.policies.get(request.agent));
+    await next;
+    assert.equal(vm.runInContext("graphCache.size", f.context), f.context.snapshot.agents.length);
+    assert.equal(f.node("interaction-graph").querySelectorAll(".edge-hit").length, 0);
+  }
+});
+
+test("manual graph layouts are isolated by workspace and study attempt while ordinary legacy pins still load", async () => {
+  const f = graphLayoutContext(), session = f.context.snapshot.runtime.session;
+  f.storage.set("agentmux-layout-" + session, JSON.stringify({"agent:a":{x:410,y:340}}));
+  await f.context.renderGraph();
+  assert.deepEqual(graphNodePositions(f)["agent:a"], {x:410,y:340}, "ordinary sessions retain their legacy manual layout");
+  const nudge = (key, direction) => f.node("interaction-graph").querySelectorAll("[data-node]")
+    .find(node => node.dataset.node === key).onkeydown({key:direction, shiftKey:true, preventDefault(){}});
+  nudge("agent:a", "ArrowRight");
+  const normalPin = graphNodePositions(f)["agent:a"];
+  f.context.snapshot.runtime.session = "another-workspace";
+  await f.context.renderGraph();
+  assert.notDeepEqual(graphNodePositions(f)["agent:a"], normalPin);
+  nudge("agent:b", "ArrowDown");
+  f.context.snapshot.runtime.session = session;
+  await f.context.renderGraph();
+  assert.deepEqual(graphNodePositions(f)["agent:a"], normalPin);
+  f.context.snapshot.study_attempt = "attempt-a";
+  await f.context.renderGraph();
+  const automatic = graphNodePositions(f);
+  assert.notDeepEqual(automatic["agent:a"], normalPin, "study attempts must not import ordinary-session pins");
+  nudge("agent:a", "ArrowDown");
+  const attemptPin = graphNodePositions(f)["agent:a"];
+  f.context.snapshot.study_attempt = "attempt-b";
+  await f.context.renderGraph();
+  assert.deepEqual(graphNodePositions(f), automatic);
+  nudge("agent:b", "ArrowRight");
+  f.context.snapshot.study_attempt = "attempt-a";
+  await f.context.renderGraph();
+  assert.deepEqual(graphNodePositions(f)["agent:a"], attemptPin);
+  assert.deepEqual(graphNodePositions(f)["agent:b"], automatic["agent:b"]);
+  f.context.snapshot.runtime.session = "another-workspace";
+  await f.context.renderGraph();
+  assert.deepEqual(graphNodePositions(f), automatic, "attempt names in a different workspace do not share pins");
+  f.context.snapshot.runtime.session = session;
+  delete f.context.snapshot.study_attempt;
+  await f.context.renderGraph();
+  assert.deepEqual(graphNodePositions(f)["agent:a"], normalPin);
+  assert.equal(f.writes.length, 0);
+});
+
 test("graph redraw keeps keyboard focus and Space activates node/edge without losing inspector navigation", () => {
   const f = graphKeyboardContext();
   f.context.drawGraph();

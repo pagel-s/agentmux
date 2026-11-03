@@ -4,6 +4,12 @@ Agentmux now has an opt-in managed mode alongside the existing tmux workspace mo
 
 The existing `load`, `render`, pane launchers, and v1 workspace YAML remain available. Managed configuration uses `version: 2` and `mode: managed`; use `amx managed up` for automatic startup, or `managed init` for manual service control. Do not pass it to `amx load`.
 
+For a single coding request with fresh reviews, executable checks and a retained
+patch, use [`amx work`](working.md). For owner-authored comparisons, missions
+and handoffs, use [`amx flow`](workflows.md). Those journeys have separate plans,
+result storage and isolation settings; starting a managed team does not enable
+workflow isolation.
+
 ## Implemented capabilities
 
 - Authenticated operations over a private Unix socket; agent identity comes from its credential rather than a caller-supplied name.

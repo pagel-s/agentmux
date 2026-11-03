@@ -14,6 +14,8 @@ implementation, Antigravity review and checked results without starting models.
 Add `--allow-models` to run, then inspect with `amx work status` and explicitly
 apply with `amx work apply latest`. See [working on a task](docs/working.md).
 
+[![Coding workflow: preview, bounded implementation and fresh review, saved evidence, explicit application](docs/assets/guide/workflow-journey.svg)](docs/visual-guide.md#ask-for-a-checked-coding-change)
+
 For revision-bound comparisons, checks, handoffs, snapshot review, missions and
 repeated team trials, see [the workflow guide](docs/workflows.md). Start with the
 command-only examples: `amx flow --help`.

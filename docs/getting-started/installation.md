@@ -4,6 +4,10 @@ Agentmux's CLI is **`amx`**. Native sessions require **tmux 3.2+** and the
 respective provider CLIs installed and authenticated separately. Published
 binaries need no Go toolchain. Python 3 runs the installer and acceptance scripts.
 
+Choose the current source build below for [`amx work`](../working.md) and
+[`amx flow`](../workflows.md), including private workflow snapshots and full
+workflow isolation. The published v0.11.0 binary predates those commands.
+
 ## Install a published binary (recommended)
 
 The current release is **[v0.11.0](https://github.com/pagel-s/agentmux/releases/tag/v0.11.0)**,
@@ -97,6 +101,19 @@ After later source updates, run `make install` again. Select another prefix with
 `make install PREFIX=/your/prefix`, or use `BINDIR` and optional `DESTDIR` for
 packaging. Existing executable replacements retain their original inode in a
 uniquely named backup.
+
+Check the source workflow commands after installation:
+
+```sh
+amx work --help
+amx flow --help
+```
+
+`amx work "Describe the change" -- CHECK [ARG...]` previews a checked coding
+journey without starting models or creating run files. Execution needs the
+selected installed and authenticated provider CLIs plus `--allow-models`.
+For a first model-free plan, use the separate temporary project in
+[advanced workflows](../workflows.md#try-the-complete-journey-without-model-calls).
 
 Remote `go install github.com/pagel-s/agentmux/cmd/agentmux@latest` is unsupported:
 `go.mod` declares module path `agentmux`, so Go rejects the GitHub module path.

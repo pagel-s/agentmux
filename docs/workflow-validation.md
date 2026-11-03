@@ -553,6 +553,47 @@ uncertain turn. These checks establish the recorded versions and task, not
 future provider compatibility or arbitrary task correctness. No Agentmux source
 or design was sent in these synthetic live checks.
 
+## Documentation and connection-layout follow-up — 3 November 2026
+
+After the workflow hardening commit, a separate frontend/documentation pass
+added deterministic grouping by enabled connections, collision avoidance around
+manual pins, and an **Auto arrange** control. Pins are stored separately for
+each runtime session and study attempt. Denied previews do not attract nodes;
+unchanged topology stays stable. Layout changes do not grant permissions.
+
+All **56 tracked Markdown files** were audited. The pass refreshed 20 guides
+and references, added four accessible SVG diagrams, and preserved the dated
+v0.11.0 screenshots. All **358 local links, assets and anchors** passed the
+link check; the strict MkDocs build passed. The SVGs were rasterized and
+visually inspected during implementation. A separate fresh-context docs review
+checked source/CLI agreement, links and SVG structure with no actionable
+findings; independent raster inspection was unavailable in that review.
+
+The frontend suite passed **119 tests with no skips**, including eight new
+regressions for topology changes, denied previews, manual and keyboard pins,
+40-card collision avoidance, unchanged-layout stability, persistence and stale
+responses across sessions/attempts. A fresh-context code review found no
+actionable issues and also checked 1,000 seeded layouts with 1–40 cards for
+finite positions and nonoverlap. Browser checks against a model-free loopback
+fixture confirmed connected groups, keyboard pinning, denied previews, Auto
+arrange, saved reset after reload, and desktop/narrow rendering. Automatic
+approval review rejected the browser permission toggle, so connection-edit
+behavior is covered by the automated regressions rather than that browser
+action. No provider was invoked for this follow-up.
+
+Follow-up evidence is retained locally under
+`/tmp/agentmux-frontend-final-20261103/`. All **574 files** in the earlier
+Go/build-source manifest remained byte-identical. Embedded web assets changed,
+so the frontend follow-up was rebuilt separately; its unversioned validation
+binary SHA256 is
+`1b3f5f3657674ab1dcadb1687be5362c10109be1049ebe9de9e71283410d5b51`.
+The full CLI package passed again with the race detector (96.479 seconds)
+and with minimum Go 1.24 (41.769 seconds). Initial probes in the default tool
+sandbox failed because local broker sockets were denied; their logs remain
+retained separately from the passing runs with authorized local socket access.
+The earlier full race, namespace, soak and live-provider evidence above belongs
+to its explicitly frozen binary, not this newly embedded frontend build.
+
 ## Enforced controls and operational boundaries
 
 The current hardening pass enforces the controls below. It preserves

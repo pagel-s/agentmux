@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+- Add `amx work` for a previewable coding, fresh-review, revision and acceptance
+  journey with status/list/show commands scoped to each project and explicit
+  application.
+- Add `amx flow` comparisons, dependency missions, bounded snapshot review,
+  repeated laboratories, revision-bound checks, handoff briefs and offline reports.
+- Default workflow snapshots to private Git object stores. Add opt-in Linux
+  filesystem, PID and network isolation, explicit filtered credentials and
+  per-request HTTPS authority inspection; required boundaries fail closed.
+- Retain patch integrity and freshness evidence, journal source application,
+  and recover interrupted application without replaying a patch. See the
+  [workflow guide](docs/working.md) and [validation record](docs/workflow-validation.md)
+  for measured provider paths and operational limits.
+- Automatically group connected web graph nodes while preserving manually pinned
+  positions for each workspace/study attempt. **Auto arrange** releases pins and
+  refits; unchanged topology stays still through refreshes and selection.
+
 ## v0.11.0 - 2026-11-02
 
 - Reject stale release retries whose commit no longer matches the tag, serialize

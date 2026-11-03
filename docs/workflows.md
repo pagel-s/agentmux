@@ -6,6 +6,12 @@ missions with dependencies, evidence explanations and repeated comparisons.
 It complements native tmux sessions and the managed broker. It does not replace
 their identity, permission, delivery or recovery controls.
 
+These commands require the current source build (`make install`); the published
+v0.11.0 binary predates them. For one coding request with defaults for
+implementation, fresh reviews and acceptance checks, start with
+[`amx work`](working.md). For a visual map of execution and explicit source
+application, see the [illustrated journey](visual-guide.md#ask-for-a-checked-coding-change).
+
 Workflow file handling is supported on the published Linux/macOS platforms.
 Input reads reject symlinks and special files, use bounded nofollow/nonblocking
 opens, and reject changed-file reads. Other platforms refuse workflow input

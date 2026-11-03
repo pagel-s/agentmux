@@ -1,13 +1,16 @@
 # Agentmux visual workflow guide
 
-Use Agentmux to keep an overview of native agent sessions, connect selected
-conversations when useful, and grow into bounded automation or controlled
-multiagent studies. The terminal is the place to work directly with agents;
-the web app provides a larger view of relationships, shared context and evidence.
+Use Agentmux for a checked coding request, several native agent sessions, bounded
+automation or controlled multiagent studies. The terminal is the place to work
+directly with agents; the web app provides a larger view of relationships,
+shared context and evidence. Coding workflows also retain private offline HTML
+reports without requiring a running work-session broker or web app.
 
 The managed runtime and workbench are experimental. This guide follows
-Agentmux v0.11.0. [Install Agentmux](getting-started/installation.md)
-to get the `amx` command. Native providers must be
+the current source build. The interactive screenshots below were captured for
+v0.11.0; the newer `work` and `flow` commands require
+[building and installing the current source](getting-started/installation.md#build-from-source).
+Native providers must be
 installed and authenticated separately. A new installation does not replace
 an existing workspace's pinned controller; use a fresh workspace for all current
 features, or [upgrade deliberately](traces-and-recovery.md).
@@ -21,6 +24,8 @@ image to see it at full size.
 
 | What you want | Start here | Keep control through |
 | --- | --- | --- |
+| One coding change with implementation, review and checks | [Checked coding change](#ask-for-a-checked-coding-change) | Preview, finite turns, fresh review, report and explicit apply |
+| Compare alternative implementations or build a custom mission | [Advanced workflow plans](#compare-alternatives-or-build-a-mission) | Pinned snapshots, external checks, retained patches and freshness |
 | Several independent Claude or Codex conversations | [Everyday sessions](#everyday-sessions) | Native terminals, titles, session switcher |
 | Ten sessions with just a few collaborating pairs | [Temporary collaboration](#temporary-collaboration) | Exact groups, directional permissions, receiver modes |
 | A concrete end-to-end collaboration example | [Write a poem together](#write-a-poem-together) | Review delivery, Tasks, Board, native terminals |
@@ -29,6 +34,88 @@ image to see it at full size.
 | Agents recruiting or forming their own teams | [Dynamic teams and recruitment](#dynamic-teams-and-recruitment) | Approved templates, invitations, consent, capacity |
 | Cooperation versus competition experiments | [Research and competition](#research-and-competition) | Frozen design, phase controls, objective outcomes |
 | More agents or another machine | [Scale and remote workers](#scale-and-remote-workers) | Admission limits, scoped views, explicit SSH placement |
+
+## Ask for a checked coding change
+
+From a Git project with an initial commit and the selected native CLIs installed,
+preview your request:
+
+```sh
+amx work "Fix the login redirect" -- go test ./...
+```
+
+The preview shows the check, phases, provider profiles, deadline, maximum turns
+and private result location. It starts no models and creates no run files.
+Replace `go test ./...` with the executable and arguments that verify your task.
+The text after `--` is literal argv; use an owner-maintained script for shell logic.
+
+[![The checked coding journey starts with a preview, retains implementation and fresh-review evidence in a private run, and integrates only after explicit application](assets/guide/workflow-journey.svg)](assets/guide/workflow-journey.svg)
+
+When the preview is suitable, explicitly permit provider execution:
+
+```sh
+amx work "Fix the login redirect" --allow-models -- go test ./...
+amx work status
+amx work show latest
+```
+
+The default profiles are Codex `gpt-6.1-sol` for implementation and Antigravity
+`gemini-3.8-flash-low` for review; `--coder` and `--reviewer` choose another
+supported profile deliberately. Each review starts a fresh native session with
+the task, acceptance criteria and current files, excluding implementation chat
+and earlier review conclusions. A final explicit approval and successful checks
+are required before application. A failed check, tool denial, malformed review
+or uncertain transport remains visible in the retained outcome.
+
+Open the `report.html` path printed by `show` to inspect the private offline report.
+It is separate from the live owner app launched by `amx web`; neither report
+inspection nor `status`/`show` starts another model. After reviewing the patch
+and evidence, apply deliberately:
+
+```sh
+amx work apply latest
+```
+
+Application rechecks the source, checked revision, final approval and patch. It
+refuses stale results and leaves committing or pushing to you. After an
+interrupted application, inspect `amx work status` and use `amx work recover latest`
+to resolve the journal against exact source content; recovery does not replay
+the patch. Interrupted provider work is never automatically replayed.
+
+Private Git snapshots separate retained data; the default trusted local tools
+still have host filesystem and network authority. On Linux,
+`--isolation bubblewrap` additionally requires filesystem, PID and network
+namespaces with no weaker fallback. Tools see the assigned worktree and selected
+runtime dependencies; reviewer workspaces are read-only. Checks get no provider
+credentials or network. Native inference needs exact allowed origins and
+explicit selected credentials; isolated Antigravity uses host inference with
+Pi tools inside the capsule. See [work on a task](working.md) for a complete
+isolated command, provider prerequisites, budgets and operational boundaries.
+
+## Compare alternatives or build a mission
+
+Use [`amx flow`](workflows.md) when you need an owner-authored plan rather than
+the default coding journey. Start with the
+[complete command-only example](workflows.md#try-the-complete-journey-without-model-calls)
+in a disposable Git project. It runs real local commands without model calls,
+checks two independent candidates and retains an offline report.
+
+| Workflow | Result to inspect |
+| --- | --- |
+| `flow run` | Alternatives from the same snapshot with separate worktrees and checks |
+| `flow mission` | Bounded dependency steps, configured review gates and final acceptance checks |
+| `flow check` | Verification pinned to the checked content; keep its sibling `.git` fingerprint store |
+| `flow watch` | A bounded review for each eligible changed snapshot; unchanged content does not retrigger |
+| `flow lab` | Repetitions against one starting snapshot with rotated candidate order |
+| `flow explain` | Saved inputs, patch integrity and current freshness |
+| `flow handoff` | A private Markdown brief; saved-brief delivery respects receiver permissions and mode |
+
+Command plans and checks execute owner-selected code even without
+`--allow-models`; that flag admits provider turns. Keep output directories outside
+the source and retain the worktrees, selection manifests and evidence stores
+together. `flow apply` is always a separate source mutation; `flow recover`
+resolves an interrupted application without replay. See [advanced workflows](workflows.md)
+for strict plan fields, isolated execution and exact saved-brief delivery.
 
 ## Navigate the terminal and web app
 
@@ -198,7 +285,22 @@ In web Board, choose **Shared boards**, select the exact board and click
 Use **Connections → List view** to search an exact pair when the graph is busy;
 the list pages 50 entries at a time and supports arrows and Enter. Inspect the
 direction shown in the controls before changing it. The graph offers an overview
-and movable nodes; permission explanations remain the authority.
+of effective permissions; permission explanations remain the authority.
+
+In the current source build, enabled session connections and enabled shared-access
+links automatically group connected nodes. Denied preview edges do not affect
+placement. Drag a node, or focus it and use **Shift+Arrow**, to pin its position.
+Pins persist in this browser for the selected workspace and study attempt, and
+stay in place when connections change. Other nodes arrange around the pins after
+you finish dragging. **Auto arrange** releases all pins and fits the new layout;
+**Fit** changes the viewport without releasing them. Selection, title changes
+and ordinary refreshes preserve the layout when the visible topology is unchanged.
+Placement never changes permissions. Direction arrows still identify sender and
+recipient; proximity does not establish that agents actually cooperated.
+
+The graph shows at most 40 active sessions. Use the roster and paginated
+**List view** for larger workspaces. The screenshot above records the older
+v0.11.0 controls; automatic grouping and **Auto arrange** are source-build features.
 
 ### Separate permission from delivery
 

@@ -5,6 +5,13 @@ These owner-configured plans exercise the `amx flow` commands. `compare.json`,
 command processes. Their scripted output demonstrates orchestration; it is not
 evidence of model intelligence or coding quality.
 
+For one coding request, start with [`amx work`](../../docs/working.md); it
+previews a coding, fresh-review and acceptance sequence before model opt-in.
+The JSON plans here expose the advanced [`amx flow`](../../docs/workflows.md)
+controls. Their `execution: local` setting retains trusted host authority unless
+full workflow isolation is explicitly configured. A worktree alone is not a
+sandbox.
+
 Use the separate temporary Git repository in the [workflow guide](../../docs/workflows.md)
 and keep outputs outside the selected repository:
 

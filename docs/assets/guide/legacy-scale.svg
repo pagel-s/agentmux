@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="840" height="250" viewBox="0 0 840 250" role="img" aria-labelledby="title description">
+  <title id="title">Legacy pane scaling</title>
+  <desc id="description">A manager calls amx scale with a session, agent and count. Agentmux reads the original configuration from session metadata and adds worker panes through tmux split-window. This layout operation is separate from managed delegated spawning.</desc>
+  <defs><marker id="a" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#69518c"/></marker></defs>
+  <rect width="840" height="250" rx="12" fill="#faf8ff"/>
+  <g fill="#ffffff" stroke="#c5b8dc" stroke-width="1.5"><rect x="25" y="100" width="165" height="60" rx="8"/><rect x="320" y="100" width="170" height="60" rx="8"/><rect x="320" y="15" width="170" height="50" rx="8"/><rect x="650" y="65" width="165" height="60" rx="8"/><rect x="650" y="150" width="165" height="60" rx="8"/></g>
+  <g fill="none" stroke="#69518c" stroke-width="2" marker-end="url(#a)"><path d="M190 130H314"/><path d="M405 68V94"/><path d="M490 119L644 95"/><path d="M490 143L644 180"/></g>
+  <g font-family="system-ui, sans-serif" font-size="17" fill="#221b31" text-anchor="middle"><text x="107" y="136">Manager pane</text><text x="405" y="136">Agentmux CLI</text><text x="405" y="46">Original config</text><text x="732" y="101">Worker pane 2</text><text x="732" y="186">Worker pane 3</text></g>
+  <g font-family="system-ui, sans-serif" font-size="14" fill="#574b68"><text x="205" y="110">scale SESSION</text><text x="205" y="151">worker 3</text><text x="505" y="93">split-window</text><text x="505" y="183">split-window</text><text x="25" y="235">Layout scaling has no managed spawn admission, delegated capabilities or isolated child identity.</text></g>
+</svg>

@@ -6,6 +6,12 @@ collaboration while keeping both terminals usable. It uses a separate workspace
 named `try-agentmux`. Every owner command below selects that same workspace,
 regardless of the current directory.
 
+For a single coding request with implementation, fresh review and acceptance
+checks, use [work on a task](../working.md) instead. Its `amx work` preview and
+the command-only [advanced workflow example](../workflows.md#try-the-complete-journey-without-model-calls)
+require the current source build. The walkthrough below covers native interactive
+sessions available in v0.11.0 and the current source.
+
 ## 1. Install and check Agentmux
 
 Install **v0.11.0** using the
