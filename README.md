@@ -1,5 +1,7 @@
 # Agentmux
 
+Licensed under the [MIT License](LICENSE).
+
 Run coding agents together, control what they share, and inspect checked changes
 before applying them to your project. Agentmux works with Claude Code, Codex, Pi
 and Antigravity. The managed runtime and workbench are experimental.

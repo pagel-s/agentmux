@@ -1,5 +1,8 @@
 # Contributing to Agentmux
 
+Agentmux is licensed under the [MIT License](LICENSE). Contributions are
+provided under the same license.
+
 Start with the [first-result guide](docs/getting-started/first-result.md), then
 read the guide for the area you want to change. The managed runtime and
 workbench are experimental. Keep new behavior small enough to explain and

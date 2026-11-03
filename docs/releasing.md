@@ -13,7 +13,7 @@ behavior promoted by its README and installation guide.
    package all four supported archives, verify their checksums, install the
    host binary and complete `amx demo` through actual workflow evidence.
 3. Review the source archive and distribution contents for private data. Include
-   contribution/security instructions and the applicable license when selected.
+   contribution/security instructions and the MIT `LICENSE` file.
 4. Merge the reviewed revision and create the new version tag on that exact
    commit. Pushing a `v*` tag starts the release workflow.
 
@@ -50,6 +50,9 @@ gh release download v0.12.0 --repo pagel-s/agentmux --dir /tmp/amx-v0.12.0-artif
 python3 scripts/smoke-release.py --artifact-dir /tmp/amx-v0.12.0-artifacts \
   --version v0.12.0 --output /tmp/amx-v0.12.0-installed-check
 ```
+
+The final v0.12.0 archives predate the MIT license file and remain verifiable.
+New builds and snapshots must include `LICENSE` in every platform archive.
 
 Choose new directories for every run. The smoke command never replaces an
 existing installation and never makes model calls. Its passing result covers

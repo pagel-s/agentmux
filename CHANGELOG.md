@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- License Agentmux under MIT and include the license in release archives.
+
 ## v0.12.0 - 2026-11-03
 
 - Add `amx demo`, a model-free first result using the actual private workflow
