@@ -92,6 +92,9 @@ type console struct {
 	taskBack                                              []string
 	taskMore                                              bool
 	taskEpoch                                             uint64
+	taskExactID                                           string
+	taskReadSequence                                      uint64
+	taskVersion                                           int
 	state                                                 string
 	client                                                *managed.Client
 	agents                                                []managed.AgentInfo
@@ -195,8 +198,12 @@ func (m console) Init() tea.Cmd { return tea.Batch(m.fetch, consoleTimer()) }
 func (m console) fetch() tea.Msg {
 	focusID, focusRevision, focusSequence := consumeConsoleFocusOrdered(m.state)
 	var d consoleData
-	if m.tab == 4 {
-		d = fetchWorkSnapshot(m.state, m.client, m.selectedID(), &consoleTaskPage{Query: m.taskQuery, After: m.taskAfter, Recipient: m.taskRecipient, State: m.taskState, Epoch: m.taskEpoch})
+	if m.tab == 4 || m.taskExactID != "" {
+		page := &consoleTaskPage{ExactID: m.taskExactID, Query: m.taskQuery, After: m.taskAfter, Recipient: m.taskRecipient, State: m.taskState, Epoch: m.taskEpoch}
+		if page.ExactID != "" {
+			page.ReadSequence = consoleTaskReads.Add(1)
+		}
+		d = fetchWorkSnapshot(m.state, m.client, m.selectedID(), page)
 	} else {
 		d = fetchWorkSnapshot(m.state, m.client, m.selectedID())
 	}
@@ -211,6 +218,10 @@ func fetchWorkSnapshot(state string, client *managed.Client, selected string, ta
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
 	d := consoleData{selected: selected}
+	if len(tasks) > 0 && tasks[0] != nil && tasks[0].ExactID != "" {
+		page := *tasks[0]
+		d.taskPage = &page
+	}
 	agents, err := workRegistry(ctx, client)
 	if err != nil {
 		status, problem := client.LocalResearchStatus(ctx, state)
@@ -376,19 +387,29 @@ func fetchWorkSnapshot(state string, client *managed.Client, selected string, ta
 	}
 	if len(tasks) > 0 && tasks[0] != nil {
 		page := *tasks[0]
-		raw, err = workCall(ctx, client, "task.list", map[string]any{"limit": 40, "order": "desc", "query": page.Query, "after": page.After, "to": page.Recipient, "state": page.State})
-		if err == nil {
-			var result struct {
-				Tasks  []managed.Task `json:"tasks"`
-				Cursor string         `json:"cursor"`
-				More   bool           `json:"has_more"`
-			}
-			err = json.Unmarshal(raw, &result)
+		if page.ExactID != "" {
+			var task managed.Task
+			task, err = loadConsoleTask(ctx, client, page.ExactID)
 			if err == nil {
-				d.activity.Tasks = result.Tasks
-				page.Cursor = result.Cursor
-				page.More = result.More
+				d.activity.Tasks = []managed.Task{task}
+				page.Cursor, page.More = "", false
 				d.taskPage = &page
+			}
+		} else {
+			raw, err = workCall(ctx, client, "task.list", map[string]any{"limit": 40, "order": "desc", "query": page.Query, "after": page.After, "to": page.Recipient, "state": page.State})
+			if err == nil {
+				var result struct {
+					Tasks  []managed.Task `json:"tasks"`
+					Cursor string         `json:"cursor"`
+					More   bool           `json:"has_more"`
+				}
+				err = json.Unmarshal(raw, &result)
+				if err == nil {
+					d.activity.Tasks = result.Tasks
+					page.Cursor = result.Cursor
+					page.More = result.More
+					d.taskPage = &page
+				}
 			}
 		}
 		if err != nil {
@@ -531,6 +552,26 @@ func (m console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case consoleTick:
 		return m, tea.Batch(m.fetch, consoleTimer())
 	case consoleData:
+		if m.taskExactID != "" || msg.taskPage != nil && msg.taskPage.ExactID != "" {
+			if msg.taskPage == nil || msg.taskPage.ExactID != m.taskExactID || msg.taskPage.Epoch != m.taskEpoch || msg.taskPage.ReadSequence < m.taskReadSequence {
+				return m, nil
+			}
+			m.taskReadSequence = msg.taskPage.ReadSequence
+			if msg.err == nil && (len(msg.activity.Tasks) != 1 || !validConsoleTaskRecord(msg.activity.Tasks[0], m.taskExactID)) {
+				msg.err = errors.New("exact task response is missing or does not match the requested task")
+			}
+			for _, current := range m.data.activity.Tasks {
+				if current.ID == m.taskExactID {
+					m.taskVersion = max(m.taskVersion, current.Version)
+				}
+			}
+			if msg.err == nil {
+				if msg.activity.Tasks[0].Version < m.taskVersion {
+					return m, nil
+				}
+				m.taskVersion = msg.activity.Tasks[0].Version
+			}
+		}
 		if msg.focusID != "" && msg.focusRevision == m.selectionRevision && (msg.focusSequence == 0 || msg.focusSequence > m.focusSequence) {
 			m.pendingFocus = msg.focusID
 			m.focusSequence = max(m.focusSequence, msg.focusSequence)
@@ -544,6 +585,11 @@ func (m console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.err != nil {
 			m.offline = true
+			if m.taskExactID != "" {
+				m.data.activity.Tasks = nil
+				m.data.taskPage = msg.taskPage
+				m.task = 0
+			}
 			if msg.selected == m.selectedID() && msg.research != nil {
 				m.data.research = msg.research
 				m.data.researchErr = nil
@@ -555,6 +601,13 @@ func (m console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.offline = false
+		if m.taskExactID != "" {
+			// Exact-task identity is independent of the session roster. A late
+			// roster selection must not discard this task's fresh version.
+			m.data.activity.Tasks = msg.activity.Tasks
+			m.data.taskPage = msg.taskPage
+			m.task = 0
+		}
 		observedID := ""
 		teamTargetID := ""
 		recipientID := ""
@@ -616,7 +669,7 @@ func (m console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				taskID = m.data.activity.Tasks[m.task].ID
 			}
 			if m.tab == 4 {
-				if msg.taskPage == nil || msg.taskPage.Epoch != m.taskEpoch || msg.taskPage.Query != m.taskQuery || msg.taskPage.After != m.taskAfter || msg.taskPage.Recipient != m.taskRecipient || msg.taskPage.State != m.taskState {
+				if msg.taskPage == nil || msg.taskPage.ExactID != m.taskExactID || msg.taskPage.Epoch != m.taskEpoch || msg.taskPage.Query != m.taskQuery || msg.taskPage.After != m.taskAfter || msg.taskPage.Recipient != m.taskRecipient || msg.taskPage.State != m.taskState {
 					msg.activity.Tasks = m.data.activity.Tasks
 					msg.taskPage = m.data.taskPage
 				} else {
@@ -815,6 +868,18 @@ func runManagedConsole(state string, in io.Reader, out, diagnostics io.Writer) i
 	return runManagedConsoleView(state, "board", false, in, out, diagnostics)
 }
 func runManagedConsoleView(state, view string, popup bool, in io.Reader, out, diagnostics io.Writer) int {
+	return runManagedConsoleViewTask(state, view, popup, "", in, out, diagnostics)
+}
+
+func runManagedConsoleTask(state, taskID string, in io.Reader, out, diagnostics io.Writer) int {
+	if !validConsoleTaskID(taskID) {
+		fmt.Fprintln(diagnostics, "error: use one exact task_ ID to open its workbench view")
+		return exitValidation
+	}
+	return runManagedConsoleViewTask(state, "tasks", false, taskID, in, out, diagnostics)
+}
+
+func runManagedConsoleViewTask(state, view string, popup bool, taskID string, in io.Reader, out, diagnostics io.Writer) int {
 	views := map[string]int{"": 0, "board": 0, "agents": 1, "connections": 2, "memory": 3, "tasks": 4, "sessions": 5, "teams": 6, "events": 7, "research": 7}
 	index, ok := views[view]
 	if !ok {
@@ -831,6 +896,16 @@ func runManagedConsoleView(state, view string, popup bool, in io.Reader, out, di
 		return exitValidation
 	}
 	model := console{contentFocus: index != 1, selectionRevision: currentConsoleFocusRevision(state), studyFollow: true, state: state, client: managed.NewClient(credential), tab: index, popup: popup}
+	if taskID != "" {
+		task, err := loadConsoleTask(context.Background(), model.client, taskID)
+		if err != nil {
+			fmt.Fprintln(diagnostics, "error: exact task:", consoleContent(err.Error(), 1000))
+			return exitRuntime
+		}
+		model.taskExactID, model.taskEpoch, model.taskVersion = taskID, 1, task.Version
+		model.data.activity.Tasks = []managed.Task{task}
+		model.data.taskPage = &consoleTaskPage{ExactID: taskID, Epoch: 1}
+	}
 	_, err = tea.NewProgram(model, tea.WithInput(in), tea.WithOutput(out), tea.WithAltScreen()).Run()
 	if err != nil && !errors.Is(err, context.Canceled) {
 		fmt.Fprintln(diagnostics, "error: dashboard:", err)

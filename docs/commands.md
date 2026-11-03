@@ -85,6 +85,7 @@ default workspace `work` and opens its workbench.
 | `amx sessions` | List registered sessions and separately observed external terminals |
 | `amx context [--json]` | Explain the ordinary command target, selection source and runtime status without starting anything |
 | `amx task TASK_ID [--json]` | Read one delegated instruction, its result, version, delivery and recovery evidence |
+| `amx task TASK_ID --open` | Open that exact task in the workbench's Tasks view; recovery still requires explicit review and confirmation |
 | `amx tasks [--to ID] [--status STATE] [--query TEXT] [--limit N] [--after TASK_ID] [--json]` | Search retained delegation history, newest first; copy the continuation command to read more |
 | `amx workspaces [--register DIR]` | Find named and remembered custom workspaces; register an older custom location |
 | `amx relaunch AGENT_ID [--resume ID\|last\|picker] [--native-launcher ABSOLUTE_PATH]` | Relaunch one exited native session, retaining its stable ID and healthy peers; optional launcher recovery applies only to trusted-local interactive sessions |

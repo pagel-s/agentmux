@@ -131,6 +131,10 @@ func (m *console) reviewGroupDisable(id string) {
 	}
 }
 func (m *console) reviewTaskResolution(resolution string) {
+	if m.offline || m.busy {
+		m.message = "Reconnect and wait for pending changes before reviewing recovery."
+		return
+	}
 	if len(m.data.activity.Tasks) == 0 {
 		return
 	}
@@ -310,7 +314,7 @@ func (m console) invokeMenuAction() (tea.Model, tea.Cmd) {
 		m.reviewGroupDisable(a.target)
 		return m, nil
 	}
-	if a.target != "" {
+	if a.target != "" && !(a.taskID != "" && (a.key == "resolve-fail" || a.key == "resolve-retry")) {
 		found := false
 		for i, v := range m.agents {
 			if v.ID == a.target {
@@ -347,6 +351,7 @@ func (m console) invokeMenuAction() (tea.Model, tea.Cmd) {
 		m.openSessionSwitcher()
 		return m, m.fetch
 	case "session-tasks":
+		m.leaveExactTask()
 		m.taskEpoch++
 		m.taskRecipient = a.target
 		m.taskQuery, m.taskState = "", ""

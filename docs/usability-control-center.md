@@ -103,7 +103,13 @@ Uncertain task recovery reviews the exact task/version and allowed fail/retry
 choice. Expired execution leases also appear in owner recovery and attention,
 while recorded delivery state remains unchanged. Expired cancellation permits
 fail resolution only; deadlines can also rule out retry.
-Use `amx task TASK_ID -s NAME` to read those distinct fields from the CLI.
+Use `amx task TASK_ID -s NAME` to read those distinct fields from the CLI, or
+`amx task TASK_ID --open -s NAME` to open the exact task in the workbench's Tasks
+view. This uses its stable ID directly, including for old tasks and retired
+recipients. Opening never retries or resolves it; review its evidence and the
+current task/version before explicitly confirming a recovery action. The
+printed open command retains the exact workspace selector. `--open` cannot be
+combined with `--json`.
 Web attention summaries link to the exact recipient's tasks, even after the
 recipient leaves the active roster. Opening history never resolves anything.
 A retry is another execution and can repeat side effects. The web retains an

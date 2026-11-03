@@ -6,8 +6,8 @@ starts no agents. `amx a` restores the last live native terminal in the selected
 workspace. If no terminal has been selected or it has closed, the workbench opens.
 With several running workspaces, choose one or pass `-s NAME`.
 
-The searchable chooser, `context`, `task`/`tasks`, bounded run lists and report
-opening described below are source-build features after v0.12.0.
+The searchable chooser, `context`, `task`/`tasks`, exact-task workbench opening,
+bounded run lists and report opening below are source-build features after v0.12.0.
 
 ## Daily power-user loop
 
@@ -17,7 +17,7 @@ opening described below are source-build features after v0.12.0.
 | Launch | **Shift+N** inherits the selected provider and project; review before starting |
 | Delegate | `amx send ID "Do this" --mode instruction -s NAME`; copy its printed inspection command |
 | Inspect | `amx task TASK_ID -s NAME`, or **Ctrl+K → Tasks for selected session** |
-| Recover | Read the task's delivery/receipt first; review the exact task/version in Tasks |
+| Recover | `amx task TASK_ID --open -s NAME`; inspect its evidence and review the exact task/version |
 
 Use `amx context` to see which workspace an ordinary command selects and why.
 It never starts or switches a workspace. Outside an attachment, bare `amx` and
@@ -111,6 +111,7 @@ amx mode reviewer -j -s work
 amx mode reviewer --approve CANDIDATE_ID -s work
 amx tasks --to reviewer --status running -s work
 amx task TASK_ID -s work
+amx task TASK_ID --open -s work
 ```
 
 Copy the exact pending candidate ID from the status. A queued or submitted
@@ -120,8 +121,14 @@ terminal. Provider-specific guarantees are in [native collaboration](../native-d
 `tasks` searches retained history at the broker, newest first, with `--query`,
 `--status`, `--to` and `--limit` (1–200). Copy the printed **More** command for
 the next page, or add `-j` for JSON. `task` shows the exact instruction, result,
-version and available receipt/recovery evidence; these commands change no task
-state. In the workbench or web app, **Tasks for selected session** clears prior
+version and available receipt/recovery evidence, then prints a command to open
+that exact task. `task TASK_ID --open` goes straight to its Tasks view without
+searching the history; old tasks and retired recipients remain addressable.
+Opening changes no task state. Any recovery action still reviews the exact
+task/version and requires explicit confirmation. `--open` applies only to `task`
+and cannot be combined with `--json`.
+
+In the workbench or web app, **Tasks for selected session** clears prior
 filters and opens that recipient's complete paginated history. Web attention
 rows also offer **Inspect tasks**, including for a retired recipient.
 

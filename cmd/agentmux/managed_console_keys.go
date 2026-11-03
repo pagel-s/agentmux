@@ -317,6 +317,7 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, m.fetch
 			}
 			if m.composer == "task-search" {
+				m.leaveExactTask()
 				m.taskQuery, m.taskAfter, m.taskBack, m.task = string(m.text), "", nil, 0
 				m.composer, m.text = "", nil
 				return m, m.fetch
@@ -407,6 +408,7 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch key {
 	case "y":
 		if m.tab == 4 {
+			m.leaveExactTask()
 			if m.taskRecipient == "" {
 				m.taskRecipient = m.selectedID()
 			} else {
@@ -418,6 +420,7 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "z":
 		if m.tab == 4 {
+			m.leaveExactTask()
 			states := []string{"", "proposed", "running", "failed", "submitted", "verified"}
 			for i, v := range states {
 				if v == m.taskState {

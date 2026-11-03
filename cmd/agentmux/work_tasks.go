@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	"agentmux/internal/managed"
@@ -20,11 +21,17 @@ type workTaskPage struct {
 	HasMore bool           `json:"has_more"`
 }
 
+var openWorkTaskWorkbench = runManagedConsoleTask
+
 // Inspection uses only owner read operations. Recovery remains a separate,
 // explicitly reviewed action against the selected task's current version.
 func runWorkTasks(operation string, args []string, out, diagnostics io.Writer) int {
+	return runWorkTasksIO(operation, args, os.Stdin, out, diagnostics)
+}
+
+func runWorkTasksIO(operation string, args []string, in io.Reader, out, diagnostics io.Writer) int {
 	if workHelpRequested(args) {
-		fmt.Fprintln(out, `Usage: amx task TASK_ID [--json] [--session NAME | --state DIR]
+		fmt.Fprintln(out, `Usage: amx task TASK_ID [--json | --open] [--session NAME | --state DIR]
        amx tasks [--to ID] [--status STATE] [--query TEXT] [--limit N]
                  [--after TASK_ID] [--json] [--session NAME | --state DIR]
 
@@ -32,6 +39,7 @@ Read retained delegation history, newest first (default page: 25; maximum: 200).
 STATE is proposed, running, submitted, verified, failed or cancelled.
 Task state and delivery evidence are separate; submitted does not mean verified.
 Inspection never retries, cancels, verifies or resolves a task.`)
+		fmt.Fprintln(out, "Use --open (-o) to open this exact task in the workbench, including recovery\ncontrols when available. Recovery still requires an explicit task/version review.")
 		return exitSuccess
 	}
 	fail := func(code int, err error) int {
@@ -48,12 +56,14 @@ Inspection never retries, cancels, verifies or resolves a task.`)
 	limit := flags.Int("limit", 25, "page size")
 	after := flags.String("after", "", "last task ID from the previous page")
 	asJSON := flags.Bool("json", false, "print broker evidence as JSON")
+	open := flags.Bool("open", false, "open the exact task in the workbench")
 	positionals, err := parseGuidedFlags(flags, args)
 	if err != nil {
 		return fail(exitValidation, err)
 	}
 	var selectors []string
 	listOnly := false
+	openSpecified := false
 	flags.Visit(func(f *flag.Flag) {
 		switch f.Name {
 		case "session":
@@ -62,13 +72,18 @@ Inspection never retries, cancels, verifies or resolves a task.`)
 			selectors = append(selectors, "--state", *state)
 		case "to", "status", "query", "limit", "after":
 			listOnly = true
+		case "open":
+			openSpecified = true
 		}
 	})
 	if operation != "task" && operation != "tasks" {
 		return fail(exitValidation, errors.New("choose task or tasks"))
 	}
 	if operation == "task" && (len(positionals) != 1 || listOnly) {
-		return fail(exitValidation, errors.New("task requires one TASK_ID and accepts only workspace selectors and --json; see task --help"))
+		return fail(exitValidation, errors.New("task requires one TASK_ID and accepts only workspace selectors, --json or --open; see task --help"))
+	}
+	if (operation == "tasks" && openSpecified) || (*open && *asJSON) {
+		return fail(exitValidation, errors.New("--open applies only to task TASK_ID and cannot be combined with --json"))
 	}
 	if operation == "tasks" && len(positionals) != 0 {
 		return fail(exitValidation, errors.New("tasks accepts filters, not positional arguments; use task TASK_ID for one item"))
@@ -145,6 +160,9 @@ Inspection never retries, cancels, verifies or resolves a task.`)
 		}
 		return exitSuccess
 	}
+	if *open {
+		return openWorkTaskWorkbench(options.state, id, in, out, diagnostics)
+	}
 	fmt.Fprintln(out, "Workspace:", consoleContent(options.state, len(options.state)))
 	if operation == "task" {
 		printWorkTask(out, options.state, task)
@@ -190,8 +208,8 @@ func printWorkTask(out io.Writer, state string, t managed.Task) {
 	if t.Recovery != nil {
 		fmt.Fprintf(out, "\nRecovery delivery: %s\n%s\nAvailable actions: %s\n", text(t.Recovery.Delivery), text(t.Recovery.Reason), text(strings.Join(t.Recovery.Actions, ", ")))
 		fmt.Fprintln(out, "Review this exact task and its side effects in Tasks before acting.")
-		printWorkTaskCommand(out, "Workbench", []string{"amx", "ui", "--state", state})
 	}
+	printWorkTaskCommand(out, "Open task", []string{"amx", "task", t.ID, "--open", "--state", state})
 }
 
 func printWorkTaskCommand(out io.Writer, label string, args []string) {

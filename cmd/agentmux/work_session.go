@@ -212,6 +212,10 @@ func runWorkSessionInner(operation string, args []string, in io.Reader, out, dia
   amx reply TASK_OR_MESSAGE_ID "message" [--mode auto|note|instruction]
                  [--to AGENT | --board NAMESPACE]
   amx inbox [--session work | --state DIR]
+  amx context [--json] [--session work | --state DIR]
+  amx task TASK_ID [--json | --open] [--session work | --state DIR]
+  amx tasks [--to AGENT] [--status STATE] [--query TEXT] [--limit N]
+                 [--after TASK_ID] [--json] [--session work | --state DIR]
   amx board "note" [--group ID | --board NAMESPACE] [--session work | --state DIR]
   amx add [NAME] --harness claude|codex|pi|antigravity --project DIR
                  [--title "..."] [--role "..." | --native-only]
@@ -242,6 +246,8 @@ workers; --mode selects intent explicitly. Replies retain broker-checked ancestr
 and cannot widen a private audience. Board replies need an explicit destination.
 Native receiver delivery defaults to Manual. Use delivery ID review|auto to allow
 attributed native turns; sender command permissions remain separate.
+task reads one exact delegation; --open shows it directly in Tasks, including
+recovery controls when available. Opening never retries or resolves anything.
 Use attach to type directly. Native Antigravity requires --native-only; use its Pi
 bridge for injected coordination context. ? opens workbench help, Ctrl-G editor
 help, Ctrl-T message intent, V role editing, B admission budgets, W workspaces,

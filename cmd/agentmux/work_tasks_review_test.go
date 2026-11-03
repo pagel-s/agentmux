@@ -93,7 +93,7 @@ func TestWorkTasksReviewRecoveryHintKeepsExactWorkspaceWithoutTerminalControls(t
 		if strings.ContainsAny(out.String(), "\x1b\u202e") {
 			t.Fatalf("recovery workspace emitted terminal controls: %q", out.String())
 		}
-		command := managedlaunch.ShellCommand([]string{"amx", "ui", "--state", state})
+		command := managedlaunch.ShellCommand([]string{"amx", "task", "task_exact", "--open", "--state", state})
 		if strings.ContainsAny(state, "\x1b\u202e\n") {
 			if strings.Contains(out.String(), command) {
 				t.Fatalf("unsafe recovery hint was offered as a copyable command: %q", out.String())

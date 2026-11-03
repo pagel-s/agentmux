@@ -36,6 +36,7 @@ func TestEverydayShortcutsPreserveIntentAndPayload(t *testing.T) {
 		{[]string{"connect", "-s", "poem", "--name", "reviewer", "external-7"}, []string{"connect", "external-7", "--session", "poem", "--name", "reviewer"}},
 		{[]string{"-s", "poem", "context", "-j"}, []string{"context", "--json", "--session", "poem"}},
 		{[]string{"-s", "poem", "task", "task-1", "-j"}, []string{"task", "task-1", "--json", "--session", "poem"}},
+		{[]string{"-s", "poem", "task", "task_1", "-o"}, []string{"task", "task_1", "--open", "--session", "poem"}},
 		{[]string{"tasks", "--query", "-s", "--status", "--state", "--after", "-j", "--limit", "4", "-j", "-s", "poem"}, []string{"tasks", "--query", "-s", "--status", "--state", "--after", "-j", "--limit", "4", "--json", "--session", "poem"}},
 	}
 	for _, tc := range cases {
