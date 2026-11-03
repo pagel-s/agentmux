@@ -1,20 +1,16 @@
 # Installation
 
-Agentmux's CLI is **`amx`**. Native sessions require **tmux 3.2+** and the
-respective provider CLIs installed and authenticated separately. Published
-binaries need no Go toolchain. Python 3 runs the installer and verification scripts.
-
-Choose the current source build below for [`amx work`](../working.md) and
-[`amx flow`](../workflows.md), including private workflow snapshots and full
-workflow isolation. The published v0.11.0 binary predates those commands.
+Agentmux's CLI is **`amx`**. Published binaries need no Go toolchain. Python 3
+runs the installer; the first [`amx demo`](first-result.md) needs only Git and a
+POSIX shell after installation. Native sessions additionally require **tmux
+3.2+** and separately installed, authenticated provider CLIs.
 
 ## Install a published binary (recommended)
 
-The current release is **[v0.11.0](https://github.com/pagel-s/agentmux/releases/tag/v0.11.0)**,
-with Linux/macOS binaries for x86-64 and ARM64. It includes the focused terminal
-workbench, native layouts, last-session attachment and the
-[illustrated workflows](../visual-guide.md). The managed runtime and workbench
-remain experimental.
+Release **[v0.12.0](https://github.com/pagel-s/agentmux/releases/tag/v0.12.0)**
+provides Linux/macOS binaries for x86-64 and ARM64. It includes `amx demo`,
+[`amx work`](../working.md), [`amx flow`](../workflows.md) and native terminal
+sessions. The managed runtime and workbench remain experimental.
 
 For publicly accessible release assets, download the versioned installer from
 GitHub, inspect it, then run it with Python 3. These commands also require `curl`.
@@ -26,15 +22,15 @@ GitHub CLI route below.
 mkdir -p "$HOME/.local/bin"
 amx_release_dir="$(mktemp -d)"
 curl --fail --location --proto '=https' --tlsv1.2 \
-  https://raw.githubusercontent.com/pagel-s/agentmux/v0.11.0/scripts/install-release.py \
+  https://raw.githubusercontent.com/pagel-s/agentmux/v0.12.0/scripts/install-release.py \
   --output "$amx_release_dir/install-release.py"
 # Read the downloaded installer before running it.
-python3 "$amx_release_dir/install-release.py" --version v0.11.0 \
+python3 "$amx_release_dir/install-release.py" --version v0.12.0 \
   --destination "$HOME/.local/bin/amx"
 rm -r "$amx_release_dir"
 export PATH="$HOME/.local/bin:$PATH"
 amx version
-amx doctor
+amx demo
 ```
 
 For access-controlled releases, authenticate GitHub CLI with an account that
@@ -44,18 +40,18 @@ versioned installer before installation:
 ```sh
 mkdir -p "$HOME/.local/bin"
 amx_release_dir="$(mktemp -d)"
-gh release download v0.11.0 --repo pagel-s/agentmux \
+gh release download v0.12.0 --repo pagel-s/agentmux \
   --dir "$amx_release_dir" --pattern 'agentmux_*.tar.gz' --pattern checksums.txt
 gh api repos/pagel-s/agentmux/contents/scripts/install-release.py \
-  --method GET -f ref=v0.11.0 --header 'Accept: application/vnd.github.raw+json' \
+  --method GET -f ref=v0.12.0 --header 'Accept: application/vnd.github.raw+json' \
   > "$amx_release_dir/install-release.py"
 # Read the downloaded installer before running it.
-python3 "$amx_release_dir/install-release.py" --version v0.11.0 \
+python3 "$amx_release_dir/install-release.py" --version v0.12.0 \
   --artifact-dir "$amx_release_dir" --destination "$HOME/.local/bin/amx"
 rm -r "$amx_release_dir"
 export PATH="$HOME/.local/bin:$PATH"
 amx version
-amx doctor
+amx demo
 ```
 
 **Upgrading:** add `--replace` to the `python3` command. The installer verifies
@@ -64,6 +60,12 @@ SHA256 and the executable version before atomically installing `amx`. A previous
 executable is retained as an `amx.backup-*` file; the recognized old `agentmux`
 path is retired. Unrelated symlinks and commands are never silently replaced.
 A fresh installation creates only `amx`.
+
+`amx demo` prints the location of its disposable repository and retained check,
+patch and report evidence. See [your first checked result](first-result.md) for
+what to inspect and how to move on to a live task. It starts no models and needs
+no provider login. Run `amx help` for everyday commands and `amx help all` for the
+full command reference.
 
 Archives retain the `agentmux_OS_ARCH.tar.gz` project name and contain `amx`,
 docs, examples and scripts. The installer also accepts older archives whose
@@ -92,21 +94,19 @@ new sandbox.
 
 ## Build from source
 
-Building needs Git, Make, Python 3, tmux 3.2+ and **Go 1.24+**. The Makefile
-prefers a compatible repo-local toolchain under `.tools/`, then Go from PATH.
+Building needs Git, Make and **Go 1.24+**. `make install` also uses Python 3.
+The Makefile prefers a compatible repo-local toolchain under `.tools/`, then Go
+from PATH. Native sessions additionally need tmux 3.2+.
 
 ```sh
-# macOS
-brew install tmux
-
 # Ubuntu/Debian: install Go 1.24+ separately if needed
-sudo apt install git make tmux python3
+sudo apt install git make python3
 
 git clone https://github.com/pagel-s/agentmux.git
 cd agentmux
 make build
 ./bin/amx version
-./bin/amx doctor
+./bin/amx demo
 ```
 
 In an existing clean checkout on `main`, run `git pull --ff-only` and
@@ -129,6 +129,7 @@ uniquely named backup.
 Check the source workflow commands after installation:
 
 ```sh
+amx demo
 amx work --help
 amx flow --help
 ```
@@ -145,6 +146,9 @@ Use the published installer or build from the checkout.
 
 ## Check the native providers
 
+For native terminal sessions, install tmux 3.2+ (`brew install tmux` on macOS or
+`sudo apt install tmux` on Ubuntu/Debian) as well as the selected provider CLIs.
+
 ```sh
 claude --version
 codex --version
@@ -156,10 +160,11 @@ Agentmux reuses those native logins in trusted local mode; it does not install a
 provider or sign you in. `amx doctor CONFIG` also checks configured native CLI
 compatibility.
 
-Continue with the [fresh-install walkthrough](quickstart.md) or
+For your first result, use [the model-free demo](first-result.md). For native
+conversations, continue with the [fresh-install walkthrough](quickstart.md) or
 [terminal folders and layouts](../terminal-workflow.md). The walkthrough covers
-native conversations, opt-in collaboration, shared memory, revocation and web
-controls. From a checkout, Linux operators can verify model-free isolation with:
+opt-in collaboration, shared memory, revocation and web controls. From a checkout,
+Linux operators can verify model-free isolation with:
 
 ```sh
 python3 scripts/smoke-managed.py

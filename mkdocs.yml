@@ -46,6 +46,7 @@ nav:
   - Home: index.md
   - Getting Started:
       - Installation: getting-started/installation.md
+      - Your first checked result: getting-started/first-result.md
       - Visual workflow guide: visual-guide.md
       - Quickstart: getting-started/quickstart.md
       - Everyday commands: getting-started/everyday-commands.md
@@ -83,6 +84,9 @@ nav:
       - Mixed Harness Scenario: mixed-harness-acceptance.md
       - Environments: research-environments.md
   - Reference:
+      - Quality and Evidence: quality.md
+      - Workflow Evaluation: evaluation.md
+      - Release Validation: releasing.md
       - Layout Configuration (v1): config-guide.md
       - Pane Harnesses (v1): harnesses.md
       - CLI Commands: commands.md

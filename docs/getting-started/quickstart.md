@@ -6,15 +6,14 @@ collaboration while keeping both terminals usable. It uses a separate workspace
 named `try-agentmux`. Every owner command below selects that same workspace,
 regardless of the current directory.
 
-For a single coding request with implementation, fresh review and acceptance
-checks, use [work on a task](../working.md) instead. Its `amx work` preview and
-the command-only [advanced workflow example](../workflows.md#try-the-complete-journey-without-model-calls)
-require the current source build. The walkthrough below covers native interactive
-sessions available in v0.11.0 and the current source.
+For your first checked result without provider setup, use
+[`amx demo`](first-result.md). For a live coding request with implementation,
+fresh review and acceptance checks, use [work on a task](../working.md).
+The walkthrough below covers native interactive sessions.
 
 ## 1. Install and check Agentmux
 
-Install **v0.11.0** using the
+Install **v0.12.0** using the
 [published binary instructions](installation.md#install-a-published-binary-recommended)
 for the `amx` command without a Go toolchain. Then skip the source-build commands
 below and continue with the native CLI checks in this step.

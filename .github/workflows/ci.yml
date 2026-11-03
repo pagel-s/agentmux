@@ -92,6 +92,14 @@ jobs:
       - name: Verify release retry guards
         run: python3 scripts/test-check-release.py
 
+      - name: Verify installed release and draft publication guards
+        run: |
+          python3 scripts/test-smoke-release.py
+          python3 scripts/test-publish-release.py
+
+      - name: Verify comparison harness failure controls without model calls
+        run: python3 scripts/test-compare-workflows.py
+
       - name: Verify soak audit and cleanup regressions
         run: python3 scripts/test-soak-managed.py
 
@@ -104,6 +112,44 @@ jobs:
           distribution: goreleaser
           version: v2.19.0
           args: check
+
+  first-run:
+    name: Installed first run (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-14]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+      - name: Build actual distribution archives without publishing
+        uses: goreleaser/goreleaser-action@v5
+        with:
+          distribution: goreleaser
+          version: v2.19.0
+          args: release --snapshot --clean
+      - name: Install the host archive and complete the model-free journey
+        run: |
+          snapshot_version=$(python3 -c 'import json; print(json.load(open("dist/metadata.json"))["version"])')
+          python3 scripts/smoke-release.py --artifact-dir dist --version "$snapshot_version" --output "$RUNNER_TEMP/agentmux-installed-first-run"
+      - name: Preserve first-run evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: installed-first-run-${{ matrix.os }}
+          path: ${{ runner.temp }}/agentmux-installed-first-run
+          include-hidden-files: true
+          retention-days: 7
+          if-no-files-found: ignore
 
   sandbox:
     # Keep isolation checks explicit and fail closed. A runner that cannot

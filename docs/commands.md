@@ -7,12 +7,13 @@ For original YAML pane-layout examples, see [recipes](recipes.md).
 
 ## Checked coding requests
 
-`work` and `flow` require a current [source installation](getting-started/installation.md#build-from-source);
-they are newer than the published v0.11.0 binary. Both select a Git project,
+`demo`, `work` and `flow` are included in
+[Agentmux v0.12.0](getting-started/installation.md). `work` and `flow` select a Git project,
 independently of an interactive workspace's `-s NAME` selector.
 
 | Command | Use it to |
 | --- | --- |
+| `amx demo [--output NEW_DIR]` | Run a deterministic checked fixture, retain evidence, and apply its patch only to a generated disposable repository; no models |
 | `amx work "Change description" -- CHECK [ARG...]` | Preview implementation, fresh review and checks without models or run files |
 | `amx work "Change description" --allow-models -- CHECK [ARG...]` | Execute the bounded journey with the explicitly selected provider profiles |
 | `amx work status [RUN\|latest]` | Inspect recorded phases, checks, review and next action for the project |
@@ -54,15 +55,15 @@ for model-free examples, plan fields, exact saved-brief delivery and limitations
 
 ## Everyday work sessions
 
-Use `make install` for the `amx` command. The [short command reference](getting-started/everyday-commands.md)
+Install `amx` using the [release installer or source build](getting-started/installation.md).
+The [short command reference](getting-started/everyday-commands.md)
 covers `amx a`, `ui`, `ls`, `link`, `mode`, and directional `allow`/`deny`.
 Everyday commands accept `-s NAME` for the workspace, before or after the command.
 Inside an owned tmux attachment the workspace is inferred from that exact
 attachment; explicit selectors take precedence. Outside, it defaults to `work`.
 `start` / `up` is the creation exception: its default is always `work`.
 
-After building, put `bin/` on your PATH as shown in the [installation
-guide](getting-started/installation.md). With Claude Code and Codex installed and
+After installation, check `command -v amx`. With Claude Code and Codex installed and
 logged in, run `amx start` from your project directory. It creates the
 default workspace `work` and opens its workbench.
 

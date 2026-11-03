@@ -6,8 +6,9 @@ missions with dependencies, evidence explanations and repeated comparisons.
 It complements native tmux sessions and the managed broker. It does not replace
 their identity, permission, delivery or recovery controls.
 
-These commands require the current source build (`make install`); the published
-v0.11.0 binary predates them. For one coding request with defaults for
+These commands are included in [Agentmux v0.12.0](getting-started/installation.md).
+For a first checked fixture with no provider configuration, run
+[`amx demo`](getting-started/first-result.md). For one coding request with defaults for
 implementation, fresh reviews and acceptance checks, start with
 [`amx work`](working.md). For a visual map of execution and explicit source
 application, see the [illustrated journey](visual-guide.md#ask-for-a-checked-coding-change).
