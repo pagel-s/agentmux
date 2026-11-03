@@ -5,7 +5,7 @@ This guide explains what each command is for, when to use it, and the most usefu
 For a guided native-terminal workflow, see [work sessions](work-sessions.md).
 For original YAML pane-layout examples, see [recipes](recipes.md).
 
-`context`, `task`/`tasks`, `work list --limit` and `work show --open` are
+`context`, `task`/`tasks` (including `task ID --open`), `work list --limit` and `work show --open` are
 source-build additions after v0.12.0.
 
 ## Checked coding requests

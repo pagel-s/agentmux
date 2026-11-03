@@ -47,7 +47,10 @@ reviews, deadlines and recovery. Each run retains private Git evidence;
 filesystem and network isolation require the explicit
 [Linux isolation option](docs/workflows.md#private-storage-and-full-isolation).
 
-[![Coding workflow: preview, bounded implementation and fresh review, saved evidence, explicit application](docs/assets/guide/workflow-journey.svg)](docs/visual-guide.md#ask-for-a-checked-coding-change)
+[![Actual checked-result report from a model-free fixture, showing retained checks and a reviewable patch](docs/assets/guide/checked-work-report.jpg?v=78d91f2ad404)](docs/visual-guide.md#ask-for-a-checked-coding-change)
+
+The report above comes from a command-only fixture. It demonstrates the evidence
+and application controls; it does not measure provider task quality.
 
 For several native conversations, use [work sessions](#start-a-work-session).
 For custom comparisons, missions and handoffs, see [advanced workflows](docs/workflows.md).
@@ -77,6 +80,11 @@ Already in a checkout? Run `make build` from its root. The Makefile selects a
 compatible repo-local Go toolchain when available. See
 [installation](docs/getting-started/installation.md) for binary releases and PATH
 setup. Remote `go install …@latest` is currently unsupported by this module.
+
+Current `main` adds workspace targeting with `amx context`, exact task opening
+with `amx task ID --open`, searchable workspace selection and direct session
+task history. These controls require a [source build](docs/getting-started/installation.md#build-from-source);
+the published v0.12.0 binaries retain their original feature set.
 
 `make install` installs `amx`, the Agentmux command. Use
 `amx` to open the workbench, `amx a` to restore the last live terminal, `amx a claude -s work`
@@ -165,7 +173,7 @@ Two unrelated groups do not silently share context. `isolate` revokes peer
 coordination and group membership while keeping native interaction running.
 Accepted tasks need separate cancellation; previously read information remains.
 Keep the printed group ID: with several groups, post using
-`amx board "Note for this group" --group GROUP_ID`. The web app's Teams view
+`amx board "Note for this group" --group GROUP_ID`. The web app's **Groups & teams** view
 lists owner collaboration groups and their boards/memory.
 `send` defaults to an inbox note for native sessions and an instruction task for
 managed workers. Choose `--mode note` or `--mode instruction` explicitly; the
@@ -173,7 +181,8 @@ terminal editor uses **Ctrl-T** and the web composer shows the same intent.
 To receive instructions inside a native conversation, also choose receiver
 delivery: `amx delivery codex review` or `amx delivery codex auto`.
 Manual is the default. Command permissions and delivery mode are separate;
-the Agents view exposes both delivery evidence and approvals. See
+**Sessions** in the terminal and **Session detail** on the web expose delivery
+evidence and approvals. See
 [native collaboration](docs/native-delivery.md) for subscriptions, limits,
 provider capabilities and upgrade instructions.
 Replies retain broker-checked ancestry and an explicit shared or private
@@ -210,8 +219,8 @@ persistence and the exact behavior of `amx a`.
 ## Observe and control
 
 The terminal dashboard provides agent selection, terminal previews, recent
-coordination, searchable complete task history, follow-ups, cancellation and live
-permissions. In Tasks, **f** searches and **PgUp/PgDn** pages; **?** opens context
+coordination, searchable retained message/event/task history, follow-ups,
+cancellation and live permissions. In Tasks, **f** searches and **PgUp/PgDn** pages; **?** opens context
 help, including **Ctrl-G** while editing without consuming printable text.
 Teams and Events expose consented membership, pending invitations, spawn lineage,
 worker admission state and recent lifecycle changes. Team boards and memory appear
@@ -220,6 +229,21 @@ in the same namespace controls as configured shared knowledge.
 controls, shared-memory inspection/editing, session setup/discovery, a relationship
 graph and read-only terminal previews. Native
 terminal input stays in tmux.
+
+From a current source installation, use these shortcuts for daily inspection:
+
+```sh
+amx context -s work
+amx tasks --to codex -s work
+amx task TASK_ID --open -s work
+```
+
+The last command opens that exact retained task with its evidence and recovery
+controls, including older tasks and retired recipients. Recovery still requires
+explicit confirmation against the task/version. In terminal and web Actions,
+**Tasks for selected session** opens that recipient's complete history; web
+attention rows also offer **Inspect tasks**. Board and Events page/search
+retained broker history separately from native-provider conversations.
 
 Collaboration groups contribute permissions independently, including overlapping
 groups. The controls distinguish stored owner overrides, effective access and

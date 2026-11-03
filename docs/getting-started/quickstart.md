@@ -11,6 +11,10 @@ For your first checked result without provider setup, use
 fresh review and acceptance checks, use [work on a task](../working.md).
 The walkthrough below covers native interactive sessions.
 
+The base walkthrough works with v0.12.0. Newer source-only shortcuts are marked
+where used; choose a [source installation](installation.md#build-from-source)
+for the current power-user controls.
+
 ## 1. Install and check Agentmux
 
 Install **v0.12.0** using the
@@ -93,12 +97,17 @@ Press **F1** (or **Ctrl-b**, release, then **g**) to return to the workbench.
 Try **/** to search, **Shift+L** to edit its title, **Shift+V** to edit its role,
 **Shift+N** to add a session, **?** for context help, and **←/→** or **1–8** to change views. **Tab** switches sidebar/content focus;
 ↑/↓ navigates that focused area. Left/right works across all eight views. In Connections
-and Teams, use **h/l** or **Alt+←/→** to choose the recipient or action target.
+(Links on narrow terminals) and Teams, use **h/l** or **Alt+←/→** to choose the recipient or action target.
 The footer follows the current view and selection; uppercase letters mean hold
 Shift. Titles can change or repeat;
 commands still use the stable IDs. A role update changes future managed turns
 and sends a native inbox notice. In the default Manual mode it does not start
 a native turn; Review/Auto can deliver updated role and boundary context.
+
+On current `main`, **Shift+N** reviews the inherited provider, project and
+coordinated/native-only choice, the provider-default model and trusted local host
+execution. **Ctrl+O** in its title editor opens advanced settings. It does not
+copy an existing model override or sandbox.
 
 For pairing existing sessions, use **3 Connections**, choose a recipient with
 **h/l** or **Alt+←/→**, then **c**. **7 Teams** is for consent-based teams created
@@ -196,6 +205,21 @@ Open the task with **o**, search with **f**, and use **PgUp/PgDn** for history.
 Return from the reader and cancel this demonstration task with **c** after
 inspection, so it does not remain pending across reopening. In a managed worker
 workflow, eligible queued tasks are claimed and executed instead.
+
+With a current source build, copy the exact inspection command printed by
+`send`, or use:
+
+```sh
+amx tasks --to codex --session try-agentmux
+amx task TASK_ID --open --session try-agentmux
+```
+
+Replace `TASK_ID` with the queued task's ID. `--open` goes straight to that
+exact task in Tasks, including older records, and shows its current version and
+recovery evidence. Opening changes no task state. When recovery is available,
+**Ctrl+K** offers a separate review and confirmation against the exact
+task/version. **Tasks for selected session** in terminal/web Actions provides
+the recipient's complete paginated history.
 
 ### Try an approved native turn
 
@@ -327,6 +351,13 @@ identified. Existing external conversations remain under your direct control.
 selected workspace and retains the previous workbench and drafts. A standalone
 observer shows an exact attach command when native input needs another server.
 For an older custom state location, use `amx workspaces --register DIRECTORY`.
+
+Current source builds also provide `amx context --session try-agentmux` to
+explain the ordinary command target without attaching. Outside an attachment,
+bare `amx` / `amx a` selects a sole running workspace or offers a running-workspace
+chooser; press `/` or Ctrl+F there to filter by name, state path or status.
+Commands with an agent ID still default to workspace `work` outside an owned
+attachment, so retain the explicit selector used throughout this walkthrough.
 
 ## 12. Stop the test and try isolated/managed workflows
 

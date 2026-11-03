@@ -159,12 +159,15 @@ neither alone proves arbitrary task correctness.
 
 ## Run a small usability pilot
 
-Recruit 6–8 developers who did not build Agentmux, including users unfamiliar
-with tmux. Treat this as a qualitative pilot, not a statistically powered
-product ranking. Counterbalance the order of Agentmux and the selected
+Recruit 6–8 developers who did not build Agentmux and represent its intended
+power-user audience. Include experienced CLI/tmux users and record prior
+familiarity with Agentmux and the comparison tool. Evaluate novices separately
+if making beginner-accessibility claims. Treat this as a qualitative pilot,
+not a statistically powered product ranking. Counterbalance the order of Agentmux and the selected
 alternative. Give each participant an equivalent disposable repository and
-the same tasks: install, launch two agents, find an agent needing attention,
-review/apply a change, revoke collaboration and recover an interrupted task.
+the same tasks: install, resume a workspace, launch two agents, delegate a task,
+find an agent needing attention, inspect the exact delegated task, review/apply
+a change, revoke collaboration and recover an interrupted task.
 Predeclare task completion criteria and a time limit. Keep a facilitator script
 and separate unassisted performance from assistance.
 

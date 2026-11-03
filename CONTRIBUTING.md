@@ -55,6 +55,30 @@ finite deadline and explicit opt-in. Routine contributions and CI should use
 the deterministic fixtures. Comparative productivity claims require the
 [evaluation protocol](docs/evaluation.md).
 
+## Refresh documentation screenshots
+
+Capture the real app after changing visible controls. The capture tool needs
+Linux, tmux, Git and DejaVu Sans Mono fonts.
+Use a private Python environment for browser and terminal-rendering dependencies:
+
+```sh
+make build
+amx_docs_env="$(mktemp -d)"
+python3 -m venv "$amx_docs_env"
+"$amx_docs_env/bin/pip" install playwright pillow rich
+"$amx_docs_env/bin/playwright" install chromium
+"$amx_docs_env/bin/python" scripts/capture-docs.py --binary bin/amx
+```
+
+This creates disposable command-only workspaces and a scripted research trial;
+both use explicitly trusted local execution. It starts no models and uses no
+live user workspace. It stages all captures
+before updating `docs/assets/guide/`. The adjacent `capture-provenance.json`
+records the source, fixture conditions and image hashes. Inspect every image
+and its caption; refresh each Markdown image's `?v=` cache key to the first
+12 characters of its recorded SHA256, then run `mkdocs build --strict` before
+publishing. Never use generated UI illustrations as evidence of actual app controls.
+
 ## Send a pull request
 
 Explain the concrete problem, resulting behavior and relevant validation.

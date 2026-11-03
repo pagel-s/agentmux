@@ -86,7 +86,7 @@ view’s content. The purple header shows focus; ↑/↓ navigates that area.
 Left/Right or 1–8 changes views. Esc returns focus to the sidebar after closing
 an open reader or editor. Ctrl+P finds sessions by task, stable
 ID, provider or project: Enter opens the native terminal, Tab selects it in the
-workbench, and Esc returns. In Links, use the sidebar to choose the sender, then Tab to choose a recipient
+workbench, and Esc returns. In Connections (Links on narrow terminals), use the sidebar to choose the sender, then Tab to choose a recipient
 with ↑/↓; h/l also changes the recipient. F1 returns from a native terminal.
 
 See [terminal folders and layouts](../terminal-workflow.md) for scratch panes,
@@ -160,7 +160,8 @@ effects cannot be undone.
 | `mode` | `delivery` |
 
 Everyday commands accept `-s` for `--session`, `-p` for `--project`, `-d` for
-`--detach`, and `-j` for `--json` where that option applies. Text after a literal
+`--detach`, and `-j` for `--json` where that option applies. `web` and `task`
+also accept `-o` for `--open`. Text after a literal
 `--` keeps its original meaning. Long commands and flags remain available.
 `allow FROM TO commands|messages|pings` and the matching `deny` change only the
 selected permission; they do not enable receiver delivery or grant new memory

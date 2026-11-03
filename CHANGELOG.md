@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Refresh the repository and site documentation, replace the dense workflow
+  diagram with an actual checked-result report, and recapture terminal/web
+  screenshots from the current app using model-free fixtures.
 - License Agentmux under MIT and include the license in release archives.
 - Make the workspace chooser searchable and show active workspaces first in
   non-interactive home output. Add read-only `amx context` to explain the exact
