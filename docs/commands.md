@@ -5,7 +5,7 @@ This guide explains what each command is for, when to use it, and the most usefu
 For a guided native-terminal workflow, see [work sessions](work-sessions.md).
 For original YAML pane-layout examples, see [recipes](recipes.md).
 
-`context`, `task`/`tasks` (including `task ID --open`), `work list --limit` and `work show --open` are
+`context`, `observe`, `task`/`tasks` (including `task ID --open`), `work list --limit` and `work show --open` are
 source-build additions after v0.12.0.
 
 ## Checked coding requests
@@ -84,6 +84,7 @@ default workspace `work` and opens its workbench.
 | `amx add --harness antigravity --native-only --project DIR` | Start native Antigravity without an injected Agentmux prompt |
 | `amx sessions` | List registered sessions and separately observed external terminals |
 | `amx context [--json]` | Explain the ordinary command target, selection source and runtime status without starting anything |
+| `amx observe [--watch] [--json] [--limit N]` | Inspect fresh broker/worker reporting, retained task attention and capacity; drill into exact task evidence using the [observability guide](observability.md) |
 | `amx task TASK_ID [--json]` | Read one delegated instruction, its result, version, delivery and recovery evidence |
 | `amx task TASK_ID --open` | Open that exact task in the workbench's Tasks view; recovery still requires explicit review and confirmation |
 | `amx tasks [--to ID] [--status STATE] [--query TEXT] [--limit N] [--after TASK_ID] [--json]` | Search retained delegation history, newest first; copy the continuation command to read more |

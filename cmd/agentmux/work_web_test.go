@@ -22,6 +22,7 @@ func TestWebOwnerCapabilityHostAndOriginAreRequired(t *testing.T) {
 		{"host rebinding", "/api/snapshot", "evil.example", "", token, 403},
 		{"cross origin", "/api/snapshot", host, "https://evil.example", token, 403},
 		{"cross origin assets", "/app.js", host, "https://evil.example", "", 403},
+		{"cross origin observation asset", "/observation.js", host, "https://evil.example", "", 403},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			r := httptest.NewRequest(http.MethodGet, "http://"+test.host+test.path, nil)
@@ -47,6 +48,26 @@ func TestWebOwnerCapabilityHostAndOriginAreRequired(t *testing.T) {
 				t.Fatal("owner API enabled CORS")
 			}
 		})
+	}
+}
+
+func TestWebObservationModuleIsEmbeddedAndLoadedBeforeControllers(t *testing.T) {
+	host, token := "127.0.0.1:12345", "private-random-owner-capability"
+	handler := workWebHandler("/nonexistent", nil, token, host)
+	request := func(path string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodGet, "http://"+host+path, nil)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		return w
+	}
+	asset := request("/observation.js")
+	if asset.Code != http.StatusOK || asset.Header().Get("Content-Type") != "application/javascript; charset=utf-8" || !strings.Contains(asset.Body.String(), "AgentmuxObservation") || strings.Contains(asset.Body.String(), token) {
+		t.Fatalf("observation module unavailable or unsafe: %d %s", asset.Code, asset.Body.String())
+	}
+	shell := request("/").Body.String()
+	moduleAt, controllerAt := strings.Index(shell, `src="/observation.js" defer`), strings.Index(shell, `src="/app.js" defer`)
+	if moduleAt < 0 || controllerAt < 0 || moduleAt >= controllerAt {
+		t.Fatal("browser controllers can run before their observation module")
 	}
 }
 

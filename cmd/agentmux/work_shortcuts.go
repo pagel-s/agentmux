@@ -26,7 +26,7 @@ var workAliases = map[string]string{
 
 func workCommand(command string) bool {
 	switch command {
-	case "start", "attach", "dashboard", "sessions", "workspaces", "context", "task", "tasks", "add", "collaborate", "disconnect", "isolate", "label", "delivery", "role", "web", "send", "reply", "inbox", "board", "down", "remove", "retire", "connect", "relaunch", "allow", "deny", "split", "unsplit":
+	case "start", "attach", "dashboard", "sessions", "workspaces", "context", "observe", "task", "tasks", "add", "collaborate", "disconnect", "isolate", "label", "delivery", "role", "web", "send", "reply", "inbox", "board", "down", "remove", "retire", "connect", "relaunch", "allow", "deny", "split", "unsplit":
 		return true
 	}
 	return false
@@ -126,7 +126,7 @@ func normalizeWorkCLI(input []string) ([]string, error) {
 				name = "--detach"
 			}
 		case "-j":
-			if command == "delivery" || command == "workspaces" || command == "context" || command == "task" || command == "tasks" {
+			if command == "delivery" || command == "workspaces" || command == "context" || command == "observe" || command == "task" || command == "tasks" {
 				name = "--json"
 			}
 		case "-o":
@@ -375,25 +375,7 @@ type workHome struct {
 func (m workHome) Init() tea.Cmd { return nil }
 
 func (m workHome) visibleRows() []workspaceListing {
-	words := strings.Fields(strings.ToLower(m.query))
-	if len(words) == 0 {
-		return m.rows
-	}
-	var rows []workspaceListing
-	for _, row := range m.rows {
-		text := strings.ToLower(row.Session + " " + row.State + " " + row.Status)
-		match := true
-		for _, word := range words {
-			if !strings.Contains(text, word) {
-				match = false
-				break
-			}
-		}
-		if match {
-			rows = append(rows, row)
-		}
-	}
-	return rows
+	return matchingWorkspaceRows(m.rows, m.query)
 }
 
 func (m workHome) selectedState() string {

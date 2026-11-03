@@ -392,6 +392,9 @@ func (m console) agentRuntimePanel(width int) string {
 	if len(children) > 0 {
 		out.WriteString("Children: " + consoleContent(strings.Join(children, ", "), 400) + "\n")
 	}
+	if m.data.workerRuntimeErr != nil {
+		out.WriteString("Worker observation unavailable: " + consoleContent(m.data.workerRuntimeErr.Error(), 150) + "\n")
+	}
 	if a.Config.Interaction == "interactive" {
 		if pane, ok := m.data.runtime.Agents[a.ID]; ok && pane.State != "" {
 			if m.offline {

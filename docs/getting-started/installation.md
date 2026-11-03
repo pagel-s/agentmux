@@ -12,8 +12,8 @@ provides Linux/macOS binaries for x86-64 and ARM64. It includes `amx demo`,
 [`amx work`](../working.md), [`amx flow`](../workflows.md) and native terminal
 sessions. The managed runtime and workbench remain experimental.
 
-Current `main` has newer daily controls: `amx context`, `amx task` / `tasks`,
-exact task opening with `task ID --open`, a searchable running-workspace chooser,
+Current `main` has newer daily controls: `amx context`, `amx observe`, `amx task` / `tasks`,
+exact task opening with `task ID --open`, searchable startup and Ctrl+W workspace choosers,
 and `work list --limit` / `work show --open`. Use the
 [source installation](#build-from-source) for these features. The v0.12.0
 archives are unchanged and do not contain them.
@@ -141,6 +141,7 @@ amx work --help
 amx flow --help
 amx task --help
 amx context --help
+amx observe --help
 ```
 
 `amx work "Describe the change" -- CHECK [ARG...]` previews a checked coding

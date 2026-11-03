@@ -16,6 +16,7 @@ Start here:
   amx add --harness codex --project DIR
   amx sessions                 List sessions; amx opens the workbench
   amx context                  Show the selected workspace and why
+  amx observe [--watch]        Inspect fresh health and delivery evidence
   amx task ID [--open]         Inspect a task; open its exact workbench view
   amx collaborate claude codex  Connect selected agents
   amx web --open               Open the local dashboard
@@ -97,7 +98,7 @@ func printAllUsage(out io.Writer) {
 
 Run amx to open the current
 workspace or choose a running one. Short options: -s workspace, -p project,
--d detach on up/start, -j JSON on delivery, workspaces, context, task/tasks;
+-d detach on up/start, -j JSON on delivery, workspaces, context, observe, task/tasks;
 -o opens the web browser or the exact task workbench (task ID).
 Use -s before or after the command. Inside an owned tmux attachment, omitted
 workspace selectors use that attachment; outside, commands default to work.
@@ -130,6 +131,7 @@ Usage:
   amx role ID "Current owner role" [--session work | --state DIR]
   amx sessions [--session work | --state DIR]
   amx context [--json] [--session work | --state DIR]
+  amx observe [--watch [--interval 1s]] [--json] [--limit N] [--session work | --state DIR]
   amx task TASK_ID [--json | --open] [--session work | --state DIR]
   amx tasks [--to ID] [--status STATE] [--query TEXT] [--limit N] [--after TASK_ID] [--json] [--session work | --state DIR]
   amx workspaces [--json] [--register DIR]

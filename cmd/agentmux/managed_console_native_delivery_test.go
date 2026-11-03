@@ -203,9 +203,9 @@ func TestConsoleNativeSummaryDistinguishesPermissionReadinessAndCapability(t *te
 	m.data.native.State = "draft"
 	m.data.native.Reason = "Preserving your terminal draft"
 	m.data.native.Policy.Mode = "auto"
-	m.data.native.Active = &managed.NativeReceipt{ID: "delivery-1", Phase: "submitted"}
+	m.data.native.Active = &managed.NativeReceipt{ID: "delivery-1", Phase: "submitted", UpdatedAt: "2026-01-01T12:00:00Z"}
 	view := ansi.Strip(m.nativeDeliverySummary(100))
-	for _, text := range []string{"auto", "draft", "Turns 0/20", "pending 2", "submitted", "instructions on", "replies on", "Shift+D"} {
+	for _, text := range []string{"auto", "draft", "Turns 0/20", "pending 2", "submitted", "instructions on", "replies on", "Shift+D", "Adapter reporting: unknown", "Last receipt: 2026-01-01T12:00:00Z"} {
 		if !strings.Contains(view, text) {
 			t.Fatalf("missing native evidence %q: %s", text, view)
 		}

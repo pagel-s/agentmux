@@ -96,6 +96,8 @@ func run(args []string) int {
 		return runWorkDelivery(args[1:], os.Stdout, os.Stderr)
 	case "context":
 		return runWorkContext(args[1:], os.Stdout, os.Stderr)
+	case "observe":
+		return runWorkObserve(args[1:], os.Stdout, os.Stderr)
 	case "task", "tasks":
 		return runWorkTasks(args[0], args[1:], os.Stdout, os.Stderr)
 	case "connect":

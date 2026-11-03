@@ -24,7 +24,7 @@ class UnixHTTP(http.client.HTTPConnection):
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument('--binary',default='bin/agentmux');p.add_argument('--agents',default='8,32,128');p.add_argument('--iterations',type=int,default=20);p.add_argument('--output',required=True)
+    p.add_argument('--binary',default='bin/amx');p.add_argument('--agents',default='8,32,128');p.add_argument('--iterations',type=int,default=20);p.add_argument('--output',required=True)
     a=p.parse_args();binary=str(Path(a.binary).resolve(strict=True));counts=[int(n) for n in a.agents.split(',')]
     if any(n<1 or n>512 for n in counts) or not 1<=a.iterations<=100: p.error('agents1..512, iterations1..100')
     results=[]

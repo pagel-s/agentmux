@@ -18,9 +18,25 @@ Each agent has one terminal/worker lock. Changing interaction mode requires a
 new launch definition/run rather than a second process sharing a conversation.
 
 Current source builds add `amx context`, `amx task` / `tasks`, exact task opening
-with `task ID --open`, the searchable running-workspace chooser and direct
+with `task ID --open`, `amx observe`, the searchable running-workspace chooser and direct
 session task history in Actions. These additions are newer than the published
 v0.12.0 binaries; see [installation](getting-started/installation.md#build-from-source).
+
+## Inspect running work
+
+```sh
+amx observe --session work
+amx observe --session work --watch --json
+amx task TASK_ID --open --session work
+```
+
+The operational view separates broker availability, ownership-checked worker
+panes, live leases, worker check-ins, native event metadata and adapter readiness.
+Counts include all retained tasks; bounded attention keeps old failures and
+uncertain attempts visible. Silence alone leaves model progress unknown.
+Use the printed exact task command for results, native receipts, traces and
+reviewed recovery. See [observability](observability.md) for freshness, JSONL,
+partial observations and the separate evidence used by coding runs and research.
 
 ## Recognize sessions throughout the day
 

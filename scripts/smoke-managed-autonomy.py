@@ -127,7 +127,7 @@ class Acceptance(mixed.Acceptance):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--binary", default="bin/agentmux")
+    parser.add_argument("--binary", default="bin/amx")
     parser.add_argument("--allow-models", action="store_true")
     parser.add_argument("--claude-auth-file", default=str(Path.home() / ".claude" / ".credentials.json"))
     parser.add_argument("--codex-auth-file", default=str(Path.home() / ".codex" / "auth.json"))

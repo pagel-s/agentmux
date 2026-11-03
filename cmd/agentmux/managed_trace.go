@@ -115,21 +115,15 @@ is not trusted. This authenticates an owner exporter, not a model provider.`)
 	if operation != "verify" && operation != "show" {
 		return managedCLIError(stdout, "trace", "", exitValidation, errors.New("trace list|verify|show|export|verify-bundle required"))
 	}
+	if operation == "show" {
+		if _, err := managed.WriteVerifiedTrace(*state, *agent, *id, *anchor, stdout); err != nil {
+			return managedCLIError(stdout, "trace.show", "", exitRuntime, err)
+		}
+		return exitSuccess
+	}
 	sum, err := managed.VerifyTrace(*state, *agent, *id, *anchor)
 	if err != nil {
 		return managedCLIError(stdout, "trace.verify", "", exitRuntime, err)
-	}
-	if operation == "show" {
-		file, err := os.Open(filepath.Join(*state, "traces", *agent, *id+".jsonl"))
-		if err != nil {
-			return managedCLIError(stdout, "trace.show", "", exitRuntime, err)
-		}
-		defer file.Close()
-		if _, err := io.Copy(stdout, file); err != nil {
-			fmt.Fprintln(stderr, err)
-			return exitRuntime
-		}
-		return exitSuccess
 	}
 	return writeManagedEnvelope(stdout, managedEnvelope{Operation: "trace.verify", OK: true, Result: sum})
 }

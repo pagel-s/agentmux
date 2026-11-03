@@ -17,6 +17,7 @@ import (
 )
 
 type managedActivitySnapshot struct {
+	ObservedAt      string            `json:"observed_at"`
 	Messages        []managed.Message `json:"messages"`
 	Tasks           []managed.Task    `json:"tasks"`
 	Events          []managed.Event   `json:"events"`
@@ -43,6 +44,9 @@ func formatManagedActivity(snapshot managedActivitySnapshot) string {
 		deadline = "none (no automatic deadline)"
 	}
 	fmt.Fprintf(&out, "Owner activity (recent items, newest first)\nRun deadline: %s\n", deadline)
+	if snapshot.ObservedAt != "" {
+		fmt.Fprintf(&out, "Observed: %s\n", activityText(snapshot.ObservedAt, 100))
+	}
 	out.WriteString("\nMESSAGES\n")
 	for i, message := range snapshot.Messages {
 		if i == 20 {
@@ -56,6 +60,19 @@ func formatManagedActivity(snapshot managedActivitySnapshot) string {
 			break
 		}
 		fmt.Fprintf(&out, "%s to=%s state=%s delivery=%s\n  instruction=%s\n", activityText(task.ID, 80), activityText(task.To, 64), activityText(task.State, 40), activityText(task.Delivery, 40), activityText(task.Text, 400))
+		fmt.Fprintf(&out, "  version=%d updated=%s\n", task.Version, activityText(task.UpdatedAt, 100))
+		if task.Progress != nil || (task.State == "running" && task.Native == nil) {
+			fmt.Fprintln(&out, "  "+taskProgressSummary(task.Progress))
+		}
+		if task.Recovery != nil {
+			fmt.Fprintf(&out, "  effective_delivery=%s recovery=%s\n", activityText(task.Recovery.Delivery, 80), activityText(task.Recovery.Reason, 600))
+		}
+		if task.Native != nil {
+			fmt.Fprintf(&out, "  native_receipt=%s phase=%s observed=%s\n", activityText(task.Native.ID, 128), activityText(task.Native.Phase, 80), activityText(task.Native.UpdatedAt, 100))
+		}
+		if task.Trace != nil {
+			fmt.Fprintf(&out, "  trace=%s complete=%t\n", activityText(task.Trace.ID, 256), task.Trace.Complete)
+		}
 		if task.Result != "" {
 			fmt.Fprintf(&out, "  result=%s\n", activityText(task.Result, 1000))
 		}

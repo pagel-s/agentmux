@@ -1,0 +1,14 @@
+[
+  {
+    "id": "native-evidence-redaction",
+    "prompt": "Fix a real credential-publication bug in the managed native worker. Known broker/native/API credentials can survive as JSON-escaped or HTML-escaped values in native event and usage evidence. Redact known values semantically, keep unrelated native evidence and exact accounting numbers intact, and fail closed when a credential-bearing schema key or native session identity cannot safely be retained. Cover actual worker publication paths, not just a standalone helper. Preserve successful ordinary native execution and existing byte limits. Add appropriate regressions. Do not change evaluator files or bypass checks."
+  },
+  {
+    "id": "authenticated-trace-display",
+    "prompt": "Fix the time-of-check/time-of-use bug in managed trace show. The CLI verifies a trace and then reopens its path for display; a concurrent append or replacement can publish unauthenticated bytes. Display exactly the captured bytes that passed authentication, preserving trace verification, MAC identity binding, owner checks and bounded reads. Failed authentication must publish no trace bytes; output errors must be returned. Add regressions exercising the actual CLI display path. Do not change evaluator files or bypass checks."
+  },
+  {
+    "id": "worker-secret-extraction",
+    "prompt": "Refactor managed worker credential discovery into workerSecrets(req harness.Request, token string, nativeSecrets ...string) []string, and have workerResult use it. This is a behavior-preserving extraction for ordinary human text, not a request to redesign JSON publication. Collect the broker token, explicit native secrets, req.APIKeyEnv's value from req.Env (including an explicitly empty override) or otherwise the process environment, plus req.Env values whose case-insensitive key contains SECRET or PASSWORD or ends _TOKEN or _KEY. Return only distinct nonempty values, ordered longest first so overlapping credentials remain fully redacted. Preserve workerResult's existing UTF-8, byte-budget and ordinary text redaction behavior. Keep the helper reusable in a separate source file, add focused tests, and avoid unrelated changes. Do not change evaluator files or bypass checks."
+  }
+]

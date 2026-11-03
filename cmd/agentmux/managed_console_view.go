@@ -454,6 +454,9 @@ func (m console) View() string {
 	if m.offline {
 		header = consoleAccent.Render(" AGENTMUX · BROKER OFFLINE ") + consoleMuted.Render("saved snapshot · writes disabled")
 	}
+	if !m.data.observedAt.IsZero() {
+		header += consoleMuted.Render(" · observed " + m.data.observedAt.Local().Format("15:04:05"))
+	}
 	tabs := []string{"1 Board", "2 Sessions", "3 Connections", "4 Memory", "5 Tasks", "6 Existing terminals", "7 Teams", "8 Events"}
 	if width < 100 {
 		tabs[2] = "3 Links"

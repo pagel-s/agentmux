@@ -38,8 +38,9 @@ type nativeRegistration struct {
 }
 
 type nativePresence struct {
-	State, Reason string
-	At            time.Time
+	State, Reason     string
+	Instance, Session string
+	At                time.Time
 }
 
 type nativeRecord struct {
@@ -61,11 +62,16 @@ type NativeStatus struct {
 	Session      string                    `json:"session,omitempty"`
 	Capabilities nativebridge.Capabilities `json:"capabilities"`
 	Connected    bool                      `json:"connected"`
-	Turns        int                       `json:"turns"`
-	Pending      []nativebridge.Delivery   `json:"pending"`
-	PendingCount int                       `json:"pending_count"`
-	PendingMore  bool                      `json:"pending_more"`
-	Active       *NativeReceipt            `json:"active,omitempty"`
+	// Readiness is an ephemeral adapter observation, separate from retained
+	// delivery receipts and never proof of model progress or completion.
+	ReadinessObservedAt string                  `json:"readiness_observed_at,omitempty"`
+	Turns               int                     `json:"turns"`
+	Pending             []nativebridge.Delivery `json:"pending"`
+	PendingCount        int                     `json:"pending_count"`
+	PendingKnown        bool                    `json:"pending_known"`
+	PendingMore         bool                    `json:"pending_more"`
+	Active              *NativeReceipt          `json:"active,omitempty"`
+	Coverage            string                  `json:"coverage,omitempty"`
 }
 
 func nativeTerminal(phase string) bool {
@@ -153,6 +159,7 @@ func (s *Store) native(ctx context.Context, q queryer, a actor, r Request) (any,
 		Results      *bool                     `json:"results"`
 		After        string                    `json:"after"`
 		Limit        int                       `json:"limit"`
+		Summary      bool                      `json:"summary"`
 	}
 	if err := strictJSON(r.Args, &in); err != nil {
 		return nil, invalid(err)
@@ -160,7 +167,13 @@ func (s *Store) native(ctx context.Context, q queryer, a actor, r Request) (any,
 	if in.Agent == "" {
 		in.Agent = a.ID
 	}
+	if in.Summary && (!a.owner() || in.Agent != ownerID || r.Operation != "native.status") {
+		return nil, fault("invalid", "native summary is available only for the owner status inventory")
+	}
 	if a.owner() && in.Agent == ownerID && r.Operation == "native.status" {
+		if in.Summary {
+			return s.nativeObservationInventory(ctx, q, in.After, in.Limit)
+		}
 		agents, err := s.nativeAgents(ctx, q)
 		if err != nil {
 			return nil, internal(err)
@@ -369,7 +382,7 @@ func (s *Store) native(ctx context.Context, q queryer, a actor, r Request) (any,
 		if s.nativePresence == nil {
 			s.nativePresence = map[string]nativePresence{}
 		}
-		s.nativePresence[a.ID] = nativePresence{State: in.State, Reason: in.Reason, At: time.Now()}
+		s.nativePresence[a.ID] = nativePresence{State: in.State, Reason: in.Reason, Instance: a.Instance, Session: reg.Session, At: time.Now()}
 	}
 	if r.Operation != "native.peek" && r.Operation != "native.claim" {
 		return nil, fault("invalid", "unknown native operation")
@@ -490,7 +503,7 @@ func (s *Store) saveNativeRecord(ctx context.Context, q queryer, d nativeRecord)
 }
 
 func (s *Store) nativeStatus(ctx context.Context, q queryer, id string) (NativeStatus, error) {
-	st := NativeStatus{Agent: id, Pending: []nativebridge.Delivery{}}
+	st := NativeStatus{Agent: id, Pending: []nativebridge.Delivery{}, PendingKnown: true}
 	st.MaxResultBytes = s.cfg.Limits.MaxMessageBytes
 	info, err := s.agent(ctx, q, id)
 	if err != nil {
@@ -578,7 +591,11 @@ func (s *Store) nativeStatus(ctx context.Context, q queryer, id string) (NativeS
 		}
 	}
 	ready, ok := s.nativePresence[id]
-	st.Connected = ok && time.Since(ready.At) < 10*time.Second
+	if ok && st.Session != "" && ready.Instance == reg.Instance && ready.Session == st.Session && !ready.At.IsZero() {
+		st.ReadinessObservedAt = ready.At.UTC().Format(time.RFC3339Nano)
+		age := time.Since(ready.At)
+		st.Connected = age >= 0 && age < 10*time.Second
+	}
 	for _, d := range all {
 		if !nativeTerminal(d.Phase) {
 			st.ActiveID = d.ID

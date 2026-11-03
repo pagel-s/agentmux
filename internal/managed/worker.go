@@ -395,26 +395,32 @@ func executeWorkerTask(ctx context.Context, caller workerCaller, req harness.Req
 }
 
 func executeWorkerTaskTrace(ctx context.Context, caller workerCaller, req harness.Request, task Task, lease, token string, maxBytes int, trace *turnTrace, nativeSecrets ...string) error {
+	progress := &workerTurnProgress{}
 	if trace != nil {
 		defer func() {
 			if !trace.closed {
 				_, _ = trace.finish("worker_stopped_or_uncertain")
 			}
 		}()
-		previousObserver := req.OnEvent
-		req.OnEvent = func(raw json.RawMessage) error {
-			if previousObserver != nil {
-				if err := previousObserver(raw); err != nil {
-					return err
-				}
+	}
+	previousObserver := req.OnEvent
+	req.OnEvent = func(raw json.RawMessage) error {
+		if previousObserver != nil {
+			if err := previousObserver(raw); err != nil {
+				return err
 			}
-			redacted := workerResult(string(raw), req, token, 8<<20, nativeSecrets...)
-			var event any = json.RawMessage(redacted)
-			if !json.Valid([]byte(redacted)) {
-				event = map[string]string{"redacted_event": redacted}
-			}
-			return trace.append("native_event", event)
 		}
+		if err := progress.event(raw); err != nil {
+			return err
+		}
+		if trace != nil {
+			redacted, err := workerJSONResult(raw, req, token, 8<<20, nativeSecrets...)
+			if err != nil {
+				return err
+			}
+			return trace.append("native_event", redacted)
+		}
+		return nil
 	}
 	current, err := workerGetLeasedTask(ctx, caller, task.ID, lease)
 	if err != nil {
@@ -427,19 +433,27 @@ func executeWorkerTaskTrace(ctx context.Context, caller workerCaller, req harnes
 	if current.State != "running" || current.Delivery != "dispatching" {
 		return errors.New("claimed task changed before execution; owner must resolve its delivery")
 	}
+	if err := progress.flush(ctx, caller, task.ID, lease); err != nil {
+		// Cancellation may land between the leased read and this check-in.
+		// No process was started, so acknowledge only that exact cancellation.
+		return workerStoppedAfterError(caller, task.ID, lease, err)
+	}
 	runCtx, stopRun := context.WithCancel(ctx)
 	defer stopRun()
 	monitorCtx, stopMonitor := context.WithCancel(ctx)
 	monitorDone := make(chan error, 1)
 	go func() {
-		monitorDone <- monitorWorkerTask(monitorCtx, caller, task.ID, lease, stopRun)
+		monitorDone <- monitorWorkerTaskProgress(monitorCtx, caller, task.ID, lease, stopRun, progress)
 	}()
 	result, runErr := harness.Run(runCtx, req)
 	// harness.Run returns only after waiting for the child; task.stopped is
 	// therefore an acknowledgement of actual process termination.
 	stopMonitor()
 	if err := <-monitorDone; err != nil {
-		return err
+		// The child has been waited for. A cancellation racing a progress
+		// check-in must retain that definite stop, rather than becoming an
+		// unnecessary uncertain cancellation. Never acknowledge a new lease.
+		return workerStoppedAfterError(caller, task.ID, lease, err)
 	}
 	finishCtx, finishCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer finishCancel()
@@ -453,18 +467,31 @@ func executeWorkerTaskTrace(ctx context.Context, caller workerCaller, req harnes
 	if current.State != "running" || current.Delivery != "dispatching" {
 		return errors.New("task delivery changed during execution; owner must resolve it")
 	}
+	if err := progress.flush(finishCtx, caller, task.ID, lease); err != nil {
+		if latest, readErr := workerGetLeasedTask(finishCtx, caller, task.ID, lease); readErr == nil && latest.State == "cancelled" && latest.Delivery == "cancel_requested" {
+			return workerStopped(caller, latest, lease)
+		}
+		return err
+	}
+	var usage json.RawMessage
+	if len(result.Usage) <= 16384 && json.Valid(result.Usage) {
+		var err error
+		usage, err = workerJSONResult(result.Usage, req, token, 16384, nativeSecrets...)
+		if err != nil {
+			runErr = errors.Join(runErr, err)
+		}
+	}
+	// A native identity is provenance, not display text. Refuse it rather than
+	// redacting it into a different conversation reference or persisting a secret.
+	if workerResult(result.SessionID, req, token, len(result.SessionID), nativeSecrets...) != result.SessionID {
+		result.SessionID = ""
+		runErr = errors.Join(runErr, errWorkerEvidenceRedaction)
+	}
 	status, text := "submitted", result.Text
 	if runErr != nil {
 		status, text = "failed", workerFailure(runErr)
 	}
 	text = workerResult(text, req, token, maxBytes, nativeSecrets...)
-	var usage json.RawMessage
-	if len(result.Usage) <= 16384 && json.Valid(result.Usage) {
-		redacted := workerResult(string(result.Usage), req, token, 16384, nativeSecrets...)
-		if json.Valid([]byte(redacted)) {
-			usage = json.RawMessage(redacted)
-		}
-	}
 	completion := map[string]any{"id": task.ID, "lease": lease, "version": current.Version, "status": status, "result": text, "usage": usage}
 	if trace != nil {
 		if err := trace.append("result", map[string]any{"status": status, "text": text, "usage": usage, "native_session_id": result.SessionID}); err != nil {
@@ -497,6 +524,11 @@ func executeWorkerTaskTrace(ctx context.Context, caller workerCaller, req harnes
 }
 
 func monitorWorkerTask(ctx context.Context, caller workerCaller, taskID, lease string, stop context.CancelFunc) error {
+	return monitorWorkerTaskProgress(ctx, caller, taskID, lease, stop, nil)
+}
+
+func monitorWorkerTaskProgress(ctx context.Context, caller workerCaller, taskID, lease string, stop context.CancelFunc, progress *workerTurnProgress) error {
+	nextProgress := time.Now().Add(time.Second)
 	for {
 		pollCtx, pollCancel := context.WithTimeout(ctx, 500*time.Millisecond)
 		current, err := workerGetLeasedTask(pollCtx, caller, taskID, lease)
@@ -538,6 +570,19 @@ func monitorWorkerTask(ctx context.Context, caller workerCaller, taskID, lease s
 				stop()
 				return err
 			}
+		}
+		if progress != nil && !time.Now().Before(nextProgress) {
+			observeCtx, observeCancel := context.WithTimeout(ctx, 500*time.Millisecond)
+			err := progress.flush(observeCtx, caller, taskID, lease)
+			observeCancel()
+			if ctx.Err() != nil {
+				return nil
+			}
+			if err != nil {
+				stop()
+				return err
+			}
+			nextProgress = time.Now().Add(time.Second)
 		}
 		if err := workerWait(ctx); err != nil {
 			return nil
@@ -583,6 +628,20 @@ func workerStopped(caller workerCaller, task Task, lease string) error {
 	return workerProblem("task.stopped", problem)
 }
 
+// Call only before a process starts or after harness.Run has waited for it.
+// A failed observation alone proves nothing about cancellation or side effects.
+// Confirm the same execution lease before acknowledging an actual stop; retain
+// the original failure when the read is unavailable or the attempt changed.
+func workerStoppedAfterError(caller workerCaller, taskID, lease string, original error) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	current, err := workerGetLeasedTask(ctx, caller, taskID, lease)
+	if err == nil && current.State == "cancelled" && current.Delivery == "cancel_requested" {
+		return workerStopped(caller, current, lease)
+	}
+	return original
+}
+
 func workerProblem(operation string, problem *Fault) error {
 	if problem == nil {
 		return nil
@@ -600,6 +659,10 @@ func workerProblem(operation string, problem *Fault) error {
 
 func workerFailure(err error) string {
 	switch {
+	case errors.Is(err, errWorkerEvidenceRedaction):
+		return "Native evidence could not be retained without known credential values; the task did not complete."
+	case errors.Is(err, errWorkerProgressLimit):
+		return "Native execution exceeded the allowed progress event count."
 	case errors.Is(err, context.DeadlineExceeded):
 		return "Harness execution reached its time limit."
 	case errors.Is(err, context.Canceled):
@@ -616,37 +679,19 @@ func workerFailure(err error) string {
 }
 
 func workerResult(text string, req harness.Request, token string, maxBytes int, nativeSecrets ...string) string {
-	secrets := append([]string{token}, nativeSecrets...)
-	if req.APIKeyEnv != "" {
-		value, ok := req.Env[req.APIKeyEnv]
-		if !ok {
-			value = os.Getenv(req.APIKeyEnv)
-		}
-		secrets = append(secrets, value)
-	}
-	for key, value := range req.Env {
-		upper := strings.ToUpper(key)
-		if strings.Contains(upper, "SECRET") || strings.Contains(upper, "PASSWORD") || strings.HasSuffix(upper, "_TOKEN") || strings.HasSuffix(upper, "_KEY") {
-			secrets = append(secrets, value)
-		}
-	}
-	// Longer values first prevent replacing a short secret from exposing the
-	// remaining suffix of a longer one. Redaction is best effort, not a claim
-	// that arbitrary model-generated text cannot contain sensitive material.
-	sort.Slice(secrets, func(i, j int) bool { return len(secrets[i]) > len(secrets[j]) })
-	for _, secret := range secrets {
-		if secret != "" {
-			text = strings.ReplaceAll(text, secret, "[redacted]")
-		}
-	}
+	values := workerSecrets(req, token, nativeSecrets...)
+	text = redactWorkerText(values, text)
 	text = strings.ToValidUTF8(text, "\uFFFD")
 	if maxBytes <= 0 {
 		return ""
 	}
 	if len(text) <= maxBytes {
-		return text
+		return redactWorkerText(values, text)
 	}
 	marker := "\n[truncated]"
+	if containsWorkerSecret(values, marker) {
+		marker = ""
+	}
 	end := maxBytes
 	if len(marker) < maxBytes {
 		end -= len(marker)
@@ -656,7 +701,15 @@ func workerResult(text string, req harness.Request, token string, maxBytes int, 
 	for end > 0 && !utf8.ValidString(text[:end]) {
 		end--
 	}
-	return text[:end] + marker
+	bounded := redactWorkerText(values, text[:end]+marker)
+	if len(bounded) > maxBytes {
+		end = maxBytes
+		for end > 0 && !utf8.ValidString(bounded[:end]) {
+			end--
+		}
+		bounded = bounded[:end]
+	}
+	return bounded
 }
 
 func workerWait(ctx context.Context) error {

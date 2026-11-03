@@ -64,6 +64,7 @@ nav:
   - Managed Teams:
       - Work Sessions: work-sessions.md
       - Control Center: usability-control-center.md
+      - Observability: observability.md
       - Native Collaboration: native-delivery.md
       - Runtime: managed-runtime.md
       - Setup: managed-setup.md

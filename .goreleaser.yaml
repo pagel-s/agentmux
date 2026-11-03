@@ -55,8 +55,14 @@ release:
     Checked coding workflows and controlled collaboration across native agents.
 
     Start with `amx demo`: a model-free first result in a private disposable
-    repository. This release includes `amx work` and `amx flow`, private workflow
-    evidence, explicit application and connected-session graph arrangement.
+    repository. Use `amx observe` for fresh operational evidence, worker reporting
+    and exact-task attention; `amx task ID --open` reaches the retained recovery
+    view. Search workspaces and session actions, inspect native delivery receipts,
+    and use `amx work` for checked changes with explicit application.
+
+    Agentmux is MIT licensed. Observation distinguishes worker check-ins, native
+    events, delivery uncertainty and verified results; it does not infer hidden
+    model activity. See the [observability guide](https://pagel-s.github.io/agentmux/observability/).
 
     The managed runtime and workbench remain experimental. Start with the
     [illustrated workflow guide](https://pagel-s.github.io/agentmux/visual-guide/)

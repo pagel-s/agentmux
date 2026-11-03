@@ -20,7 +20,7 @@ import urllib.request
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--binary", default="bin/agentmux")
+    parser.add_argument("--binary", default="bin/amx")
     parser.add_argument("--keep-output", action="store_true")
     options = parser.parse_args()
     binary = str(Path(options.binary).resolve(strict=True))

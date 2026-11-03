@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Add `amx observe` with live worker check-ins, native event metadata,
+  readiness timestamps, retained capacity and database file sizes. Keep recorded
+  delivery, effective uncertainty and model activity distinct.
+- Keep operational reads fast at large retained histories using covered metadata
+  queries; balance attention categories so old failures cannot hide new reviews.
+- Give everyday operations focused help and make the in-workbench workspace
+  picker searchable while preserving exact targets, drafts and frozen reviews.
+- Redact decoded credential values from native JSON evidence, reject unsafe
+  native identities, and publish only the exact authenticated trace capture.
+  Reject ambiguous signed trace envelopes and retain definite cancellation
+  acknowledgements when cancellation races worker check-ins.
+- Preserve process-admission error origins and handle a proven disappearing
+  pidfd target conservatively without weakening cleanup or evidence checks.
+- Add a subscription-only matched pilot with pinned native tools and external
+  contract graders; prepared infrastructure does not establish a productivity win.
 - Refresh the repository and site documentation, replace the dense workflow
   diagram with an actual checked-result report, and recapture terminal/web
   screenshots from the current app using model-free fixtures.

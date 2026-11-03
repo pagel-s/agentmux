@@ -4,6 +4,7 @@ Only pidfds admitted from a still-pinned parent may become signal targets.
 The observation boundary is the trees actually seen through /proc; this is not
 a containment mechanism for arbitrary hostile executables or an OS task quota.
 """
+import errno
 import os
 from pathlib import Path
 import signal
@@ -85,11 +86,15 @@ def launch_pinned(command, **options):
                 os.close(descriptor)
 
 
+def _read_process_identity(pid):
+    data = Path("/proc", str(pid), "stat").read_text()
+    tail = data[data.rindex(")") + 2:].split()
+    return {"pid": pid, "start_ticks": tail[19], "state": tail[0], "parent_pid": int(tail[1])}
+
+
 def process_identity(pid):
     try:
-        data = Path("/proc", str(pid), "stat").read_text()
-        tail = data[data.rindex(")") + 2:].split()
-        return {"pid": pid, "start_ticks": tail[19], "state": tail[0], "parent_pid": int(tail[1])}
+        return _read_process_identity(pid)
     except (OSError, ValueError, IndexError):
         return None
 
@@ -107,6 +112,25 @@ class PinnedProcess:
             descriptor = os.pidfd_open(pid)
         except ProcessLookupError:
             return None
+        except OSError as error:
+            # Some kernels return EINVAL, rather than ESRCH, if the pid still
+            # exists during lookup but loses its task before pidfd_prepare().
+            # Discard only a *proven* vanished/recycled identity. A denied or
+            # malformed /proc read and an unchanged live target remain fatal;
+            # they must never turn unsupported admission into passing evidence.
+            if error.errno == errno.EINVAL:
+                try:
+                    after = _read_process_identity(pid)
+                except (FileNotFoundError, ProcessLookupError):
+                    return None
+                except (OSError, ValueError, IndexError):
+                    pass
+                else:
+                    if after["start_ticks"] != before["start_ticks"]:
+                        return None
+            raise RuntimeError("pidfd_open failed for observed process "
+                               f"pid={pid} start_ticks={before['start_ticks']} "
+                               f"parent_pid={before['parent_pid']}: {error}") from error
         handle = cls(before, descriptor)
         after = handle.current()
         if (after is None or after["start_ticks"] != before["start_ticks"]

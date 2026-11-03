@@ -50,6 +50,21 @@ Use `make test-sandbox` for sandbox/workflow changes. See
 failure injection and recovery checks. State which integrations ran and which
 were unavailable; a skipped integration is not a passing boundary test.
 
+For reporting changes, preserve the [observation boundaries](docs/observability.md):
+worker check-ins, native events, adapter readiness and task verification are
+different evidence. Keep live progress metadata bounded and free of raw event
+content; fence it to the exact lease and credential generation, and preserve
+unknown state after restart. Exercise the targeted
+[observation regressions](docs/workflow-validation.md#observation-and-reporting)
+alongside relevant console/browser checks.
+
+Keep browser evidence formatting in `cmd/agentmux/workweb/observation.js`.
+It is a pure module shared by the browser and direct Node tests; pass an explicit
+clock/formatter when testing time-dependent behavior. Keep task authority,
+network requests and DOM changes in their controllers. New pure behavior should
+have tests against its exported functions, without finding function boundaries
+inside `app.js`. The existing controller fixtures receive those same exports.
+
 Model calls require a deliberately selected provider, disposable project,
 finite deadline and explicit opt-in. Routine contributions and CI should use
 the deterministic fixtures. Comparative productivity claims require the

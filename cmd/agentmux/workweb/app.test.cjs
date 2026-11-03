@@ -5,10 +5,12 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 const { domFixture } = require("./dom-fixture.cjs");
+const observation = require("./observation.js");
 const source = fs.readFileSync(path.join(__dirname, "app.js"), "utf8");
 
 function createTestContext(values) {
   const context = vm.createContext({
+    AgentmuxObservation: observation,
     selected:"",sessionQuery:"",pendingRailReveal:"",renderSessionLists(){},revealSelectedSession(){},
     routingEpoch:0,routingPending:false,snapshotRoute:{follow:false},taskSummary:{agents:[],loading:false,error:"",epoch:0,updatedAt:0},loadTaskSummary(){},
     exposureHistory:{epoch:0},
@@ -28,6 +30,64 @@ function createTestContext(values) {
   vm.runInContext(`snapshotIdentity=function(value=snapshot){return value?.study_attempt||value?.runtime?.attempt_id||"";};sendFrozen=async function(operation,args,target){const result=await api("/api/send",{...(operation==="board.post"?{}:{target}),...args,mode:operation==="instruct"?"instruction":"note"});return operation==="instruct"?{task:{id:result.id}}:{message:{id:result.id}};};receiverDeliveryExplanation=function(id,key){return key==="instruct"&&typeof nativeDeliveryHint==="function"?nativeDeliveryHint(id):"Inbox message; native terminal input was not changed.";};`, context);
   return context;
 }
+
+// Test exported production behavior directly. These units do not discover
+// function boundaries in app.js or need a DOM/controller fixture.
+test("observation module formats only valid server times with an explicit clock", () => {
+  const now = Date.parse("2026-11-03T12:00:00Z"),
+    formatTime = at => new Date(at).toISOString();
+  assert.ok(Object.isFrozen(observation));
+  assert.deepEqual(Object.keys(observation).sort(), ["nativeReportingText", "observationTimeText", "taskProgressText"]);
+  assert.equal(observation.observationTimeText("2026-11-03T11:59:58Z", {now, formatTime}), "Observed 2026-11-03T11:59:58.000Z");
+  assert.equal(observation.observationTimeText("1970-01-01T00:00:00Z", {now, formatTime}), "Observed 1970-01-01T00:00:00.000Z");
+  for (const value of [null, undefined, "", "not-a-time", 12, {}, "2026-11-03T12:00:01.001Z"])
+    assert.equal(observation.observationTimeText(value, {now, formatTime}), "Observation time unknown");
+  assert.match(observation.observationTimeText("2026-11-03T12:00:01Z", {now, formatTime}), /^Observed /);
+});
+
+test("native reporting presentation cannot upgrade a retained receipt", () => {
+  const options = {now: Date.parse("2026-11-03T12:00:00Z"), formatDate: at => new Date(at).toISOString()},
+    status = {connected:false, readiness_observed_at:"2026-11-03T11:59:00Z", active:{id:"exact",phase:"running"}},
+    before = JSON.stringify(status);
+  const lost = observation.nativeReportingText(status, options);
+  assert.match(lost, /Adapter not reporting/);
+  assert.match(lost, /2026-11-03T11:59:00.000Z/);
+  assert.match(lost, /outcome is not confirmed/);
+  assert.equal(JSON.stringify(status), before);
+  assert.match(observation.nativeReportingText({...status, connected:true}, options), /^Adapter reporting;/);
+  assert.match(observation.nativeReportingText({...status, connected:"false"}, options), /^Adapter not reporting;/);
+  for (const value of ["", "invalid", "2026-11-03T12:00:01.001Z"])
+    assert.match(observation.nativeReportingText({...status, connected:true, readiness_observed_at:value}, options), /reporting unknown/);
+});
+
+test("worker reporting distinguishes unknown, no events, and observed native events", () => {
+  const options = {now: Date.parse("2026-11-03T12:00:00Z")},
+    progress = {worker_observed_at:"2026-11-03T11:59:59Z", event_count:0};
+  const unknown = observation.taskProgressText(null, options);
+  assert.match(unknown, /reporting unknown/);
+  assert.doesNotMatch(unknown, /0 native events/);
+  assert.match(observation.taskProgressText(progress, options), /0 native events observed/);
+  assert.doesNotMatch(observation.taskProgressText(progress, options), /last .* at/);
+  const events = {...progress,event_count:3,event_kind:"tool",event_observed_at:"2026-11-03T11:59:58Z"},
+    before = JSON.stringify(events), text = observation.taskProgressText(events, options);
+  assert.match(text, /3 native events · last tool at 2026-11-03T11:59:58Z/);
+  assert.match(text, /do not establish task correctness/);
+  assert.equal(JSON.stringify(events), before);
+  for (const count of [-1, 1.5, 1000001, undefined, "3"])
+    assert.match(observation.taskProgressText({...events,event_count:count}, options), /event count unknown/);
+  const malformed = observation.taskProgressText({...events,worker_observed_at:"invalid",event_observed_at:"2999-01-01T00:00:00Z",event_kind:"private arbitrary event content"}, options);
+  assert.match(malformed, /Worker check-in: unknown/);
+  assert.match(malformed, /last unknown at unknown/);
+  assert.doesNotMatch(malformed, /private arbitrary/);
+});
+
+test("browser loads the same frozen observation exports without Node or app globals", () => {
+  const context = vm.createContext({});
+  vm.runInContext(fs.readFileSync(path.join(__dirname, "observation.js"), "utf8"), context);
+  assert.ok(Object.isFrozen(context.AgentmuxObservation));
+  assert.equal(context.AgentmuxObservation.taskProgressText(null), observation.taskProgressText(null));
+  assert.equal(context.AgentmuxObservation.observationTimeText(""), observation.observationTimeText(""));
+});
 
 // Execute the production identity helpers and submit callback as ordinary
 // JavaScript units. This starts no browser, server, terminal or model.
@@ -3213,6 +3273,40 @@ test("native UI exposes limits and truthful capabilities without claiming draft 
   assert.ok(f.panel.querySelectorAll("[data-owner-write]").every(node=>node.disabled));
 });
 
+test("native reporting loss preserves the receipt while making its age explicit",()=>{
+  const f=nativeViewContext();
+  f.status.state="active";
+  f.status.connected=false;
+  f.status.readiness_observed_at="2026-01-01T12:00:00Z";
+  f.status.active={id:"delivery_exact",phase:"running",updated_at:"2026-01-01T11:59:59Z"};
+  f.context.renderNativeDelivery();
+  const text=textTree(f.panel);
+  assert.match(text,/Adapter not reporting/);
+  assert.match(text,/outcome is not confirmed/);
+  assert.match(text,/Last receipt: 2026-01-01T11:59:59Z/);
+  assert.equal(f.status.active.phase,"running");
+  assert.equal(f.writes.length,0);
+  f.status.readiness_observed_at="not-a-date";
+  assert.match(f.context.nativeReportingText(f.status),/reporting unknown/);
+  f.status.readiness_observed_at="2999-01-01T12:00:00Z";
+  f.status.connected=true;
+  assert.match(f.context.nativeReportingText(f.status),/reporting unknown/);
+});
+
+test("snapshot freshness uses server observation time and stays pinned offline",async()=>{
+  const f=connectionContext(),next={...f.context.snapshot,observed_at:"2026-01-01T12:00:00Z"};
+  f.context.fetch=async()=>({ok:true,status:200,text:async()=>JSON.stringify(next)});
+  await f.context.refresh();
+  const observed=f.node("updated").textContent;
+  assert.match(observed,/^Observed /);
+  f.context.fetch=async()=>{throw new Error("transport gone")};
+  await f.context.refresh();
+  assert.equal(f.node("updated").textContent,observed);
+  assert.equal(f.context.connected,false);
+  assert.equal(f.context.observationTimeText(""),"Observation time unknown");
+  assert.equal(f.context.observationTimeText("2999-01-01T12:00:00Z"),"Observation time unknown");
+});
+
 test("native drafts survive polling and require explicit CAS rebase",()=>{
   const f=nativeViewContext();f.context.renderNativeDelivery();
   const turns=f.panel.querySelectorAll("input").find(node=>node.dataset.focusKey==="native:max_turns");
@@ -3396,7 +3490,12 @@ test("full application boot renders the current workspace before exposing owner 
   assert.ok(declared.has("open-actions"));assert.ok(declared.has("quick-new-session"));
   const terminalTab=[...f.document.querySelectorAll("[data-tab]")].find(node=>node.dataset.tab==="terminals");assert.ok(terminalTab,"existing terminal discovery needs a visible navigation entry");
   const c=vm.createContext({document:f.document,window:{addEventListener(){}},location:{hash:"#fixture-token",pathname:"/",host:"fixture"},history:{replaceState(){}},sessionStorage:{getItem:key=>storage.get(key),setItem:(key,value)=>storage.set(key,value)},localStorage:{getItem:()=>null,setItem(){}},navigator:{},AbortController,setTimeout:()=>1,clearTimeout(){},setInterval(){},queueMicrotask,fetch:async(url,options={})=>({ok:true,text:async()=>{if(url.startsWith("/api/snapshot"))return JSON.stringify(snap);if(url==="/api/workspaces")return JSON.stringify({ok:true,workspaces:[]});const operation=options.body?JSON.parse(options.body).operation:"";return JSON.stringify({ok:true,result:operation==="task.summary"?{agents:[],has_more:false}:operation==="message.list"?{messages:[],has_more:false}:{}});}}),URLSearchParams,console});
-  vm.runInContext(source,c);vm.runInContext(fs.readFileSync(path.join(__dirname,"graph.js"),"utf8"),c);await new Promise(resolve=>setImmediate(resolve));
+  for (const match of html.matchAll(/<script\b([^>]*)><\/script>/g)) {
+    const asset = match[1].match(/\bsrc="\/([a-z0-9-]+\.js)"/)?.[1];
+    assert.ok(asset && /\bdefer\b/.test(match[1]), "boot fixture requires declared same-origin deferred assets");
+    vm.runInContext(fs.readFileSync(path.join(__dirname,asset),"utf8"),c,{filename:asset});
+  }
+  await new Promise(resolve=>setImmediate(resolve));
   assert.equal(f.node("connection").textContent,"Connected",f.node("notice").textContent);assert.equal(f.node("agent-name").textContent,"fixture-project · Codex");assert.equal(f.node("send-message").disabled,false);assert.equal(f.node("resource-session-tokens").disabled,true);
   declared.get("open-actions").click();assert.equal(declared.get("action-menu").className.includes("hidden"),false);declared.get("close-actions").click();
   declared.get("quick-new-session").click();assert.equal(vm.runInContext("tab",c),"sessions");assert.equal(declared.get("new-harness").value,"codex");assert.equal(declared.get("new-project").value,"/tmp/fixture-project");

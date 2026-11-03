@@ -2,6 +2,7 @@
 """Safety/evidence regressions for the workflow soak runner; no providers."""
 import copy
 from contextlib import contextmanager
+import errno
 import importlib.util
 import io
 import json
@@ -207,6 +208,45 @@ class WorkflowSoakTests(unittest.TestCase):
                 group_kill.assert_not_called()
         finally:
             tree.close()
+
+    def test_pidfd_einval_discards_only_a_proven_vanished_or_recycled_identity(self):
+        helper = SOAK.PROCESS
+        before = {"pid": 900001, "start_ticks": "admitted", "parent_pid": 900000, "state": "R"}
+        outcomes = (FileNotFoundError(), ProcessLookupError(), dict(before, start_ticks="new-owner"))
+        for after in outcomes:
+            with self.subTest(after=after), \
+                    mock.patch.object(helper, "process_identity", return_value=before), \
+                    mock.patch.object(helper, "_read_process_identity", side_effect=after if isinstance(after, BaseException) else None, return_value=after) as reread, \
+                    mock.patch.object(helper.os, "pidfd_open", side_effect=OSError(errno.EINVAL, "Invalid argument")) as admit, \
+                    mock.patch.object(os, "kill") as numeric_kill, mock.patch.object(os, "killpg") as group_kill:
+                self.assertIsNone(helper.PinnedProcess.open(before["pid"], parent_pid=before["parent_pid"]))
+                admit.assert_called_once_with(before["pid"])
+                reread.assert_called_once_with(before["pid"])
+                numeric_kill.assert_not_called()
+                group_kill.assert_not_called()
+
+    def test_pidfd_admission_errors_remain_fatal_with_process_context(self):
+        helper = SOAK.PROCESS
+        before = {"pid": 900001, "start_ticks": "admitted", "parent_pid": 900000, "state": "R"}
+        cases = [(errno.EINVAL, before), (errno.EINVAL, PermissionError("proc denied")),
+                 (errno.EINVAL, ValueError("malformed stat")), (errno.EPERM, None),
+                 (errno.ENOSYS, None), (errno.EMFILE, None)]
+        for number, after in cases:
+            failure = OSError(number, os.strerror(number))
+            with self.subTest(errno=number, after=after), \
+                    mock.patch.object(helper, "process_identity", return_value=before), \
+                    mock.patch.object(helper, "_read_process_identity", side_effect=after if isinstance(after, BaseException) else None, return_value=after) as reread, \
+                    mock.patch.object(helper.os, "pidfd_open", side_effect=failure), \
+                    mock.patch.object(os, "kill") as numeric_kill, mock.patch.object(os, "killpg") as group_kill:
+                with self.assertRaisesRegex(RuntimeError, "pidfd_open failed.*pid=900001 start_ticks=admitted parent_pid=900000") as stopped:
+                    helper.PinnedProcess.open(before["pid"], parent_pid=before["parent_pid"])
+                self.assertIs(stopped.exception.__cause__, failure)
+                if number == errno.EINVAL:
+                    reread.assert_called_once_with(before["pid"])
+                else:
+                    reread.assert_not_called()
+                numeric_kill.assert_not_called()
+                group_kill.assert_not_called()
 
     def test_missing_pidfd_support_refuses_admission_before_any_process(self):
         with tempfile.TemporaryDirectory(prefix="amx-soak-no-pidfds-") as temporary:
@@ -419,6 +459,37 @@ raise SystemExit(soak.main(['--binary', sys.executable, '--output', output,
             for key, fragment in (("error", "primary failure"), ("cleanup_error", "cleanup failure"),
                                   ("output_error", "diagnostic output failure"), ("evidence_error", "case evidence failure")):
                 self.assertIn(fragment, record[key])
+
+    def test_failure_evidence_retains_bounded_origins_and_causal_errno_without_locals(self):
+        with tempfile.TemporaryDirectory(prefix="amx-soak-failure-origins-") as temporary:
+            root = Path(temporary)
+            runner = SOAK.Soak(self.arguments(root, self.executable(root, "raise SystemExit(1)\n")))
+
+            def failed_observation():
+                private_local = "owner-private-value-must-not-be-captured"
+                try:
+                    raise OSError(errno.EINVAL, "Invalid argument")
+                except OSError as cause:
+                    raise RuntimeError("process admission failed") from cause
+
+            try:
+                failed_observation()
+            except RuntimeError as error:
+                for _ in range(10):
+                    runner.note_failure(error)
+            runner.save(index=True)
+            record = SOAK.read_json(runner.root / "soak.json")
+            self.assertIs(record["completed"], False)
+            self.assertEqual(len(record["failure_details"]), 8)
+            self.assertEqual(record["failure_details_omitted"], 2)
+            event = record["failure_details"][0]
+            self.assertEqual(event["cause_type"], "OSError")
+            self.assertEqual(event["cause_errno"], errno.EINVAL)
+            self.assertEqual(event["frames"][-1]["file"], Path(__file__).name)
+            self.assertEqual(event["frames"][-1]["function"], "failed_observation")
+            self.assertIs(type(event["frames"][-1]["line"]), int)
+            self.assertNotIn("owner-private-value", json.dumps(record))
+            self.assertNotIn("private_local", json.dumps(record))
 
     def test_apply_markers_are_exact_ignored_source_paths_without_hiding_owner_changes(self):
         with tempfile.TemporaryDirectory(prefix="amx-soak-apply-markers-") as temporary:
@@ -712,7 +783,15 @@ raise SystemExit(soak.main(['--binary', sys.executable, '--output', output,
                     self.assertIs(record["completed"], not bool(mutation))
                     self.assertEqual(record["model_calls"], 0)
                     details = SOAK.read_json(Path(record["cases"][0]["directory"]) / "case.json")
-                    report = SOAK.read_json(Path(record["cases"][0]["directory"]) / "run/report.json")
+                    fixture_diagnostic = "real fixture failed before the review-evidence oracle:\n" + json.dumps(
+                        {"soak_error": record.get("error"), "cleanup_error": record.get("cleanup_error"),
+                         "case_error": details.get("error"), "commands": details.get("commands"),
+                         "failure_details": record.get("failure_details"), "stderr": process.stderr}, indent=2)
+                    report_path = Path(record["cases"][0]["directory"]) / "run/report.json"
+                    self.assertTrue(report_path.is_file(), fixture_diagnostic)
+                    report = SOAK.read_json(report_path)
+                    self.assertTrue(isinstance(report.get("steps"), list) and report["steps"],
+                                    fixture_diagnostic + "\nreport state: " + repr(report.get("state")))
                     implementation = report["steps"][0]
                     self.assertIs(implementation["verification"]["passed"], True)
                     self.assertEqual((Path(implementation["worktree"]) / "answer.txt").read_bytes(), b"1\n" if scenario == "guided_history" else b"42\n")

@@ -198,3 +198,78 @@ completion rate with no serious permission misunderstanding, but a small pilot
 cannot establish that rate. Passing the evaluator or meeting one dimension's
 target does not automatically upgrade the overall rating. Public stars and
 downloads can describe reach; they do not establish correctness or superiority.
+
+## Prepare a native-subscription pilot
+
+The repository includes a small **whole-workflow pilot**, separate from a
+representative benchmark or human usability study. Three selected tasks use
+historical source `d52e940c473be6a3b7d7983a704e2bac9547e6de`: escaped native
+credential redaction, authenticated trace display during concurrent mutation,
+and a reusable worker credential-discovery refactor. A separate reviewer wrote
+external Go-overlay graders and checked that the historical source fails and
+the corrected implementation passes. These selected repository tasks do not
+establish general coding quality or productivity.
+
+```sh
+python3 scripts/test-subscription-pilot.py
+python3 examples/evaluation/subscription-pilot.py prepare \
+  --output /tmp/amx-subscription-pilot-NEW \
+  --go /absolute/path/to/go --amx /absolute/path/to/pinned/amx
+python3 examples/evaluation/subscription-pilot.py preflight \
+  --manifest /tmp/amx-subscription-pilot-NEW/pilot.json
+```
+
+Preparation makes no model calls. It freezes private grader copies and records
+tool versions, executable/wrapper/grader hashes, model settings, native auth
+paths and the protocol. Preflight retains only the authentication route summary.
+It requires existing Codex ChatGPT authentication and Claude first-party
+Pro/Max authentication, refuses API/alternate-provider environment variables,
+and does not install tools or copy account credentials. Codex's
+[authentication methods](https://learn.chatgpt.com/docs/auth) and
+[forced login setting](https://learn.chatgpt.com/docs/config-file/config-reference#forced_login_method)
+distinguish subscription access from API-key access. Model availability still
+depends on the account; an unavailable model is a retained setup failure.
+
+Review `plan.json`, then explicitly start the six live attempts:
+
+```sh
+python3 scripts/compare-workflows.py \
+  --config /tmp/amx-subscription-pilot-NEW/plan.json \
+  --output /tmp/amx-subscription-pilot-NEW/results --allow-models
+```
+
+Each arm gets 480 seconds. The baseline permits one native Codex invocation;
+Agentmux permits four native coder/reviewer invocations, one implementation
+attempt per phase and a 7m15s workflow deadline. Codex uses `gpt-6.1-sol` at
+medium reasoning; the Claude reviewer uses `claude-sonnet-5-5` at medium effort,
+with no automatic model/provider fallback. The selected model pins can be
+changed explicitly when preparing a new study. Agentmux's retained plan can
+still name its `sonnet` profile alias; the pinned native wrapper supplies the
+recorded full reviewer model. This is a workflow comparison with different
+inference allowances, not an isolated orchestration experiment.
+
+Failures and limit responses remain failures. No automatic paid fallback or
+retry is provided. Authentication status does not expose account billing or
+extra-usage entitlement, so these local controls do not establish a financial
+cap. Usage and cost remain unknown in the comparison schema. Native command
+output stays in private attempt files; review it before publishing. Changed
+pinned files invalidate the study: prepare a new directory, preserving existing
+records. Functional grading is external and frozen, but these trusted local
+arms can read host files; the graders are not hidden by an isolation boundary.
+
+### Add an operator trial with Agent Deck
+
+Agent Deck's [official CLI reference](https://github.com/asheshgoplani/agent-deck/blob/main/skills/agent-deck/references/cli-reference.md)
+documents native session management and `session send --wait --json`.
+It has its own completion/confirmation semantics and native hook setup.
+An unattended adapter has not been validated here; its absence from the six
+attempts is not a failed competitor result.
+
+For an operator comparison, pin the Agent Deck release/binary and use a private
+disposable profile, XDG directories and tmux socket. Give the operator the same
+source commit, task, model settings, development checks and eight-minute limit.
+Record setup separately from task time, capture every operator intervention,
+retain the native delivery/confirmation fields, then grade the resulting patch
+with the same frozen grader. Use its supported launch/send controls rather than
+equating an idle pane or zero command exit with task completion. Keep results
+separate until the adapter and supervision/cleanup have their own controls.

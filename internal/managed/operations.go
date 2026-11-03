@@ -70,6 +70,12 @@ func (s *Store) Call(ctx context.Context, token string, r Request) (json.RawMess
 	}()
 	a, err := s.authenticate(ctx, token)
 	if err != nil {
+		if ctx.Err() != nil {
+			return nil, internal(ctx.Err())
+		}
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, internal(err)
+		}
 		return nil, fault("unauthorized", "invalid credential")
 	}
 	if len(r.Args) == 0 {
@@ -320,6 +326,10 @@ func (s *Store) dispatch(ctx context.Context, q queryer, a actor, r Request) (an
 		return s.messages(ctx, q, a, r.Args, r.Operation == "board.list")
 	case "task.summary":
 		return s.taskSummary(ctx, q, a, r.Args)
+	case "observation.get":
+		return s.observation(ctx, q, a, r.Args)
+	case "task.observe":
+		return s.observeTask(ctx, q, a, r.Args)
 	case "task.get", "task.list", "task.claim", "task.complete", "task.stopped", "task.cancel", "task.verify", "task.resolve":
 		return s.tasks(ctx, q, a, r)
 	case "memory.get", "memory.list", "memory.put", "memory.patch", "memory.head", "memory.search", "memory.delete", "memory.prune", "memory.index":
@@ -399,7 +409,7 @@ func (s *Store) dispatch(ctx context.Context, q queryer, a actor, r Request) (an
 		if err != nil {
 			return nil, internal(err)
 		}
-		return map[string]any{"messages": mp, "tasks": tp, "events": events, "runtime_deadline": deadline}, nil
+		return map[string]any{"messages": mp, "tasks": tp, "events": events, "runtime_deadline": deadline, "observed_at": time.Now().UTC().Format(time.RFC3339Nano)}, nil
 	case "status":
 		var in struct{}
 		if err := strictJSON(r.Args, &in); err != nil {
@@ -412,15 +422,9 @@ func (s *Store) dispatch(ctx context.Context, q queryer, a actor, r Request) (an
 		if err != nil {
 			return nil, internal(err)
 		}
-		tasks, err := list[taskRecord](ctx, q, "task", "ORDER BY seq")
+		observed, err := taskObservationCounts(ctx, q, time.Now())
 		if err != nil {
 			return nil, internal(err)
-		}
-		states := map[string]int{}
-		delivery := map[string]int{}
-		for _, t := range tasks {
-			states[t.State]++
-			delivery[t.Delivery]++
 		}
 		cfg := s.Config()
 		for id, agent := range cfg.Agents {
@@ -453,7 +457,7 @@ func (s *Store) dispatch(ctx context.Context, q queryer, a actor, r Request) (an
 				active++
 			}
 		}
-		return map[string]any{"session": s.cfg.Session, "agents": len(s.cfg.Agents), "active_agents": active, "runtime_deadline": deadline, "runtime_expired": !deadline.IsZero() && time.Now().After(deadline), "messages": messages, "tasks": len(tasks), "task_states": states, "deliveries": delivery, "config": cfg}, nil
+		return map[string]any{"session": s.cfg.Session, "agents": len(s.cfg.Agents), "active_agents": active, "runtime_deadline": deadline, "runtime_expired": !deadline.IsZero() && time.Now().After(deadline), "messages": messages, "tasks": observed.Tasks, "task_states": observed.TaskStates, "deliveries": observed.Deliveries, "effective_deliveries": observed.EffectiveDeliveries, "recovery_eligible": observed.RecoveryEligible, "observed_at": observed.ObservedAt, "config": cfg}, nil
 	case "events", "events.list", "event.list":
 		return s.listEvents(ctx, q, a, r.Args)
 	case "exposure.list":

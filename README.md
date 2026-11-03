@@ -83,7 +83,10 @@ setup. Remote `go install …@latest` is currently unsupported by this module.
 
 Current `main` adds workspace targeting with `amx context`, exact task opening
 with `amx task ID --open`, searchable workspace selection and direct session
-task history. These controls require a [source build](docs/getting-started/installation.md#build-from-source);
+task history. `amx observe` brings broker availability, observed worker state,
+live reporting and retained task attention into one read-only view; `--watch --json`
+records JSONL. See [observability](docs/observability.md) for fresh/stale evidence
+and exact-task drilldown. These controls require a [source build](docs/getting-started/installation.md#build-from-source);
 the published v0.12.0 binaries retain their original feature set.
 
 `make install` installs `amx`, the Agentmux command. Use

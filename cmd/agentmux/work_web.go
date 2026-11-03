@@ -25,7 +25,7 @@ import (
 	"agentmux/internal/managedlaunch"
 )
 
-//go:embed workweb/index.html workweb/app.css workweb/app.js workweb/graph.js
+//go:embed workweb/index.html workweb/app.css workweb/observation.js workweb/app.js workweb/graph.js
 var workWebAssets embed.FS
 
 // Legacy untagged direct controls cannot be attributed to a historical group
@@ -197,7 +197,7 @@ func workWebHandler(state string, client *managed.Client, token, host string) ht
 					}
 					return err.Error()
 				}
-				reply(map[string]any{"ok": true, "study_attempt": workStudyAttempt(state, d.runtime, d.research), "headless": d.headless, "native": d.native, "native_statuses": nativeStatuses, "native_error": nativeError, "groups": d.controls.Groups, "legacy_group_edges": workLegacyGroupEdges(d.controls), "teams": d.teams, "autonomy": d.autonomy, "conversation": d.conversation, "research": d.research, "runtime_error": errorText(d.runtimeErr), "teams_error": errorText(d.teamsErr), "research_error": errorText(d.researchErr), "observed": d.observed, "bridge_setup": func() string {
+				reply(map[string]any{"ok": true, "observed_at": d.observedAt, "worker_runtime_error": errorText(d.workerRuntimeErr), "study_attempt": workStudyAttempt(state, d.runtime, d.research), "headless": d.headless, "native": d.native, "native_statuses": nativeStatuses, "native_error": nativeError, "groups": d.controls.Groups, "legacy_group_edges": workLegacyGroupEdges(d.controls), "teams": d.teams, "autonomy": d.autonomy, "conversation": d.conversation, "research": d.research, "runtime_error": errorText(d.runtimeErr), "teams_error": errorText(d.teamsErr), "research_error": errorText(d.researchErr), "observed": d.observed, "bridge_setup": func() string {
 					for _, a := range d.agents {
 						if a.ID == d.selected && a.External {
 							return bridgeInstructions(state, a.ID)
@@ -386,6 +386,8 @@ func workWebHandler(state string, client *managed.Client, token, host string) ht
 			path, contentType = "app.css", "text/css; charset=utf-8"
 		case "/app.js":
 			path, contentType = "app.js", "application/javascript; charset=utf-8"
+		case "/observation.js":
+			path, contentType = "observation.js", "application/javascript; charset=utf-8"
 		case "/graph.js":
 			path, contentType = "graph.js", "application/javascript; charset=utf-8"
 		default:

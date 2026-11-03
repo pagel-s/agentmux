@@ -136,12 +136,18 @@ workspace. Outside, bare `amx` or `amx a` uses the sole running workspace or
 shows a chooser when several are running. Commands with an explicit agent ID
 still use workspace `work` outside an attachment unless you provide `-s`.
 
-In source builds after v0.12.0, press `/` or Ctrl+F in the workspace chooser,
+In source builds after v0.12.0, press `/` or Ctrl+F in the startup/resume workspace
+chooser or the workbench's **Ctrl+W** picker,
 then type to filter by name, path or status; arrows or Ctrl+N/P select a match, Ctrl+U clears and
 Enter opens the exact displayed workspace. Non-interactive `amx` shows active
 workspaces first and a short saved summary; `amx ws` retains the full inventory.
 `amx context [-s NAME]` prints the ordinary command target and its selection
 source without attaching or starting agents.
+
+The Ctrl+W picker keeps your open draft, reader or action review intact. Esc
+returns to that panel. Once filtering, `j`, `k` and `q` are literal text; use
+arrows or Ctrl+N/P to navigate. `amx COMMAND --help` gives focused everyday
+command guidance; `amx help all` is the complete reference.
 
 `amx a` restores an attachment's last live agent when available, otherwise the
 workspace's last live selection. If none is available, it opens the workbench.

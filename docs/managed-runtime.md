@@ -107,7 +107,7 @@ The CLI generates a random request ID when one is omitted. Within the same authe
 
 When `--state` is omitted, `up` uses `.agentmux-state/SESSION` under the current directory. Choose a short explicit path if the Unix socket path would exceed 100 bytes. An existing state directory must contain identical saved configuration; use a different directory for a changed experiment or team definition.
 
-Each run uses its own private `STATE/tmux.sock`, with an attempt ID on the session and tracked panes. It does not connect to the user's default tmux server. A supervisor watches the authenticated agent registry and adds windows for newly spawned agents. Worker or broker crashes are observed rather than automatically restarted. The owner workbench shows the roster, native terminal previews, coordination content, tasks, shared memory, and live permission controls. It is a content-sensitive owner surface; agents must not receive its credential. For a metadata summary, use `managed status --watch`.
+Each run uses its own private `STATE/tmux.sock`, with an attempt ID on the session and tracked panes. It does not connect to the user's default tmux server. A supervisor watches the authenticated agent registry and adds windows for newly spawned agents. Worker or broker crashes are observed rather than automatically restarted. The owner workbench shows the roster, native terminal previews, coordination content, tasks, shared memory, and live permission controls. It is a content-sensitive owner surface; agents must not receive its credential. For a metadata summary in a current source build, use [`amx observe --watch --state STATE`](observability.md); `managed status --watch` retains the lower-level lifecycle view.
 
 Use `managed activity --state DIRECTORY` for a content-sensitive owner JSON snapshot of recent messages, task results/failures, events, and reported usage. Add `--watch` for a bounded terminal view; model and message text is quoted to escape terminal controls and Unicode direction controls. This view always uses the state's owner credential, includes private coordination content, and is not an agent-facing API. The default workbench also uses the owner credential and displays coordination content. See [interactive work sessions](work-sessions.md) for its shortcuts and native terminal workflow.
 
@@ -145,6 +145,8 @@ For a manual worker, `--once` handles one queued task or exits if none is waitin
 | `ping.send` | `to` array, `text` | `ping.send` grant for every recipient |
 | `instruct` | One recipient in `to`, `text` | Separate `instruct` grant; creates a task |
 | `task.list` / `task.get` | Optional state / task `id` | Sender, recipient, or owner |
+| `observation.get` | Optional `limit` (1–200) | Owner only; body-free retained counts, attention and live lease metadata |
+| `task.observe` | Exact task `id`, `lease`, cumulative `event_count`, fixed `event_kind` | Current recipient worker only; exact instance/generation/lease, ephemeral check-in |
 | `task.cancel` | Task `id`, current `version` | Sender or owner |
 | `task.verify` | Task `id`, current `version` | Owner, after submission |
 | `agent.role` | Agent `id`, `role`, current role `version` | Owner only |
@@ -177,6 +179,14 @@ Roles describe responsibilities. They grant no authority. Policy defaults to den
 `agent.role` updates a role with its own `role_version` compare-and-swap check. Roles accept up to 16384 UTF-8 bytes without Unicode control characters except newlines/tabs; an empty role clears it. Managed workers capture the current role at the next task claim; in-flight input stays unchanged. Native sessions receive an inbox notice and can read the current role through `identity`; no keystrokes are injected. A nonempty role is rejected for `native_only` sessions.
 
 `board.post`, `message.send`, `ping.send` and `instruct` accept optional `reply_to` for a visible message or instruction task. The broker derives `thread_id`; callers cannot choose a root. A board reply retains the original board, while each direct recipient must already be able to read the referenced message. A reply adds no authority or ancestor access. `task.list` supports `state`, `to`, `query`, `order`, `after` and `limit`, with a returned `has_more` flag; use `task.get` for an exact task. Native provider-only chat turns are outside this broker history.
+
+Current source workers publish metadata-only check-ins while a task is leased.
+`task.observe` does not change task state/version, renew a lease, consume a
+durable request receipt or prove model activity. Worker check-in and native
+event times are set separately by the broker. Owner task reads may include this
+ephemeral `progress`; a broker restart makes it unknown. See the
+[observability guide](observability.md) for effective uncertainty, native
+readiness, capacity and safe evidence inspection.
 
 Owner collaboration groups, explicit overrides and consented teams remain separate permission sources. See [live permissions](live-permissions.md) for overlapping groups, isolation overlays, explicit legacy-state review, reset semantics and live admission edits. [Memory lifecycle](memory-lifecycle.md) covers retention, retrieval and archive provenance.
 

@@ -1,5 +1,12 @@
 # Trace coverage and operational recovery
 
+For current reporting, start with `amx observe --session work`, then inspect
+the printed exact task with `amx task TASK_ID --open --session work`. The
+[observability guide](observability.md) separates worker check-ins, native event
+observations, adapter readiness and retained outcomes. These source-build
+controls are newer than v0.12.0. Live progress contains metadata only; opt-in
+traces below contain sensitive prepared input and adapter events.
+
 ```yaml
 agents:
   coder:
@@ -31,8 +38,12 @@ amx managed trace show --state STATE --agent coder --id TRACE_ID
 
 These commands require the state owner's credential/filesystem access and work
 with the broker offline. They reject malformed framing, altered records,
-truncation, data after the footer and mismatched anchors. `show` emits verified
-JSONL. Copy traces together with their task anchors to owner-controlled archive
+truncation, data after the footer and mismatched anchors. Signed record envelopes
+require the nine canonical fields exactly once; duplicate fields and case aliases
+are rejected before authentication. Native event data remains covered by its
+record's MAC. `show` authenticates a private capture before emitting those exact
+captured JSONL bytes, so a concurrent append or replacement cannot add unverified
+content to the output. Copy traces together with their task anchors to owner-controlled archive
 storage before intentionally freeing capacity; never delete active turn files.
 
 ## Portable authenticated bundles

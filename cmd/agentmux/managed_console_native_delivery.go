@@ -423,12 +423,14 @@ func (m console) nativeDeliverySummary(width int) string {
 	var out strings.Builder
 	fmt.Fprintf(&out, "Native delivery: %s · %s\n", s.Policy.Mode, consoleContent(s.State, 80))
 	fmt.Fprintf(&out, "%s\n", consoleContent(s.Reason, 250))
+	fmt.Fprintln(&out, nativeObservationSummary(s))
 	fmt.Fprintf(&out, "Turns %d/%d · hop cap %d · pending %d\n", s.Turns, s.Policy.MaxTurns, s.Policy.MaxHops, max(s.PendingCount, len(s.Pending)))
 	if s.PendingMore {
 		out.WriteString("More queued items follow as the queue advances.\n")
 	}
 	if s.Active != nil {
 		fmt.Fprintf(&out, "Active: %s · %s\n", consoleContent(s.Active.ID, 100), consoleContent(s.Active.Phase, 40))
+		fmt.Fprintf(&out, "Last receipt: %s\n", consoleContent(s.Active.UpdatedAt, 100))
 	}
 	adapter := s.Adapter
 	if adapter == "" {
@@ -456,5 +458,5 @@ func (m console) nativeDeliverySummary(width int) string {
 		out.WriteString(" · Shift+A review inbox")
 	}
 	out.WriteString("\n")
-	return consoleClip(out.String(), width, 8) + "\n"
+	return consoleClip(out.String(), width, 12) + "\n"
 }

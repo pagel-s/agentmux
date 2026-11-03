@@ -162,13 +162,20 @@ func (m console) teamKeyHints() string {
 func (m console) contextualKeys() string {
 	common := "Tab focus · ←/→ views · Ctrl+P sessions · Ctrl+K Actions · ? · q detach/close"
 	if m.workspacePicker != nil {
+		back := "Esc/q"
+		if m.workspacePicker.filtering {
+			back = "Esc"
+		}
 		if m.workspacePicker.loading {
-			return "Loading workspaces · Esc/q returns to your previous draft or review"
+			return "Loading workspaces · " + back + " returns to your previous draft or review"
 		}
 		if m.workspacePicker.err != nil {
-			return "Workspace inventory unavailable · Esc/q back"
+			return "Workspace inventory unavailable · " + back + " back"
 		}
-		return "↑/↓ workspace · Enter opens observer · Esc/q back"
+		if m.workspacePicker.filtering {
+			return "↑/↓ workspace · Enter opens observer · Ctrl+U clears · Esc back"
+		}
+		return "↑/↓ workspace · Enter opens observer · / or Ctrl+F filters · Esc/q back"
 	}
 	if m.ownerReview != nil {
 		return "↑/↓ scroll · Enter applies exact reviewed action · Esc cancels"

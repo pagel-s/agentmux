@@ -468,7 +468,7 @@ class Acceptance:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--binary", default="bin/agentmux")
+    parser.add_argument("--binary", default="bin/amx")
     parser.add_argument("--allow-models", action="store_true", help="authorize two real cloud tasks and one local Pi task")
     parser.add_argument("--check-fixtures", action="store_true", help="validate positive/negative oracle controls without model calls")
     parser.add_argument("--verify-artifact", metavar="FILE", help="check a saved tag_normalizer.py in a credential-free sandbox; no model calls")

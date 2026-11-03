@@ -12,7 +12,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--host',required=True)
     parser.add_argument('--remote-dir',required=True,help='new absolute directory, parent already present')
-    parser.add_argument('--binary',default='bin/agentmux')
+    parser.add_argument('--binary',default='bin/amx')
     parser.add_argument('--output')
     args=parser.parse_args()
     binary=str(Path(args.binary).resolve(strict=True))

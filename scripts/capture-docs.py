@@ -119,7 +119,7 @@ class Capture:
             agent = {"harness": "command", "sandbox": "local", "network": "host",
                      "workdir": str(folder), "role": "Documentation fixture. No model is running."}
             if name in ("builder", "verifier", "recovery"):
-                commands = {"builder": ["/bin/cat"], "verifier": ["/bin/sh", "-c", "cat; exit 2"],
+                commands = {"builder": ["/bin/sh", "-c", "input=$(cat); printf '%s\\n' \"$input\"; case \"$input\" in *'LIVE OBSERVATION FIXTURE'*) sleep 600;; esac"], "verifier": ["/bin/sh", "-c", "cat; exit 2"],
                             "recovery": ["/bin/sh", "-c", "cat; sleep 600"]}
                 agent["command"] = commands[name]
             else:
@@ -159,6 +159,8 @@ class Capture:
         task = self.call("instruct", {"to": ["builder"], "text": "FIXTURE: echo this input to demonstrate a completed delivery."})["task"]
         finished = until(lambda: (t if (t := self.call("task.get", {"id": task["id"]})["task"])["state"] == "submitted" else None), "submitted fixture task")
         self.call("task.verify", {"id": finished["id"], "version": finished["version"]})
+        live = self.call("instruct", {"to": ["builder"], "text": "LIVE OBSERVATION FIXTURE: keep the command alive so the owner's worker check-in remains inspectable. No model is running."})["task"]
+        until(lambda: self.call("task.get", {"id": live["id"]})["task"].get("progress", {}).get("worker_observed_at"), "live fixture worker check-in")
         failed = self.call("instruct", {"to": ["verifier"], "text": "FIXTURE: deliberately exit 2 so the recorded failure is visible."})["task"]
         until(lambda: self.call("task.get", {"id": failed["id"]})["task"]["state"] == "failed", "deliberately failed task")
         self.call("instruct", {"to": ["editor"], "text": "FIXTURE queued instruction: contribute a four-line reply stanza."}, "poet")
@@ -237,6 +239,10 @@ class Capture:
         self.tmux("resize-window", "-t", exact, "-x", "136", "-y", "39")
         self.terminal("terminal-task-recovery", exact, "Recovery: uncertain")
         self.tmux("send-keys", "-t", exact, "q")
+        observe = " ".join("'" + s.replace("'", "'\"'\"'") + "'" for s in [str(self.binary), "observe", "--limit", "2", "--state", str(self.state)]) + "; sleep 600"
+        observation = self.tmux("new-window", "-d", "-P", "-F", "#{pane_id}", "-t", self.runtime["session"], "-n", "observation", observe).strip()
+        self.tmux("resize-window", "-t", observation, "-x", "136", "-y", "64")
+        self.terminal("terminal-observability", observation, "Observations describe reporting")
 
     def shot(self, page, name, fixture, target=None):
         page.wait_for_timeout(250)
@@ -277,6 +283,7 @@ class Capture:
         page.locator('#action-query').fill("Tasks for selected session")
         page.locator("#action-query").press("Enter")
         expect(page.locator("#task-agent-filter")).to_have_value("builder")
+        page.locator("#tasks").get_by_text("Worker check-in:", exact=False).wait_for()
         self.shot(page, "web-session-tasks", "direct selected-recipient task history action", "#task-history-filter")
         page.close()
 
@@ -349,8 +356,8 @@ class Capture:
 
     def publish(self, browser_version):
         names = [item["file"] for item in self.images]
-        if len(names) != 16 or len(set(names)) != 16:
-            raise RuntimeError("expected exactly 16 authentic documentation images")
+        if len(names) != 17 or len(set(names)) != 17:
+            raise RuntimeError("expected exactly 17 authentic documentation images")
         self.output.mkdir(parents=True, exist_ok=True)
         for item in self.images:
             path = self.staged / item["file"]
@@ -366,6 +373,7 @@ class Capture:
                   "data": "Disposable scripted command-only workspace and research fixtures. Owner-supplied text, not model output. No live user workspace was used.",
                   "terminal_rendering": "Actual live tmux ANSI capture; empty trailing rows cropped; fixture label outside the captured app.",
                   "uncertainty": "A real command worker claimed an instruction, was stopped by the owner and retired after exit. Broker-retained uncertain delivery is shown without resolving or retrying.",
+                  "live_progress": "A command-only worker remains alive and reports lease-bound check-ins with zero native model events. Actual amx observe output and selected-recipient task history show that metadata; no provider inference is performed.",
                   "retired_recipient": {"id": self.retired["id"], "state": self.retired["state"]},
                   "execution": "Explicit trusted-local command fixtures for workspace, research broker and participants. These captures do not validate filesystem/network isolation.",
                   "checked_report": "amx demo applied only to its generated fixture; amx flow report RUN --output NEWFILE.html then freshly rendered the retained evidence for capture.",
