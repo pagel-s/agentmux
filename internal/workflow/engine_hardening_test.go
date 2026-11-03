@@ -210,9 +210,22 @@ func TestLabRefusesToContinueFromMutatedBaseline(t *testing.T) {
 	output := filepath.Join(root, "lab")
 	baseline, _ := json.Marshal(filepath.Join(output, "baseline", "file.txt"))
 	p := auditPlan(repo, []string{"python3", "-c", "from pathlib import Path; Path(" + string(baseline) + ").write_text('contaminated baseline'); print('completed')"})
-	r, err := Lab(context.Background(), p, output, false, 2)
+	// This tests rejection of an actually mutated baseline, not a five-second
+	// execution limit. Lab prepares multiple private snapshots before and during
+	// its first trial; allow slow race-test storage to reach that assertion.
+	p.TimeoutSeconds = 30
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	r, err := Lab(ctx, p, output, false, 2)
 	if err == nil || r.State != "failed" || len(r.Runs) != 1 || !strings.Contains(err.Error(), "baseline changed") {
 		t.Fatalf("contaminated trial continued: %+v %v", r, err)
+	}
+	changed, readErr := os.ReadFile(filepath.Join(output, "baseline", "file.txt"))
+	if readErr != nil || string(changed) != "contaminated baseline" {
+		t.Fatalf("fixture did not actually mutate the pinned baseline: %q %v", changed, readErr)
+	}
+	if _, statErr := os.Stat(filepath.Join(output, "trial-0002")); !os.IsNotExist(statErr) {
+		t.Fatalf("second trial was admitted after baseline mutation: %v", statErr)
 	}
 }
 
