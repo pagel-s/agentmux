@@ -25,10 +25,15 @@ spec = importlib.util.spec_from_file_location("release_installer", Path(__file__
 installer = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(installer)
 ARCHIVES = {f"agentmux_{system}_{arch}.tar.gz" for system in ("linux", "darwin") for arch in ("x86_64", "arm64")}
-REQUIRED_FILES = {"amx", "README.md", "CONTRIBUTING.md", "SECURITY.md", "docs/getting-started/first-result.md", "scripts/install-release.py"}
+REQUIRED_FILES = {"amx", "LICENSE", "README.md", "CONTRIBUTING.md", "SECURITY.md", "docs/getting-started/first-result.md", "scripts/install-release.py"}
 
 
-def check_archives(directory):
+def check_archives(directory, version=None):
+    required_files = REQUIRED_FILES
+    # The immutable final v0.12.0 release predates license selection. Snapshots
+    # and every subsequent version must carry the notice in each archive.
+    if version in ("v0.12.0", "0.12.0"):
+        required_files = REQUIRED_FILES - {"LICENSE"}
     manifest = installer.read_bounded(directory / "checksums.txt", 1024 * 1024)
     entries = {}
     for line in manifest.decode("ascii").splitlines():
@@ -51,8 +56,8 @@ def check_archives(directory):
                 if member.name in files:
                     raise ValueError("duplicate archive member: " + member.name)
                 files[member.name] = member
-            if not REQUIRED_FILES.issubset(files) or any(not files[name].isfile() for name in REQUIRED_FILES):
-                raise ValueError("archive lacks required executable or first-run documentation: " + name)
+            if not required_files.issubset(files) or any(not files[name].isfile() for name in required_files):
+                raise ValueError("archive lacks required executable, license or first-run documentation: " + name)
     return entries, manifest
 
 
@@ -155,7 +160,7 @@ def main(argv=None):
     started = time.monotonic()
     evidence = {"version": 1, "state": "failed", "release": args.version, "coverage": "deterministic installed-artifact check; no model calls", "platform": platform.system(), "architecture": platform.machine()}
     try:
-        assets, manifest = check_archives(args.artifact_dir)
+        assets, manifest = check_archives(args.artifact_dir, args.version)
         system = {"Linux": "linux", "Darwin": "darwin"}.get(platform.system())
         arch = {"x86_64": "x86_64", "AMD64": "x86_64", "aarch64": "arm64", "arm64": "arm64"}.get(platform.machine())
         if not system or not arch:
