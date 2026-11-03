@@ -407,9 +407,26 @@ func TestObservationAttentionBoundsKeepCompleteCounts(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// This checks query semantics, not a scheduling guarantee for a maximum
+	// page on a race-instrumented CI host. The public operation deliberately
+	// returns unavailable when its 250ms read budget expires; the separate
+	// blocked-read and large-history tests enforce that budget and the exact
+	// 500ms worker monitor. Exercise the same count/page queries directly so
+	// an unavailable sample cannot skip any of the bounds/privacy assertions.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	at := time.Now()
 	for _, limit := range []int{25, 200} {
-		result := observationIn(t, s, map[string]any{"limit": limit})
-		if result.Tasks != 206 || result.AttentionCount != 206 || len(result.Attention) != limit || !result.AttentionMore {
+		result, err := taskObservationCounts(ctx, s.db, at)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var problem *Fault
+		result.Attention, problem = s.observationTaskPage(ctx, s.db, actor{ID: ownerID}, at, limit, false)
+		if problem != nil {
+			t.Fatal(problem)
+		}
+		if result.Tasks != 206 || result.AttentionCount != 206 || len(result.Attention) != limit || len(result.Attention) >= result.AttentionCount {
 			t.Fatalf("bounded page discarded counts: %+v", result)
 		}
 		encoded, _ := json.Marshal(result)
@@ -444,9 +461,22 @@ func TestObservationHistoricalFailuresCannotHideOtherAttentionKinds(t *testing.T
 	if err := s.db.QueryRow("SELECT group_concat(data,'') FROM records ORDER BY seq").Scan(&before); err != nil {
 		t.Fatal(err)
 	}
+	// Check fairness and privacy independently of the public operation's
+	// deliberate unavailable result when its read budget expires under load.
+	queryCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	at := time.Now()
 	for _, limit := range []int{25, 200} {
-		result := observationIn(t, s, map[string]any{"limit": limit})
-		if result.Tasks != 228 || result.AttentionCount != 228 || result.TaskStates["failed"] != 225 || len(result.Attention) != limit || !result.AttentionMore {
+		result, err := taskObservationCounts(queryCtx, s.db, at)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var problem *Fault
+		result.Attention, problem = s.observationTaskPage(queryCtx, s.db, actor{ID: ownerID}, at, limit, false)
+		if problem != nil {
+			t.Fatal(problem)
+		}
+		if result.Tasks != 228 || result.AttentionCount != 228 || result.TaskStates["failed"] != 225 || len(result.Attention) != limit || len(result.Attention) >= result.AttentionCount {
 			t.Fatalf("fair page changed complete counts: %+v", result)
 		}
 		for i, id := range []string{"task_old_recovery", "task_failed_224", "task_new_review", "task_new_pending"} {

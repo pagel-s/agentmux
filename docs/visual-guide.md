@@ -18,8 +18,8 @@ installed and authenticated separately. A new installation does not replace
 an existing workspace's pinned controller; use a fresh workspace for all current
 features, or [upgrade deliberately](traces-and-recovery.md).
 
-Screenshots were captured on **2026-11-03** from source **725ef1e**, using
-disposable command-only workspaces and a scripted research trial with explicitly
+Screenshots were captured on **2026-11-03** from source **e27b3efc6ff0**,
+using **amx v0.12.0-12-ge27b3ef**, in disposable command-only workspaces and a scripted research trial with explicitly
 trusted local execution. They show real current controls; they measure neither
 model quality nor isolation. Terminal images render live tmux captures with
 trailing empty rows cropped. [Capture provenance](assets/guide/capture-provenance.json)

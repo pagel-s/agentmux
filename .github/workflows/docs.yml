@@ -21,6 +21,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: 3.x
+      - name: Test documentation capture failure controls
+        run: python3 scripts/test-doc-assets.py
+      - name: Verify captured images, provenance and Markdown labels
+        run: python3 scripts/check-doc-assets.py
       - run: echo "cache_id=$(date --utc '+%V')" >> $GITHUB_ENV
       - uses: actions/cache@v4
         with:
