@@ -2,13 +2,15 @@
 
 ## Unreleased
 
-## v0.13.0 - 2026-11-03
+## v0.13.0 - 2026-11-04
 
 - Add `amx observe` with live worker check-ins, native event metadata,
   readiness timestamps, retained capacity and database file sizes. Keep recorded
   delivery, effective uncertainty and model activity distinct.
 - Keep operational reads fast at large retained histories using covered metadata
   queries; balance attention categories so old failures cannot hide new reviews.
+  Isolate metadata queries and cancellation from worker coordination with one
+  read-only snapshot at a time and recheck credentials before publication.
 - Give everyday operations focused help and make the in-workbench workspace
   picker searchable while preserving exact targets, drafts and frozen reviews.
 - Redact decoded credential values from native JSON evidence, reject unsafe
@@ -22,7 +24,8 @@
 - Refresh the repository and site documentation, replace the dense workflow
   diagram with an actual checked-result report, and recapture terminal/web
   screenshots from the current app using model-free fixtures.
-- License Agentmux under MIT and include the license in release archives.
+- License Agentmux under MIT, retain dependency notices in release archives,
+  and build/test distributions with the maintained Go 1.27.3 toolchain.
 - Make the workspace chooser searchable and show active workspaces first in
   non-interactive home output. Add read-only `amx context` to explain the exact
   selected workspace and its runtime status.

@@ -32,10 +32,12 @@ and used disposable fixtures. It is not evidence of seven days of native use.
 
 The observability regressions cover large retained histories, complete counts,
 fair bounded attention and additive metadata-index migration. Query-plan checks
-reject reads of task bodies during operational counting/ranking, and a blocked
-observation must release its bounded read before the worker's unchanged 500 ms
-lease-monitor deadline. Worker check-ins remain separate from native events;
-unknown reporting never becomes a successful task outcome.
+reject reads of task bodies during operational counting/ranking. A separate
+read-only connection keeps slow queries and cancellation outside the worker's
+unchanged 500 ms lease monitor. Tests block the actual read path, retain the
+250 ms query budget and check credential rotation and shutdown before
+publication. Worker check-ins remain separate from native events; unknown
+reporting never becomes a successful task outcome.
 
 Fresh AI peer reviews added reproducible controls for escaped secret publication,
 ambiguous signed trace envelopes, concurrent trace changes and cancellation

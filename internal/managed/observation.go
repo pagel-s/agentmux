@@ -7,8 +7,8 @@ import (
 	"time"
 )
 
-// Leave half of the worker's 500ms lease-monitor deadline for authentication,
-// cancellation and response handling, including under scheduling load.
+// Bound diagnostic query work. Slow SQL cancellation/decoding runs on an
+// independent read-only connection, outside the worker lease-monitor lock.
 const operationalObservationReadBudget = 250 * time.Millisecond
 
 // ObservationSnapshot is a fresh owner-only read projection. Counts cover the

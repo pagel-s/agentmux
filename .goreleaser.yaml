@@ -26,10 +26,13 @@ archives:
       - SECURITY.md
       - docs/*.md
       - docs/*.json
+      - docs/*.txt
       - docs/**/*
       - examples/*.yaml
       - examples/**/*
       - scripts/*.py
+      - scripts/third-party-notice-sources.json
+      - scripts/license-texts/*.txt
       - scripts/**/*.py
     name_template: >-
       {{ .ProjectName }}_

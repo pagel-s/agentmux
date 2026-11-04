@@ -13,9 +13,28 @@ behavior promoted by its README and installation guide.
    package all four supported archives, verify their checksums, install the
    host binary and complete `amx demo` through actual workflow evidence.
 3. Review the source archive and distribution contents for private data. Include
-   contribution/security instructions and the MIT `LICENSE` file.
+   contribution/security instructions, the MIT `LICENSE` file and
+   `docs/third-party-notices.txt`.
 4. Merge the reviewed revision and create the new version tag on that exact
    commit. Pushing a `v*` tag starts the release workflow.
+
+Release and installed-artifact jobs use **Go 1.27.3**; the regular test job
+retains Go 1.24 to check the minimum source-compatibility promise. Use a
+[maintained Go release](https://go.dev/doc/devel/release) when updating the
+distribution toolchain. Regenerate and check dependency notices for that exact
+toolchain before building.
+
+From a source checkout, use the selected release toolchain:
+
+```sh
+python3 scripts/check-third-party-notices.py --go /path/to/go1.27.3 --write
+python3 scripts/check-third-party-notices.py --go /path/to/go1.27.3 --check
+```
+
+The explicit source selection covers runtime modules for all four targets,
+Go's runtime/vendor notices and included Unicode data. A missing component,
+changed upstream notice or changed dependency version requires review and
+regeneration. The check never rewrites the notice automatically.
 
 The default release targets are Linux and macOS on x86-64 and ARM64. Native
 execution in CI covers the runner architectures only; verifying a cross-built
@@ -52,7 +71,8 @@ python3 scripts/smoke-release.py --artifact-dir /tmp/amx-v0.13.0-artifacts \
 ```
 
 The final v0.12.0 archives predate the MIT license file and remain verifiable.
-New builds and snapshots must include `LICENSE` in every platform archive.
+New builds and snapshots must include `LICENSE` and
+`docs/third-party-notices.txt` in every platform archive.
 
 Choose new directories for every run. The smoke command never replaces an
 existing installation and never makes model calls. Its passing result covers

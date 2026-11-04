@@ -63,6 +63,16 @@ class SmokeTests(unittest.TestCase):
                 with self.subTest(version=version), self.assertRaisesRegex(ValueError, "license"):
                     smoke.check_archives(root, version)
 
+    def test_dependency_notices_are_required_except_for_immutable_final_v0120(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            archives(root, "docs/third-party-notices.txt")
+            for version in ("v0.12.0", "0.12.0"):
+                smoke.check_archives(root, version)
+            for version in (None, "v0.12.0-next", "v0.13.0", "v1.0.0"):
+                with self.subTest(version=version), self.assertRaisesRegex(ValueError, "license"):
+                    smoke.check_archives(root, version)
+
     def test_successful_process_without_workflow_evidence_is_failure(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

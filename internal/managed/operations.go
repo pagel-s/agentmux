@@ -53,6 +53,9 @@ func isWrite(op string) bool {
 // Call binds the actor to a credential before decoding operation arguments.
 // Every mutating call requires an idempotency key, scoped to its actor.
 func (s *Store) Call(ctx context.Context, token string, r Request) (json.RawMessage, *Fault) {
+	if operationalRead(r) {
+		return s.callOperationalRead(ctx, token, r)
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {

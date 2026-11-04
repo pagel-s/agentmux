@@ -119,9 +119,15 @@ The native inventory is a fast reporting/receipt summary. It deliberately does
 not evaluate all queued admission candidates; `native[].pending_count` is
 `null` when not computed. Use `amx delivery ID` and the exact task view to
 inspect current admission policy and queued native work. Metadata indexes keep
-large task bodies out of operational counts and ranking. A bounded broker query
-that cannot finish reports unavailable evidence instead of extending worker
-lease-check delays.
+large task bodies out of operational counts and ranking. These projections use
+a separate read-only database snapshot, outside the worker coordination lock.
+The query budget remains 250 ms; slow query cancellation cannot hold the
+worker's connection or its unchanged 500 ms lease monitor.
+
+One operational read runs at a time. Overlapping observations return
+`unavailable`; a watch collects again on its next tick. An unfinished query
+reports unavailable evidence. Credentials are rechecked before a completed
+sample is published.
 
 The output omits task/result bodies, raw native events, provider usage bodies
 and credentials. It still contains local paths, task/session identities,

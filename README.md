@@ -1,6 +1,6 @@
 # Agentmux
 
-Licensed under the [MIT License](LICENSE).
+Licensed under the [MIT License](LICENSE). [Dependency notices](docs/third-party-notices.txt) accompany the binaries.
 
 Run coding agents together, control what they share, and inspect checked changes
 before applying them to your project. Agentmux works with Claude Code, Codex, Pi
@@ -9,7 +9,7 @@ and Antigravity. The managed runtime and workbench are experimental.
 ## Get your first checked result
 
 [Install v0.13.0](docs/getting-started/installation.md#install-a-published-binary-recommended)
-for Linux or macOS, then run:
+for Linux or macOS 13+, then run:
 
 ```sh
 amx demo
@@ -63,7 +63,7 @@ instructions. Published binaries need no Go toolchain.
 
 ### Build from source
 
-Building requires Git, Make and Go 1.24+; `make install` also uses Python 3.
+Building requires Git, Make and Go 1.24+; use the maintained Go 1.27.3 toolchain for current builds. `make install` also uses Python 3.
 Native sessions require tmux 3.2+. Isolated profiles require Linux with working
 Bubblewrap namespaces. Everyday native sessions use trusted local execution to
 preserve your normal configuration; isolation is opt-in.
