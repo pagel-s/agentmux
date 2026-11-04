@@ -21,7 +21,7 @@ controller and workers explicitly; installing a new CLI does not replace a
 running controller. An older controller can report this operation as unsupported. The output records
 `observer_version` and the pinned controller path separately; installing a new
 observer does not prove that an existing workspace upgraded its controller.
-Agentmux [v0.14.0](getting-started/installation.md) adds structured collection diagnostics and the offline summary
+Agentmux [v0.15.0](getting-started/installation.md) includes structured collection diagnostics and the offline summary
 described below. Older v0.13.0 schema-1 captures remain readable; missing
 diagnostic timings stay unknown.
 

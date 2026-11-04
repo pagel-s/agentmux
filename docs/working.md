@@ -7,8 +7,8 @@ review examines the final revision. Final acceptance checks always run. You rece
 report and a patch in a separate Git worktree. Agentmux does not integrate that
 patch into your project until you explicitly apply it.
 
-The clean-approval shortcut described below is included in
-[Agentmux v0.14.0](getting-started/installation.md). v0.13.0 always executes the
+The clean-approval shortcut, introduced in v0.14.0, is included in
+[Agentmux v0.15.0](getting-started/installation.md). v0.13.0 always executes the
 response and second review. To inspect a
 checked fixture before configuring providers, start with
 [`amx demo`](getting-started/first-result.md).

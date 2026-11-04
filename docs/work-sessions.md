@@ -17,7 +17,7 @@ managed task execution. Both modes share the coordination broker and its permiss
 Each agent has one terminal/worker lock. Changing interaction mode requires a
 new launch definition/run rather than a second process sharing a conversation.
 
-v0.14.0 includes `amx context`, `amx task` / `tasks`, exact task opening
+v0.15.0 includes `amx context`, `amx task` / `tasks`, exact task opening
 with `task ID --open`, `amx observe`, the searchable running-workspace chooser and direct
 session task history in Actions. See [installation](getting-started/installation.md)
 and explicitly upgrade an older workspace controller before using its new controls.

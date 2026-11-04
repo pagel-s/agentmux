@@ -4,7 +4,7 @@ Agentmux keeps each native conversation interactive. The terminal is the main
 work surface; the local black/purple web app provides observation and reviewed
 control. Both surfaces identify actions by stable session ID.
 
-The shortcuts below are included in v0.14.0. They
+The shortcuts below are included in v0.15.0. They
 retain the same explicit permissions, delivery policies and recovery reviews.
 
 ## Upgrade an existing workspace
