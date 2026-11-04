@@ -25,8 +25,13 @@
 - Show the recipient's delivery mode in Connections and open its settings or
   exact pending approval there with Shift+D/A. Preview existing queue metadata
   before Auto, and give native agents portable delivery and task-result guidance.
+  Identify managed workers separately, including the default interaction mode,
+  rather than suggesting a refresh can enable native delivery settings.
 - Print workspace-scoped recovery commands after an unconfirmed shutdown or
   restart, retaining the original fault, failure status and process boundaries.
+- Add focused `stop --help` and keep pending/submitted tasks visible in the
+  everyday inspection example; explain Manual's peer-turn cancellation request
+  without claiming a confirmed stop.
 
 ## v0.13.0 - 2026-11-04
 

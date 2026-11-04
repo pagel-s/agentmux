@@ -59,6 +59,7 @@ jobs:
           AGENTMUX_MANAGED_INTEGRATION: '1'
           AGENTMUX_EXPERIMENT_INTEGRATION: '1'
           AGENTMUX_TMUX_DEBUG: '1'
+          AGENTMUX_KEEP_UAT_ARTIFACTS: '1'
         run: go test -race -count=1 -timeout=20m ./...
 
       - name: Verify workflow CLI journeys without provider calls
@@ -100,6 +101,21 @@ jobs:
         with:
           name: tmux-test-failure-logs
           path: /tmp/amx-views-*/tmux-*.log
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Preserve failed terminal navigation captures
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: terminal-navigation-failure-evidence
+          path: |
+            /tmp/amx-session-navigation-*/failure.txt
+            /tmp/amx-session-navigation-*/connections-*.txt
+            /tmp/amx-session-navigation-*/switcher-*.txt
+            /tmp/amx-session-navigation-*/result.json
+            /tmp/amx-session-navigation-*/key-stages.txt
+            /tmp/amx-session-navigation-*/tmux-metadata.json
           retention-days: 7
           if-no-files-found: ignore
 
@@ -263,6 +279,19 @@ jobs:
         with:
           name: tmux-sandbox-failure-logs
           path: /tmp/amx-views-*/tmux-*.log
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Preserve failed interactive popup captures
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: interactive-popup-failure-evidence
+          path: |
+            /tmp/amx-interactive-failure-*/failed-popup-screen.bin
+            /tmp/amx-interactive-failure-*/failure-context.json
+            /tmp/amx-interactive-failure-*/lead-pane.txt
+            /tmp/amx-interactive-failure-*/worker-pane.txt
           retention-days: 7
           if-no-files-found: ignore
 
