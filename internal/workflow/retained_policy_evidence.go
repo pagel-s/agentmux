@@ -107,10 +107,29 @@ func samePolicyCandidate(a, b CandidateResult) bool {
 	return leftErr == nil && rightErr == nil && reflect.DeepEqual(left, right)
 }
 
+// Retained plans are metadata, not executable credential capabilities. Preserve
+// all normal plan validation while preventing harness.Build from resolving a
+// selected key against the inspector's current environment. The placeholder is
+// confined to this private copy; authority bindings use the original plan.
+func validateRetainedPolicyPlan(plan Plan) error {
+	validation := plan
+	validation.Candidates = append([]Candidate(nil), plan.Candidates...)
+	for i := range validation.Candidates {
+		candidate := &validation.Candidates[i]
+		if len(candidate.Env) != 0 {
+			return errors.New("retained plan contains execution environment values")
+		}
+		if candidate.APIKeyEnv != "" {
+			candidate.Env = map[string]string{candidate.APIKeyEnv: "retained-credential-placeholder"}
+		}
+	}
+	return ValidatePlan(validation)
+}
+
 // These checks bind independently retained owner artifacts. They reject a
 // report-only rewrite, but do not attest an owner who rewrites all artifacts.
 func validateRetainedPolicyEvidence(r Report, plan Plan) error {
-	if err := ValidatePlan(plan); err != nil {
+	if err := validateRetainedPolicyPlan(plan); err != nil {
 		return errors.New("guided report retained plan is invalid")
 	}
 	if plan.Kind != r.Kind || plan.Mode != r.Mode || plan.Repository != r.Repository || plan.Goal != r.Goal || plan.Storage != r.Storage || plan.ProcessContainment != r.ProcessContainment || !reflect.DeepEqual(plan.Isolation, r.Isolation) {
