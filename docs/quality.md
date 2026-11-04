@@ -88,8 +88,16 @@ With one implementation attempt, the clean path uses two native CLI turns;
 retries increase that count and requested changes keep the full review loop.
 Legacy plans without the declared
 policy retain their previous behavior. Model-free controls establish those
-branches and rejection behavior; no new native timing or comparative
-productivity result is claimed for this optimization.
+branches and rejection behavior.
+
+A [November 4 subscription smoke](assets/quality/subscription-smoke-2026-11-04.json)
+exercised that clean path in 69.093 seconds with exactly two native CLI sessions:
+Codex implementation and Claude review. The original approval, both skipped
+phases, final checks, full retained-report load, external grader and confirmed
+fixture-only application were verified. Its generic final files and grader
+contract reproduce without models. This used the clean `bf3a578` source build
+labeled `0.14.0-pre`, not a published release archive. The separate November 3
+and November 4 records establish no speedup or competitive advantage.
 
 Use [workflow validation](workflow-validation.md) for engineering checks,
 [evaluation](evaluation.md) for usability and comparative task studies, and
