@@ -777,7 +777,7 @@ class WorkflowOracle:
         if self.plan.get("isolation"):
             expected_plan["isolation"] = dict(self.plan["isolation"], read_only_paths=[str(self.output / "fixture-providers")])
         self.policy(plan, expected_plan)
-        expected = [("coder", "codex", "gpt-6.1-sol"), ("reviewer", "claude", "sonnet") if self.plan.get("isolation") else ("reviewer", "antigravity", "gemini-3.8-flash-low")]
+        expected = [("coder", "codex", "gpt-6.1-sol"), ("reviewer", "claude", "sonnet")]
         candidates = objects(plan.get("candidates"), "guided candidate profiles are missing")
         require([(p.get("id"), p.get("harness"), p.get("model")) for p in candidates] == expected, "guided provider profiles differ")
         steps = objects(plan.get("steps"), "guided planned steps are missing")
@@ -1213,9 +1213,11 @@ def run_validation(args, binary, output, summary, processes):
                 fixture.write_text(code);fixture.chmod(0o700)
             workflow_environment['PATH']=str(fixtures)+os.pathsep+os.environ.get('PATH','')
             summary['fixture_providers']=True
-        options=["--repo",repo,"--catalog",catalog,"--timeout","300s","--attempts","1","--storage",args.storage,"--containment",args.containment,"--json"]
+        # Pin protocol-test roles: host CLI discovery must not change the
+        # independently declared profiles or select a real installed provider.
+        options=["--repo",repo,"--catalog",catalog,"--timeout","300s","--attempts","1","--storage",args.storage,"--containment",args.containment,"--coder","codex","--reviewer","claude","--json"]
         if args.isolation == "bubblewrap":
-            options.extend(["--isolation","bubblewrap","--network","none","--read-only-path",fixtures,"--reviewer","claude"])
+            options.extend(["--isolation","bubblewrap","--network","none","--read-only-path",fixtures])
         flow("work-preview",GOAL,*options,"--",*check['command'],root_command="work")
         summary['cases'].append({'name':'preview-no-catalog-writes','passed':not catalog.exists()})
         worked,report=flow("work-run",GOAL,*options,"--allow-models","--",*check['command'],root_command="work")
