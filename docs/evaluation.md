@@ -311,6 +311,30 @@ pinned files invalidate the study: prepare a new directory, preserving existing
 records. Functional grading is external and frozen, but these trusted local
 arms can read host files; the graders are not hidden by an isolation boundary.
 
+### Recorded exploratory pilot
+
+The [reviewed November 4 aggregate](assets/quality/subscription-pilot-2026-11-04.json)
+identifies the actual v0.14.0 controller, patched process tracker, frozen protocol
+and historical task seed. Native Codex passed 3/3 selected tasks; the Agentmux
+workflow passed 1/3. Its two failures hit the 180-second implementation profile
+limit before review/application, and the supervisor separately rejected observed
+background work. All tracked cleanup completed. The successful Agentmux arm used
+Codex plus Claude static review, then controller checks, external grading and
+fixture-only application.
+
+Four earlier native admissions remain invalidated process-limit evidence; seven
+were admitted in the corrected frozen study. Comparable token usage, inference-request count,
+actual subscription cost and immutable served-model revisions remain unknown.
+No competitor UI or unaided human journey was included. Budget fixes and their
+later targeted validation are separate evidence, not replacements for these six
+original attempts or a basis to pool a better pass rate.
+
+New comparison failures can retain at most 32 identity-checked background-process
+records with explicit omitted/unknown counts. Records contain safe executable
+basenames and numeric identity/group/session metadata, never argv, environment
+values or full paths. Diagnostic failure cannot replace the primary failure or
+skip cleanup. Review these private records before sharing them.
+
 ### Add an operator trial with Agent Deck
 
 Agent Deck's [official CLI reference](https://github.com/asheshgoplani/agent-deck/blob/main/skills/agent-deck/references/cli-reference.md)

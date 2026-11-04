@@ -6,6 +6,10 @@
   Codex coding and Claude review when available. Show and pin the selected roles
   in previews, disclose single-provider fresh-context review, and retain explicit
   and isolated profiles without execution-time provider fallback.
+- Align implicit Codex/Claude turn limits with the shared overall deadline,
+  capped at the existing ten-minute ceiling. Expose role/native limits and their
+  shared budget in preview/run output; preserve explicit limits and historical
+  report bindings. Encourage targeted checks and completion of started commands.
 - Add `amx pair A B --delivery review|auto`: preview task pairing, then use
   `--apply` for one atomic update of mutual Commands, both receiver modes and
   returned results. Bind the update to current permissions, policy versions and
@@ -16,6 +20,9 @@
   the exact idempotent request when its outcome is unconfirmed.
 - Shorten the README and native quickstart around start, task pairing and native
   attach. Preserve the full boundary-verification walkthrough as an optional guide.
+- Retain bounded identity-checked background-process diagnostics before workflow
+  comparison cleanup, without argv, environments, full paths or raw errors.
+  Keep unknowns and omitted counts explicit without replacing the primary failure.
 - Retire kernel-confirmed exited process handles from workflow fixture tracking,
   so sequential Go subprocesses do not exhaust a cumulative identity ledger.
   Preserve bounded live tracking, finite scan work, unknown-state refusal and

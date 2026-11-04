@@ -67,7 +67,9 @@ release:
     Ordinary trusted-local `amx work` now selects installed native CLIs, preferring
     Codex for coding and Claude for fresh review when available. Previews name and
     pin both profiles without starting providers. Explicit and isolated profiles
-    keep their selected authority. The short quickstart focuses on everyday use;
+    keep their selected authority. Implicit Codex/Claude turn limits follow the
+    shared overall deadline up to the existing ten-minute ceiling, with budgets
+    visible before execution. The short quickstart focuses on everyday use;
     detailed verification steps remain available separately.
 
     Workflow fixture tracking retires only kernel-confirmed exited identities,

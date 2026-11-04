@@ -99,6 +99,27 @@ contract reproduce without models. This used the clean `bf3a578` source build
 labeled `0.14.0-pre`, not a published release archive. The separate November 3
 and November 4 records establish no speedup or competitive advantage.
 
+A [private exploratory subscription pilot](assets/quality/subscription-pilot-2026-11-04.json)
+ran three selected historical repository tasks once with a native Codex baseline
+and once through the actual published v0.14.0 Codex/Claude workflow. The baseline
+passed **3/3**, while Agentmux passed **1/3**. Two Agentmux implementations hit
+an implicit 180-second profile limit before review/application, despite a
+longer overall deadline. The outer guard separately rejected observed background
+processes and cleaned its tracked identities. These are undelivered-workflow
+failures, not correctness scores for completed patches.
+
+The first four admissions were invalidated by a cumulative process-tracker limit
+and are retained separately. The corrected frozen study used seven native CLI
+admissions, with eleven across both studies. Grader/artifact integrity and the
+independent evidence audit passed. Raw source, logs and local paths remain private;
+the linked aggregate contains only reviewed metadata. Unequal workflow and turn
+allowances, one repeat, selected historical tasks, trusted-local access and unknown
+served-model revisions prevent a general speed, quality or competitive claim.
+
+The v0.15.0 budget and bounded process-diagnostic changes address the concrete
+engineering findings. Later targeted rechecks must remain separate from this
+unchanged original pilot; passing code controls does not rewrite its failures.
+
 Use [workflow validation](workflow-validation.md) for engineering checks,
 [evaluation](evaluation.md) for usability and comparative task studies, and
 [release verification](releasing.md) for the bytes delivered to users.

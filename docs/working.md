@@ -65,6 +65,22 @@ and sign in to the selected native CLIs before executing a request. Trusted-loca
 setup discovers installed Codex, Claude Code or Antigravity tools without
 launching them; executable discovery does not check subscription login.
 
+## One deadline, visible turn limits
+
+From v0.15.0, an implicit Codex or Claude turn can use the chosen overall
+`--timeout`, up to the existing ten-minute per-turn ceiling. All turns and
+acceptance checks **share** that overall budget; their limits do not add together,
+and time is not reserved for a later review. Explicit role limits remain saved.
+Antigravity print/bridge requests retain their own shorter limits, which the
+preview displays separately.
+
+For example, `--timeout 435s` gives implicit Codex/Claude profiles a maximum of
+7m15s each within one shared 7m15s run, rather than a hidden three-minute cutoff.
+The agent is encouraged to run targeted checks and finish started commands;
+that guidance does not guarantee completion. Controller acceptance checks and
+explicit application remain mandatory. See [process containment](workflows.md)
+for the difference between process groups and Linux namespace containment.
+
 ## Start the work
 
 Add `--allow-models` before `--`:

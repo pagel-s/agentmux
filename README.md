@@ -72,6 +72,7 @@ starting a model or writing run files. With Codex and Claude available, it uses
 Codex for coding and Claude for fresh review. One installed CLI can serve both
 roles in separate fresh contexts. Discovery checks executables, not login.
 Use `--coder` and `--reviewer` to pin explicit profiles.
+Turns and checks share `--timeout`; the preview shows each role's turn limit.
 
 When the preview is suitable:
 
