@@ -118,7 +118,9 @@ try:
  until(lambda:'RECIPIENT · ↑/↓ choose' in (s:=screen()) and 'SENDER · [ focus' in s and connection_pair(s)==('Problem 01 [session_01]','Problem 01 [session_01]'),'Tab focuses recipient without changing pair')
  key('Down')
  until(lambda:connection_pair(screen())==('Problem 01 [session_01]','Problem 02 [session_02]'),'Tab changes only focused recipient')
- key('S-Tab')
+ # BTab is tmux's canonical Shift-Tab (CSI Z). S-Tab sends literal text on
+ # tmux 3.4 and ordinary Tab on 3.6, so neither exercises this shortcut.
+ key('BTab')
  until(lambda:'SENDER · ↑/↓ choose' in (s:=screen()) and 'RECIPIENT · ] focus' in s and connection_pair(s)==('Problem 01 [session_01]','Problem 02 [session_02]'),'Shift-Tab focuses sender without changing pair')
  key('Up')
  until(lambda:connection_pair(screen())==('Problem 00 [session_00]','Problem 02 [session_02]'),'Shift-Tab changes only focused sender')
