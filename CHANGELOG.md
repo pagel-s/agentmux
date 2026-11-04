@@ -9,6 +9,8 @@
   delivery, effective uncertainty and model activity distinct.
 - Keep operational reads fast at large retained histories using covered metadata
   queries; balance attention categories so old failures cannot hide new reviews.
+  Isolate metadata queries and cancellation from worker coordination with one
+  read-only snapshot at a time and recheck credentials before publication.
 - Give everyday operations focused help and make the in-workbench workspace
   picker searchable while preserving exact targets, drafts and frozen reviews.
 - Redact decoded credential values from native JSON evidence, reject unsafe

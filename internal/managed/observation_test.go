@@ -26,13 +26,15 @@ func TestObservationReadBudgetPreservesTheExactLeaseMonitor(t *testing.T) {
 	instruction(t, s)
 	task, lease := claim(t, s)
 	worker := credential(t, s, "bob")
+	view, reader, _, _, problem := s.operationalReader()
+	if problem != nil {
+		t.Fatal(problem)
+	}
 	entered := make(chan struct{})
 	finished := make(chan *Fault, 1)
 	go func() {
-		s.mu.Lock()
 		close(entered)
-		_, problem := s.observation(context.Background(), blockedObservationQueryer{s.db}, actor{ID: ownerID}, json.RawMessage(`{}`))
-		s.mu.Unlock()
+		_, problem := view.observation(context.Background(), blockedObservationQueryer{reader}, actor{ID: ownerID}, json.RawMessage(`{}`))
 		finished <- problem
 	}()
 	<-entered
@@ -192,23 +194,45 @@ func assertObservationAtDefaultHistoryCapacity(t *testing.T, fixture largeHistor
 	if err = s.db.QueryRow("SELECT (SELECT COUNT(*) FROM records),(SELECT COUNT(*) FROM requests),(SELECT COUNT(*) FROM exposures)").Scan(&recordsBefore, &requestsBefore, &exposuresBefore); err != nil {
 		t.Fatal(err)
 	}
-	entered := make(chan struct{})
 	type observationOutcome struct {
 		result  any
 		problem *Fault
 	}
 	finished := make(chan observationOutcome, 1)
+	owner := credential(t, s, "")
+	_, reader, _, _, problem := s.operationalReader()
+	if problem != nil {
+		t.Fatal(problem)
+	}
+	admission, err := reader.Conn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer admission.Close()
+	waits := reader.Stats().WaitCount
 	started := time.Now()
 	go func() {
-		// Store.Call holds this exact lock around observation. Start a worker
-		// read after admission so a slow observer cannot hide behind scheduling.
-		s.mu.Lock()
-		close(entered)
-		result, problem := s.observation(ctx, s.db, actor{ID: ownerID}, json.RawMessage(`{"limit":25}`))
-		s.mu.Unlock()
-		finished <- observationOutcome{result, problem}
+		// Exercise the actual owner route. Operational SQL and cancellation
+		// run on its independent read-only connection, outside the lease lock.
+		raw, problem := s.Call(ctx, owner.Token, Request{Operation: "observation.get", Args: json.RawMessage(`{"limit":25}`)})
+		var result ObservationSnapshot
+		if problem == nil {
+			if err := json.Unmarshal(raw, &result); err != nil {
+				finished <- observationOutcome{nil, internal(err)}
+				return
+			}
+			finished <- observationOutcome{result, nil}
+			return
+		}
+		finished <- observationOutcome{nil, problem}
 	}()
-	<-entered
+	// Admit the real Store.Call before racing its SQL against the worker.
+	// This tests the independent connection, rather than manually imposing a
+	// mutex layout the production path no longer uses.
+	waitForOperationalConnection(t, reader, waits)
+	if err := admission.Close(); err != nil {
+		t.Fatal(err)
+	}
 	monitorCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
 	defer cancel()
 	current, readErr := workerGetLeasedTask(monitorCtx, workerTestCaller(s, worker), live.ID, live.LeaseToken)

@@ -45,6 +45,10 @@ func (a actor) owner() bool { return a.ID == ownerID }
 
 type Store struct {
 	db                  *sql.DB
+	observationDB       *sql.DB
+	observationSlot     chan struct{}
+	observationContext  context.Context
+	observationCancel   context.CancelFunc
 	cfg                 managedconfig.Config
 	dir                 string
 	mu                  sync.Mutex
@@ -280,9 +284,17 @@ func Open(dir string) (*Store, error) {
 
 func (s *Store) Close() error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.closed = true
-	return s.db.Close()
+	observer, cancelObserver := s.observationDB, s.observationCancel
+	s.mu.Unlock()
+	if cancelObserver != nil {
+		cancelObserver()
+	}
+	var observerErr error
+	if observer != nil {
+		observerErr = observer.Close()
+	}
+	return errors.Join(s.db.Close(), observerErr)
 }
 
 func (s *Store) Config() managedconfig.Config {

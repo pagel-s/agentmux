@@ -52,10 +52,16 @@ func TestMissionAllowsToolOnlyStepWhenNoResultRequired(t *testing.T) {
 	repo, root := fixtureRepo(t)
 	p := auditPlan(repo, []string{"python3", "-c", "from pathlib import Path; Path('tool-output.txt').write_text('done')"})
 	p.Mode = "mission"
+	// This checks optional result semantics, not snapshot throughput. Allow
+	// Git setup and retained evidence to finish on a loaded race-test runner.
+	p.TimeoutSeconds = 30
 	p.Steps = []Step{{ID: "write", Candidate: "review"}}
 	r, err := RunMission(context.Background(), p, filepath.Join(root, "tool-only"), false)
 	if err != nil || r.State != "completed" || len(r.Steps) != 1 || r.Steps[0].State != "completed" || r.Steps[0].Result != "" {
 		t.Fatalf("tool-only step unnecessarily rejected: %+v %v", r, err)
+	}
+	if data, err := os.ReadFile(filepath.Join(r.Worktree, "tool-output.txt")); err != nil || string(data) != "done" {
+		t.Fatalf("tool-only step did not retain its file: %q %v", data, err)
 	}
 }
 
