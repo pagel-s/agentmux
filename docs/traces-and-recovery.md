@@ -1,5 +1,12 @@
 # Trace coverage and operational recovery
 
+For current reporting, start with `amx observe --session work`, then inspect
+the printed exact task with `amx task TASK_ID --open --session work`. The
+[observability guide](observability.md) separates worker check-ins, native event
+observations, adapter readiness and retained outcomes. These controls
+are included in v0.13.0. Live progress contains metadata only; opt-in
+traces below contain sensitive prepared input and adapter events.
+
 ```yaml
 agents:
   coder:
@@ -31,8 +38,12 @@ amx managed trace show --state STATE --agent coder --id TRACE_ID
 
 These commands require the state owner's credential/filesystem access and work
 with the broker offline. They reject malformed framing, altered records,
-truncation, data after the footer and mismatched anchors. `show` emits verified
-JSONL. Copy traces together with their task anchors to owner-controlled archive
+truncation, data after the footer and mismatched anchors. Signed record envelopes
+require the nine canonical fields exactly once; duplicate fields and case aliases
+are rejected before authentication. Native event data remains covered by its
+record's MAC. `show` authenticates a private capture before emitting those exact
+captured JSONL bytes, so a concurrent append or replacement cannot add unverified
+content to the output. Copy traces together with their task anchors to owner-controlled archive
 storage before intentionally freeing capacity; never delete active turn files.
 
 ## Portable authenticated bundles
@@ -82,7 +93,7 @@ an agent are not performed. A missing/invalid source stops new claims.
 An interactive native process retains its prepared snapshot until exit;
 relaunch it when a refreshed source must be loaded.
 
-With a running broker, current source builds provide direct owner inspection:
+With a running v0.13.0 broker, use direct owner inspection:
 
 ```sh
 amx tasks --status running --state STATE
@@ -93,7 +104,7 @@ amx task TASK_ID --open --state STATE
 `--open` pins the exact task in the workbench, including older tasks and retired
 recipients. It shows recorded delivery, current recovery evidence and the
 explicit task/version review; opening never retries or resolves the task.
-These shortcuts are additions after v0.12.0. Trace verification and bundle
+These shortcuts are included in v0.13.0. Trace verification and bundle
 inspection above also work without a running broker.
 
 The lower-level `managed activity`, `managed status`, `task.list`, `task.get`

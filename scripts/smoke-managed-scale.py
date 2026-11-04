@@ -288,7 +288,7 @@ while IFS= read -r line; do printf 'HUMAN_INPUT:%s\n' "$line"; done
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--binary", default="bin/agentmux")
+    parser.add_argument("--binary", default="bin/amx")
     parser.add_argument("--live-agents", type=int, default=40)
     parser.add_argument("--registry-agents", type=int, default=None)
     parser.add_argument("--sandbox", choices=("bubblewrap", "local"), default="bubblewrap")

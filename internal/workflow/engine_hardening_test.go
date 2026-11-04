@@ -123,27 +123,42 @@ func TestMissionCancellationPreservesContextIdentityAndStopsDescendants(t *testi
 func TestRepairAttemptBeforeLaunchRecordDoesNotClaimPriorCompletion(t *testing.T) {
 	repo, root := fixtureRepo(t)
 	marker := filepath.Join(root, "second-started")
+	release := filepath.Join(root, "record-inspected")
 	q, _ := json.Marshal(marker)
-	script := "from pathlib import Path; import time; p=Path('attempt.txt'); n=int(p.read_text())+1 if p.exists() else 1; p.write_text(str(n)); Path('file.txt').write_text('fixed' if n==2 else 'wrong')\nif n==2: Path(" + string(q) + ").write_text('started'); time.sleep(0.5)\nprint('turn completed')"
+	ack, _ := json.Marshal(release)
+	script := "from pathlib import Path; import time; p=Path('attempt.txt'); n=int(p.read_text())+1 if p.exists() else 1; p.write_text(str(n)); Path('file.txt').write_text('fixed' if n==2 else 'wrong')\nif n==2:\n Path(" + string(q) + ").write_text('started')\n end=time.monotonic()+25\n while not Path(" + string(ack) + ").exists():\n  if time.monotonic()>end: raise RuntimeError('owner did not inspect the running attempt')\n  time.sleep(0.005)\nprint('turn completed')"
 	p := auditPlan(repo, []string{"python3", "-c", script})
+	// This verifies publication order, not a five-second execution deadline.
+	// Give snapshot/check overhead room, and hold the actual second process
+	// until its running record has been inspected instead of racing a sleep.
+	p.TimeoutSeconds = 30
 	p.MaxAttempts = 2
 	p.Checks = []Check{pythonCheck("from pathlib import Path; assert Path('file.txt').read_text()=='fixed'")}
 	output := filepath.Join(root, "run")
 	observed := make(chan CandidateResult, 1)
+	observationCtx, cancelObservation := context.WithCancel(context.Background())
+	defer cancelObservation()
 	go func() {
-		end := time.Now().Add(4 * time.Second)
+		end := time.Now().Add(25 * time.Second)
 		for time.Now().Before(end) {
 			if _, err := os.Stat(marker); err == nil {
 				var record CandidateResult
 				_ = decodeFile(filepath.Join(output, "candidates", "review", "attempt-2.json"), &record)
+				_ = os.WriteFile(release, []byte("inspected"), 0600)
 				observed <- record
 				return
 			}
-			time.Sleep(5 * time.Millisecond)
+			select {
+			case <-observationCtx.Done():
+				observed <- CandidateResult{}
+				return
+			case <-time.After(5 * time.Millisecond):
+			}
 		}
 		observed <- CandidateResult{}
 	}()
 	r, err := Run(context.Background(), p, output, false)
+	cancelObservation()
 	record := <-observed
 	if err != nil || r.Candidates[0].Attempts != 2 {
 		t.Fatalf("repair failed: %+v %v", r, err)

@@ -52,6 +52,7 @@ type Store struct {
 	stagedPaths         []string
 	researchHeartbeatAt string
 	nativePresence      map[string]nativePresence
+	taskProgress        map[string]taskProgressObservation
 }
 
 type queryer interface {
@@ -74,6 +75,39 @@ CREATE TABLE IF NOT EXISTS records (
 CREATE INDEX IF NOT EXISTS records_kind_seq ON records(kind,seq);
 CREATE INDEX IF NOT EXISTS records_target ON records(kind,target);
 CREATE INDEX IF NOT EXISTS records_scope ON records(kind,scope);
+CREATE INDEX IF NOT EXISTS records_native_candidate_metadata ON records(
+ actor,target,seq,id,length(CAST(data AS BLOB)),
+ json_extract(data,'$.id'),json_extract(data,'$.message_id'),
+ json_extract(data,'$.reply_to'),json_extract(data,'$.thread_id'),
+ json_extract(data,'$.from'),json_extract(data,'$.to'),
+ json_extract(data,'$.state'),json_extract(data,'$.delivery'),json_extract(data,'$.version'),
+ json_extract(data,'$.created_at'),json_extract(data,'$.updated_at'),
+ json_extract(data,'$.origin'),json_type(data,'$.origin'),
+ json_type(data,'$.native'),json_extract(data,'$.native.id'),
+ json_extract(data,'$.instance'),json_extract(data,'$.expires')
+) WHERE kind='task';
+CREATE INDEX IF NOT EXISTS records_task_observation_metadata ON records(
+ id,
+ COALESCE(json_extract(data,'$.state'),''),
+ COALESCE(json_extract(data,'$.delivery'),''),
+ COALESCE(json_extract(data,'$.expires'),0),seq,
+ json_extract(data,'$.id'),json_extract(data,'$.to'),json_extract(data,'$.version'),
+ json_extract(data,'$.created_at'),json_extract(data,'$.updated_at'),
+ json_extract(data,'$.lease_token'),json_extract(data,'$.instance'),
+ json_extract(data,'$.native.id'),json_extract(data,'$.native.adapter'),
+ json_extract(data,'$.native.phase'),json_extract(data,'$.native.updated_at'),json_extract(data,'$.native.evidence'),
+ json_extract(data,'$.trace.id'),json_extract(data,'$.trace.records'),json_extract(data,'$.trace.bytes'),
+ json_extract(data,'$.trace.mac'),json_extract(data,'$.trace.complete')
+) WHERE kind='task';
+CREATE INDEX IF NOT EXISTS records_native_observation_metadata ON records(
+ target,seq,id,json_extract(data,'$.phase'),json_extract(data,'$.task_id'),
+ json_extract(data,'$.session'),json_extract(data,'$.instance'),json_extract(data,'$.updated_at')
+) WHERE kind='native_delivery';
+CREATE INDEX IF NOT EXISTS records_agent_observation_metadata ON records(
+ json_extract(data,'$.id'),COALESCE(json_extract(data,'$.state'),''),
+ COALESCE(json_extract(data,'$.config.interaction'),''),COALESCE(json_extract(data,'$.config.harness'),''),
+ COALESCE(json_extract(data,'$.config.native_only'),0),COALESCE(json_extract(data,'$.external'),0)
+) WHERE kind='agent';
 CREATE TABLE IF NOT EXISTS exposures (
  seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE,
  reader TEXT NOT NULL, kind TEXT NOT NULL, entity_id TEXT NOT NULL,
@@ -529,6 +563,7 @@ type Task struct {
 	Origin    *TaskOrigin     `json:"origin,omitempty"`
 	Native    *NativeReceipt  `json:"native,omitempty"`
 	Recovery  *TaskRecovery   `json:"recovery,omitempty"`
+	Progress  *TaskProgress   `json:"progress,omitempty"`
 }
 
 // Persist lease fields separately from public task JSON. They are never part
@@ -549,6 +584,7 @@ func loadTask(ctx context.Context, q queryer, id string) (taskRecord, error) {
 func saveTask(ctx context.Context, q queryer, t taskRecord) error {
 	// Recovery is current owner-only read evidence, never durable authority.
 	t.Recovery = nil
+	t.Progress = nil
 	return save(ctx, q, "task", t.ID, t.From, t.To, "", t)
 }
 

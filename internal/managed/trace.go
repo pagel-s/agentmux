@@ -233,39 +233,85 @@ func (t *turnTrace) finish(status string) (TraceSummary, error) {
 // VerifyTrace validates framing, sequence, every HMAC and the terminal marker.
 // expectedMAC may anchor the trace to a stored task completion reference.
 func VerifyTrace(state, agent, id, expectedMAC string) (TraceSummary, error) {
-	if !validKey(id) || strings.ContainsAny(id, "/\\") {
-		return TraceSummary{}, errors.New("invalid trace identifier")
-	}
-	if !managedconfig.ValidID(agent) {
-		return TraceSummary{}, errors.New("invalid trace agent")
-	}
-	dir := filepath.Join(state, "traces", agent)
-	for _, path := range []string{filepath.Join(state, "traces"), dir} {
-		info, err := os.Lstat(path)
-		if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm()&0077 != 0 {
-			return TraceSummary{}, errors.New("trace directory unavailable or unsafe")
-		}
-	}
-	keyPath := filepath.Join(state, "traces", "trace.key")
-	keyInfo, err := os.Lstat(keyPath)
-	if err != nil || !keyInfo.Mode().IsRegular() || keyInfo.Mode().Perm() != 0600 {
-		return TraceSummary{}, errors.New("trace key unavailable or unsafe")
-	}
-	key, err := os.ReadFile(keyPath)
-	if err != nil || len(key) != 32 {
-		return TraceSummary{}, errors.New("trace key invalid")
-	}
-	path := filepath.Join(dir, id+".jsonl")
-	info, err := os.Lstat(path)
-	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
-		return TraceSummary{}, errors.New("trace must be a private regular file")
-	}
-	f, err := os.Open(path)
+	f, key, err := openTrace(state, agent, id)
 	if err != nil {
 		return TraceSummary{}, err
 	}
 	defer f.Close()
 	return verifyTraceReader(f, key, agent, id, expectedMAC)
+}
+
+// WriteVerifiedTrace publishes only the exact bytes that passed authentication.
+// Capture privately before writing anything to the caller: reopening or seeking
+// the source after verification would allow an append/replacement to change the
+// displayed evidence. A private spool keeps memory bounded for large traces.
+func WriteVerifiedTrace(state, agent, id, expectedMAC string, output io.Writer) (TraceSummary, error) {
+	f, key, err := openTrace(state, agent, id)
+	if err != nil {
+		return TraceSummary{}, err
+	}
+	defer f.Close()
+	captured, err := os.CreateTemp("", "amx-verified-trace-*")
+	if err != nil {
+		return TraceSummary{}, err
+	}
+	defer func() {
+		captured.Close()
+		os.Remove(captured.Name())
+	}()
+	// No configured turn may exceed 1 GiB. The extra byte makes an oversized
+	// source fail verification rather than accepting a truncated prefix.
+	summary, err := verifyTraceReader(io.TeeReader(io.LimitReader(f, 1<<30+1), captured), key, agent, id, expectedMAC)
+	if err != nil {
+		return TraceSummary{}, err
+	}
+	if _, err = captured.Seek(0, io.SeekStart); err != nil {
+		return TraceSummary{}, err
+	}
+	if _, err = io.Copy(output, captured); err != nil {
+		return TraceSummary{}, err
+	}
+	return summary, nil
+}
+
+func openTrace(state, agent, id string) (*os.File, []byte, error) {
+	if !validKey(id) || strings.ContainsAny(id, "/\\") {
+		return nil, nil, errors.New("invalid trace identifier")
+	}
+	if !managedconfig.ValidID(agent) {
+		return nil, nil, errors.New("invalid trace agent")
+	}
+	dir := filepath.Join(state, "traces", agent)
+	for _, path := range []string{filepath.Join(state, "traces"), dir} {
+		info, err := os.Lstat(path)
+		if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm()&0077 != 0 {
+			return nil, nil, errors.New("trace directory unavailable or unsafe")
+		}
+	}
+	keyPath := filepath.Join(state, "traces", "trace.key")
+	keyInfo, err := os.Lstat(keyPath)
+	if err != nil || !keyInfo.Mode().IsRegular() || keyInfo.Mode().Perm() != 0600 {
+		return nil, nil, errors.New("trace key unavailable or unsafe")
+	}
+	key, err := os.ReadFile(keyPath)
+	if err != nil || len(key) != 32 {
+		return nil, nil, errors.New("trace key invalid")
+	}
+	path := filepath.Join(dir, id+".jsonl")
+	info, err := os.Lstat(path)
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
+		return nil, nil, errors.New("trace must be a private regular file")
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	opened, err := f.Stat()
+	if err != nil || !os.SameFile(info, opened) || !opened.Mode().IsRegular() || opened.Mode().Perm()&0077 != 0 {
+		f.Close()
+		return nil, nil, errors.New("trace changed while opening")
+	}
+	return f, key, nil
 }
 
 func verifyTraceReader(input io.Reader, key []byte, agent, id, expectedMAC string) (TraceSummary, error) {
@@ -285,11 +331,8 @@ func verifyTraceReader(input io.Reader, key []byte, agent, id, expectedMAC strin
 			return summary, errors.New("trace contains data after terminal marker")
 		}
 		summary.Bytes += int64(len(line))
-		var r TraceRecord
-		dec := json.NewDecoder(bytes.NewReader(line))
-		dec.DisallowUnknownFields()
-		var extra any
-		if dec.Decode(&r) != nil || dec.Decode(&extra) != io.EOF || r.Agent != agent || r.TraceID != id || r.TaskID == "" || !strings.HasPrefix(id, r.TaskID+"-") || r.Sequence != summary.Records+1 || r.Previous != previous || summary.Records == 0 && r.Kind != "input" {
+		r, decodeErr := decodeTraceRecord(line)
+		if decodeErr != nil || r.Agent != agent || r.TraceID != id || r.TaskID == "" || !strings.HasPrefix(id, r.TaskID+"-") || r.Sequence != summary.Records+1 || r.Previous != previous || summary.Records == 0 && r.Kind != "input" {
 			return summary, errors.New("trace sequence or framing invalid")
 		}
 		saved := r.MAC
@@ -311,4 +354,72 @@ func verifyTraceReader(input io.Reader, key []byte, agent, id, expectedMAC strin
 	summary.MAC = previous
 	summary.Complete = true
 	return summary, nil
+}
+
+// The signed envelope has one canonical set of field names. A struct decoder
+// alone accepts duplicate fields and case-insensitive aliases, which can hide
+// unsigned content before a later value that still passes the canonical MAC.
+// Decode each envelope field exactly once. Data remains raw signed JSON; this
+// does not impose a new duplicate-key policy on native provider payloads.
+func decodeTraceRecord(line []byte) (TraceRecord, error) {
+	var record TraceRecord
+	decoder := json.NewDecoder(bytes.NewReader(line))
+	token, err := decoder.Token()
+	if err != nil || token != json.Delim('{') {
+		return record, errors.New("trace record must be an object")
+	}
+	seen := make(map[string]bool, 9)
+	for decoder.More() {
+		token, err = decoder.Token()
+		if err != nil {
+			return record, errors.New("trace envelope field invalid")
+		}
+		key, ok := token.(string)
+		if !ok || seen[key] {
+			return record, errors.New("trace envelope field repeated")
+		}
+		seen[key] = true
+		var target any
+		switch key {
+		case "agent":
+			target = &record.Agent
+		case "task_id":
+			target = &record.TaskID
+		case "trace_id":
+			target = &record.TraceID
+		case "sequence":
+			target = &record.Sequence
+		case "at":
+			target = &record.At
+		case "kind":
+			target = &record.Kind
+		case "data":
+			target = &record.Data
+		case "previous":
+			target = &record.Previous
+		case "mac":
+			target = &record.MAC
+		default:
+			return record, errors.New("trace envelope field unsupported")
+		}
+		if key != "data" && key != "sequence" {
+			var value json.RawMessage
+			if err = decoder.Decode(&value); err != nil || len(value) == 0 || value[0] != '"' || json.Unmarshal(value, target) != nil {
+				return record, errors.New("trace envelope string invalid")
+			}
+			continue
+		}
+		if err = decoder.Decode(target); err != nil {
+			return record, errors.New("trace envelope value invalid")
+		}
+	}
+	token, err = decoder.Token()
+	if err != nil || token != json.Delim('}') || len(seen) != 9 {
+		return record, errors.New("trace envelope incomplete")
+	}
+	var extra any
+	if decoder.Decode(&extra) != io.EOF {
+		return record, errors.New("trace envelope contains trailing data")
+	}
+	return record, nil
 }

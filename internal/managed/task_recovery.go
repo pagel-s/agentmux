@@ -39,6 +39,7 @@ func taskResolutionActions(state, delivery string) []string {
 func taskView(t taskRecord, a actor, at time.Time) Task {
 	view := t.Task
 	view.Recovery = nil
+	view.Progress = nil
 	if !a.owner() {
 		return view
 	}
@@ -65,17 +66,28 @@ func taskView(t taskRecord, a actor, at time.Time) Task {
 // Capture one read time and admission view for an entire page. In particular,
 // task.resolve permits only fail after the session runtime budget expires.
 func (s *Store) taskViews(ctx context.Context, q queryer, a actor) (func(taskRecord) Task, *Fault) {
-	at := time.Now()
+	return s.taskViewsAt(ctx, q, a, time.Now())
+}
+
+func (s *Store) taskViewsAt(ctx context.Context, q queryer, a actor, at time.Time) (func(taskRecord) Task, *Fault) {
 	retryAllowed := true
+	var progress map[string]taskProgressObservation
 	if a.owner() {
 		deadline, err := s.admissionDeadline(ctx, q)
 		if err != nil {
 			return nil, internal(err)
 		}
 		retryAllowed = deadline.IsZero() || !at.After(deadline)
+		progress, err = s.currentTaskProgress(ctx, q)
+		if err != nil {
+			return nil, internal(err)
+		}
 	}
 	return func(t taskRecord) Task {
 		view := taskView(t, a, at)
+		if a.owner() {
+			view.Progress = projectedTaskProgress(t, progress)
+		}
 		if view.Recovery != nil && !retryAllowed && contains(view.Recovery.Actions, "retry") {
 			view.Recovery.Actions = []string{"fail"}
 			view.Recovery.Reason += " Session runtime budget is exhausted; retry is unavailable."

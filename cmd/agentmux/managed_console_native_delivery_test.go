@@ -203,9 +203,9 @@ func TestConsoleNativeSummaryDistinguishesPermissionReadinessAndCapability(t *te
 	m.data.native.State = "draft"
 	m.data.native.Reason = "Preserving your terminal draft"
 	m.data.native.Policy.Mode = "auto"
-	m.data.native.Active = &managed.NativeReceipt{ID: "delivery-1", Phase: "submitted"}
+	m.data.native.Active = &managed.NativeReceipt{ID: "delivery-1", Phase: "submitted", UpdatedAt: "2026-01-01T12:00:00Z"}
 	view := ansi.Strip(m.nativeDeliverySummary(100))
-	for _, text := range []string{"auto", "draft", "Turns 0/20", "pending 2", "submitted", "instructions on", "replies on", "Shift+D"} {
+	for _, text := range []string{"auto", "draft", "Turns 0/20", "pending 2", "submitted", "instructions on", "replies on", "Shift+D", "Adapter reporting: unknown", "Last receipt: 2026-01-01T12:00:00Z"} {
 		if !strings.Contains(view, text) {
 			t.Fatalf("missing native evidence %q: %s", text, view)
 		}
@@ -227,6 +227,26 @@ func TestConsoleNativeQueuePageDoesNotClaimToBeComplete(t *testing.T) {
 	m.reviewNativeDelivery(true)
 	if view := ansi.Strip(m.nativeDeliveryPanel(80, 16)); !strings.Contains(view, "More queued items follow") {
 		t.Fatalf("partial approval page was hidden: %s", view)
+	}
+}
+
+func TestConsoleUnknownAdmissionKeepsPolicyControlsAndDoesNotClaimEmptyQueue(t *testing.T) {
+	m := nativeConsoleFixture()
+	m.data.native.PendingKnown = false
+	m.data.native.Coverage = "Pending admission unavailable; current policy and retained transport remain inspectable."
+	m.data.native.Pending = nil
+	view := ansi.Strip(m.nativeDeliverySummary(100))
+	if !strings.Contains(view, "pending unknown") || !strings.Contains(view, "Shift+D settings") || strings.Contains(view, "pending 0") {
+		t.Fatalf("unknown admission became empty or hid controls: %s", view)
+	}
+	m.reviewNativeDelivery(false)
+	if m.nativeAction == nil {
+		t.Fatalf("pending diagnostics blocked policy controls: %s", m.message)
+	}
+	m.nativeAction = nil
+	m.reviewNativeDelivery(true)
+	if m.nativeAction != nil || !strings.Contains(m.message, "unavailable") {
+		t.Fatalf("unknown admission reached approval: %+v %s", m.nativeAction, m.message)
 	}
 }
 

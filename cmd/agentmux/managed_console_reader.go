@@ -204,6 +204,9 @@ func (m *console) openReader() {
 		v := m.data.activity.Tasks[m.task%len(m.data.activity.Tasks)]
 		title = "Task " + v.ID
 		body = "Result\n" + v.Result + "\n\nInstruction\n" + v.Text
+		if v.Progress != nil || (v.State == "running" && v.Native == nil) {
+			body += "\n\n" + taskProgressSummary(v.Progress)
+		}
 		v.Text, v.Result = "", ""
 		data, _ := json.MarshalIndent(v, "", "  ")
 		body += "\n\nTask provenance / reported trace\n" + string(data)

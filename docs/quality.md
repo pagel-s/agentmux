@@ -21,6 +21,48 @@ They do not represent new-user observations, native model quality or a
 comparative benchmark. Keep real evaluation evidence private until its contents
 have been reviewed for publication.
 
+## Recorded engineering evidence
+
+The [bounded command-worker soak](assets/quality/managed-soak-2026-11-03.json)
+records 60 verified turns, 61 audited tasks, 12 clean restarts and an in-flight
+broker crash. The interrupted attempt remained uncertain, its process stopped,
+and the owner resolved it as failed without automatic replay. Completed traces
+were verified after recovery. This took 66.66 seconds, made zero model calls,
+and used disposable fixtures. It is not evidence of seven days of native use.
+
+The observability regressions cover large retained histories, complete counts,
+fair bounded attention and additive metadata-index migration. Query-plan checks
+reject reads of task bodies during operational counting/ranking, and a blocked
+observation must release its bounded read before the worker's unchanged 500 ms
+lease-monitor deadline. Worker check-ins remain separate from native events;
+unknown reporting never becomes a successful task outcome.
+
+Fresh AI peer reviews added reproducible controls for escaped secret publication,
+ambiguous signed trace envelopes, concurrent trace changes and cancellation
+races. These are scoped code reviews and regressions, not an external human
+security audit. The [subscription pilot](evaluation.md) has frozen contract
+graders and route guards; preparation and metadata checks alone are not measured
+model or competitor outcomes.
+
+A [subscription-route smoke](assets/quality/subscription-smoke-2026-11-03.json)
+completed a newly authored Go exercise in 86.541 seconds using Codex 0.166.0
+with ChatGPT authentication and Claude Code 2.1.317 with first-party Pro
+subscription authentication. Four native CLI sessions ran. Controller checks and
+the frozen external grader passed; the confirmed patch applied only to the
+fixture and independently reproduced its final files. Observed process cleanup
+was clean. The record identifies the source build, rather than claiming that a
+later release archive was used.
+
+Both model reviews approved without findings and reported not running tests.
+Their approvals are separate from controller and external test evidence. The
+preceding duplicate-flag setup failure remains recorded. The workflow's `sonnet`
+profile was overridden by the pinned `claude-sonnet-5-5` request; the provider's
+resolved model and inference-request count remain unknown. This small route
+check establishes no comparative productivity or long-term reliability result.
+It also identifies a future optimization: avoid the response and second-review
+turns after an exact initial approval, with explicit skip evidence and unchanged
+final checks, review freshness and application guards.
+
 Use [workflow validation](workflow-validation.md) for engineering checks,
 [evaluation](evaluation.md) for usability and comparative task studies, and
 [release verification](releasing.md) for the bytes delivered to users.

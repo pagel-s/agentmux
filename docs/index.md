@@ -5,7 +5,7 @@ before applying them to your project.
 
 ## Get your first checked result
 
-[Install v0.12.0](getting-started/installation.md), then run:
+[Install v0.13.0](getting-started/installation.md), then run:
 
 ```sh
 amx demo
@@ -27,6 +27,7 @@ This fixture demonstrates workflow mechanics, not AI task quality.
 | Inspect a checked fixture without configuring providers | [Your first checked result](getting-started/first-result.md) | Run `amx demo`; it changes only its generated repository |
 | Ask for one checked coding change | [Work on a task](working.md) | Add `--allow-models` after inspecting the preview |
 | Type directly in several native conversations | [Fresh-install walkthrough](getting-started/quickstart.md) | Start a workspace and use its native terminals |
+| Inspect reporting, pending work or uncertain delivery | [Observability](observability.md) | Inspection starts no execution; choose the workspace explicitly |
 | Compare alternatives, build a mission or review changed snapshots | [Advanced workflows](workflows.md) | Run an owner-authored plan; provider turns require `--allow-models` |
 | Queue tasks or enable bounded autonomous teams | [Managed setup](managed-setup.md) | Launch a reviewed team configuration |
 | Run controlled cooperation or competition studies | [Research](research.md) | Run a declared study; model participants require explicit opt-in |
@@ -37,11 +38,12 @@ workspace switching and individual-session recovery. A
 [source build](getting-started/installation.md#build-from-source) remains an
 alternative to release binaries.
 
-Current `main` includes daily power-user shortcuts beyond the published
-v0.12.0 release: `amx context` explains the selected workspace, `amx tasks`
+v0.13.0 includes the daily power-user controls: `amx context` explains the selected workspace, `amx tasks`
 searches retained delegation history, and `amx task ID --open -s NAME` opens
-the exact task's evidence and recovery controls. Both terminal and web Actions
-offer **Tasks for selected session**. Build from source for these controls;
+the exact task's evidence and recovery controls. `amx observe` summarizes fresh
+broker/worker reporting and complete retained task counts, with bounded attention
+and optional JSONL watching. Both terminal and web Actions
+offer **Tasks for selected session**. Upgrade existing workspace controllers explicitly;
 see [everyday commands](getting-started/everyday-commands.md) for the five daily loops.
 
 Keep the [everyday command reference](commands.md#everyday-work-sessions) handy
@@ -66,6 +68,7 @@ describe enforced boundaries, reproducible checks and limits.
 - [Live permissions and admission controls](live-permissions.md)
 - [Hardening](hardening.md)
 - [Trace inspection and recovery](traces-and-recovery.md)
+- [Operational observation and reporting](observability.md)
 - [Remote workers](remote-workers.md)
 - [Provider compatibility](provider-compatibility.md)
 - [Reproduce a mixed-harness scenario](mixed-harness-acceptance.md)

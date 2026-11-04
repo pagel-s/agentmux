@@ -6,7 +6,7 @@ missions with dependencies, evidence explanations and repeated comparisons.
 It complements native tmux sessions and the managed broker. It does not replace
 their identity, permission, delivery or recovery controls.
 
-These commands are included in [Agentmux v0.12.0](getting-started/installation.md).
+These commands are included in [Agentmux v0.13.0](getting-started/installation.md).
 For a first checked fixture with no provider configuration, run
 [`amx demo`](getting-started/first-result.md). For one coding request with defaults for
 implementation, fresh reviews and acceptance checks, start with

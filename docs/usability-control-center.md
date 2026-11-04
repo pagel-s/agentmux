@@ -4,7 +4,7 @@ Agentmux keeps each native conversation interactive. The terminal is the main
 work surface; the local black/purple web app provides observation and reviewed
 control. Both surfaces identify actions by stable session ID.
 
-The new shortcuts below are available in source builds after v0.12.0. They
+The shortcuts below are included in v0.13.0. They
 retain the same explicit permissions, delivery policies and recovery reviews.
 
 ## Upgrade an existing workspace
@@ -56,7 +56,7 @@ background refreshes preserve your current focus. Attention filters
 show recorded review, delivery blockage, uncertainty and failure; they do not
 infer whether a model is thinking or waiting at an unreported native prompt.
 
-The v0.12.0 web graph automatically groups enabled connections and
+The web graph automatically groups enabled connections and
 shared-access links. Drag or **Shift+Arrow** pins a node; local pins survive
 connection changes for that workspace/study attempt. **Auto arrange** releases
 pins and refits, while **Fit** preserves them. An unchanged visible topology

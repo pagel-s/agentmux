@@ -31,6 +31,11 @@ jobs:
       - name: Check formatting
         run: test -z "$(gofmt -l cmd internal)"
 
+      - name: Verify comparison harness failure controls without model calls
+        run: |
+          python3 scripts/test-compare-workflows.py
+          python3 scripts/test-subscription-pilot.py
+
       - name: Verify owner console interaction regressions
         run: node --test cmd/agentmux/workweb/app.test.cjs
 
@@ -96,9 +101,6 @@ jobs:
         run: |
           python3 scripts/test-smoke-release.py
           python3 scripts/test-publish-release.py
-
-      - name: Verify comparison harness failure controls without model calls
-        run: python3 scripts/test-compare-workflows.py
 
       - name: Verify soak audit and cleanup regressions
         run: python3 scripts/test-soak-managed.py

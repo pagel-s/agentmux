@@ -6,8 +6,8 @@ starts no agents. `amx a` restores the last live native terminal in the selected
 workspace. If no terminal has been selected or it has closed, the workbench opens.
 With several running workspaces, choose one or pass `-s NAME`.
 
-The searchable chooser, `context`, `task`/`tasks`, exact-task workbench opening,
-bounded run lists and report opening below are source-build features after v0.12.0.
+The searchable choosers, `context`, `observe`, `task`/`tasks`, exact-task workbench opening,
+bounded run lists and report opening below are included in v0.13.0.
 
 ## Daily power-user loop
 
@@ -17,6 +17,7 @@ bounded run lists and report opening below are source-build features after v0.12
 | Launch | **Shift+N** inherits the selected provider and project; review before starting |
 | Delegate | `amx send ID "Do this" --mode instruction -s NAME`; copy its printed inspection command |
 | Inspect | `amx task TASK_ID -s NAME`, or **Ctrl+K → Tasks for selected session** |
+| Observe | `amx observe -s NAME`; add `--watch` for repeated fresh evidence |
 | Recover | `amx task TASK_ID --open -s NAME`; inspect its evidence and review the exact task/version |
 
 Use `amx context` to see which workspace an ordinary command selects and why.
@@ -24,10 +25,22 @@ It never starts or switches a workspace. Outside an attachment, bare `amx` and
 `amx a` offer running-workspace selection; commands with IDs still default to
 `work` unless you supply a selector. Keep `-s NAME` on scripts and copied commands.
 
+**Ctrl+W** opens the same workspace filter inside the workbench without losing
+an open draft or review. Press `/` or Ctrl+F, then filter by name, path or status;
+arrows or Ctrl+N/P choose, Ctrl+U clears, Enter opens the exact displayed state,
+and Esc returns. While filtering, `j`, `k` and `q` are literal query text.
+Use `amx send --help`, `amx attach --help` or another command's help for focused
+options. `amx help all` retains the full reference.
+
+[`amx observe`](../observability.md) separates broker connectivity, worker
+check-ins, native events, effective delivery uncertainty and retained outcomes.
+It counts complete task history and prints exact task inspection commands;
+quiet reporting alone does not establish a stalled or failed model.
+
 ## Ask for a checked coding change
 
-The base checked workflow is included in [v0.12.0](installation.md); `--limit`
-and `--open` below require a newer source build. For a first checked fixture
+The checked workflow, `--limit` and `--open` below are included in
+[v0.13.0](installation.md). For a first checked fixture
 with no provider setup, run [`amx demo`](first-result.md).
 From a Git project with an initial commit and the selected native CLIs installed:
 

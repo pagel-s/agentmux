@@ -194,6 +194,9 @@ func printWorkTask(out io.Writer, state string, t managed.Task) {
 	text := func(value string) string { return consoleContent(value, len(value)) }
 	fmt.Fprintf(out, "Task: %s\nFrom: %s\nTo: %s\nState: %s\nDelivery: %s\nVersion: %d\n", text(t.ID), text(t.From), text(t.To), text(t.State), text(t.Delivery), t.Version)
 	fmt.Fprintf(out, "Created: %s\nUpdated: %s\n\nInstruction:\n%s\n", text(t.CreatedAt), text(t.UpdatedAt), text(t.Text))
+	if t.Progress != nil || (t.State == "running" && t.Native == nil) {
+		fmt.Fprintln(out, "\n"+taskProgressSummary(t.Progress))
+	}
 	if t.Result != "" {
 		fmt.Fprintln(out, "\nResult:\n"+text(t.Result))
 	}

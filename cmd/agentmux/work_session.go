@@ -202,57 +202,7 @@ func runWorkSession(operation string, args []string, in io.Reader, out, diagnost
 
 func runWorkSessionInner(operation string, args []string, in io.Reader, out, diagnostics io.Writer) int {
 	if workHelpRequested(args) {
-		fmt.Fprintln(out, `Human work sessions:
-  amx start [--project DIR] [--session work] [--detach]
-                 [--config team.yaml] [--sandbox bubblewrap|local] [--state DIR]
-  amx attach [AGENT] [--session work | --state DIR]
-  amx dashboard [--session work | --state DIR]
-  amx web [--session work | --state DIR]
-  amx send AGENT "message" [--mode auto|note|instruction]
-  amx reply TASK_OR_MESSAGE_ID "message" [--mode auto|note|instruction]
-                 [--to AGENT | --board NAMESPACE]
-  amx inbox [--session work | --state DIR]
-  amx context [--json] [--session work | --state DIR]
-  amx task TASK_ID [--json | --open] [--session work | --state DIR]
-  amx tasks [--to AGENT] [--status STATE] [--query TEXT] [--limit N]
-                 [--after TASK_ID] [--json] [--session work | --state DIR]
-  amx board "note" [--group ID | --board NAMESPACE] [--session work | --state DIR]
-  amx add [NAME] --harness claude|codex|pi|antigravity --project DIR
-                 [--title "..."] [--role "..." | --native-only]
-  amx label ID "Fix login redirect"
-  amx role ID "Current owner role"
-  amx workspaces [--json] [--register DIR]
-  amx relaunch ID [--resume ID|last|picker] [--native-launcher ABSOLUTE_PATH]
-  amx delivery ID [manual|review|auto] [--approve CANDIDATE]
-  amx remove NAME
-  amx retire NAME
-  amx disconnect NAME NAME [...] [--group ID]
-  amx sessions
-  amx connect OBSERVED_ID --name NAME
-  amx collaborate NAME NAME [...] [--legacy-policy preserve|group]
-  amx isolate NAME [...]
-  amx team <list|create|edit|invite|remove|transfer|dissolve|join|leave|accept-owner|move>
-  amx down [--session work | --state DIR]
-
-Select one workspace with --session NAME or --state DIR on each command;
-inside an owned attachment it is inferred from that exact context; outside,
-the default is work. start always defaults to work and may combine name/storage.
-start creates a coding preset with real interactive Claude and Codex terminals.
-By default both use normal local native configuration in the current project.
-Collaboration, delegation and autonomous wakeups start disabled. Use collaborate
-for a dedicated board/memory group, or --sandbox bubblewrap for isolated profiles.
-send/reply default to notes for native agents and instruction tasks for managed
-workers; --mode selects intent explicitly. Replies retain broker-checked ancestry
-and cannot widen a private audience. Board replies need an explicit destination.
-Native receiver delivery defaults to Manual. Use delivery ID review|auto to allow
-attributed native turns; sender command permissions remain separate.
-task reads one exact delegation; --open shows it directly in Tasks, including
-recovery controls when available. Opening never retries or resolves anything.
-Use attach to type directly. Native Antigravity requires --native-only; use its Pi
-bridge for injected coordination context. ? opens workbench help, Ctrl-G editor
-help, Ctrl-T message intent, V role editing, B admission budgets, W workspaces,
-and U single-session relaunch. team --help describes participant consent.
-Legacy raw pane input remains: amx send SESSION PANE -- COMMAND.`)
+		fmt.Fprintln(out, workSessionUsage(operation))
 		return exitSuccess
 	}
 	if err := validateWorkFlags(operation, args); err != nil {

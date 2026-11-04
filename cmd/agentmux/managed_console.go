@@ -24,6 +24,8 @@ import (
 
 type consoleTick time.Time
 type consoleData struct {
+	observedAt             time.Time
+	workerRuntimeErr       error
 	focusRevision          uint64
 	focusSequence          uint64
 	historyErr             error
@@ -417,7 +419,16 @@ func fetchWorkSnapshot(state string, client *managed.Client, selected string, ta
 			return d
 		}
 	}
-	d.runtime, _ = managedlaunch.Snapshot(state)
+	d.runtime, d.workerRuntimeErr = describeWorkRuntime(ctx, state)
+	if d.workerRuntimeErr != nil {
+		d.runtime.State = "unknown"
+	}
+	for id, pane := range d.runtime.Agents {
+		if d.workerRuntimeErr != nil || (pane.State == "running" && d.runtime.State != "running" && d.runtime.State != "starting") {
+			pane.State = "unknown"
+			d.runtime.Agents[id] = pane
+		}
+	}
 	for _, info := range d.agents {
 		if info.ID == d.selected && !info.External && d.runtime.Agents[d.selected].PaneID == "" {
 			d.headless = d.research != nil || d.runtime.AttemptID == "" && info.Config.Interaction != "interactive"
@@ -432,6 +443,7 @@ func fetchWorkSnapshot(state string, client *managed.Client, selected string, ta
 			d.preview = string(data)
 		}
 	}
+	d.observedAt = time.Now().UTC()
 	return d
 }
 
@@ -511,7 +523,7 @@ func (m console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.workspacePicker.err = msg.err
 			m.message = "Workspace inventory unavailable: " + activityText(msg.err.Error(), 160)
 		} else {
-			m.workspacePicker = &consoleWorkspacePicker{rows: msg.rows}
+			m.workspacePicker.setRows(msg.rows)
 		}
 	case consoleMemoryVersionReview:
 		m.receiveMemoryReview(msg)

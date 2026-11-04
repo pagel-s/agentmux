@@ -21,6 +21,23 @@ python3 scripts/test-soak-workflows.py
 Conditional integrations report skips when their prerequisites are absent.
 A passing default suite does not establish that those integrations ran.
 
+## Observation and reporting
+
+Current source includes model-free regressions for owner observation, task
+progress and native readiness:
+
+```sh
+go test -race ./internal/managed -run 'TestObservation|TestTaskProgress|TestNativeReadiness' -count=1
+go test -race ./cmd/agentmux -run 'TestObserve|TestNativeObservation' -count=1
+node --test cmd/agentmux/workweb/app.test.cjs
+```
+
+These check bounded full-history summaries, exact attempt/credential fences,
+separate event and worker timestamps, restart-unknown progress, unavailable
+components and read-only inspection. They make no model calls. They do not
+prove provider acceptance, useful model progress or elapsed production use.
+See [observability](observability.md) for operational commands and interpretation.
+
 ## Model-free workflow journeys
 
 Choose a new output directory for each run. The validator creates disposable

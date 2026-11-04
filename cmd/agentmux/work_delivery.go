@@ -146,7 +146,12 @@ where supported. It never types into or interrupts unrelated human input.`)
 		return exitSuccess
 	}
 	fmt.Fprintf(out, "%s · %s · %s\n%s\n", consoleContent(id, 100), status.Mode, status.State, consoleContent(status.Reason, 700))
-	fmt.Fprintf(out, "Native turns %d/%d · %d pending on this page · cooldown %ds · max hops %d\n", status.Turns, status.Policy.MaxTurns, len(status.Pending), status.Policy.CooldownSeconds, status.Policy.MaxHops)
+	pending := fmt.Sprint(len(status.Pending))
+	if !nativePendingKnown(status) {
+		pending = "unknown"
+		fmt.Fprintln(out, consoleContent(status.Coverage, 700))
+	}
+	fmt.Fprintf(out, "Native turns %d/%d · %s pending on this page · cooldown %ds · max hops %d\n", status.Turns, status.Policy.MaxTurns, pending, status.Policy.CooldownSeconds, status.Policy.MaxHops)
 	if status.PendingMore {
 		fmt.Fprintln(out, "More pending items follow as this queue advances; message bodies are never truncated for approval.")
 	}
@@ -170,4 +175,17 @@ where supported. It never types into or interrupts unrelated human input.`)
 		fmt.Fprintln(out, "Previews only; inspect exact full bodies with --json before approving a candidate.")
 	}
 	return exitSuccess
+}
+
+func nativePendingKnown(status managed.NativeStatus) bool {
+	// Older controllers did not advertise coverage; their returned queue keeps
+	// its legacy meaning. Current unavailable/summary responses are explicit.
+	return status.PendingKnown || status.Coverage == ""
+}
+
+func nativePendingCountText(status managed.NativeStatus) string {
+	if !nativePendingKnown(status) {
+		return "unknown"
+	}
+	return fmt.Sprint(max(status.PendingCount, len(status.Pending)))
 }

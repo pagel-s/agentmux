@@ -11,13 +11,12 @@ For your first checked result without provider setup, use
 fresh review and acceptance checks, use [work on a task](../working.md).
 The walkthrough below covers native interactive sessions.
 
-The base walkthrough works with v0.12.0. Newer source-only shortcuts are marked
-where used; choose a [source installation](installation.md#build-from-source)
-for the current power-user controls.
+The walkthrough and its power-user controls are included in
+[v0.13.0](installation.md); upgrade older workspace controllers explicitly.
 
 ## 1. Install and check Agentmux
 
-Install **v0.12.0** using the
+Install **v0.13.0** using the
 [published binary instructions](installation.md#install-a-published-binary-recommended)
 for the `amx` command without a Go toolchain. Then skip the source-build commands
 below and continue with the native CLI checks in this step.
@@ -206,7 +205,7 @@ Return from the reader and cancel this demonstration task with **c** after
 inspection, so it does not remain pending across reopening. In a managed worker
 workflow, eligible queued tasks are claimed and executed instead.
 
-With a current source build, copy the exact inspection command printed by
+In v0.13.0, copy the exact inspection command printed by
 `send`, or use:
 
 ```sh
@@ -352,7 +351,7 @@ selected workspace and retains the previous workbench and drafts. A standalone
 observer shows an exact attach command when native input needs another server.
 For an older custom state location, use `amx workspaces --register DIRECTORY`.
 
-Current source builds also provide `amx context --session try-agentmux` to
+v0.13.0 also provides `amx context --session try-agentmux` to
 explain the ordinary command target without attaching. Outside an attachment,
 bare `amx` / `amx a` selects a sole running workspace or offers a running-workspace
 chooser; press `/` or Ctrl+F there to filter by name, state path or status.

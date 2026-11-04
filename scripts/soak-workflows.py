@@ -1071,6 +1071,30 @@ class Soak:
             detail = type(error).__name__ + ": diagnostic text unavailable"
         previous = self.summary.get(field, "")
         self.summary[field] = (previous + "; " + detail if previous else detail)[:4096]
+        # Keep a bounded origin, not locals or source lines. Bare errno text
+        # cannot distinguish a process-admission race from failed evidence I/O.
+        failures = self.summary.setdefault("failure_details", [])
+        if len(failures) < 8:
+            frames, cursor = [], error.__traceback__
+            for _ in range(64):
+                if cursor is None:
+                    break
+                code = cursor.tb_frame.f_code
+                frames.append({"file": Path(code.co_filename).name[:128],
+                               "function": code.co_name[:96], "line": cursor.tb_lineno})
+                cursor = cursor.tb_next
+            event = {"field": field, "type": type(error).__name__, "detail": detail[:1024],
+                     "frames": frames[-8:], "frames_truncated": len(frames) > 8 or cursor is not None}
+            if isinstance(error, OSError):
+                event["errno"] = error.errno
+            cause = error.__cause__
+            if cause is not None:
+                event["cause_type"] = type(cause).__name__
+                if isinstance(cause, OSError):
+                    event["cause_errno"] = cause.errno
+            failures.append(event)
+        else:
+            self.summary["failure_details_omitted"] = self.summary.get("failure_details_omitted", 0) + 1
         interrupted = isinstance(error, (KeyboardInterrupt, SoakInterrupted))
         state = "interrupted" if interrupted and self.summary["state"] != "failed" else "failed"
         self.summary.update(state=state, completed=False)

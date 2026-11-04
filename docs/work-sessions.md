@@ -17,10 +17,26 @@ managed task execution. Both modes share the coordination broker and its permiss
 Each agent has one terminal/worker lock. Changing interaction mode requires a
 new launch definition/run rather than a second process sharing a conversation.
 
-Current source builds add `amx context`, `amx task` / `tasks`, exact task opening
-with `task ID --open`, the searchable running-workspace chooser and direct
-session task history in Actions. These additions are newer than the published
-v0.12.0 binaries; see [installation](getting-started/installation.md#build-from-source).
+v0.13.0 includes `amx context`, `amx task` / `tasks`, exact task opening
+with `task ID --open`, `amx observe`, the searchable running-workspace chooser and direct
+session task history in Actions. See [installation](getting-started/installation.md)
+and explicitly upgrade an older workspace controller before using its new controls.
+
+## Inspect running work
+
+```sh
+amx observe --session work
+amx observe --session work --watch --json
+amx task TASK_ID --open --session work
+```
+
+The operational view separates broker availability, ownership-checked worker
+panes, live leases, worker check-ins, native event metadata and adapter readiness.
+Counts include all retained tasks; bounded attention keeps old failures and
+uncertain attempts visible. Silence alone leaves model progress unknown.
+Use the printed exact task command for results, native receipts, traces and
+reviewed recovery. See [observability](observability.md) for freshness, JSONL,
+partial observations and the separate evidence used by coding runs and research.
 
 ## Recognize sessions throughout the day
 
@@ -175,7 +191,7 @@ amx attach codex --session billing
 amx dashboard --session billing
 ```
 
-With a current source build, `amx context --session billing` explains the target,
+In v0.13.0, `amx context --session billing` explains the target,
 selection source and runtime status without attaching or starting agents.
 Bare `amx` / `amx a` outside an attachment uses a sole running workspace or
 offers a running-workspace chooser. In that chooser, `/` or Ctrl+F starts a
@@ -549,7 +565,7 @@ shared-memory inspection and versioned editing, role/profile setup, autonomy and
 admission controls, and the same live permission switches as the terminal
 dashboard. Board is the main focus pane. **Connections** shows directional message/ping/command
 connections and shared board/memory access; select a connection to adjust it.
-In v0.12.0, enabled connections automatically group connected
+In v0.13.0, enabled connections automatically group connected
 nodes. Denied preview edges do not affect arrangement. Dragging or **Shift+Arrow**
 pins a node; its position persists locally for that workspace and study attempt,
 including after topology changes. Unpinned nodes arrange around pins after a drag.

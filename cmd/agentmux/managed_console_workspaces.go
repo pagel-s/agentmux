@@ -18,31 +18,76 @@ type consoleWorkspaceList struct {
 	err     error
 }
 type consoleWorkspacePicker struct {
-	rows     []workspaceListing
-	selected int
-	loading  bool
-	err      error
+	rows        []workspaceListing
+	selected    int
+	loading     bool
+	err         error
+	query       string
+	filtering   bool
+	filterFocus string
+}
+
+func (p *consoleWorkspacePicker) visibleRows() []workspaceListing {
+	return matchingWorkspaceRows(p.rows, p.query)
+}
+
+func (p *consoleWorkspacePicker) selectedState() string {
+	rows := p.visibleRows()
+	if p.selected < 0 || p.selected >= len(rows) {
+		return ""
+	}
+	return rows[p.selected].State
+}
+
+func (p *consoleWorkspacePicker) selectState(state string) {
+	p.selected = 0
+	for i, row := range p.visibleRows() {
+		if row.State == state {
+			p.selected = i
+			return
+		}
+	}
+}
+
+func (p *consoleWorkspacePicker) setRows(rows []workspaceListing) {
+	focus := p.selectedState()
+	p.rows, p.loading, p.err = rows, false, nil
+	p.selectState(focus)
+}
+
+func (p *consoleWorkspacePicker) setQuery(query string) {
+	focus := p.selectedState()
+	if strings.TrimSpace(p.query) == "" && strings.TrimSpace(query) != "" {
+		p.filterFocus = focus
+	}
+	p.query = query
+	if strings.TrimSpace(query) == "" && p.filterFocus != "" {
+		focus = p.filterFocus
+	}
+	p.selectState(focus)
 }
 
 func (m console) workspaceKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	picker := m.workspacePicker
 	switch msg.String() {
-	case "esc", "q":
+	case "esc":
 		m.workspaceRequest++
 		m.workspacePicker = nil
 	case "ctrl+c":
 		return m, m.close()
-	case "down", "j":
-		m.workspacePicker.selected = min(max(0, len(m.workspacePicker.rows)-1), m.workspacePicker.selected+1)
-	case "up", "k":
-		m.workspacePicker.selected = max(0, m.workspacePicker.selected-1)
+	case "down", "ctrl+n":
+		picker.selected = min(max(0, len(picker.visibleRows())-1), picker.selected+1)
+	case "up", "ctrl+p":
+		picker.selected = max(0, picker.selected-1)
 	case "enter":
 		if m.workspacePicker.loading || m.workspacePicker.err != nil {
 			return m, nil
 		}
-		if len(m.workspacePicker.rows) == 0 {
+		rows := picker.visibleRows()
+		if picker.selected < 0 || picker.selected >= len(rows) {
 			return m, nil
 		}
-		row := m.workspacePicker.rows[m.workspacePicker.selected]
+		row := rows[picker.selected]
 		if row.Status != "running" && row.Status != "unknown" {
 			m.message = "Workspace is " + row.Status + ". Inspect it with amx managed status --state " + row.State + " before restarting."
 			return m, nil
@@ -52,13 +97,51 @@ func (m console) workspaceKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m.openWorkspace(row.State)
+	default:
+		if picker.filtering {
+			switch msg.Type {
+			case tea.KeyRunes:
+				query := picker.query + string(msg.Runes)
+				if len(query) <= 512 {
+					picker.setQuery(query)
+				}
+			case tea.KeySpace:
+				if len(picker.query) < 512 {
+					picker.setQuery(picker.query + " ")
+				}
+			case tea.KeyBackspace, tea.KeyCtrlH:
+				runes := []rune(picker.query)
+				if len(runes) > 0 {
+					picker.setQuery(string(runes[:len(runes)-1]))
+				}
+			case tea.KeyCtrlU:
+				picker.setQuery("")
+			}
+			return m, nil
+		}
+		switch msg.String() {
+		case "/", "ctrl+f":
+			picker.filtering, picker.filterFocus = true, picker.selectedState()
+		case "j":
+			picker.selected = min(max(0, len(picker.visibleRows())-1), picker.selected+1)
+		case "k":
+			picker.selected = max(0, picker.selected-1)
+		case "q":
+			m.workspaceRequest++
+			m.workspacePicker = nil
+		}
 	}
 	return m, nil
 }
 func (m console) workspacePanel(width, height int) string {
 	var out strings.Builder
-	out.WriteString(consoleAccent.Render("Workspaces") + "\n" + consoleMuted.Render("↑/↓ choose · Enter opens workspace · Esc cancels") + "\n\n")
-	rows := m.workspacePicker.rows
+	out.WriteString(consoleAccent.Render("Workspaces") + "\n" + consoleMuted.Render("↑/↓ choose · Enter opens workspace · / filters · Esc cancels") + "\n")
+	rows := m.workspacePicker.visibleRows()
+	if m.workspacePicker.filtering {
+		fmt.Fprintf(&out, "Filter: %s▏ · %d/%d · Ctrl+U clears\n\n", consoleContent(m.workspacePicker.query, 200), len(rows), len(m.workspacePicker.rows))
+	} else {
+		out.WriteString("\n")
+	}
 	if m.workspacePicker.loading {
 		return consoleClip(out.String()+"Loading saved workspaces…\nYour previous draft or review remains open. Esc cancels.", width, height)
 	}
@@ -66,9 +149,13 @@ func (m console) workspacePanel(width, height int) string {
 		return consoleClip(out.String()+"Workspace inventory unavailable: "+consoleContent(m.workspacePicker.err.Error(), 300)+"\nEsc returns to your previous draft or review.", width, height)
 	}
 	if len(rows) == 0 {
-		out.WriteString("No saved workspaces found. amx start creates one.\nOlder custom paths: amx workspaces --register DIR")
+		if len(m.workspacePicker.rows) > 0 {
+			out.WriteString("No matching workspaces. Ctrl+U clears the filter.\n")
+		} else {
+			out.WriteString("No saved workspaces found. amx start creates one.\nOlder custom paths: amx workspaces --register DIR")
+		}
 	}
-	count := max(1, (height-5)/4)
+	count := max(1, (height-7)/4)
 	first := max(0, m.workspacePicker.selected-count+1)
 	for i := first; i < len(rows) && i < first+count; i++ {
 		row := rows[i]

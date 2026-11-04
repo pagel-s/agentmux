@@ -1,0 +1,90 @@
+package managed
+
+import (
+	"agentmux/internal/harness"
+	"agentmux/internal/managedconfig"
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+)
+
+// A real native-protocol child exercises the OnEvent/usage/session publication
+// boundaries without a provider account or network access.
+func TestPilotNativeEvidenceChild(t *testing.T) {
+	if os.Getenv("AMX_PILOT_NATIVE_HELPER") != "1" {
+		return
+	}
+	_, _ = io.ReadAll(os.Stdin)
+	fmt.Fprint(os.Stdout, os.Getenv("AMX_PILOT_NATIVE_FRAMES"))
+	os.Exit(0)
+}
+
+func TestPilotNativeEvidenceRedaction(t *testing.T) {
+	const secret = "escaped-native-secret-817425"
+	for _, scenario := range []string{"escaped value", "escaped key", "native identity"} {
+		t.Run(scenario, func(t *testing.T) {
+			store, owner, credential := workerTestStore(t, []string{"/bin/cat"}, "local")
+			task, lease := workerTestTask(t, store, owner, credential)
+			identity := "safe-native-id"
+			usage := `{"input_tokens":9007199254740993,"fraction":1.2500e-9,"diagnostic":"\u0065scaped-native-secret-817425"}`
+			if scenario == "escaped key" {
+				usage = `{"\u0065scaped-native-secret-817425":"diagnostic"}`
+			}
+			if scenario == "native identity" {
+				identity = secret
+				usage = `{"input_tokens":23}`
+			}
+			frames := `{"type":"thread.started","thread_id":"` + identity + `"}` + "\n" +
+				`{"type":"item.completed","item":{"type":"agent_message","text":"answer"}}` + "\n" +
+				`{"type":"turn.completed","usage":` + usage + `}` + "\n"
+			req := harness.Request{Harness: "codex", Command: []string{os.Args[0], "-test.run=TestPilotNativeEvidenceChild", "--"}, Prompt: "fixture task", Workdir: store.cfg.Agents["worker"].Workdir, Env: map[string]string{"AMX_PILOT_NATIVE_HELPER": "1", "AMX_PILOT_NATIVE_FRAMES": frames}}
+			trace, err := beginTrace(store.dir, "worker", task.ID, managedconfig.Trace{MaxTurnBytes: 16384, MaxTotalBytes: 32768}, map[string]string{"input": "fixture input"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := executeWorkerTaskTrace(ctx, workerTestCaller(store, credential), req, task, lease, credential.Token, 1024, trace, secret); err != nil {
+				t.Fatal(err)
+			}
+			current, err := workerGetTask(ctx, workerTestCaller(store, credential), task.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			expected := "failed"
+			if scenario == "escaped value" {
+				expected = "submitted"
+			}
+			if current.State != expected || current.Trace == nil {
+				t.Fatalf("task state/evidence: %+v", current)
+			}
+			if scenario == "escaped value" && (!bytes.Contains(current.Usage, []byte("9007199254740993")) || !bytes.Contains(current.Usage, []byte("1.2500e-9"))) {
+				t.Fatalf("unrelated exact accounting numbers changed: %s", current.Usage)
+			}
+			raw, err := os.ReadFile(filepath.Join(store.dir, "traces", "worker", current.Trace.ID+".jsonl"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, line := range bytes.Split(bytes.TrimSpace(raw), []byte("\n")) {
+				var record TraceRecord
+				if json.Unmarshal(line, &record) != nil {
+					t.Fatal("invalid trace record")
+				}
+				var event any
+				if json.Unmarshal(record.Data, &event) != nil {
+					t.Fatal("invalid trace event")
+				}
+				decoded, _ := json.Marshal(event)
+				if bytes.Contains(decoded, []byte(secret)) {
+					t.Fatalf("known credential retained in native evidence: %s", decoded)
+				}
+			}
+		})
+	}
+}

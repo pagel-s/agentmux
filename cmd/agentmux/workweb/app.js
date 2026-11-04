@@ -871,6 +871,9 @@ async function action(fn, success) {
     document.body.classList.remove("busy");
   }
 }
+function observationTimeText(value) {
+  return AgentmuxObservation.observationTimeText(value);
+}
 async function refresh() {
   if (loading) return;
   loading = true;
@@ -917,7 +920,7 @@ async function refresh() {
       nativeHeadless(next.agents.find((agent) => agent.id === next.selected))
     )
       activateTab(next.research ? "research" : "tasks");
-    $("updated").textContent = "Updated " + new Date().toLocaleTimeString();
+    $("updated").textContent = observationTimeText(next.observed_at);
   } catch (error) {
     if(responseEpoch!==routingEpoch)return;
     if(followStudy)loadStudyStatus();
@@ -1303,6 +1306,9 @@ function renderTasks() {
       el("code", "", t.id),
     );
     item.append(title,el("p","task-timestamps",sessionTime(t.created_at,"Created")+" · "+ageText(t.created_at)+" · "+sessionTime(t.updated_at,"Updated")), el("p", "", t.text));
+    if (t.progress || (t.state === "running" && !t.native)) {
+      item.append(el("p", "session-note", AgentmuxObservation.taskProgressText(t.progress)));
+    }
     const attention=taskAttentionKind(t);if(attention)item.append(el("p","action-error",({review:"Review required",blocked:"Delivery blocked",uncertain:"Delivery uncertain",failed:"Failed"})[attention]));
     if (t.native) item.append(el("p", "session-note", "Native delivery: " + t.native.phase + (t.native.reason ? " · " + t.native.reason : "") + (t.native.adapter === "claude" ? ". Completion is a receiver acknowledgment." : "") + " Transport receipt is separate from task verification."));
     appendThreadMetadata(item,t);
@@ -3042,6 +3048,8 @@ async function applyLegacyGroupReview() {
 function renderWorkerRuntime(agent) {
   const panel = $("worker-runtime");
   panel.replaceChildren();
+  if (snapshot.worker_runtime_error)
+    panel.append(el("p", "action-error", "Worker observation unavailable: " + snapshot.worker_runtime_error));
   if (snapshot.runtime_error)
     panel.append(
       el(
@@ -4063,12 +4071,15 @@ function nativeInfo(id = selected) {
   if (snapshot?.native?.agent === id) return snapshot.native;
   return snapshot?.native_statuses?.[id] || null;
 }
+function nativeReportingText(status) {
+  return AgentmuxObservation.nativeReportingText(status);
+}
 function nativeDeliveryHint(id) {
   const agent = snapshot?.agents?.find((item) => item.id === id);
   if (agent?.config.interaction !== "interactive") return "Instruction tasks run when the managed worker is ready.";
   const status = nativeInfo(id);
   if (!status?.policy?.version) return "Native delivery unavailable. Commands remain queued until the session explicitly reads them.";
-  if (!status.session || !status.connected) return "Native delivery " + status.state + ": " + (status.reason || "adapter is not connected") + ".";
+  if (!status.session || !status.connected) return "Native adapter not connected. " + nativeReportingText(status);
   if (status.mode === "manual") return "Manual inbox: commands stay queued. Enable Review or Auto in Session detail → Native collaboration to deliver them.";
   if (status.mode === "review") return "Review delivery: approve each exact request in Session detail → Native collaboration before it enters the native conversation.";
   if (!["ready","active"].includes(status.state)) return "Auto delivery is blocked: " + status.reason + ".";
@@ -4094,6 +4105,7 @@ function renderNativeDelivery() {
   heading.append(el("h2","","Native collaboration"),el("span","",status?.state || "UNAVAILABLE"));
   panel.append(heading);
   panel.append(el("p","session-note",status?.reason || snapshot.native_error || "This controller has no native delivery status. Reopen with a current controller before enabling automatic delivery."));
+  if (status) panel.append(el("p", status.connected ? "session-note" : "action-error", nativeReportingText(status)));
   if(agent.external) {
     panel.append(el("p","session-note","External bridge setup authorizes explicit inbox reads in its existing terminal. Automatic delivery needs a verified adapter and authenticated native session; registering a bridge does not supply one. Use the copied setup in Existing terminals, then read the inbox manually."));
     const sessions=el("button","quiet","Open existing terminal setup");sessions.type="button";sessions.onclick=()=>activateTab("terminals");panel.append(sessions);
@@ -4162,10 +4174,11 @@ function renderNativeDelivery() {
     },"Saved native delivery limits and subscriptions. Access permissions remain independently enforced.");
   };
   settings.append(form);panel.append(settings);
-  if (status.active) panel.append(el("p",status.active.phase==="uncertain" ? "action-error" : "session-note","Current delivery "+status.active.id+": "+status.active.phase+". "+(status.active.reason||"Awaiting a correlated native receipt.")));
-  const pending=status.pending||[], queue=el("div","native-queue");
-  queue.append(el("h3","","Pending native turns · "+(status.pending_count ?? pending.length)+(status.pending_more ? "+" : "")));
-  if (!pending.length) queue.append(el("p","session-note","No eligible requests waiting."));
+  if (status.active) panel.append(el("p",status.active.phase==="uncertain" ? "action-error" : "session-note","Current delivery "+status.active.id+": "+status.active.phase+". "+(status.active.reason||"Awaiting a correlated native receipt.")+" Last receipt: "+(status.active.updated_at || "unknown")+"."));
+  const pending=status.pending||[], queue=el("div","native-queue"), pendingKnown=status.pending_known!==false;
+  queue.append(el("h3","","Pending native turns · "+AgentmuxObservation.nativePendingCountText(status)));
+  if (!pendingKnown) queue.append(el("p","action-error",status.coverage || "Pending admission is unavailable. Current policy and retained transport evidence remain inspectable; this is not a known empty queue."));
+  else if (!pending.length) queue.append(el("p","session-note","No eligible requests waiting."));
   for(const delivery of pending.slice(0,5)) {
     const item=el("details","native-candidate");item.dataset.disclosureKey="native:"+delivery.id;item.dataset.itemKey=delivery.id;
     item.append(el("summary","",delivery.kind+" from "+sessionReference(delivery.from)+" · "+ageText(delivery.created_at)),el("code","",delivery.id),el("pre","",delivery.text));

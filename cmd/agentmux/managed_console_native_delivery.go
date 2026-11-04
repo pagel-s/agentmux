@@ -80,6 +80,10 @@ func (m *console) reviewNativeDelivery(approve bool) {
 		return
 	}
 	s := m.data.native
+	if approve && !nativePendingKnown(s) {
+		m.message = "Pending admission is unavailable; inspect task evidence. Shift+D still configures delivery."
+		return
+	}
 	if approve && (s.Policy.Mode != "review" || len(s.Pending) == 0) {
 		m.message = "Review mode and a pending request are required. Shift+D configures delivery."
 		return
@@ -421,14 +425,19 @@ func (m console) nativeDeliverySummary(width int) string {
 		return "Native delivery: loading; command permission alone does not start a turn.\n"
 	}
 	var out strings.Builder
-	fmt.Fprintf(&out, "Native delivery: %s · %s\n", s.Policy.Mode, consoleContent(s.State, 80))
+	fmt.Fprintf(&out, "Native delivery: %s · %s · Shift+D settings\n", s.Policy.Mode, consoleContent(s.State, 80))
 	fmt.Fprintf(&out, "%s\n", consoleContent(s.Reason, 250))
-	fmt.Fprintf(&out, "Turns %d/%d · hop cap %d · pending %d\n", s.Turns, s.Policy.MaxTurns, s.Policy.MaxHops, max(s.PendingCount, len(s.Pending)))
+	fmt.Fprintln(&out, nativeObservationSummary(s))
+	fmt.Fprintf(&out, "Turns %d/%d · hop cap %d · pending %s\n", s.Turns, s.Policy.MaxTurns, s.Policy.MaxHops, nativePendingCountText(s))
+	if !nativePendingKnown(s) {
+		fmt.Fprintln(&out, consoleContent(s.Coverage, 400))
+	}
 	if s.PendingMore {
 		out.WriteString("More queued items follow as the queue advances.\n")
 	}
 	if s.Active != nil {
 		fmt.Fprintf(&out, "Active: %s · %s\n", consoleContent(s.Active.ID, 100), consoleContent(s.Active.Phase, 40))
+		fmt.Fprintf(&out, "Last receipt: %s\n", consoleContent(s.Active.UpdatedAt, 100))
 	}
 	adapter := s.Adapter
 	if adapter == "" {
@@ -456,5 +465,5 @@ func (m console) nativeDeliverySummary(width int) string {
 		out.WriteString(" · Shift+A review inbox")
 	}
 	out.WriteString("\n")
-	return consoleClip(out.String(), width, 8) + "\n"
+	return consoleClip(out.String(), width, 12) + "\n"
 }
