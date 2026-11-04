@@ -10,7 +10,7 @@ Available in [Agentmux v0.13.0](getting-started/installation.md). To inspect a
 checked fixture before configuring providers, start with
 [`amx demo`](getting-started/first-result.md).
 
-[![Actual offline report from the model-free demo, showing saved checks and the retained change](assets/guide/checked-work-report.jpg?v=c1d8bad75eaf)](getting-started/first-result.md)
+[![Actual offline report from the model-free demo, showing saved checks and the retained change](assets/guide/checked-work-report.jpg?v=9e8c23859bf8)](getting-started/first-result.md)
 
 The report above comes from `amx demo`, a deterministic fixture with no model
 calls. For your own task, the daily sequence is:

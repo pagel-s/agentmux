@@ -47,7 +47,7 @@ reviews, deadlines and recovery. Each run retains private Git evidence;
 filesystem and network isolation require the explicit
 [Linux isolation option](docs/workflows.md#private-storage-and-full-isolation).
 
-[![Actual checked-result report from a model-free fixture, showing retained checks and a reviewable patch](docs/assets/guide/checked-work-report.jpg?v=c1d8bad75eaf)](docs/visual-guide.md#ask-for-a-checked-coding-change)
+[![Actual checked-result report from a model-free fixture, showing retained checks and a reviewable patch](docs/assets/guide/checked-work-report.jpg?v=9e8c23859bf8)](docs/visual-guide.md#ask-for-a-checked-coding-change)
 
 The report above comes from a command-only fixture. It demonstrates the evidence
 and application controls; it does not measure provider task quality.
@@ -81,7 +81,7 @@ compatible repo-local Go toolchain when available. See
 [installation](docs/getting-started/installation.md) for binary releases and PATH
 setup. Remote `go install …@latest` is currently unsupported by this module.
 
-Current `main` adds workspace targeting with `amx context`, exact task opening
+v0.13.0 includes workspace targeting with `amx context`, exact task opening
 with `amx task ID --open`, searchable workspace selection and direct session
 task history. `amx observe` brings broker availability, observed worker state,
 live reporting and retained task attention into one read-only view; `--watch --json`

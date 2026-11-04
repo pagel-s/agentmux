@@ -22,7 +22,7 @@ running controller. An older controller can report this operation as unsupported
 `observer_version` and the pinned controller path separately; installing a new
 observer does not prove that an existing workspace upgraded its controller.
 
-![Actual amx observe output showing capacity, uncertain delivery and a live command-worker check-in](assets/guide/terminal-observability.jpg?v=0c1af4e27808)
+![Actual amx observe output showing capacity, uncertain delivery and a live command-worker check-in](assets/guide/terminal-observability.jpg?v=d9ac7487da7c)
 
 The capture uses disposable command-only fixtures. The running worker reports a
 check-in and zero native model events; stopped delivery remains uncertain.
@@ -114,6 +114,11 @@ available; inspect `attention_more`, `active_more` and `native_more` for bounded
 inventories. The top-level collection time, broker snapshot time, worker
 check-in, native event time and readiness time describe different observations.
 They are not one atomic snapshot of every process.
+
+These metadata snapshots and JSONL are the supported integration surface.
+Agentmux has no bundled OTLP/Prometheus exporter or cross-workspace trend
+database. Preserve sample timestamps, `complete` and component errors in any
+external aggregation; unavailable samples do not mean zero work.
 
 The native inventory is a fast reporting/receipt summary. It deliberately does
 not evaluate all queued admission candidates; `native[].pending_count` is
