@@ -1,9 +1,9 @@
 {
   "schema": 1,
-  "captured_at_utc": "2026-11-04T02:17:50.540040+00:00",
-  "source_commit": "0fca686e0f2f8e83d762ebecfddccbe54bdd29ff",
-  "binary_version": "amx 0.13.0 (commit: 0fca686, built: 2026-11-04T02:12:00Z)",
-  "binary_sha256": "e03fd0920286d28b1c55f29e99650d054d2b23d6e9f20d684f01c0c1edc2862e",
+  "captured_at_utc": "2026-11-04T10:11:08.594819+00:00",
+  "source_commit": "6edb44bbcc9156329de1b726dbce074c1f574a57",
+  "binary_version": "amx 0.14.0 (commit: 6edb44b, built: 2026-11-04T10:06:34Z)",
+  "binary_sha256": "61e77aa6649934b6ca165cfdf553bde4dfbd28d67114bcbdac6615b26148ce39",
   "browser_version": "156.0.8078.4",
   "model_calls": 0,
   "capture_dependencies": {
@@ -33,7 +33,7 @@
       "file": "terminal-board.jpg",
       "surface": "live tmux ANSI capture",
       "fixture": "command-only workspace",
-      "sha256": "1fee273e42f0d5bc6e2af97764e3adf3f8f80911ec86b160a606978fd5ff123e",
+      "sha256": "e301fabd23e6d6f13ba1697db36e04a6ffe3763b00083d301e27d6929d15c6e9",
       "width": 1435,
       "height": 988
     },
@@ -41,7 +41,7 @@
       "file": "terminal-switcher.jpg",
       "surface": "live tmux ANSI capture",
       "fixture": "command-only workspace",
-      "sha256": "a7fb991ec1455cc4f2684295ca7257ac97adc9b5741b1093ba119138dabc2199",
+      "sha256": "b853fbe7fa87d90c1502bbc006e9724fbb5cda919f8e6525801c6e72aaacd425",
       "width": 1435,
       "height": 484
     },
@@ -49,7 +49,7 @@
       "file": "terminal-actions.jpg",
       "surface": "live tmux ANSI capture",
       "fixture": "command-only workspace",
-      "sha256": "dc534792a1425654818325bac01ff479b290c6aad7d1176929d5ec849f5b854a",
+      "sha256": "6087783816dfb31fe8b07d35bd447a7db2cfb900f62937e11e1269e0ef83134f",
       "width": 1435,
       "height": 340
     },
@@ -57,7 +57,7 @@
       "file": "terminal-connections.jpg",
       "surface": "live tmux ANSI capture",
       "fixture": "command-only workspace",
-      "sha256": "872aca32fed22eea086eb00a3f25e6e8937d85ebf1b47cff08c7afca5307bd9d",
+      "sha256": "1d51cfd7430617e6b09b94b70413ba41bf457fe981494bfa8e9cb0b160fc1d6e",
       "width": 1435,
       "height": 988
     },
@@ -65,7 +65,7 @@
       "file": "terminal-task-recovery.jpg",
       "surface": "live tmux ANSI capture",
       "fixture": "command-only workspace",
-      "sha256": "dbaaea1ab1ad7178ae1e5658b304d4bdf41dbb8221f893960f096db57e791beb",
+      "sha256": "0e9ed39b499528bef8158603beb4f4ba704d8c4a95aceefbd8d2f7ee7e4db93e",
       "width": 1435,
       "height": 988
     },
@@ -73,7 +73,7 @@
       "file": "terminal-observability.jpg",
       "surface": "live tmux ANSI capture",
       "fixture": "command-only workspace",
-      "sha256": "d9ac7487da7c820b1d7aa0ff6f3ae5ed522b2d3ff93398e0e258242f6b923bba",
+      "sha256": "3b3ac01704fabdd2dfff05df3c3d029f7dcd09454456e187718964817a8d4d8b",
       "width": 1435,
       "height": 1252
     },
@@ -81,7 +81,7 @@
       "file": "web-board.jpg",
       "surface": "live browser content",
       "fixture": "command-only owner/agent board posts",
-      "sha256": "1d865859912c53976052029cb148c8fc9d5b35687d41932f6879b0aff15045f3",
+      "sha256": "92dda425664d98f0f956cd12c547ccb23fff6d9d26b04f52ece9ef1570c0b9f6",
       "width": 1440,
       "height": 960
     },
@@ -89,7 +89,7 @@
       "file": "web-connections.jpg",
       "surface": "live browser content",
       "fixture": "current automatic graph arrangement and controls",
-      "sha256": "0e6134c1ca54b5a0752c71a3226053ec23dfcafbfd84d78ff9a18be468f0f783",
+      "sha256": "0fd3a75200c72a2ab719796e9f13099539052b0799d49f519f546b87ece610eb",
       "width": 1440,
       "height": 960
     },
@@ -97,7 +97,7 @@
       "file": "web-teams.jpg",
       "surface": "live browser content",
       "fixture": "scripted consented API triage team",
-      "sha256": "f72d92ace13061083570d423593b4a60169923b337d357e52edf0cd19c5af8de",
+      "sha256": "26ca0a62c499a8670ef1511e12ced68b9f4fd3c90f50594b1ef98651c1cfa770",
       "width": 1440,
       "height": 960
     },
@@ -105,7 +105,7 @@
       "file": "web-groups.jpg",
       "surface": "live browser content",
       "fixture": "owner-configured independent collaboration pairs",
-      "sha256": "cf97095a21786c617557fa1a2f9d2e520967b14e76fad0fd7707b36dff04ee68",
+      "sha256": "7faa7d74bfb18ed88b8cbd359fe8a197daa2a54ff1a0b5199e4c9dc6cd0bd0ea",
       "width": 1440,
       "height": 960
     },
@@ -113,7 +113,7 @@
       "file": "web-memory.jpg",
       "surface": "live browser content",
       "fixture": "real shared memory version and retrieval provenance",
-      "sha256": "60ca91219e5eb8dafcd12e7f544133451ba26a6bd332110695e412b5124c34bd",
+      "sha256": "355480b85d6990da7511e5f2515d7fb9096410263af4ded65b7cd6155dd4596a",
       "width": 1440,
       "height": 960
     },
@@ -121,7 +121,7 @@
       "file": "web-tasks.jpg",
       "surface": "live browser content",
       "fixture": "verified, failed, pending and owner-stopped uncertain command tasks",
-      "sha256": "ac69b633c2e505d97bec0efe8009702e8f20f6cfbcaaa9393f1415c23b7d5ea8",
+      "sha256": "19ad3ea7cd2a8bcbc1ab8cbe9eeccb6824d4c6f8a78b612bd6ca18c8ffeee88f",
       "width": 1440,
       "height": 960
     },
@@ -129,7 +129,7 @@
       "file": "web-session-tasks.jpg",
       "surface": "live browser content",
       "fixture": "direct selected-recipient task history action",
-      "sha256": "9efe08dbe0c7400c5a4102c026fb745cc0cc50e6d136d6b3e6c82e8b7b5ee301",
+      "sha256": "a62a57b2a38b73d36d79bf7d438374924924007a06840875f7986395ac28824e",
       "width": 1440,
       "height": 960
     },
@@ -137,7 +137,7 @@
       "file": "web-research.jpg",
       "surface": "live browser content",
       "fixture": "actual deterministic public-goods fixture; one completed phase, paused before decisions",
-      "sha256": "5fa82a1d3f658ba3437384ca50876648b6ac2ac40e786a6a01d19e36eb81be50",
+      "sha256": "8318adf0735d55453e5aafea9ee12e3fcd759e07ac8f79355c8a0503ef9a2503",
       "width": 1440,
       "height": 960
     },
@@ -145,7 +145,7 @@
       "file": "web-research-control.jpg",
       "surface": "live browser content",
       "fixture": "unsubmitted reasoned intervention review",
-      "sha256": "c3f12cf403fc7f2d571d03df9442d8a8ee40fcd3f5b6d47a5ab83905539ba34e",
+      "sha256": "b454120a775fc5212d42abe9b7f01f3cb77438d7401b54cba18d1ea68421ae41",
       "width": 1440,
       "height": 960
     },
@@ -153,7 +153,7 @@
       "file": "web-research-teams.jpg",
       "surface": "live browser content",
       "fixture": "actual scripted Alice/Bob consent; Charlie outside pair",
-      "sha256": "cbde20a18a162c6eb7e4ec30ec24903cf95c4ff5b8987384d8e4ddc77429f3f0",
+      "sha256": "e9910402cec43aeca3a14bd1aa5ef969131e7705d76a166efcd0504b3217ae47",
       "width": 1440,
       "height": 960
     },
@@ -161,7 +161,7 @@
       "file": "checked-work-report.jpg",
       "surface": "live browser content",
       "fixture": "actual amx demo report; deterministic command checks and fixture-only application, no model quality claim",
-      "sha256": "9e8c23859bf88153a6020e9420ad408406bc51bdffcb020b968f87c8b44b2ac9",
+      "sha256": "d3cdf4a8e03687b7eeda0021ad7df2814bb87ca153b086ee61a7b92b4bb82861",
       "width": 1440,
       "height": 1080
     }
