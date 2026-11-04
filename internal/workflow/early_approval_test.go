@@ -802,3 +802,77 @@ func TestPolicyWholeReportCompactionKeepsSkippedPhasesAndBindings(t *testing.T) 
 		t.Fatalf("whole-report projection rejected supported global compaction: %v", err)
 	}
 }
+
+func TestPolicyUsageCompactionBoundariesSurviveRetainedFormatting(t *testing.T) {
+	for _, kind := range []string{"indentation", "html-escaping"} {
+		t.Run(kind, func(t *testing.T) {
+			plan, output, _ := earlyApprovalFixture(t)
+			r, err := RunMission(context.Background(), plan, output, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var raw json.RawMessage
+			if kind == "indentation" {
+				usage := map[string]string{}
+				for i := 0; i < 400; i++ {
+					usage[fmt.Sprintf("field-%03d", i)] = "v"
+				}
+				raw, err = json.Marshal(usage)
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				raw = json.RawMessage(`{"html":"` + strings.Repeat("<", 1400) + `"}`)
+			}
+			if len(raw) >= 8192 {
+				t.Fatal("fixture raw usage is not below compaction limit")
+			}
+			var retained CandidateResult
+			if err := DecodeFile(r.Steps[0].EvidencePath, &retained); err != nil {
+				t.Fatal(err)
+			}
+			retained.Usage = raw
+			retained.UsageRecords = []AttemptUsage{{Attempt: 1, Usage: raw}}
+			if err := saveJSON(retained.EvidencePath, &retained); err != nil {
+				t.Fatal(err)
+			}
+			var formatted CandidateResult
+			if err := DecodeFile(retained.EvidencePath, &formatted); err != nil {
+				t.Fatal(err)
+			}
+			if len(formatted.Usage) <= 8192 {
+				t.Fatalf("fixture stored usage did not cross limit: %d", len(formatted.Usage))
+			}
+			r.Steps[0].CandidateResult = retained
+			if err := saveJSON(filepath.Join(output, "report.json"), r); err != nil {
+				t.Fatal(err)
+			}
+			loaded, err := LoadReport(output)
+			if err != nil {
+				t.Fatalf("formatting changed usage retention decision: %v", err)
+			}
+			if kind == "indentation" {
+				if len(loaded.Steps[0].Usage) == 0 || len(loaded.Steps[0].UsageRecords) != 1 || len(loaded.Steps[0].UsageRecords[0].Usage) == 0 {
+					t.Fatal("small canonical usage became unknown after indentation")
+				}
+			} else if len(loaded.Steps[0].Usage) != 0 || len(loaded.Steps[0].UsageRecords) != 1 || string(loaded.Steps[0].UsageRecords[0].Usage) != "null" || !loaded.DiagnosticsTruncated {
+				t.Fatal("over-limit HTML-escaped canonical usage did not remain explicitly unknown")
+			}
+			if result, err := Apply(context.Background(), output, ""); err != nil || !result.Applied {
+				t.Fatalf("usage formatting changed checked application authority: %+v %v", result, err)
+			}
+		})
+	}
+}
+
+func TestPolicyUnknownUsageNullRemainsUnknownAfterReload(t *testing.T) {
+	nilUsage := CandidateResult{UsageRecords: []AttemptUsage{{Attempt: 1}}}
+	loaded := CandidateResult{Usage: json.RawMessage(`null`), UsageRecords: []AttemptUsage{{Attempt: 1, Usage: json.RawMessage(`null`)}}}
+	if !samePolicyCandidate(nilUsage, loaded) {
+		t.Fatal("unknown usage null did not retain nil/unknown meaning after JSON reload")
+	}
+	canonical, err := canonicalUsageJSON(json.RawMessage(`null`))
+	if err != nil || len(canonical) != 0 {
+		t.Fatal("unknown usage became a recorded value")
+	}
+}

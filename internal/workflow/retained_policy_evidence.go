@@ -62,35 +62,40 @@ func policyAggregateCandidate(candidate CandidateResult) CandidateResult {
 	return result
 }
 
+// canonicalUsageJSON makes both retention bounds and artifact comparison
+// independent of pretty-printing and HTML escaping. UseNumber preserves integer
+// precision and number literals; json.Marshal applies one escaping policy.
+func canonicalUsageJSON(raw json.RawMessage) (json.RawMessage, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	var value any
+	if err := decoder.Decode(&value); err != nil {
+		return nil, err
+	}
+	var extra any
+	if decoder.Decode(&extra) != io.EOF {
+		return nil, errors.New("usage must contain exactly one JSON value")
+	}
+	if value == nil {
+		return nil, nil
+	}
+	return json.Marshal(value)
+}
+
 func samePolicyCandidate(a, b CandidateResult) bool {
-	// Native usage is adapter-authored JSON. Its indentation changes when the
-	// same value is nested in report.json rather than the standalone attempt.
-	// Normalize that JSON semantically while comparing every other field exactly.
+	// Normalize adapter-authored usage while comparing every other field exactly.
 	normalize := func(candidate CandidateResult) (CandidateResult, error) {
-		canonical := func(raw json.RawMessage) (json.RawMessage, error) {
-			if len(raw) == 0 {
-				return nil, nil
-			}
-			decoder := json.NewDecoder(bytes.NewReader(raw))
-			decoder.UseNumber()
-			var value any
-			if err := decoder.Decode(&value); err != nil {
-				return nil, err
-			}
-			var extra any
-			if decoder.Decode(&extra) != io.EOF {
-				return nil, errors.New("usage must contain exactly one JSON value")
-			}
-			return json.Marshal(value)
-		}
 		var err error
-		candidate.Usage, err = canonical(candidate.Usage)
+		candidate.Usage, err = canonicalUsageJSON(candidate.Usage)
 		if err != nil {
 			return candidate, err
 		}
 		candidate.UsageRecords = append([]AttemptUsage(nil), candidate.UsageRecords...)
 		for i := range candidate.UsageRecords {
-			candidate.UsageRecords[i].Usage, err = canonical(candidate.UsageRecords[i].Usage)
+			candidate.UsageRecords[i].Usage, err = canonicalUsageJSON(candidate.UsageRecords[i].Usage)
 			if err != nil {
 				return candidate, err
 			}

@@ -813,6 +813,14 @@ func compactReport(r Report) Report {
 		}
 		return &copy
 	}
+	compactUsage := func(raw json.RawMessage) json.RawMessage {
+		canonical, err := canonicalUsageJSON(raw)
+		if err != nil || len(canonical) > 8192 {
+			r.DiagnosticsTruncated = true
+			return nil
+		}
+		return canonical
+	}
 	compactCandidate := func(c CandidateResult) CandidateResult {
 		var cut bool
 		// The explicit guided policy validates its original review verdict on
@@ -846,16 +854,10 @@ func compactReport(r Report) Report {
 		c.Error, cut = trim(c.Error, 4096)
 		r.DiagnosticsTruncated = r.DiagnosticsTruncated || cut
 		c.Verification = compactVerification(c.Verification)
-		if len(c.Usage) > 8192 {
-			c.Usage = nil
-			r.DiagnosticsTruncated = true
-		}
+		c.Usage = compactUsage(c.Usage)
 		c.UsageRecords = append([]AttemptUsage(nil), c.UsageRecords...)
 		for i := range c.UsageRecords {
-			if len(c.UsageRecords[i].Usage) > 8192 {
-				c.UsageRecords[i].Usage = nil
-				r.DiagnosticsTruncated = true
-			}
+			c.UsageRecords[i].Usage = compactUsage(c.UsageRecords[i].Usage)
 		}
 		return c
 	}
