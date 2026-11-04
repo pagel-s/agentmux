@@ -4,7 +4,7 @@ For current reporting, start with `amx observe --session work`, then inspect
 the printed exact task with `amx task TASK_ID --open --session work`. The
 [observability guide](observability.md) separates worker check-ins, native event
 observations, adapter readiness and retained outcomes. These controls
-are included in v0.14.0. Live progress contains metadata only; opt-in
+are included in v0.15.0. Live progress contains metadata only; opt-in
 traces below contain sensitive prepared input and adapter events.
 
 ```yaml

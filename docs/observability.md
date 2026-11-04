@@ -21,11 +21,11 @@ controller and workers explicitly; installing a new CLI does not replace a
 running controller. An older controller can report this operation as unsupported. The output records
 `observer_version` and the pinned controller path separately; installing a new
 observer does not prove that an existing workspace upgraded its controller.
-Agentmux [v0.14.0](getting-started/installation.md) adds structured collection diagnostics and the offline summary
+Agentmux [v0.15.0](getting-started/installation.md) includes structured collection diagnostics and the offline summary
 described below. Older v0.13.0 schema-1 captures remain readable; missing
 diagnostic timings stay unknown.
 
-![Actual amx observe output showing capacity, uncertain delivery and a live command-worker check-in](assets/guide/terminal-observability.jpg?v=3b3ac01704fa)
+![Actual amx observe output showing capacity, uncertain delivery and a live command-worker check-in](assets/guide/terminal-observability.jpg?v=5aaf1d1c409a)
 
 The capture uses disposable command-only fixtures. The running worker reports a
 check-in and zero native model events; stopped delivery remains uncertain.

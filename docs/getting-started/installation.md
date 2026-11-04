@@ -182,10 +182,11 @@ provider or sign you in. `amx doctor CONFIG` also checks configured native CLI
 compatibility.
 
 For your first result, use [the model-free demo](first-result.md). For native
-conversations, continue with the [fresh-install walkthrough](quickstart.md) or
-[terminal folders and layouts](../terminal-workflow.md). The walkthrough covers
-opt-in collaboration, shared memory, revocation and web controls. From a checkout,
-Linux operators can verify model-free isolation with:
+conversations, continue with the [short native quickstart](quickstart.md) or
+[terminal folders and layouts](../terminal-workflow.md). The
+[optional verification walkthrough](native-walkthrough.md) covers collaboration,
+shared memory, revocation and web controls. From a checkout, Linux operators can
+verify model-free isolation with:
 
 ```sh
 python3 scripts/smoke-managed.py

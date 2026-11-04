@@ -117,8 +117,16 @@ allowances, one repeat, selected historical tasks, trusted-local access and unkn
 served-model revisions prevent a general speed, quality or competitive claim.
 
 The v0.15.0 budget and bounded process-diagnostic changes address the concrete
-engineering findings. Later targeted rechecks must remain separate from this
-unchanged original pilot; passing code controls does not rewrite its failures.
+engineering findings. A [separate regression record](assets/quality/subscription-regressions-2026-11-04.json)
+covers only the two failed cases: both passed **2/2** using the clean
+`0.15.0-rc1` source build, not a published binary. Fresh review, mandatory final
+checks, the same frozen external graders and fixture-only application passed.
+One extra package race-test command hit four native-sandbox Unix-socket
+permission errors; focused checks and the frozen contracts passed. This is not
+a full-suite success claim. The original native **3/3** versus Agentmux **1/3**
+remains unchanged, with no baseline rerun or pooled pass rate. Requested model
+aliases still do not verify served revisions, and these targeted rechecks
+establish no speedup or competitive advantage.
 
 Use [workflow validation](workflow-validation.md) for engineering checks,
 [evaluation](evaluation.md) for usability and comparative task studies, and

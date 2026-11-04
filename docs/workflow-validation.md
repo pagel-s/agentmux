@@ -28,7 +28,7 @@ checkout's last built binary.
 
 ## Observation and reporting
 
-The v0.14.0 source includes model-free regressions for owner observation, task
+The v0.15.0 source includes model-free regressions for owner observation, task
 progress and native readiness:
 
 ```sh

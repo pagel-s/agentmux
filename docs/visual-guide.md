@@ -18,8 +18,8 @@ installed and authenticated separately. A new installation does not replace
 an existing workspace's pinned controller; use a fresh workspace for all current
 features, or [upgrade deliberately](traces-and-recovery.md).
 
-Screenshots were captured on **2026-11-04** from source **6edb44bbcc91**,
-using **amx 0.14.0**, in disposable command-only workspaces and a scripted research trial with explicitly
+Screenshots were captured on **2026-11-04** from source **d5265d3c152d**,
+using **amx 0.15.0**, in disposable command-only workspaces and a scripted research trial with explicitly
 trusted local execution. They show real current controls; they measure neither
 model quality nor isolation. Terminal images render live tmux captures with
 trailing empty rows cropped. [Capture provenance](assets/guide/capture-provenance.json)
@@ -54,7 +54,7 @@ and private result location. It starts no models and creates no run files.
 Replace `go test ./...` with the executable and arguments that verify your task.
 The text after `--` is literal argv; use an owner-maintained script for shell logic.
 
-[![Actual offline report from amx demo with retained check evidence and a reviewable change](assets/guide/checked-work-report.jpg?v=d3cdf4a8e036)](assets/guide/checked-work-report.jpg?v=d3cdf4a8e036)
+[![Actual offline report from amx demo with retained check evidence and a reviewable change](assets/guide/checked-work-report.jpg?v=a15253337515)](assets/guide/checked-work-report.jpg?v=a15253337515)
 
 This is a real report from the deterministic `amx demo` fixture, with no model
 calls. The practical sequence for your own task is **preview → run → inspect →
@@ -131,7 +131,7 @@ for strict plan fields, isolated execution and exact saved-brief delivery.
 
 ## Navigate the terminal and web app
 
-[![Terminal workbench with session identities on the left and coordination on the right](assets/guide/terminal-board.jpg?v=e301fabd23e6)](assets/guide/terminal-board.jpg?v=e301fabd23e6)
+[![Terminal workbench with session identities on the left and coordination on the right](assets/guide/terminal-board.jpg?v=54c0c02a01ff)](assets/guide/terminal-board.jpg?v=54c0c02a01ff)
 
 The left column selects a **session**. **Tab** moves focus between the sidebar
 and content; the focused header is purple. Its task title can change; its Agentmux
@@ -162,13 +162,13 @@ between them; **Up/Down** changes only the focused identity. Its label is purple
 and shows the arrow hint. Focus changes preserve both selections and permissions.
 **h/l** or **Alt+Left/Right** also chooses a recipient. **Left/Right** still changes views.
 
-[![Searchable terminal session switcher distinguishes two poem sessions by title and stable ID](assets/guide/terminal-switcher.jpg?v=b853fbe7fa87)](assets/guide/terminal-switcher.jpg?v=b853fbe7fa87)
+[![Searchable terminal session switcher distinguishes two poem sessions by title and stable ID](assets/guide/terminal-switcher.jpg?v=aeee8aa8f64a)](assets/guide/terminal-switcher.jpg?v=aeee8aa8f64a)
 
 Search results show titles, IDs, projects and providers. **Enter** opens a
 workspace-owned native terminal; an external observation opens its details.
 **Tab** keeps you in the current workbench view and changes its selected session.
 
-[![Searchable Actions menu with shortcuts and exact session targets](assets/guide/terminal-actions.jpg?v=6087783816df)](assets/guide/terminal-actions.jpg?v=6087783816df)
+[![Searchable Actions menu with shortcuts and exact session targets](assets/guide/terminal-actions.jpg?v=8574df89597b)](assets/guide/terminal-actions.jpg?v=8574df89597b)
 
 Use **Ctrl+K** when unsure what to press. Actions opens the appropriate editor
 or review, with the target and unavailable reasons shown before a change.
@@ -182,7 +182,7 @@ Open the web control center with:
 amx web -s daily --open
 ```
 
-[![Web board filtered to a specific collaboration pair](assets/guide/web-board.jpg?v=92dda425664d)](assets/guide/web-board.jpg?v=92dda425664d)
+[![Web board filtered to a specific collaboration pair](assets/guide/web-board.jpg?v=449fac1e2d14)](assets/guide/web-board.jpg?v=449fac1e2d14)
 
 The web sidebar selects a session; the main tabs expose its controls and the
 workspace's records. **Board** filters communication, **Connections** controls
@@ -287,7 +287,7 @@ amx board "The API proposal is ready." --group GROUP_ID -s daily
 amx send api-review "Read the proposal when useful." --mode note -s daily
 ```
 
-[![Owner collaboration groups show exact members board and memory namespaces and group controls](assets/guide/web-groups.jpg?v=7faa7d74bfb1)](assets/guide/web-groups.jpg?v=7faa7d74bfb1)
+[![Owner collaboration groups show exact members board and memory namespaces and group controls](assets/guide/web-groups.jpg?v=e65a19867fca)](assets/guide/web-groups.jpg?v=e65a19867fca)
 
 A board post is visible to that board's authorized readers. A direct note has
 explicit recipients. An everyone-readable board is possible when configured
@@ -297,9 +297,9 @@ overlapping membership when testing independent information boundaries.
 In web Board, choose **Shared boards**, select the exact board and click
 **Search** to apply that scope.
 
-[![Terminal Connections view labels sender and recipient and explains note ping and command permissions](assets/guide/terminal-connections.jpg?v=1d51cfd74306)](assets/guide/terminal-connections.jpg?v=1d51cfd74306)
+[![Terminal Connections view labels sender and recipient and explains note ping and command permissions](assets/guide/terminal-connections.jpg?v=12fef29b7005)](assets/guide/terminal-connections.jpg?v=12fef29b7005)
 
-[![Web relationship graph with directional permission and receiver-delivery explanations](assets/guide/web-connections.jpg?v=0fd3a75200c7)](assets/guide/web-connections.jpg?v=0fd3a75200c7)
+[![Web relationship graph with directional permission and receiver-delivery explanations](assets/guide/web-connections.jpg?v=b4e5b653dcf5)](assets/guide/web-connections.jpg?v=b4e5b653dcf5)
 
 Use **Connections → List view** to search an exact pair when the graph is busy;
 the list pages 50 entries at a time and supports arrows and Enter. Inspect the
@@ -414,7 +414,7 @@ workspace's owned processes and retains their saved data.
 
 ## Private and shared memory
 
-[![Shared memory editor shows the selected pair namespace an agreed plan and its version](assets/guide/web-memory.jpg?v=355480b85d69)](assets/guide/web-memory.jpg?v=355480b85d69)
+[![Shared memory editor shows the selected pair namespace an agreed plan and its version](assets/guide/web-memory.jpg?v=11753a25565b)](assets/guide/web-memory.jpg?v=11753a25565b)
 
 Private memory belongs to one authenticated agent. Shared memory belongs to an
 explicit namespace with separate read/write access. Neither is an automatic
@@ -465,7 +465,7 @@ v0.13.0 prints a copyable open command after `amx task TASK_ID`:
 amx task TASK_ID --open -s daily
 ```
 
-[![Terminal Tasks view pinned to one exact task with its version, evidence and recovery controls](assets/guide/terminal-task-recovery.jpg?v=0e9ed39b4995)](assets/guide/terminal-task-recovery.jpg?v=0e9ed39b4995)
+[![Terminal Tasks view pinned to one exact task with its version, evidence and recovery controls](assets/guide/terminal-task-recovery.jpg?v=ebb836a0ebf7)](assets/guide/terminal-task-recovery.jpg?v=ebb836a0ebf7)
 
 The view reads that exact record, including older tasks and retired recipients;
 it never substitutes a newer task that mentions the ID. Inspect the instruction,
@@ -474,7 +474,7 @@ each action reviews the exact task/version before confirmation. Opening the
 view does not retry or resolve anything. Check the prior process and side
 effects before choosing retry.
 
-[![Web Tasks opened for a selected session with exact recipient filtering and retained history](assets/guide/web-session-tasks.jpg?v=a62a57b2a38b)](assets/guide/web-session-tasks.jpg?v=a62a57b2a38b)
+[![Web Tasks opened for a selected session with exact recipient filtering and retained history](assets/guide/web-session-tasks.jpg?v=c934c4784be2)](assets/guide/web-session-tasks.jpg?v=c934c4784be2)
 
 In terminal or web Actions, **Tasks for selected session** goes directly to a
 recipient's retained history. Web attention rows also have **Inspect tasks**,
@@ -510,7 +510,7 @@ Set finite turn, hop, backlog, concurrency and runtime limits. A message-trigger
 observation is attributed data, not a new owner instruction. See
 [persistent workflows](autonomous-workflows.md) for the configuration.
 
-[![Tasks view shows complete retained counts and attention for pending and failed deliveries](assets/guide/web-tasks.jpg?v=19ad3ea7cd2a)](assets/guide/web-tasks.jpg?v=19ad3ea7cd2a)
+[![Tasks view shows complete retained counts and attention for pending and failed deliveries](assets/guide/web-tasks.jpg?v=2d701afb0f82)](assets/guide/web-tasks.jpg?v=2d701afb0f82)
 
 Observe **Tasks** for complete retained counts, attention filters, exact
 recipients, results and adapter evidence. Search or load older pages rather than
@@ -520,7 +520,7 @@ an already running task separately.
 
 ## Dynamic teams and recruitment
 
-[![Consented team details show its creator current members effective access and membership version](assets/guide/web-teams.jpg?v=26ca0a62c499)](assets/guide/web-teams.jpg?v=26ca0a62c499)
+[![Consented team details show its creator current members effective access and membership version](assets/guide/web-teams.jpg?v=5502c79a9675)](assets/guide/web-teams.jpg?v=5502c79a9675)
 
 Two mechanisms serve different purposes:
 
@@ -604,7 +604,7 @@ For slower exploration, make a separate manifest and team with explicitly larger
 trial, phase and runtime limits; use a new output path. Pausing does not extend
 any of those deadlines.
 
-[![Live research console shows one completed coordination phase a paused decision boundary and reasoned intervention controls](assets/guide/web-research.jpg?v=8318adf0735d)](assets/guide/web-research.jpg?v=8318adf0735d)
+[![Live research console shows one completed coordination phase a paused decision boundary and reasoned intervention controls](assets/guide/web-research.jpg?v=7edbfe472bf2)](assets/guide/web-research.jpg?v=7edbfe472bf2)
 
 The research screenshots show a one-condition demo. The bundled public-goods
 smoke plans six trials across its conditions and seeds.
@@ -630,7 +630,7 @@ a live pause, not a terminated runner. `--start-paused` pauses every new attempt
 it also takes precedence over a carried unused step. Deadlines and budgets keep
 counting while paused.
 
-[![Research intervention form requires an action reason and review before applying](assets/guide/web-research-control.jpg?v=b454120a775f)](assets/guide/web-research-control.jpg?v=b454120a775f)
+[![Research intervention form requires an action reason and review before applying](assets/guide/web-research-control.jpg?v=1a0fd399a8d2)](assets/guide/web-research-control.jpg?v=1a0fd399a8d2)
 
 ### Design cooperation and competition comparisons
 
@@ -662,7 +662,7 @@ count, declare preregistration and a positive model-task budget, then explicitly
 use `--allow-models`. Supported limits count admissions or native tasks, not a
 hard external dollar cap. See [research design and analysis](research.md).
 
-[![A scripted research team contains Alice and Bob while Charlie remains outside it](assets/guide/web-research-teams.jpg?v=e9910402cec4)](assets/guide/web-research-teams.jpg?v=e9910402cec4)
+[![A scripted research team contains Alice and Bob while Charlie remains outside it](assets/guide/web-research-teams.jpg?v=316be4e7412b)](assets/guide/web-research-teams.jpg?v=316be4e7412b)
 
 The demo above exercises actual invitation, acceptance and namespace access.
 Its Alice/Bob coalition is scripted; measuring model self-organization requires

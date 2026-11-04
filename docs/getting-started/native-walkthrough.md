@@ -15,11 +15,11 @@ fresh review and acceptance checks, use [work on a task](../working.md).
 The walkthrough below covers native interactive sessions.
 
 The walkthrough and its power-user controls are included in
-[v0.14.0](installation.md); upgrade older workspace controllers explicitly.
+[v0.15.0](installation.md); upgrade older workspace controllers explicitly.
 
 ## 1. Install and check Agentmux
 
-Install **v0.14.0** using the
+Install **v0.15.0** using the
 [published binary instructions](installation.md#install-a-published-binary-recommended)
 for the `amx` command without a Go toolchain. Then skip the source-build commands
 below and continue with the native CLI checks in this step.
