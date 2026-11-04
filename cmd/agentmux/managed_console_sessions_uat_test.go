@@ -37,6 +37,9 @@ state=root/'state'
 env={'PATH':os.environ['PATH'],'HOME':str(root/'home'),'SHELL':'/bin/sh','TERM':'xterm-256color','LC_ALL':'C.UTF-8'}
 (root/'home').mkdir()
 started=False
+foreign_created=False
+stage='startup'
+key_stages=[]
 def run(*args):
  p=subprocess.run([binary,*map(str,args)],env=env,text=True,capture_output=True,timeout=45)
  if p.returncode:raise RuntimeError(p.stderr+' '+p.stdout)
@@ -44,6 +47,8 @@ def run(*args):
 def tmux(*args):
  return subprocess.check_output(['tmux','-S',str(state/'tmux.sock'),*map(str,args)],env=env,text=True,timeout=5).strip()
 def until(check,label):
+ global stage
+ stage=label
  end=time.monotonic()+12
  while time.monotonic()<end:
   value=check()
@@ -51,7 +56,10 @@ def until(check,label):
   time.sleep(.06)
  raise AssertionError('Timed out: '+label)
 def screen():return tmux('capture-pane','-p','-t',dashboard)
-def key(*args):tmux('send-keys','-t',dashboard,*args)
+def key(*args):
+ key_stages.append({'stage':stage,'keys':args})
+ del key_stages[:-64]
+ tmux('send-keys','-t',dashboard,*args)
 def text(value):tmux('send-keys','-t',dashboard,'-l',value)
 def capture(name):
  value=screen();(root/(name+'.txt')).write_text(value);return value
@@ -89,12 +97,15 @@ try:
  tmux('resize-window','-t',dashboard,'-x','80','-y','28')
  until(lambda:'Problem 00' in screen(),'readable initial roster')
  pids={a:tmux('display-message','-p','-t',p['pane_id'],'#{pane_pid}') for a,p in runtime['agents'].items()}
- key('3');until(lambda:'SENDER' in screen(),'connections view')
- initial=capture('connections-80x28')
+ key('3')
+ initial=until(lambda:(s if connection_pair(s:=screen())==('Problem 00 [session_00]','Problem 01 [session_01]') else ''),'initial distinct recipient and current display titles')
+ (root/'connections-80x28.txt').write_text(initial)
  assert 'SENDER' in initial and 'RECIPIENT' in initial and 'Ctrl+P' in initial,initial
  assert connection_pair(initial)==('Problem 00 [session_00]','Problem 01 [session_01]'),initial
  original_control=run('managed','call','control.get','--credential-file',state/'owner.json','--json','{}')['result']
- key(']');key('Up')
+ key(']')
+ until(lambda:'RECIPIENT · ↑/↓ choose' in (s:=screen()) and 'SENDER · [ focus' in s and connection_pair(s)==('Problem 00 [session_00]','Problem 01 [session_01]'),'direct recipient focus preserves pair')
+ key('Up')
  until(lambda:connection_pair(screen())==('Problem 00 [session_00]','Problem 00 [session_00]'),'explicit self recipient remains available')
  key('Down')
  until(lambda:connection_pair(screen())==('Problem 00 [session_00]','Problem 01 [session_01]'),'recipient changes independently')
@@ -103,9 +114,13 @@ try:
  assert connection_pair(screen())==('Problem 00 [session_00]','Problem 01 [session_01]')
  key('Down')
  until(lambda:connection_pair(screen())==('Problem 01 [session_01]','Problem 01 [session_01]'),'sender changes without recipient retargeting')
- key('Tab');key('Down')
+ key('Tab')
+ until(lambda:'RECIPIENT · ↑/↓ choose' in (s:=screen()) and 'SENDER · [ focus' in s and connection_pair(s)==('Problem 01 [session_01]','Problem 01 [session_01]'),'Tab focuses recipient without changing pair')
+ key('Down')
  until(lambda:connection_pair(screen())==('Problem 01 [session_01]','Problem 02 [session_02]'),'Tab changes only focused recipient')
- key('S-Tab');key('Up')
+ key('S-Tab')
+ until(lambda:'SENDER · ↑/↓ choose' in (s:=screen()) and 'RECIPIENT · ] focus' in s and connection_pair(s)==('Problem 01 [session_01]','Problem 02 [session_02]'),'Shift-Tab focuses sender without changing pair')
+ key('Up')
  until(lambda:connection_pair(screen())==('Problem 00 [session_00]','Problem 02 [session_02]'),'Shift-Tab changes only focused sender')
  assert run('managed','call','control.get','--credential-file',state/'owner.json','--json','{}')['result']==original_control
  capture('connections-explicit-focus-80x28')
@@ -175,6 +190,7 @@ try:
  tmux('set-option','-t','navigation-view','@agentmux_view',runtime['attempt_id'])
  current_list('navigation-view')
  tmux('new-session','-d','-s','foreign-navigation','/bin/sh')
+ foreign_created=True
  foreign=subprocess.run([str(alias),'ls'],env=current_context('foreign-navigation'),text=True,capture_output=True,timeout=5)
  assert foreign.returncode!=0 and 'cannot verify the current Agentmux workspace' in foreign.stderr,(foreign.stdout,foreign.stderr)
  master,slave=pty.openpty()
@@ -185,11 +201,21 @@ try:
  result={'ok':True,'native_sessions':10,'model_calls':0,'checks':['vertical-roster-80','vertical-roster-64','tiny-session-control-50','sender-recipient-labels','direct-sender-recipient-focus','tab-shift-tab-focus','independent-sender-recipient-selection','focus-preserves-permissions','recipient-native-delivery-review','delivery-esc-preserves-pair-focus-drafts','delivery-review-preserves-policy','ctrl-p-search','enter-native-focus','tab-select-here','esc-preserves-selection','global-left-right','native-input','unchanged-worker-pids','amx-owned-core-context','amx-owned-view-context','amx-rejects-foreign-session-same-socket','pty-input-piped-output-is-plain']}
  (root/'result.json').write_text(json.dumps(result,indent=2));print(json.dumps(result));print('Private artifacts:',root)
 except Exception:
+ (root/'key-stages.txt').write_text(json.dumps({'stage':stage,'keys':key_stages},indent=2))
  if started:
   try:(root/'failure.txt').write_text(screen())
   except Exception:pass
+  metadata={}
+  try:metadata['tmux_version']=subprocess.check_output(['tmux','-V'],env=env,text=True,timeout=5).strip()[:100]
+  except Exception:metadata['tmux_version']='unavailable'
+  try:metadata['dashboard']=tmux('display-message','-p','-t',dashboard,'pane=#{pane_id} pid=#{pane_pid} size=#{pane_width}x#{pane_height} mode=#{pane_in_mode} dead=#{pane_dead} input_off=#{pane_input_off} command=#{pane_current_command}')[:500]
+  except Exception:metadata['dashboard']='unavailable'
+  (root/'tmux-metadata.json').write_text(json.dumps(metadata,indent=2))
  print('Private failure artifacts:',root);raise
 finally:
+ if foreign_created:
+  try:tmux('kill-session','-t','foreign-navigation')
+  except Exception:pass
  if started:
   try:run('managed','down','--state',state)
   except Exception:pass
