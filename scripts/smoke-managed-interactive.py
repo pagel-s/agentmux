@@ -18,6 +18,9 @@ import urllib.parse
 import urllib.request
 
 
+POPUP_OUTPUT_LIMIT = 64 * 1024
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", default="bin/amx")
@@ -185,58 +188,79 @@ done
         run("attach", "lead", "--state", state, env=first_env)
         assert current_window(first_view) == "agent-lead", "contextual attach focused the wrong client"
         assert current_window(second_view) == "agent-worker", "contextual attach moved another terminal client"
+        def await_popup(predicate, stage):
+            try:
+                until(predicate)
+            except RuntimeError:
+                # Popups render on the invoking client, outside normal panes.
+                # Keep only bounded synthetic-fixture evidence outside root so
+                # ordered cleanup can remove credentials/runtime as usual.
+                artifacts = Path(tempfile.mkdtemp(prefix="amx-interactive-failure-"))
+                (artifacts / "failed-popup-screen.bin").write_bytes(popup_output[-POPUP_OUTPUT_LIMIT:])
+                details = {"stage": stage, "retained_client_output_bytes": len(popup_output),
+                           "client_output_limit_bytes": POPUP_OUTPUT_LIMIT,
+                           "client_output_may_be_truncated": len(popup_output) == POPUP_OUTPUT_LIMIT}
+                for name, view in (("invoking", first_view), ("other", second_view)):
+                    try:
+                        details[name + "_window"] = current_window(view)
+                    except subprocess.SubprocessError:
+                        details[name + "_window"] = "unavailable"
+                for name, pane in panes.items():
+                    try:
+                        output = tmux("capture-pane", "-p", "-t", pane, "-S", "-100").encode()
+                        (artifacts / (name + "-pane.txt")).write_bytes(output[-POPUP_OUTPUT_LIMIT:])
+                    except subprocess.SubprocessError:
+                        pass
+                (artifacts / "failure-context.json").write_text(json.dumps(details, indent=2) + "\n")
+                print(f"Interactive popup failure ({stage}); bounded artifacts: {artifacts}", file=sys.stderr)
+                raise RuntimeError(f"interactive popup condition was not observed: {stage}") from None
+
         drain()
         os.write(terminal_fd, b"\x02b")  # prefix, board popup
         # Popup contents are in the client screen, outside normal window panes.
         popup_output = bytearray()
-        def popup_ready():
+        def collect_popup_output():
             try:
-                popup_output.extend(os.read(terminal_fd, 65536))
+                popup_output.extend(os.read(terminal_fd, POPUP_OUTPUT_LIMIT))
+                del popup_output[:-POPUP_OUTPUT_LIMIT]
             except BlockingIOError:
                 pass
+        def popup_ready():
+            collect_popup_output()
             return b"AGENTMUX" in popup_output and b"Board" in popup_output and b"peer note" in popup_output
-        try:
-            until(popup_ready)
-        except RuntimeError:
-            (Path(root.name) / "popup-screen.bin").write_bytes(popup_output)
-            raise
+        await_popup(popup_ready, "board")
         os.write(terminal_fd, b"b")
         # Wait for composer before typing; the owner view uses asynchronous polling.
         popup_output.clear()
         def composer_ready():
-            try:
-                popup_output.extend(os.read(terminal_fd, 65536))
-            except BlockingIOError:
-                pass
+            collect_popup_output()
             return b"Enter submits" in popup_output
-        until(composer_ready)
+        await_popup(composer_ready, "board-composer")
         os.write(terminal_fd, b"POPUP_BOARD_SENTINEL\r")
         until(lambda: any(m["text"] == "POPUP_BOARD_SENTINEL" for m in call("activity", {"limit":40})["result"]["messages"]))
         popup_output.clear()
         os.write(terminal_fd, b"q")
         def native_visible():
-            try:
-                popup_output.extend(os.read(terminal_fd, 65536))
-            except BlockingIOError:
-                pass
+            collect_popup_output()
             return b"NATIVE_TTY_READY" in popup_output
-        until(native_visible)
+        await_popup(native_visible, "board-close")
         assert current_window(first_view) == "agent-lead"
-        for key, marker in ((b"\x02P", b"Workspace groups"), (b"\x02m", b"Shared boundaries"), (b"\x02t", b"No managed tasks yet")):
+        for view, key, markers in (
+                ("connections", b"\x02P", (b"Connections", b"revision", b"SENDER", b"RECIPIENT", b"[lead]", b"[worker]")),
+                ("memory", b"\x02m", (b"Shared boundaries",)),
+                ("tasks", b"\x02t", (b"No managed tasks yet",))):
             drain()
             popup_output.clear()
             os.write(terminal_fd, key)
-            def other_popup_ready(marker=marker):
-                try:
-                    popup_output.extend(os.read(terminal_fd, 65536))
-                except BlockingIOError:
-                    pass
-                return marker in popup_output
-            until(other_popup_ready)
+            def other_popup_ready(markers=markers):
+                collect_popup_output()
+                return all(marker in popup_output for marker in markers)
+            await_popup(other_popup_ready, view)
             assert current_window(second_view) == "agent-worker", "popup moved the other terminal client"
             popup_output.clear()
             os.write(terminal_fd, b"q")
-            until(native_visible)
+            await_popup(native_visible, view + "-close")
+            assert current_window(first_view) == "agent-lead", "popup changed the invoking client's native selection"
         os.write(terminal_fd, b"\x1bOP")
         until(lambda: current_window(first_view) == "dashboard")
         os.write(terminal_fd, b"q")
