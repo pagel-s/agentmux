@@ -4,10 +4,9 @@ Use your existing Claude Code and Codex subscriptions. This page covers ordinary
 setup; the [optional verification walkthrough](native-walkthrough.md) tests every
 permission and recovery boundary in detail.
 
-Task pairing and automatic installed-provider selection are new source features.
-Until their release, [build current source](installation.md#build-from-source).
-An older installed binary or pinned workspace controller will not acquire them
-just because the docs changed.
+Task pairing and automatic installed-provider selection require
+[Agentmux v0.15.0](installation.md). An existing workspace retains its pinned
+controller until explicitly upgraded; a fresh workspace uses the installed binary.
 
 ## 1. Install and sign in once
 
@@ -29,7 +28,8 @@ amx pair claude codex --delivery auto
 ```
 
 The pairing command is a preview. It shows both identities, command permissions,
-delivery modes, returned results, existing queues and limits. Apply that setup:
+delivery modes, returned results, existing queues and limits. `--apply` checks
+and prints the current review again before its atomic update:
 
 ```sh
 amx pair claude codex --delivery auto --apply

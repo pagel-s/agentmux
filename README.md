@@ -15,8 +15,8 @@ amx start --detach
 amx pair claude codex --delivery auto
 ```
 
-The second command previews task pairing without changing anything. To apply
-that reviewed setup, repeat it with `--apply`:
+The second command previews task pairing without changing anything. Add
+`--apply` when ready; that invocation checks and prints the current review again:
 
 ```sh
 amx pair claude codex --delivery auto --apply
@@ -30,8 +30,7 @@ eligible existing queue and future work from all permitted senders; its existing
 limits remain in force. Choose `--delivery review` for approval of each exact item.
 Ordinary `amx link` still enables scoped chat and shared memory separately.
 
-Pairing and installed-provider selection are new setup improvements; use the
-[source build](#build-from-source) until they appear in a published release.
+Task pairing and installed-provider selection require **v0.15.0 or later**.
 An existing workspace keeps its pinned controller; use a fresh workspace or
 [upgrade it deliberately](docs/traces-and-recovery.md).
 

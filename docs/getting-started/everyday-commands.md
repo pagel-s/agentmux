@@ -118,6 +118,8 @@ multiple agents in one window and reattachment.
 
 ## Pair native agents for tasks
 
+Task pairing requires v0.15.0 or later, including the workspace controller.
+
 ```sh
 amx pair claude codex --delivery auto -s work
 amx pair claude codex --delivery auto --apply -s work

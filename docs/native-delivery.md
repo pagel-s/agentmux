@@ -13,7 +13,8 @@ draft before dispatch. `--native-only` disables this integration.
 
 ## Pair two native agents for tasks
 
-Task pairing combines command authority, receiver mode and result-return setup:
+From v0.15.0, task pairing combines command authority, receiver mode and
+result-return setup:
 
 ```sh
 amx pair claude codex --delivery auto --session collaboration-test

@@ -17,7 +17,7 @@ Pairing previews the mutual command grants, both delivery modes, returned
 results and existing queues. Add `--apply` after reviewing it, then
 `amx attach claude`. Auto can start eligible existing work and future work from
 all permitted senders; choose `--delivery review` for exact item approval.
-These setup improvements are new source features until their published release.
+Task pairing and installed-provider selection require v0.15.0 or later.
 The [short quickstart](getting-started/quickstart.md) covers ordinary setup.
 
 For a checked coding request in a separate worktree, preview `amx work "Change" -- CHECK`.

@@ -9,7 +9,11 @@ simultaneous model-worker scale.
 
 ## First verify the evaluator without models
 
-The matched-attempt runner requires Linux, Git and Python with pidfd support.
+The matched-attempt runner requires Linux, Git and Python with pidfd support. Process tracking bounds
+active identities and each observation scan separately. Kernel-confirmed exited
+identities release tracking slots; an unreadable process record does not prove
+exit. Cleanup and supervision failures remain attempt failures, even if a patch
+passes its task contract.
 Run from a checkout:
 
 ```sh

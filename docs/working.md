@@ -92,7 +92,7 @@ review, review edits, remaining requested changes or failed acceptance checks
 stop the journey and remain visible in the result. A model saying “finished”
 does not replace review approval and executable checks.
 
-Trusted-local defaults select an installed CLI: Codex first for coding, then
+From v0.15.0, trusted-local defaults select an installed CLI: Codex first for coding, then
 Claude for review when available. A different installed provider is preferred
 for review; a single installed CLI uses separate fresh contexts for both roles.
 The preview names and pins both profiles in its suggested run command.

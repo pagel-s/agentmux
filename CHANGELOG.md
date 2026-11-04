@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.15.0 - 2026-11-04
+
+- Select installed native CLIs for ordinary trusted-local checked work, preferring
+  Codex coding and Claude review when available. Show and pin the selected roles
+  in previews, disclose single-provider fresh-context review, and retain explicit
+  and isolated profiles without execution-time provider fallback.
+- Add `amx pair A B --delivery review|auto`: preview task pairing, then use
+  `--apply` for one atomic update of mutual Commands, both receiver modes and
+  returned results. Bind the update to current permissions, policy versions and
+  native conversations; preserve limits, spent turns and unrelated permissions.
+- Add Connections **Shift+C** and searchable task-pair Actions. One frozen owner
+  review chooses Review or Auto, shows existing/global queue effects and applies
+  explicitly. Distinguish definite rejection from uncertain transport and retain
+  the exact idempotent request when its outcome is unconfirmed.
+- Shorten the README and native quickstart around start, task pairing and native
+  attach. Preserve the full boundary-verification walkthrough as an optional guide.
+- Retire kernel-confirmed exited process handles from workflow fixture tracking,
+  so sequential Go subprocesses do not exhaust a cumulative identity ledger.
+  Preserve bounded live tracking, finite scan work, unknown-state refusal and
+  cleanup of independently tracked descendants.
+
 ## v0.14.0 - 2026-11-04
 
 - Skip the response and second review in guided work only when the initial fresh,
