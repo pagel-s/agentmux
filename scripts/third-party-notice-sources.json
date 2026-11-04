@@ -1,0 +1,123 @@
+{
+  "version": 1,
+  "go_version": "go1.27.3",
+  "targets": [
+    "linux/amd64",
+    "linux/arm64",
+    "darwin/amd64",
+    "darwin/arm64"
+  ],
+  "modules": {
+    "github.com/aymanbagabas/go-osc52/v2": [
+      "LICENSE"
+    ],
+    "github.com/charmbracelet/bubbletea": [
+      "LICENSE"
+    ],
+    "github.com/charmbracelet/colorprofile": [
+      "LICENSE"
+    ],
+    "github.com/charmbracelet/lipgloss": [
+      "LICENSE"
+    ],
+    "github.com/charmbracelet/x/ansi": [
+      "LICENSE"
+    ],
+    "github.com/charmbracelet/x/cellbuf": [
+      "LICENSE"
+    ],
+    "github.com/charmbracelet/x/term": [
+      "LICENSE"
+    ],
+    "github.com/coder/websocket": [
+      "LICENSE.txt"
+    ],
+    "github.com/dustin/go-humanize": [
+      "LICENSE"
+    ],
+    "github.com/google/uuid": [
+      "LICENSE"
+    ],
+    "github.com/lucasb-eyer/go-colorful": [
+      "LICENSE"
+    ],
+    "github.com/mattn/go-isatty": [
+      "LICENSE"
+    ],
+    "github.com/mattn/go-runewidth": [
+      "LICENSE"
+    ],
+    "github.com/muesli/ansi": [
+      "LICENSE"
+    ],
+    "github.com/muesli/cancelreader": [
+      "LICENSE"
+    ],
+    "github.com/muesli/termenv": [
+      "LICENSE"
+    ],
+    "github.com/ncruces/go-strftime": [
+      "LICENSE"
+    ],
+    "github.com/remyoudompheng/bigfft": [
+      "LICENSE"
+    ],
+    "github.com/rivo/uniseg": [
+      "LICENSE.txt"
+    ],
+    "github.com/xo/terminfo": [
+      "LICENSE"
+    ],
+    "golang.org/x/exp": [
+      "LICENSE"
+    ],
+    "golang.org/x/sys": [
+      "LICENSE"
+    ],
+    "gopkg.in/yaml.v3": [
+      "LICENSE",
+      "NOTICE"
+    ],
+    "modernc.org/libc": [
+      "COPYRIGHT-MUSL",
+      "LICENSE",
+      "LICENSE-GO",
+      "AUTHORS",
+      "honnef.co/go/netdb/LICENSE"
+    ],
+    "modernc.org/mathutil": [
+      "LICENSE",
+      "AUTHORS"
+    ],
+    "modernc.org/memory": [
+      "LICENSE",
+      "LICENSE-GO",
+      "LICENSE-MMAP-GO",
+      "AUTHORS"
+    ],
+    "modernc.org/sqlite": [
+      "LICENSE",
+      "SQLITE-LICENSE",
+      "AUTHORS"
+    ]
+  },
+  "go_files": [
+    "LICENSE",
+    "src/vendor/golang.org/x/crypto/LICENSE",
+    "src/vendor/golang.org/x/net/LICENSE",
+    "src/vendor/golang.org/x/sys/LICENSE",
+    "src/vendor/golang.org/x/text/LICENSE"
+  ],
+  "supplements": [
+    {
+      "title": "Apache License, Version 2.0 \u2014 complete terms for Apache-covered yaml.v3 files",
+      "file": "license-texts/Apache-2.0.txt",
+      "source": "https://www.apache.org/licenses/LICENSE-2.0"
+    },
+    {
+      "title": "Unicode data tables used by runtime dependencies \u2014 Unicode License v3",
+      "file": "license-texts/Unicode-License-v3.txt",
+      "source": "https://www.unicode.org/license.txt"
+    }
+  ]
+}

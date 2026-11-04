@@ -8,7 +8,8 @@ POSIX shell after installation. Native sessions additionally require **tmux
 ## Install a published binary (recommended)
 
 Release **[v0.13.0](https://github.com/pagel-s/agentmux/releases/tag/v0.13.0)**
-provides MIT-licensed Linux/macOS binaries for x86-64 and ARM64. It includes
+provides Linux/macOS binaries for x86-64 and ARM64. Agentmux uses MIT;
+[dependency notices](../third-party-notices.txt) are bundled separately. It includes
 `amx demo`, checked `work`/`flow` journeys, native sessions, searchable workspace
 choosers, `context`, `observe`, retained `task`/`tasks` inspection and exact-task
 recovery navigation. No Go toolchain is needed for these controls.
@@ -102,7 +103,10 @@ new sandbox.
 
 ## Build from source
 
-Building needs Git, Make and **Go 1.24+**. `make install` also uses Python 3.
+Building needs Git, Make and **Go 1.24+**. Use **Go 1.27.3** for a current
+maintained toolchain; 1.24 is retained as the source-compatibility minimum.
+Published distributions and installed-artifact checks use 1.27.3.
+`make install` also uses Python 3.
 The Makefile prefers a compatible repo-local toolchain under `.tools/`, then Go
 from PATH. Native sessions additionally need tmux 3.2+.
 

@@ -25,15 +25,15 @@ spec = importlib.util.spec_from_file_location("release_installer", Path(__file__
 installer = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(installer)
 ARCHIVES = {f"agentmux_{system}_{arch}.tar.gz" for system in ("linux", "darwin") for arch in ("x86_64", "arm64")}
-REQUIRED_FILES = {"amx", "LICENSE", "README.md", "CONTRIBUTING.md", "SECURITY.md", "docs/getting-started/first-result.md", "scripts/install-release.py"}
+REQUIRED_FILES = {"amx", "LICENSE", "docs/third-party-notices.txt", "README.md", "CONTRIBUTING.md", "SECURITY.md", "docs/getting-started/first-result.md", "scripts/install-release.py"}
 
 
 def check_archives(directory, version=None):
     required_files = REQUIRED_FILES
-    # The immutable final v0.12.0 release predates license selection. Snapshots
+    # The immutable final v0.12.0 release predates the bundled license notices. Snapshots
     # and every subsequent version must carry the notice in each archive.
     if version in ("v0.12.0", "0.12.0"):
-        required_files = REQUIRED_FILES - {"LICENSE"}
+        required_files = REQUIRED_FILES - {"LICENSE", "docs/third-party-notices.txt"}
     manifest = installer.read_bounded(directory / "checksums.txt", 1024 * 1024)
     entries = {}
     for line in manifest.decode("ascii").splitlines():
