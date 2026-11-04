@@ -10,21 +10,20 @@ const everydayUsage = `amx · Agentmux
 Run native coding agents together, with communication you control.
 
 Start here:
-  amx demo                     Try a checked change in a throwaway repository
   amx start                    Start Claude and Codex in the current project
+  amx pair claude codex         Preview task pairing; --apply saves it atomically
   amx a [ID]                   Open a native terminal (or restore the last one)
-  amx add --harness codex --project DIR
   amx sessions                 List sessions; amx opens the workbench
   amx context                  Show the selected workspace and why
   amx observe [--watch]        Inspect fresh health and delivery evidence
   amx task ID [--open]         Inspect a task; open its exact workbench view
-  amx collaborate claude codex  Connect selected agents
   amx web --open               Open the local dashboard
   amx down                     Stop the current workspace
 
 Checked coding:
   amx work "Describe the change" -- CHECK [ARG...]
   Preview first; add --allow-models to run. Inspect, then explicitly apply.
+  amx demo                     Try a checked fixture without provider setup.
 
 Use -s NAME to choose a workspace. Ctrl+K opens Actions; Ctrl+P switches sessions.
 Native sessions require tmux and installed, authenticated provider CLIs.
@@ -112,8 +111,7 @@ Everyday shortcuts:
   amx ls -s daily               amx ws
   amx new --harness codex -p ./project -s daily
   amx link claude codex -s daily
-  amx allow codex claude commands -s daily
-  amx mode claude auto -s daily
+  amx pair claude codex --delivery auto -s daily  # preview; --apply saves
 Aliases: up=start, a/open=attach, ui=dashboard, ls=sessions, ws=workspaces,
 new=add, link=collaborate, unlink=disconnect, name=label, mode=delivery, archive=retire.
 Ctrl+K opens Actions; Ctrl+P switches sessions. Tab focuses sidebar/content.
@@ -136,6 +134,7 @@ Usage:
   amx tasks [--to ID] [--status STATE] [--query TEXT] [--limit N] [--after TASK_ID] [--json] [--session work | --state DIR]
   amx workspaces [--json] [--register DIR]
   amx relaunch ID [--resume ID|last|picker] [--session work | --state DIR]
+  amx pair A B [--delivery review|auto] [--apply] [--session work | --state DIR]
   amx delivery ID [manual|review|auto] [--approve CANDIDATE] [--session work | --state DIR]
   amx allow|deny FROM TO commands|messages|pings [--session work | --state DIR]
   amx connect OBSERVED_ID --name NAME [--session work | --state DIR]

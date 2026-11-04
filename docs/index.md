@@ -3,22 +3,26 @@
 Run coding agents together, control what they share, and inspect checked changes
 before applying them to your project.
 
-## Get your first checked result
+## Start with your native subscriptions
 
-[Install v0.14.0](getting-started/installation.md), then run:
+[Install Agentmux](getting-started/installation.md) and sign in to Claude Code
+and Codex. From your project, start a workspace and review task pairing:
 
 ```sh
-amx demo
+amx start --detach
+amx pair claude codex --delivery auto
 ```
 
-The demo makes a deterministic change in a disposable Git repository, checks it
-independently, and applies its patch only to that fixture. It retains reports and
-the patch for inspection. After installation it needs Git and a POSIX shell,
-with no provider account or model calls. Follow
-[your first checked result](getting-started/first-result.md) to inspect the
-evidence, then preview a live task with `amx work`.
+Pairing previews the mutual command grants, both delivery modes, returned
+results and existing queues. Add `--apply` after reviewing it, then
+`amx attach claude`. Auto can start eligible existing work and future work from
+all permitted senders; choose `--delivery review` for exact item approval.
+These setup improvements are new source features until their published release.
+The [short quickstart](getting-started/quickstart.md) covers ordinary setup.
 
-This fixture demonstrates workflow mechanics, not AI task quality.
+For a checked coding request in a separate worktree, preview `amx work "Change" -- CHECK`.
+To inspect the mechanics without provider setup, run `amx demo`; it changes only
+its own disposable Git fixture. See [your first checked result](getting-started/first-result.md).
 
 ## Choose your starting point
 
@@ -26,7 +30,7 @@ This fixture demonstrates workflow mechanics, not AI task quality.
 | --- | --- | --- |
 | Inspect a checked fixture without configuring providers | [Your first checked result](getting-started/first-result.md) | Run `amx demo`; it changes only its generated repository |
 | Ask for one checked coding change | [Work on a task](working.md) | Add `--allow-models` after inspecting the preview |
-| Type directly in several native conversations | [Fresh-install walkthrough](getting-started/quickstart.md) | Start a workspace and use its native terminals |
+| Type directly in several native conversations | [Short native quickstart](getting-started/quickstart.md) | Start a workspace and use its native terminals |
 | Inspect reporting, pending work or uncertain delivery | [Observability](observability.md) | Inspection starts no execution; choose the workspace explicitly |
 | Compare alternatives, build a mission or review changed snapshots | [Advanced workflows](workflows.md) | Run an owner-authored plan; provider turns require `--allow-models` |
 | Queue tasks or enable bounded autonomous teams | [Managed setup](managed-setup.md) | Launch a reviewed team configuration |

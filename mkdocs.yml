@@ -46,12 +46,13 @@ nav:
   - Home: index.md
   - Getting Started:
       - Installation: getting-started/installation.md
+      - Quickstart: getting-started/quickstart.md
       - Your first checked result: getting-started/first-result.md
       - Visual workflow guide: visual-guide.md
-      - Quickstart: getting-started/quickstart.md
       - Everyday commands: getting-started/everyday-commands.md
       - Terminal folders and layouts: terminal-workflow.md
   - Tutorials:
+      - Verify native collaboration: getting-started/native-walkthrough.md
       - Legacy Layout Handoff: tutorials/hello-team.md
       - Portable Bundles: tutorials/portable-bundles.md
   - Coding Workflows:

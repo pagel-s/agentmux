@@ -71,7 +71,9 @@ reporting the failure.
 
 ## Move to a live coding task
 
-Install and sign in to Codex and Antigravity, the default coder and reviewer.
+Install and sign in to the native CLIs you want to use. Trusted-local setup
+selects installed tools and shows the coder/reviewer in its preview; Codex plus
+Claude is the usual pair when both are installed.
 In a Git project with an initial commit, preview a specific task with its
 executable acceptance check:
 
@@ -98,4 +100,4 @@ project. A failed check or unapproved review does not become an accepted result.
 
 See [work on a task](../working.md) for provider choices, deadlines, failed or
 interrupted runs and optional Linux isolation. For several interactive native
-conversations instead, follow the [native-session walkthrough](quickstart.md).
+conversations instead, follow the [short native-session quickstart](quickstart.md).

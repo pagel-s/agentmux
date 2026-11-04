@@ -15,7 +15,8 @@ bounded run lists and report opening below are included in v0.14.0.
 | --- | --- |
 | Resume | `amx a`; filter the workspace chooser by name, path or status |
 | Launch | **Shift+N** inherits the selected provider and project; review before starting |
-| Delegate | `amx send ID "Do this" --mode instruction -s NAME`; copy its printed inspection command |
+| Peer delegation | **Shift+C** in Connections reviews Commands, both delivery modes and returned results together |
+| Owner task | `amx send ID "Do this" --mode instruction -s NAME`; copy its printed inspection command |
 | Inspect | `amx task TASK_ID -s NAME`, or **Ctrl+K → Tasks for selected session** |
 | Observe | `amx observe -s NAME`; add `--watch` for repeated fresh evidence |
 | Recover | `amx task TASK_ID --open -s NAME`; inspect its evidence and review the exact task/version |
@@ -115,7 +116,25 @@ with ↑/↓; h/l also changes the recipient. F1 returns from a native terminal.
 See [terminal folders and layouts](../terminal-workflow.md) for scratch panes,
 multiple agents in one window and reattachment.
 
-## Connect two agents
+## Pair native agents for tasks
+
+```sh
+amx pair claude codex --delivery auto -s work
+amx pair claude codex --delivery auto --apply -s work
+```
+
+The first command previews; each `--apply` invocation reads and prints the
+current review before making one atomic update. It grants Commands both ways,
+sets both receivers and enables returned results. In Connections, **Shift+C**
+opens one frozen review: **1** chooses Review, **2** chooses Auto, **Enter** applies.
+
+Auto affects eligible existing queues and future work from all permitted senders,
+not just this pair. New grants/results can make previously ineligible items
+eligible. Limits and spent turns remain saved. Use `--delivery review` for exact
+item approval. Pairing leaves notes, pings, shared boards and memory alone.
+Older pinned controllers need an explicit upgrade or a fresh workspace.
+
+## Share chat and memory, or edit one direction
 
 ```sh
 amx link claude reviewer -s work
