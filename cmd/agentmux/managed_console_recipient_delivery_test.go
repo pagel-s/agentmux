@@ -71,7 +71,7 @@ func TestConsoleConnectionsRecipientSummaryKeepsPendingBodyPrivate(t *testing.T)
 }
 
 func TestConsoleConnectionsRecipientStatusUnknownCannotOpenWrite(t *testing.T) {
-	for _, scenario := range []string{"absent", "mismatch", "unversioned", "revoked", "unknown-config", "offline"} {
+	for _, scenario := range []string{"absent", "mismatch", "unversioned", "revoked", "invalid-config", "offline"} {
 		t.Run(scenario, func(t *testing.T) {
 			m := recipientDeliveryFixture()
 			s := m.data.nativeStates["codex"]
@@ -86,8 +86,8 @@ func TestConsoleConnectionsRecipientStatusUnknownCannotOpenWrite(t *testing.T) {
 				m.data.nativeStates["codex"] = s
 			case "revoked":
 				m.agents[1].State = "revoked"
-			case "unknown-config":
-				m.agents[1].Config.Interaction = ""
+			case "invalid-config":
+				m.agents[1].Config.Interaction = "unsupported"
 			case "offline":
 				m.offline = true
 			}
@@ -219,15 +219,54 @@ func TestConsoleConnectionsDeliveryAffordanceVisibleAtCommonTerminalSizes(t *tes
 }
 
 func TestConsoleConnectionsManagedWorkerIsIndependentOfNativeMode(t *testing.T) {
-	m := recipientDeliveryFixture()
-	m.agents[1].Config.Interaction = "managed"
-	view := m.connectionDeliverySummary("codex")
-	if !strings.Contains(view, "managed worker") || strings.Contains(view, "Manual") || strings.Contains(view, "queued") {
-		t.Fatalf("managed worker incorrectly depends on native delivery: %s", view)
+	for _, interaction := range []string{"", "managed"} {
+		for _, key := range []string{"D", "A"} {
+			t.Run(fmt.Sprintf("%q/%s", interaction, key), func(t *testing.T) {
+				m := recipientDeliveryFixture()
+				m.agents[1].Config.Interaction = interaction
+				view := m.connectionDeliverySummary("codex")
+				if !strings.Contains(view, "managed worker") || !strings.Contains(view, "inspect Tasks and current worker state") || strings.Contains(view, "Manual") || strings.Contains(view, "queued") || strings.Contains(view, "unknown") || strings.Contains(view, "running") || strings.Contains(view, "consuming") {
+					t.Fatalf("managed worker incorrectly depends on native delivery or implies health: %s", view)
+				}
+				before := m.data.nativeStates["codex"]
+				m, cmd := nativeRune(m, key)
+				if cmd != nil || m.nativeAction != nil || m.busy || m.selectedID() != "pi" || m.nativeDeliveryRecipient() != "codex" || m.data.nativeStates["codex"].Policy != before.Policy {
+					t.Fatal("managed recipient shortcut opened a native write, changed policy or followed sender")
+				}
+				if !strings.Contains(m.message, "do not apply") || !strings.Contains(m.message, "inspect Tasks and current worker state") || strings.Contains(m.message, "Refresh") {
+					t.Fatalf("managed recipient received misleading recovery advice: %s", m.message)
+				}
+				// Native sender status is independent of the managed recipient.
+				if view := m.connectionDeliverySummary("pi"); strings.Contains(view, "managed worker") || !strings.Contains(view, "Receiver delivery:") {
+					t.Fatalf("recipient type changed sender delivery: %s", view)
+				}
+			})
+		}
 	}
-	m.reviewNativeDelivery(false)
-	if m.nativeAction != nil {
-		t.Fatal("managed worker opened native policy write")
+	for _, interaction := range []string{"", "managed"} {
+		for _, scenario := range []string{"external", "revoked", "offline"} {
+			t.Run(fmt.Sprintf("%q/%s", interaction, scenario), func(t *testing.T) {
+				m := recipientDeliveryFixture()
+				m.agents[1].Config.Interaction = interaction
+				switch scenario {
+				case "external":
+					m.agents[1].External = true
+				case "revoked":
+					m.agents[1].State = "revoked"
+				case "offline":
+					m.offline = true
+				}
+				if view := m.connectionDeliverySummary("codex"); !strings.Contains(view, "unknown") || strings.Contains(view, "managed worker") {
+					t.Fatalf("unavailable or external recipient was classified as a current owned worker: %s", view)
+				}
+				for _, approve := range []bool{false, true} {
+					m.reviewNativeDelivery(approve)
+					if m.nativeAction != nil || !strings.Contains(m.message, "unavailable") {
+						t.Fatal("unavailable or external recipient opened a write or hid unknown state")
+					}
+				}
+			})
+		}
 	}
 }
 

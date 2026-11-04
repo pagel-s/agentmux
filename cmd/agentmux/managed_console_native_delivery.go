@@ -78,6 +78,10 @@ func (m *console) reviewNativeDelivery(approve bool) {
 		return
 	}
 	id := m.nativeDeliveryRecipient()
+	if m.managedDeliveryRecipient(id) {
+		m.message = "Native delivery settings do not apply to managed workers; inspect Tasks and current worker state."
+		return
+	}
 	s, available := m.nativeDeliveryStatus(id)
 	if !available {
 		m.message = "Current native delivery state unavailable. Refresh before editing or approving."
@@ -127,11 +131,21 @@ func (m console) nativeDeliveryStatus(id string) (managed.NativeStatus, bool) {
 	return s, ok && s.Agent == id && s.Policy.Version > 0
 }
 
-func (m console) connectionDeliverySummary(recipient string) string {
+func (m console) managedDeliveryRecipient(id string) bool {
+	if m.offline || id == "" {
+		return false
+	}
 	for _, agent := range m.agents {
-		if agent.ID == recipient && agent.State == "active" && agent.Config.Interaction == "managed" {
-			return "Receiver is a managed worker; inspect Tasks and current worker state."
+		if agent.ID == id {
+			return agent.State == "active" && !agent.External && (agent.Config.Interaction == "" || agent.Config.Interaction == "managed")
 		}
+	}
+	return false
+}
+
+func (m console) connectionDeliverySummary(recipient string) string {
+	if m.managedDeliveryRecipient(recipient) {
+		return "Receiver is a managed worker; inspect Tasks and current worker state."
 	}
 	s, available := m.nativeDeliveryStatus(recipient)
 	if !available {
