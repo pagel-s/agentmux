@@ -1,9 +1,9 @@
 # Ask for work, inspect the result, apply it
 
-`amx work` turns one request into a checked coding-and-review journey. Codex
-implements the change and Antigravity independently reviews the checked files.
-If the review requests changes, Codex addresses them and Antigravity reviews
-the final revision. Final acceptance checks always run. You receive a saved
+`amx work` turns one request into a checked coding-and-review journey. A coding
+provider implements the change and a fresh review context examines the checked
+files. If the review requests changes, the coder addresses them and a fresh
+review examines the final revision. Final acceptance checks always run. You receive a saved
 report and a patch in a separate Git worktree. Agentmux does not integrate that
 patch into your project until you explicitly apply it.
 
@@ -61,7 +61,25 @@ check needs several commands.
 
 Preflight checks the Git project, executable availability, check selection and
 output paths. It cannot establish that provider accounts are signed in. Install
-and sign in to the Codex and Antigravity CLIs before executing a request.
+and sign in to the selected native CLIs before executing a request. Trusted-local
+setup discovers installed Codex, Claude Code or Antigravity tools without
+launching them; executable discovery does not check subscription login.
+
+## One deadline, visible turn limits
+
+From v0.15.0, an implicit Codex or Claude turn can use the chosen overall
+`--timeout`, up to the existing ten-minute per-turn ceiling. All turns and
+acceptance checks **share** that overall budget; their limits do not add together,
+and time is not reserved for a later review. Explicit role limits remain saved.
+Antigravity print/bridge requests retain their own shorter limits, which the
+preview displays separately.
+
+For example, `--timeout 435s` gives implicit Codex/Claude profiles a maximum of
+7m15s each within one shared 7m15s run, rather than a hidden three-minute cutoff.
+The agent is encouraged to run targeted checks and finish started commands;
+that guidance does not guarantee completion. Controller acceptance checks and
+explicit application remain mandatory. See [process containment](workflows.md)
+for the difference between process groups and Linux namespace containment.
 
 ## Start the work
 
@@ -90,10 +108,14 @@ review, review edits, remaining requested changes or failed acceptance checks
 stop the journey and remain visible in the result. A model saying “finished”
 does not replace review approval and executable checks.
 
-Default native selections are Codex `gpt-6.1-sol` and Antigravity
-`gemini-3.8-flash-low`. `--coder` and `--reviewer` explicitly select another
-supported profile, including Claude. Availability depends on your account and
-CLI versions. Each review starts a new native session with the owner’s task,
+From v0.15.0, trusted-local defaults select an installed CLI: Codex first for coding, then
+Claude for review when available. A different installed provider is preferred
+for review; a single installed CLI uses separate fresh contexts for both roles.
+The preview names and pins both profiles in its suggested run command.
+`--coder` and `--reviewer` remain authoritative; failures never switch providers.
+Isolated defaults remain Codex and the Antigravity bridge because their selected
+credentials and network/runtime boundaries are explicit. Availability depends
+on your account and CLI versions. Each review starts a new native session with the owner’s task,
 acceptance criteria and current files. Implementation narrative, earlier review
 findings and earlier approvals are excluded from that review’s input.
 Workflow profiles that request native resume, continue or transcript selection

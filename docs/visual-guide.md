@@ -68,9 +68,10 @@ amx work status
 amx work show latest
 ```
 
-The default profiles are Codex `gpt-6.1-sol` for implementation and Antigravity
-`gemini-3.8-flash-low` for review; `--coder` and `--reviewer` choose another
-supported profile deliberately. Each review starts a fresh native session with
+Trusted-local setup selects installed native CLIs and shows both profiles in
+the preview. With Codex and Claude installed, Codex implements and Claude reviews.
+A lone CLI uses separate fresh contexts for both roles. `--coder` and `--reviewer`
+pin your choices; isolated profiles retain their explicit credential defaults. Each review starts a fresh native session with
 the task, acceptance criteria and current files, excluding implementation chat
 and earlier review conclusions. A final explicit approval and successful checks
 are required before application. A failed check, tool denial, malformed review
@@ -735,7 +736,7 @@ spawn/team, runtime and resource limits apply as you grow.
 | Broker or runner health is unknown | Inspect evidence and logs; a responsive broker does not prove a runner or model is active |
 
 Use the [control center reference](usability-control-center.md),
-[fresh-install walkthrough](getting-started/quickstart.md) and
+[optional verification walkthrough](getting-started/native-walkthrough.md) and
 [trace and recovery guide](traces-and-recovery.md) for exact recovery steps.
 Closing an observer leaves work running. `amx remove ID` revokes and closes an
 owned session; removing an external bridge leaves its original terminal alone.

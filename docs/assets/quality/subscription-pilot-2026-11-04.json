@@ -1,0 +1,175 @@
+{
+  "schema": 1,
+  "kind": "exploratory native-subscription workflow pilot",
+  "completed": true,
+  "all_attempts_passed": false,
+  "engine_release": "v0.14.0",
+  "engine_source_commit": "6edb44bbcc9156329de1b726dbce074c1f574a57",
+  "engine_binary_sha256": "61e77aa6649934b6ca165cfdf553bde4dfbd28d67114bcbdac6615b26148ce39",
+  "harness_source_commit": "7f8c04cceeebe30f980a06b023ed76cbdbfc8855",
+  "process_helper_sha256": "553a8df2f33ed5cab702017d0d9f80498010933e0bd5f9b8825f3efbeb5d5dcc",
+  "historical_task_seed": "d52e940c473be6a3b7d7983a704e2bac9547e6de",
+  "configuration_sha256": "db610e967528ea288aa991136c615d5574d813b75772fb53352afb9c93400399",
+  "raw_comparison_sha256": "604e466a5771566d9961e810a99fb9f7e3d3d6e36f38be4e5914b0fc140281d6",
+  "tasks": 3,
+  "repeats": 1,
+  "attempts": 6,
+  "native_codex": {
+    "passed": 3,
+    "attempted": 3
+  },
+  "agentmux_codex_claude": {
+    "passed": 1,
+    "attempted": 3
+  },
+  "task_outcomes": [
+    {
+      "task": "credential redaction",
+      "workflow": "native-codex",
+      "completed": true,
+      "passed": true,
+      "native_cli_admissions": 1,
+      "providers_admitted": [
+        "codex"
+      ],
+      "contract_passed": true,
+      "artifact_integrity": true,
+      "evaluator_integrity": true,
+      "cleanup_errors": 0,
+      "failure": null
+    },
+    {
+      "task": "credential redaction",
+      "workflow": "agentmux-codex-claude",
+      "completed": true,
+      "passed": false,
+      "native_cli_admissions": 1,
+      "providers_admitted": [
+        "codex"
+      ],
+      "contract_passed": false,
+      "artifact_integrity": true,
+      "evaluator_integrity": true,
+      "cleanup_errors": 0,
+      "failure": "Implementation hit its 180-second profile deadline and became uncertain. The outer guard separately rejected an observed background process, then cleaned tracked identities; no checked patch was applied."
+    },
+    {
+      "task": "authenticated trace display",
+      "workflow": "agentmux-codex-claude",
+      "completed": true,
+      "passed": false,
+      "native_cli_admissions": 1,
+      "providers_admitted": [
+        "codex"
+      ],
+      "contract_passed": false,
+      "artifact_integrity": true,
+      "evaluator_integrity": true,
+      "cleanup_errors": 0,
+      "failure": "Implementation hit its 180-second profile deadline and became uncertain. The outer guard separately rejected an observed background process, then cleaned tracked identities; no checked patch was applied."
+    },
+    {
+      "task": "authenticated trace display",
+      "workflow": "native-codex",
+      "completed": true,
+      "passed": true,
+      "native_cli_admissions": 1,
+      "providers_admitted": [
+        "codex"
+      ],
+      "contract_passed": true,
+      "artifact_integrity": true,
+      "evaluator_integrity": true,
+      "cleanup_errors": 0,
+      "failure": null
+    },
+    {
+      "task": "credential-discovery refactor",
+      "workflow": "native-codex",
+      "completed": true,
+      "passed": true,
+      "native_cli_admissions": 1,
+      "providers_admitted": [
+        "codex"
+      ],
+      "contract_passed": true,
+      "artifact_integrity": true,
+      "evaluator_integrity": true,
+      "cleanup_errors": 0,
+      "failure": null
+    },
+    {
+      "task": "credential-discovery refactor",
+      "workflow": "agentmux-codex-claude",
+      "completed": true,
+      "passed": true,
+      "native_cli_admissions": 2,
+      "providers_admitted": [
+        "codex",
+        "claude"
+      ],
+      "contract_passed": true,
+      "artifact_integrity": true,
+      "evaluator_integrity": true,
+      "cleanup_errors": 0,
+      "failure": null
+    }
+  ],
+  "actual_new_cli_admissions": 7,
+  "actual_new_provider_admissions": {
+    "codex": 6,
+    "claude": 1
+  },
+  "prior_invalidated_cli_admissions": 4,
+  "actual_combined_cli_admissions": 11,
+  "prior_invalidated_study": "Four Codex admissions retained separately: three cumulative 512-identity supervision failures and a fourth interrupted attempt. Those outcomes and timings are not comparative quality evidence.",
+  "limits": {
+    "outer_attempt_seconds": 480,
+    "agentmux_mission_seconds": 435,
+    "agentmux_native_profile_seconds": 180,
+    "baseline_cli_allowance": 1,
+    "agentmux_cli_allowance": 4
+  },
+  "requested_models": {
+    "codex": "gpt-6.1-sol",
+    "claude": "claude-sonnet-5-5"
+  },
+  "served_model_revisions": "unverified",
+  "authentication": {
+    "codex": "ChatGPT subscription",
+    "claude": "first-party Claude Pro subscription",
+    "api_key_routes": false
+  },
+  "normalized_tokens": null,
+  "actual_cost": null,
+  "inference_requests": null,
+  "successful_agentmux_path": {
+    "native_turns": 2,
+    "review": "Claude static read-only review; its Bash attempt was denied. Deterministic acceptance checks and external grading passed.",
+    "skipped_phases": [
+      "address-review",
+      "final-review"
+    ],
+    "final_check": "verified",
+    "application": "explicit owner-authorized adapter apply to disposable fixture"
+  },
+  "independent_review": {
+    "frozen_protocol_and_tool_pins_verified": true,
+    "all_six_candidate_fingerprints_verified": true,
+    "artifact_and_evaluator_integrity_verified": true,
+    "recorded_hidden_grader_or_credential_reads_found": false,
+    "scope": "Recorded tool metadata and retained artifacts; not a filesystem-access monitor or arbitrary host containment proof."
+  },
+  "final_cleanup": {
+    "tracked_cleanup_errors": 0,
+    "visible_trial_prefix_processes": 0,
+    "scope": "Read-only host-namespace command/cwd prefix check; no signals sent."
+  },
+  "interpretation": [
+    "Three selected historical tasks and one repeat are not representative, blinded or statistically powered.",
+    "Whole-workflow outcomes include unequal CLI allowances and unequal effective per-turn opportunities; they do not isolate model quality or orchestration.",
+    "Timings, list-price usage metadata and provider aliases do not establish speedup, actual subscription charges or immutable served models.",
+    "No competitor UI, human usability study or sustained native-operation test was included.",
+    "Later fixes and regression validations must remain separate from these unchanged original outcomes."
+  ]
+}

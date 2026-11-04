@@ -15,6 +15,8 @@ type consoleOwnerReview struct {
 	operation, title, body, message string
 	args                            map[string]any
 	offset                          int
+	pair                            *workPairReview
+	requestID                       string
 }
 
 func (m console) ownerReviewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -31,6 +33,15 @@ func (m console) ownerReviewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.ownerReview.offset += max(1, m.height/2)
 	case "pgup":
 		m.ownerReview.offset = max(0, m.ownerReview.offset-max(1, m.height/2))
+	case "1", "2":
+		if m.ownerReview.pair != nil {
+			mode := "review"
+			if msg.String() == "2" {
+				mode = "auto"
+			}
+			pair := m.ownerReview.pair.withMode(mode)
+			m.ownerReview = taskPairOwnerReview(pair)
+		}
 	case "enter":
 		if m.busy || m.offline {
 			m.message = "Review kept; reconnect and wait for pending changes before applying."
@@ -41,6 +52,9 @@ func (m console) ownerReviewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.busy = true
 		if a.operation == "launch-native" {
 			return m, m.addNative(m.newNative)
+		}
+		if a.pair != nil {
+			return m, m.applyTaskPair(a)
 		}
 		return m, m.mutate(a.operation, a.args, a.message)
 	}
@@ -192,6 +206,7 @@ func (m *console) openActions() {
 	add("Edit coordinated role", "V", 1, need)
 	add("Send note or instruction", "s", 1, need)
 	if m.tab == 2 {
+		m.actionRows = append(m.actionRows, consoleMenuAction{label: "Pair selected sessions for tasks", key: "C", tab: 2, target: m.selectedID(), recipient: m.nativeDeliveryRecipient()})
 		for _, action := range []struct{ label, key string }{{"Configure recipient delivery", "D"}, {"Review recipient inbox", "A"}} {
 			m.actionRows = append(m.actionRows, consoleMenuAction{label: action.label, key: action.key, tab: 2, target: m.nativeDeliveryRecipient(), kind: "native-recipient"})
 		}
@@ -500,6 +515,21 @@ func (m console) menuActionReason(action consoleMenuAction) string {
 		}
 	}
 	switch action.key {
+	case "C":
+		var recipient *managed.AgentInfo
+		for _, agent := range m.agents {
+			if agent.ID == action.recipient {
+				copy := agent
+				recipient = &copy
+				break
+			}
+		}
+		if target == nil || recipient == nil || target.ID == recipient.ID {
+			return "Choose two different owned native sessions"
+		}
+		if err := managed.ValidateTaskPairAgents([]managed.AgentInfo{*target, *recipient}, m.data.controls); err != nil {
+			return consoleContent(err.Error(), 300)
+		}
 	case "N", "new-advanced", "attention", "f", "study-follow":
 		return ""
 	case "session-tasks":

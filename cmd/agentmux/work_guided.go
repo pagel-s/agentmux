@@ -32,14 +32,17 @@ const guidedWorkUsage = `Usage: amx work "Describe the change" [options] -- CHEC
        amx work recover [RUN_ID|RUN_DIR|latest] [--repo DIR] [--catalog DIR] [--json]
 
 Preview is the default: it starts no models and writes no run files.
-Add --allow-models to execute Codex implementation, Antigravity review,
-Codex review fixes, a final review, and declared acceptance checks.
+Add --allow-models to execute implementation, fresh review, any review fixes,
+and declared acceptance checks. Trusted-local defaults use installed native CLIs:
+prefer Codex for coding and a different available reviewer, including Claude.
+A single installed CLI can serve both roles with separate fresh review context.
+PATH discovery checks availability, not login. Sign in through each selected CLI.
 
 Options:
   --repo DIR       Project directory (default: current directory)
   --output DIR     New result directory outside the project (default: private catalog)
   --catalog DIR    Private run catalog (default: XDG state directory)
-  --timeout 10m    Overall deadline, from 1s to 24h in whole seconds
+  --timeout 10m    Shared overall deadline, from 1s to 24h in whole seconds
   --check-timeout 1m  Deadline per acceptance check, from 1s to 10m
   --attempts 2     Bounded implementation correction attempts
   --containment process-group  Use process-group or Linux pid-namespace containment
@@ -50,8 +53,8 @@ Options:
   --read-only-path DIR  Selected runtime dependency (repeatable)
   --auth ID=FILE    Explicit isolated credential file for coder/reviewer (repeatable)
   --auth-provider ID=NAME  Provider entry in an isolated Pi credential file
-  --coder codex    Coding profile: codex, claude, antigravity or antigravity-bridge
-  --reviewer NAME  Review profile (default: Antigravity, bridge when isolated)
+  --coder NAME     Coding profile (default: installed Codex, Claude or Antigravity)
+  --reviewer NAME  Review profile (default: a different installed CLI when available)
   --dry-run        Preview even when --allow-models is supplied
   --allow-models   Permit provider turns and their charges
   --json           Print a machine-readable result instead of prose
@@ -61,6 +64,12 @@ Without an explicit check, supported unambiguous Go/npm project checks are detec
 Commands and native tools use trusted local authority. Worktrees separate files;
 they are not a sandbox. Applying a result is always a separate explicit action.
 Interrupted work is retained and never automatically replayed.
+Profiles: codex, claude, antigravity or antigravity-bridge.
+Explicit profiles are never replaced. Isolated defaults remain Codex coding
+and the Antigravity bridge reviewer; select other isolated profiles explicitly.
+Implicit Codex/Claude turn limits follow --timeout, up to the existing 10m
+per-turn ceiling. Turns and acceptance checks share the overall deadline;
+native CLI limits also apply. Preview shows the effective profile turn limits.
 Isolated previews and runs inspect selected auth before output. Their CLI output
 is deferred until completion and checked in bounded memory; unsafe output is refused.
 See docs/working.md.`
@@ -111,7 +120,7 @@ func runGuidedWorkUnguardedIO(ctx context.Context, args []string, out, diagnosti
 	storage := flags.String("storage", "private", "private or legacy shared snapshot storage")
 	isolation := flags.String("isolation", "", "required bubblewrap filesystem and network isolation")
 	network := flags.String("network", "", "none or allowlist for isolated execution")
-	coder := flags.String("coder", "codex", "coding provider profile")
+	coder := flags.String("coder", "", "coding provider profile")
 	reviewer := flags.String("reviewer", "", "review provider profile")
 	var origins, readOnlyPaths, authFiles, authProviders guidedValues
 	flags.Var(&origins, "allow-origin", "exact allowed inference origin")
@@ -162,6 +171,10 @@ func runGuidedWorkUnguardedIO(ctx context.Context, args []string, out, diagnosti
 		}
 	}
 	options := configureGuidedWork(workflow.GuidedOptions{Repository: *repository, Storage: *storage, Isolation: isolationOptions, CoderHarness: *coder, ReviewerHarness: *reviewer, ProcessContainment: *containment, Goal: positionals[0], Output: *output, CheckCommand: check, TimeoutSeconds: int(*timeout / time.Second), MaxAttempts: *attempts, CheckTimeoutSeconds: int(*checkTimeout / time.Second)})
+	options, err = selectGuidedProviders(options, nil)
+	if err != nil {
+		return fail(exitValidation, err)
+	}
 	ctx, err = selectGuidedCLIOptions(ctx, options)
 	if err != nil {
 		return exitRuntime
@@ -194,6 +207,8 @@ func runGuidedWorkUnguardedIO(ctx context.Context, args []string, out, diagnosti
 	// the catalog owns only its own new directory hierarchy.
 	if !*asJSON {
 		fmt.Fprintf(out, "Working on: %s\nProject: %s\n", guidedLine(options.Goal), guidedLine(preview.Repository))
+		printGuidedProfiles(out, preview.Plan.Candidates)
+		printGuidedTurnBudgets(out, preview.Plan.Candidates)
 		fmt.Fprintf(out, "Plan: normally four native turns, up to %d within %s. Check timeout: %s.\n", preview.MaxNativeTurns, *timeout, *checkTimeout)
 		fmt.Fprintln(out, "Agentmux integrates no changes into the source until you explicitly apply a checked result.")
 	}
@@ -518,6 +533,39 @@ func runGuidedHistory(ctx context.Context, operation string, args []string, out,
 	return exitSuccess
 }
 
+func printGuidedTurnBudgets(out io.Writer, candidates []workflow.Candidate) {
+	if len(candidates) != 2 {
+		return
+	}
+	limit := func(candidate workflow.Candidate) time.Duration {
+		seconds := candidate.TimeoutSeconds
+		if seconds == 0 {
+			seconds = 600 // The workflow runner's existing default turn ceiling.
+		}
+		return time.Duration(seconds) * time.Second
+	}
+	fmt.Fprintf(out, "Profile turn limits: coder %s · reviewer %s (10m ceiling).\n", limit(candidates[0]), limit(candidates[1]))
+	fmt.Fprintln(out, "Turns and acceptance checks share the remaining overall deadline.")
+	for _, candidate := range candidates {
+		if candidate.Harness == "antigravity" {
+			for i, argument := range candidate.Command {
+				if argument == "--print-timeout" && i+1 < len(candidate.Command) {
+					fmt.Fprintf(out, "Native print option (%s): --print-timeout %s\n", guidedLine(candidate.ID), guidedLine(guidedShellWord(candidate.Command[i+1])))
+				}
+			}
+		}
+		if candidate.Harness == "antigravity-bridge" {
+			// Match the existing inference-request bound in workflow/isolation.go;
+			// this is separate from the client's profile turn limit above.
+			bridgeLimit := 90 * time.Second
+			if candidate.TimeoutSeconds > 0 && candidate.TimeoutSeconds <= 120 {
+				bridgeLimit = limit(candidate)
+			}
+			fmt.Fprintf(out, "Bridge request limit (%s): %s\n", guidedLine(candidate.ID), bridgeLimit)
+		}
+	}
+}
+
 func printGuidedPreview(out io.Writer, preview workflow.GuidedPreview, catalog string, explicitOutput, forced bool) {
 	minimum, maximum := 0, 0
 	for _, step := range preview.Plan.Steps {
@@ -535,6 +583,8 @@ func printGuidedPreview(out io.Writer, preview workflow.GuidedPreview, catalog s
 		minimum = 2
 	}
 	fmt.Fprintf(out, "Preview: %s\nProject: %s\n\n", guidedLine(preview.Plan.Goal), guidedLine(preview.Repository))
+	printGuidedProfiles(out, preview.Plan.Candidates)
+	printGuidedTurnBudgets(out, preview.Plan.Candidates)
 	for i, phase := range preview.Phases {
 		fmt.Fprintf(out, "  %d. %s\n", i+1, guidedLine(phase))
 	}

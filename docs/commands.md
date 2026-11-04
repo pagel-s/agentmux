@@ -93,6 +93,7 @@ default workspace `work` and opens its workbench.
 | `amx tasks [--to ID] [--status STATE] [--query TEXT] [--limit N] [--after TASK_ID] [--json]` | Search retained delegation history, newest first; copy the continuation command to read more |
 | `amx workspaces [--register DIR]` | Find named and remembered custom workspaces; register an older custom location |
 | `amx relaunch AGENT_ID [--resume ID\|last\|picker] [--native-launcher ABSOLUTE_PATH]` | Relaunch one exited native session, retaining its stable ID and healthy peers; optional launcher recovery applies only to trusted-local interactive sessions |
+| `amx pair A B [--delivery review\|auto] [--apply]` | Preview task pairing; `--apply` atomically configures mutual Commands, both receiver modes and returned results while retaining limits and other permissions |
 | `amx delivery AGENT_ID [manual\|review\|auto] [--approve CANDIDATE_ID]` | Inspect native delivery evidence, set receiver mode, or approve an exact queued item; `--help` lists limits and subscriptions |
 | `amx connect OBSERVED_ID --title "Task"` | Prepare a helper for an existing external session; paste the printed setup into its original terminal |
 | `amx label AGENT_ID "Task"` | Rename its display title while keeping its ID and conversation |

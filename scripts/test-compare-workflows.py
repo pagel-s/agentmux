@@ -3,10 +3,14 @@
 import importlib.util
 import json
 from pathlib import Path
+import signal
 import subprocess
 import sys
 import tempfile
+import time
+from types import SimpleNamespace
 import unittest
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -96,6 +100,76 @@ class ComparisonTests(unittest.TestCase):
         for arm in ("baseline", "agentmux", "competitor"):
             self.assertEqual([sum(item[1:] == (position, arm) for item in first) for position in range(3)], [2, 2, 2])
 
+    def test_background_metadata_is_bounded_private_and_identity_checked(self):
+        comparison = CONTROLS.COMPARISON
+        handles = []
+        for number in range(35):
+            identity = {"pid": 1000 + number, "start_ticks": "12345", "parent_pid": 900}
+            before = dict(identity, parent_pid=901)
+            after = dict(identity, parent_pid=902)
+            if number == 1:
+                after["start_ticks"] = "replacement"
+            current = mock.Mock(side_effect=[None] if number == 4 else [before, after])
+            handles.append(SimpleNamespace(identity=identity, current=current))
+
+        def executable(path):
+            pid = int(path.parts[-2])
+            if pid == 1003:
+                raise OSError("RAW_ERROR_SECRET /private/owner/file")
+            basename = "UNSAFE_NAME_SECRET" if pid == 1000 else "compile"
+            return "/PRIVATE_PATH_SENTINEL/" + basename
+
+        def session(pid):
+            if pid == 1002:
+                raise PermissionError("RAW_ERROR_SECRET")
+            return 88
+
+        with mock.patch.object(comparison.os, "readlink", side_effect=executable), \
+                mock.patch.object(comparison.os, "getpgid", return_value=77), \
+                mock.patch.object(comparison.os, "getsid", side_effect=session):
+            receipt = comparison.background_process_metadata(handles)
+        self.assertEqual(receipt["observed_count"], 35)
+        self.assertEqual(receipt["inspected_count"], 32)
+        self.assertEqual(receipt["omitted_count"], 3)
+        self.assertEqual(receipt["identity_unknown_count"], 2)
+        self.assertEqual(len(receipt["processes"]), 30)
+        by_pid = {row["pid"]: row for row in receipt["processes"]}
+        self.assertNotIn(1001, by_pid, "a recycled identity must publish no process fields")
+        self.assertNotIn(1004, by_pid, "an unavailable identity must stay unknown")
+        self.assertEqual(by_pid[1000]["unknowns"], {"executable_basename": "unsafe_or_unrecognized"})
+        self.assertIsNone(by_pid[1000]["executable_basename"])
+        self.assertEqual(by_pid[1002]["unknowns"], {"session_id": "unavailable"})
+        self.assertIsNone(by_pid[1002]["session_id"])
+        self.assertEqual(by_pid[1003]["unknowns"], {"executable_basename": "unavailable"})
+        self.assertEqual(by_pid[1005]["executable_basename"], "compile")
+        self.assertEqual(by_pid[1005]["admitted_parent_pid"], 900)
+        self.assertEqual(by_pid[1005]["current_parent_pid"], 902)
+        for handle in handles[32:]:
+            handle.current.assert_not_called()
+        serialized = json.dumps(receipt)
+        for secret in ("PRIVATE_PATH_SENTINEL", "UNSAFE_NAME_SECRET", "RAW_ERROR_SECRET", "/private/owner"):
+            self.assertNotIn(secret, serialized)
+
+    def test_failed_background_diagnostics_preserve_failure_and_cleanup(self):
+        comparison = CONTROLS.COMPARISON
+        with tempfile.TemporaryDirectory(prefix="amx-comparison-diagnostic-failure-") as temporary:
+            root = Path(temporary)
+            tree = mock.Mock()
+            tree.live.side_effect = [[mock.Mock()], [], []]
+            process = mock.Mock(_validation_tree=tree)
+            process.wait.return_value = 0
+            with mock.patch.object(comparison.processes, "launch_pinned", return_value=process), \
+                    mock.patch.object(comparison, "background_process_metadata", side_effect=RuntimeError("PRIVATE_ERROR_SECRET")):
+                result = comparison.run_command(["fixture"], root, root / "actor.log", 5, time.monotonic() + 5)
+            self.assertFalse(result["passed"])
+            self.assertEqual(result["error"], "RuntimeError: command left observed background processes")
+            self.assertEqual(result["cleanup_errors"], [])
+            self.assertEqual(result["background_processes"]["error_code"], "unavailable")
+            self.assertEqual(result["background_processes"]["identity_unknown_count"], 1)
+            self.assertNotIn("PRIVATE_ERROR_SECRET", json.dumps(result))
+            tree.signal.assert_called_once_with(signal.SIGKILL)
+            tree.close.assert_called_once()
+
     def test_changed_external_evaluator_cannot_report_success(self):
         with tempfile.TemporaryDirectory(prefix="amx-comparison-grader-") as temporary:
             root = Path(temporary)
@@ -184,6 +258,19 @@ class ComparisonTests(unittest.TestCase):
             self.assertIn("background processes", attempt["execution"]["error"])
             self.assertEqual(attempt["execution"]["cleanup_errors"], [])
             pid = int((output / attempt["directory"] / "artifacts/child.pid").read_text())
+            receipt = attempt["execution"]["background_processes"]
+            self.assertEqual(receipt["observed_count"], 1)
+            self.assertEqual(receipt["omitted_count"], 0)
+            self.assertEqual(receipt["identity_unknown_count"], 0)
+            self.assertEqual(len(receipt["processes"]), 1)
+            child = receipt["processes"][0]
+            self.assertEqual(child["pid"], pid)
+            self.assertTrue(child["start_ticks"].isdigit())
+            self.assertEqual(child["executable_basename"], Path(sys.executable).resolve().name)
+            self.assertEqual(child["process_group_id"], child["admitted_parent_pid"])
+            self.assertEqual(child["session_id"], child["admitted_parent_pid"])
+            self.assertEqual(child["unknowns"], {})
+            self.assertNotIn(str(root), json.dumps(receipt))
             identity = CONTROLS.COMPARISON.processes.process_identity(pid)
             self.assertTrue(identity is None or identity["state"] == "Z")
 

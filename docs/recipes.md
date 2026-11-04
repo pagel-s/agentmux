@@ -306,7 +306,7 @@ Related files:
 ## Choosing A Starter
 
 For authenticated native conversations and opt-in collaboration, begin with
-`amx start` and the [fresh-install walkthrough](getting-started/quickstart.md).
+`amx start` and the [optional verification walkthrough](getting-started/native-walkthrough.md).
 If you specifically want a v1 custom layout:
 
 - use `default` for day-to-day coding

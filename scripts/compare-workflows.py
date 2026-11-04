@@ -24,6 +24,14 @@ import workflow_processes as processes
 MAX_FILES = 10000
 MAX_BYTES = 128 * 1024 * 1024
 CANCELLED = False
+BACKGROUND_PROCESS_LIMIT = 32
+# Keep executable labels useful without retaining arbitrary task-provided names.
+SAFE_EXECUTABLE_BASENAMES = frozenset({
+    "amx", "agentmux", "codex", "codex-exec-server", "codex-linux-sandbox", "claude",
+    "bash", "dash", "sh", "zsh", "fish", "node", "go", "gofmt", "compile", "link",
+    "asm", "cgo", "git", "sleep", "timeout", "env", "managed.test", "agentmux.test",
+    "harness.test", "workflow.test",
+})
 
 
 def integer(value, name, low, high):
@@ -294,10 +302,69 @@ def stop(proc, tree):
     return errors
 
 
+def background_process_metadata(handles):
+    """Read a bounded identity-checked snapshot without argv, env or full paths."""
+    inspected = min(len(handles), BACKGROUND_PROCESS_LIMIT)
+    result = {"version": 1, "observed_count": len(handles), "inspected_count": inspected,
+              "omitted_count": len(handles) - inspected, "identity_unknown_count": 0,
+              "processes": []}
+    for handle in handles[:inspected]:
+        try:
+            before = handle.current()
+            if before is None:
+                result["identity_unknown_count"] += 1
+                continue
+            pid, ticks = before["pid"], before["start_ticks"]
+            if (type(pid) is not int or pid <= 0 or not isinstance(ticks, str)
+                    or not re.fullmatch(r"[0-9]{1,32}", ticks)
+                    or pid != handle.identity["pid"] or ticks != handle.identity["start_ticks"]):
+                result["identity_unknown_count"] += 1
+                continue
+            values, unknowns = {}, {}
+            try:
+                target = os.readlink(Path("/proc", str(pid), "exe"))
+                basename = PurePosixPath(target.removesuffix(" (deleted)")).name
+                if (basename in SAFE_EXECUTABLE_BASENAMES
+                        or re.fullmatch(r"python(?:[0-9]{1,2}(?:\.[0-9]{1,3}){0,2})?", basename)
+                        or re.fullmatch(r"[0-9]{1,3}(?:\.[0-9]{1,4}){1,3}", basename)):
+                    values["executable_basename"] = basename
+                else:
+                    values["executable_basename"] = None
+                    unknowns["executable_basename"] = "unsafe_or_unrecognized"
+            except OSError:
+                values["executable_basename"] = None
+                unknowns["executable_basename"] = "unavailable"
+            for key, read in (("process_group_id", os.getpgid), ("session_id", os.getsid)):
+                try:
+                    value = read(pid)
+                    if type(value) is not int or value <= 0:
+                        raise ValueError("invalid process metadata")
+                    values[key] = value
+                except (OSError, ValueError):
+                    values[key] = None
+                    unknowns[key] = "unavailable"
+            after = handle.current()
+            if after is None or after["pid"] != pid or after["start_ticks"] != ticks:
+                result["identity_unknown_count"] += 1
+                continue
+            for key, value in (("admitted_parent_pid", handle.identity["parent_pid"]),
+                               ("current_parent_pid", after["parent_pid"])):
+                values[key] = value if type(value) is int and value >= 0 else None
+                if values[key] is None:
+                    unknowns[key] = "unavailable"
+            result["processes"].append(dict(values, pid=pid, start_ticks=ticks, unknowns=unknowns))
+        except Exception:
+            # Diagnostics never replace the original failure or leak a raw
+            # exception message. An unverified current identity is not emitted.
+            result["identity_unknown_count"] += 1
+    return result
+
+
 def run_command(argv, cwd, log, timeout, overall_deadline):
     start = time.monotonic()
     result = {"argv": argv, "elapsed_seconds": None, "exit_code": None,
-              "timed_out": False, "error": None, "cleanup_errors": [], "passed": False}
+              "timed_out": False, "error": None, "cleanup_errors": [], "passed": False,
+              "background_processes": None}
     proc = tree = None
     try:
         if CANCELLED:
@@ -324,7 +391,15 @@ def run_command(argv, cwd, log, timeout, overall_deadline):
                 except subprocess.TimeoutExpired:
                     continue
             tree.observe()
-            if tree.live(descendants_only=True):
+            survivors = tree.live(descendants_only=True)
+            if survivors:
+                try:
+                    result["background_processes"] = background_process_metadata(survivors)
+                except Exception:
+                    inspected = min(len(survivors), BACKGROUND_PROCESS_LIMIT)
+                    result["background_processes"] = {"version": 1, "observed_count": len(survivors),
+                        "inspected_count": inspected, "omitted_count": len(survivors) - inspected,
+                        "identity_unknown_count": inspected, "processes": [], "error_code": "unavailable"}
                 raise RuntimeError("command left observed background processes")
             result["passed"] = result["exit_code"] == 0
     except Exception as error:

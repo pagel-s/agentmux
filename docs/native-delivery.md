@@ -11,7 +11,36 @@ provider's normal features. The adapter does not type tmux keys, transmit unsent
 drafts or edit your global configuration. Pi checks its local editor for an empty
 draft before dispatch. `--native-only` disables this integration.
 
-## Connect a pair and choose delivery
+## Pair two native agents for tasks
+
+From v0.15.0, task pairing combines command authority, receiver mode and
+result-return setup:
+
+```sh
+amx pair claude codex --delivery auto --session collaboration-test
+amx pair claude codex --delivery auto --apply --session collaboration-test
+amx attach claude --session collaboration-test
+```
+
+The preview changes nothing. Each `--apply` call loads and prints the current
+review, then makes one atomic change: mutual Commands, both receiver modes and
+own-result delivery. In the workbench, **Connections → Shift+C** opens one review;
+**1** chooses Review, **2** chooses Auto and **Enter** applies the frozen action.
+
+Ask Claude in its native conversation to delegate a task to Codex. Both can
+return task results without reverse Messages permission. Auto affects each
+receiver's eligible existing queue and future work from all permitted senders.
+The grants and results setting can make old items newly eligible, so displayed
+pre-change counts are not the future queue size. Choose Review for exact-item
+approval. Limits, spent turns, other subscriptions and shared scopes stay saved.
+
+Pairing requires supported owned integrated native sessions. It refuses stale
+versions, changed native conversations, external/native-only sessions and
+isolation that must be reviewed separately. An old pinned controller needs an
+explicit upgrade or a fresh workspace. `link` still controls shared chat/memory;
+`allow` and `delivery` remain available for one-way or custom settings.
+
+## Manual controls and an owner-authored probe
 
 Start a new workspace with the current binary, then use a regular owner shell:
 

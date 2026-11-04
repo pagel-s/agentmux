@@ -26,7 +26,7 @@ var workAliases = map[string]string{
 
 func workCommand(command string) bool {
 	switch command {
-	case "start", "attach", "dashboard", "sessions", "workspaces", "context", "observe", "task", "tasks", "add", "collaborate", "disconnect", "isolate", "label", "delivery", "role", "web", "send", "reply", "inbox", "board", "down", "remove", "retire", "connect", "relaunch", "allow", "deny", "split", "unsplit":
+	case "start", "attach", "dashboard", "sessions", "workspaces", "context", "observe", "task", "tasks", "add", "collaborate", "disconnect", "isolate", "label", "delivery", "role", "web", "send", "reply", "inbox", "board", "down", "remove", "retire", "connect", "relaunch", "allow", "deny", "pair", "split", "unsplit":
 		return true
 	}
 	return false
@@ -146,7 +146,7 @@ func normalizeWorkCLI(input []string) ([]string, error) {
 	}
 	result = append(result, leading...)
 	switch command {
-	case "add", "delivery", "connect":
+	case "add", "delivery", "connect", "pair":
 		result = interspersedWorkOptions(result)
 	}
 	return checkedWorkSelectors(result)
@@ -198,7 +198,7 @@ func checkedWorkSelectors(args []string) ([]string, error) {
 
 func workOptionValue(name string) bool {
 	switch name {
-	case "--session", "--state", "--config", "--project", "--sandbox", "--view", "--group", "--board", "--legacy-policy", "--mode", "--to", "--resume", "--native-launcher", "--harness", "--role", "--title", "--model", "--auth-file", "--auth-provider", "--name", "--approve", "--max-turns", "--max-hops", "--cooldown", "--port", "--register", "--limit", "--after", "--query", "--status":
+	case "--session", "--state", "--config", "--project", "--sandbox", "--view", "--group", "--board", "--legacy-policy", "--mode", "--delivery", "--to", "--resume", "--native-launcher", "--harness", "--role", "--title", "--model", "--auth-file", "--auth-provider", "--name", "--approve", "--max-turns", "--max-hops", "--cooldown", "--port", "--register", "--limit", "--after", "--query", "--status":
 		return true
 	}
 	return false

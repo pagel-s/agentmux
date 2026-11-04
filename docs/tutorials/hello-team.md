@@ -1,7 +1,7 @@
 # Legacy layout handoff tutorial
 
 For your first native Claude/Codex team with scoped communication, use the
-[fresh-install walkthrough](../getting-started/quickstart.md). This separate
+[optional verification walkthrough](../getting-started/native-walkthrough.md). This separate
 tutorial demonstrates the original v1 layout compiler with two shell commands;
 it makes no model calls and provides no per-agent broker ACLs or sandboxes.
 

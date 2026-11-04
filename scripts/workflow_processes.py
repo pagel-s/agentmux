@@ -7,9 +7,13 @@ a containment mechanism for arbitrary hostile executables or an OS task quota.
 import errno
 import os
 from pathlib import Path
+import select
 import signal
 import subprocess
 import sys
+
+
+MAX_PROCESSES = 512
 
 
 def require_process_support():
@@ -160,6 +164,25 @@ class PinnedProcess:
         current = self.current()
         return current is not None and current["state"] != "Z"
 
+    def exited(self):
+        """Confirm exit through the admitted pidfd, never an ambiguous /proc read.
+
+        Linux reports POLLIN after the last thread exits and POLLHUP once the
+        task is reaped. Both refer to this kernel identity even if its numeric
+        PID has since been reused. Unknown or failed polling stays fatal.
+        """
+        if self.descriptor is None:
+            raise RuntimeError("cannot poll a closed admitted pidfd")
+        poller = select.poll()
+        poller.register(self.descriptor, select.POLLIN)
+        events = poller.poll(0)
+        if not events:
+            return False
+        if (len(events) != 1 or events[0][0] != self.descriptor
+                or not events[0][1] or events[0][1] & ~(select.POLLIN | select.POLLHUP)):
+            raise RuntimeError("unexpected admitted pidfd polling result")
+        return True
+
     def send_signal(self, number):
         if self.descriptor is None:
             return False
@@ -186,7 +209,16 @@ class ProcessTree:
             raise RuntimeError("cannot pin the admitted subprocess identity")
         self.handles = {(process.pid, self.root.identity["start_ticks"]): self.root}
 
+    def retire_exited(self):
+        # Descendants have their own admitted pidfds: retiring an exited parent
+        # must neither discard them nor authorize adoption through its old PID.
+        for key, handle in list(self.handles.items()):
+            if handle.exited():
+                handle.close()
+                del self.handles[key]
+
     def observe(self):
+        self.retire_exited()
         pending, visited = list(self.handles.values()), set()
         while pending:
             parent = pending.pop()
@@ -194,8 +226,8 @@ class ProcessTree:
             if key in visited:
                 continue
             visited.add(key)
-            if len(visited) > 512:
-                raise RuntimeError("fixture process tree exceeded 512 processes")
+            if len(visited) > MAX_PROCESSES:
+                raise RuntimeError(f"fixture process observation exceeded {MAX_PROCESSES} processes")
             if parent.current() is None:
                 continue
             captured = []
@@ -209,8 +241,8 @@ class ProcessTree:
                         children.update(int(child) for child in (task / "children").read_text().split())
                     except (OSError, ValueError):
                         continue
-                if len(children) > 512:
-                    raise RuntimeError("fixture process tree exceeded 512 processes")
+                if len(children) > MAX_PROCESSES:
+                    raise RuntimeError(f"fixture process tree exceeded {MAX_PROCESSES} processes")
                 for pid in children:
                     handle = PinnedProcess.open(pid, parent_pid=parent.identity["pid"])
                     if handle is not None:
@@ -228,8 +260,10 @@ class ProcessTree:
                         handle.close()
                     pending.append(self.handles[child_key])
                 captured = []
-                if len(self.handles) > 512:
-                    raise RuntimeError("fixture process tree exceeded 512 processes")
+                if len(self.handles) > MAX_PROCESSES:
+                    self.retire_exited()
+                    if len(self.handles) > MAX_PROCESSES:
+                        raise RuntimeError(f"fixture process tree exceeded {MAX_PROCESSES} processes")
             except (FileNotFoundError, ProcessLookupError):
                 pass
             finally:
@@ -261,8 +295,14 @@ class ProcessTree:
         return stopped
 
     def close(self):
-        for handle in self.handles.values():
-            handle.close()
+        # A caller may retry cleanup after an observation error. Remove only
+        # confirmed exits before releasing descriptors; a closed live/unknown
+        # identity must still fail observation rather than look safely retired.
+        try:
+            self.retire_exited()
+        finally:
+            for handle in self.handles.values():
+                handle.close()
 
 
 def consume_pending_signals(managed, old_mask):

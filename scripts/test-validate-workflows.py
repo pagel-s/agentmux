@@ -153,7 +153,7 @@ class ValidationEvidenceTests(unittest.TestCase):
                 "checks": [{"name": "contract", "command": [sys.executable, "-c", "print('ok')"]}]}
         plan = dict(base, mode="mission", kind="work", max_attempts=1, max_parallel=1, review_policy=VALIDATOR.REVIEW.POLICY,
                     candidates=[{"id": "coder", "harness": "codex", "model": "gpt-6.1-sol"},
-                                {"id": "reviewer", "harness": "antigravity", "model": "gemini-3.8-flash-low"}],
+                                {"id": "reviewer", "harness": "claude", "model": "sonnet"}],
                     checks=[dict(base["checks"][0], name="project-check", timeout_seconds=60)],
                     steps=[{"id": "implement", "candidate": "coder", "verify": True},
                            {"id": "review", "candidate": "reviewer", "depends_on": ["implement"], "review": True, "read_only": True, "require_result": True},
@@ -163,6 +163,10 @@ class ValidationEvidenceTests(unittest.TestCase):
                            {"id": "final-check", "depends_on": ["final-review"], "verify": True}])
         oracle = VALIDATOR.WorkflowOracle(Path("/tmp"), base, {})
         oracle.preview({"plan": plan, "min_native_turns": 2, "max_native_turns": 4})
+        wrong_provider = copy.deepcopy(plan)
+        wrong_provider["candidates"][1].update(harness="antigravity", model="gemini-3.8-flash-low")
+        with self.assertRaisesRegex(ValueError, "provider profiles differ"):
+            oracle.preview({"plan": wrong_provider, "min_native_turns": 2, "max_native_turns": 4})
         explicit = copy.deepcopy(plan)
         for step in explicit["steps"]:
             for flag in ("verify", "read_only", "review", "gate_review", "require_result"):

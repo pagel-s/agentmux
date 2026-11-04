@@ -55,20 +55,25 @@ snapshot:
 release:
   prerelease: auto
   header: |
-    Checked coding workflows and controlled collaboration across native agents.
+    Simpler setup for native subscriptions, with checked work and visible outcomes.
 
-    Start with `amx demo`: a model-free first result in a private disposable
-    repository. A clean initial review in `amx work` can skip redundant response
-    and second-review turns only for the exact independently checked revision;
-    final acceptance checks and explicit application remain mandatory. Requested
-    changes keep the full loop, and skipped phases remain visible in evidence.
+    Start your normal native workspace, then use `amx pair A B --delivery auto`
+    to preview task pairing. Add `--apply` to atomically grant mutual Commands,
+    configure both receivers and enable returned results. Connections Shift+C
+    offers the same configuration in one owner review. Existing eligible queues
+    and all already-authorized senders are shown as part of the delivery scope;
+    turn/hop limits, spent turns and unrelated permissions remain saved.
 
-    `amx observe` now records fixed diagnostic codes and local collection timings.
-    Offline operational and matched-comparison reports preserve unknown states,
-    gaps, failed and incomplete attempts without inventing uptime or a winner.
-    Connections adds direct sender/recipient focus with `[` and `]`, clear labels
-    and independent selections. Exact-task inspection and reviewed recovery remain
-    available through `amx task ID --open`.
+    Ordinary trusted-local `amx work` now selects installed native CLIs, preferring
+    Codex for coding and Claude for fresh review when available. Previews name and
+    pin both profiles without starting providers. Explicit and isolated profiles
+    keep their selected authority. Implicit Codex/Claude turn limits follow the
+    shared overall deadline up to the existing ten-minute ceiling, with budgets
+    visible before execution. The short quickstart focuses on everyday use;
+    detailed verification steps remain available separately.
+
+    Workflow fixture tracking retires only kernel-confirmed exited identities,
+    preserving live-process bounds and cleanup evidence during long Go checks.
 
     Agentmux is MIT licensed. Observation distinguishes worker check-ins, native
     events, delivery uncertainty and verified results; it does not infer hidden

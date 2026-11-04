@@ -63,7 +63,7 @@ func (f *Fault) OperationalReadReasonCode() string {
 
 func isWrite(op string) bool {
 	switch op {
-	case "native.configure", "native.approve", "native.register", "native.claim", "native.event":
+	case "control.pair", "native.configure", "native.approve", "native.register", "native.claim", "native.event":
 		return true
 	case "agent.role":
 		return true
@@ -285,6 +285,9 @@ func (s *Store) Call(ctx context.Context, token string, r Request) (json.RawMess
 }
 
 func (s *Store) dispatch(ctx context.Context, q queryer, a actor, r Request) (any, *Fault) {
+	if r.Operation == "control.pair" {
+		return s.taskPair(ctx, q, a, r)
+	}
 	if r.Operation == "control.get" || r.Operation == "control.update" || r.Operation == "boundaries.get" {
 		return s.control(ctx, q, a, r)
 	}
