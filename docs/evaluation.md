@@ -149,6 +149,11 @@ proprietary code; review and redact evidence before publishing it.
 The offline summary reads the frozen configuration and `comparison.json` from
 one evidence directory. It invokes no actor, grader, Git command or provider:
 
+Run these commands from a source checkout or extract the `scripts` directory
+from the matching release archive. The binary installer installs only `amx`.
+Keep the extracted scripts together and use an absolute Python script path
+when running the report outside that directory.
+
 ```sh
 python3 scripts/summarize-comparison.py /private/study/run-NEW
 python3 scripts/summarize-comparison.py /private/study/run-NEW --json \

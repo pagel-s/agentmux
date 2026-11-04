@@ -12,15 +12,20 @@
   plans retain their behavior.
 - Add fixed observation diagnostic error codes and per-component collection
   timings, preserving unattempted components and unknown durations explicitly.
+  Distinguish busy operational reads, exhausted query budgets and controller
+  shutdown with bounded reason codes while preserving older clients.
 - Add offline reports for saved observation JSONL and matched comparison evidence,
   retaining sample gaps, unknown states, failures and incomplete attempts without
   inferring uptime, model quality or a competitive winner.
 - Make Connections navigation explicit with **[** sender and **]** recipient
   focus keys, active field labels and matching sidebar/help cues. Keep Tab focus,
-  independent selections and Left/Right view navigation unchanged.
+  independent selections and Left/Right view navigation unchanged. Initially
+  select a different active peer when available without retargeting later work.
 - Show the recipient's delivery mode in Connections and open its settings or
   exact pending approval there with Shift+D/A. Preview existing queue metadata
   before Auto, and give native agents portable delivery and task-result guidance.
+- Print workspace-scoped recovery commands after an unconfirmed shutdown or
+  restart, retaining the original fault, failure status and process boundaries.
 
 ## v0.13.0 - 2026-11-04
 
