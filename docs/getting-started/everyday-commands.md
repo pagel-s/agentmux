@@ -188,4 +188,12 @@ also accept `-o` for `--open`. Text after a literal
 `--` keeps its original meaning. Long commands and flags remain available.
 `allow FROM TO commands|messages|pings` and the matching `deny` change only the
 selected permission; they do not enable receiver delivery or grant new memory
-access. Use [the complete command reference](../commands.md) for advanced options.
+access. In terminal Connections, inspect the recipient's delivery summary and
+press **Shift+D** for its settings or **Shift+A** to review a pending item.
+`amx delivery ID auto -s work` can dispatch existing eligible queued items and
+preserves saved subscriptions and limits. Choose Review first to inspect an
+exact item. Results of your own instructions use the correlated task channel,
+without a reverse message grant; receiving them as native turns still needs your
+own Results subscription and delivery readiness. Use `amx task TASK_ID` to inspect
+the recorded result directly. See [native collaboration](../native-delivery.md)
+and [the complete command reference](../commands.md) for advanced options.

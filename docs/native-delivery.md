@@ -46,10 +46,21 @@ amx delivery codex auto --max-turns 20 --max-hops 4 --cooldown 1 \
 amx delivery claude auto --session collaboration-test
 ```
 
-The terminal Sessions view and the web Session detail view expose the same delivery
-settings and pending approvals. Terminal **Shift+D** edits delivery and
-**Shift+A** reviews an item. Sender grants, receiver mode, current scopes,
-adapter capability, readiness and budgets all have to allow delivery.
+In terminal **Connections**, the displayed recipient has its own delivery summary,
+separate from the sender's Commands permission. **Shift+D** reviews that recipient's
+delivery settings; **Shift+A** opens its pending-item chooser in Review mode.
+These actions also appear in **Ctrl+K** Actions with the recipient's stable ID.
+They keep the sender selected. In **Sessions**, the same keys apply to the selected
+session. Web Connections already offers **Inspect receiver delivery**, leading to
+Session detail with the same settings and pending approvals. Sender grants, receiver mode, current scopes, adapter capability, readiness and
+budgets all have to allow delivery.
+
+Choosing Auto can start **already queued eligible items**, including boundary
+notices, as well as future instructions. The terminal confirmation previews the
+known queue count and bounded kind/sender metadata; the queue can change. Choose Review
+first when you want to inspect and approve one exact item's complete text.
+Plain `amx delivery ID auto` changes only the mode: it keeps saved subscriptions,
+turn/hop limits and cooldown. It does not grant Commands or reset spent turns.
 
 ## Modes and observations
 
@@ -82,10 +93,13 @@ active peer delivery where the provider supports it. It does not interrupt an
 unrelated human turn. Isolation revokes future peer access and delivery eligibility;
 data already read remains known. Inspect active tasks and cancellation status too.
 
-An instruction result returns to its issuer through a correlated result notice;
-this does not grant the recipient reverse command authority. Result notices do
-not recursively generate result notices. Native turns count toward a cumulative
-per-agent turn limit, causal hop limits and any configured broker admission budget.
+An instruction result returns to its issuer through a correlated task/result
+channel; this needs no reverse `message.send` or Commands grant. A native result
+turn still requires the issuer's **Returned results** subscription, its own
+Review/Auto delivery policy and adapter readiness. In Manual, inspect the recorded
+result with `amx task TASK_ID` or the agent-authenticated `task.get` operation.
+Result notices do not recursively generate result notices. Native turns count
+toward a cumulative per-agent turn limit, causal hop limits and any configured broker admission budget.
 Raising `max_turns` explicitly permits more turns; changing modes does not reset it.
 These are admission controls, not hard caps on provider billing or human CLI use.
 
@@ -93,7 +107,7 @@ These are admission controls, not hard caps on provider billing or human CLI use
 
 | Phase | Evidence |
 | --- | --- |
-| Pending | Broker record only; no native turn has been submitted. |
+| Pending | Current queue record; no new native turn is confirmed. Earlier attempts may have run: inspect receipts and history, especially after retry. |
 | Claimed / submitting | One exact attempt is reserved. |
 | Submitted | Transport accepted the message, or the inbox write completed; model execution is not yet confirmed. |
 | Running | Correlated native events or an explicit receiver acknowledgment confirm this delivery started. |
@@ -104,6 +118,15 @@ These are admission controls, not hard caps on provider billing or human CLI use
 Permission revocation is checked again when claiming and when the adapter checks
 active delivery. Cancellation cannot undo model context or tool effects already
 produced. A restarted broker never assumes an in-flight native turn is safe to retry.
+
+A successful `instruct` call confirms broker admission. A `proposed` task or
+`pending` delivery confirms queueing, not execution; inspect correlated receipts
+and history, especially after retries because prior attempts may have run. It does
+not identify the receiver's mode or prove why dispatch is blocked. Agents can
+inspect only their **own** `native.status`. Ask the owner to inspect another recipient with
+`amx delivery ID --json --state /exact/workspace/state`. Integrated launch context
+includes these instructions and owner commands even when the project repository
+contains no Agentmux documentation. `amx delivery --help` is available anywhere.
 
 ## Adapter capabilities
 

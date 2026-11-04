@@ -265,7 +265,8 @@ func (m console) panel(width, height int) string {
 				}
 				fmt.Fprintf(&out, "  [%s]  %-13s %s %s\n", row.key, row.label, value, consoleMuted.Render(consoleClip(consoleContent(reason, 250), max(1, width-35), 1)))
 			}
-			out.WriteString("\n" + consoleMuted.Render("c connect scoped group · d isolate sender · M/P/I reset overrides\nCommands authorize tasks; 2 Sessions → Shift+D sets native delivery.\nGroups add grants; explicit owner overrides take precedence.\nExisting tasks stay accepted; cancel them in Tasks.\no reads full effective boundaries and stored controls"))
+			out.WriteString("\n" + consoleMuted.Render(m.connectionDeliverySummary(target)) + "\n")
+			out.WriteString("\n" + consoleMuted.Render("c connect scoped group · d isolate sender · M/P/I reset overrides\nCommands grant permission; receiver delivery is a separate owner choice.\nGroups add grants; explicit owner overrides take precedence.\nExisting tasks stay accepted; cancel them in Tasks.\no reads full effective boundaries and stored controls"))
 			out.WriteString("\n\n" + consoleAccent.Render("Workspace groups") + "\n")
 			found := false
 			for _, g := range m.data.controls.Groups {

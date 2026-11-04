@@ -106,6 +106,29 @@ try:
  until(lambda:connection_pair(screen())==('Problem 00 [session_00]','Problem 02 [session_02]'),'Shift-Tab changes only focused sender')
  assert run('managed','call','control.get','--credential-file',state/'owner.json','--json','{}')['result']==original_control
  capture('connections-explicit-focus-80x28')
+ # Inspect the exact owner policy/readiness for the displayed recipient. The
+ # command harness has no automatic adapter; this review must not enable one.
+ native_before=run('managed','call','native.status','--credential-file',state/'owner.json','--json',json.dumps({'agent':'session_02'}))['result']['status']
+ assert native_before['agent']=='session_02' and native_before['policy']['version']>=1
+ assert native_before['policy']['mode']=='manual'
+ draft_pane=runtime['agents']['session_02']['pane_id']
+ tmux('send-keys','-t',draft_pane,'-l','OWNER_UNSENT_REVIEW_DRAFT')
+ until(lambda:'OWNER_UNSENT_REVIEW_DRAFT' in tmux('capture-pane','-p','-t',draft_pane),'native draft before delivery review')
+ drafts={a:tmux('capture-pane','-p','-t',p['pane_id']) for a,p in runtime['agents'].items()}
+ key('D')
+ modal=until(lambda:(s if 'Native delivery' in (s:=screen()) and 'Problem 02' in s and 'session_02' in s and 'policy v' in s else ''),'Connections opens displayed recipient delivery review')
+ assert 'Enter reviews' in modal and 'Delivery' in modal,modal
+ capture('connections-recipient-delivery-review-80x28')
+ key('Escape')
+ until(lambda:connection_pair(screen())==('Problem 00 [session_00]','Problem 02 [session_02]') and 'SENDER · ↑/↓ choose' in screen() and 'RECIPIENT · ] focus' in screen(),'Esc preserves sender-recipient pair and focus')
+ assert run('managed','call','control.get','--credential-file',state/'owner.json','--json','{}')['result']==original_control
+ native_after=run('managed','call','native.status','--credential-file',state/'owner.json','--json',json.dumps({'agent':'session_02'}))['result']['status']
+ assert native_after['policy']==native_before['policy'],'delivery review changed saved policy'
+ for actor,pane in runtime['agents'].items():
+  assert tmux('capture-pane','-p','-t',pane['pane_id'])==drafts[actor],'delivery review changed terminal draft/output'
+  assert tmux('display-message','-p','-t',pane['pane_id'],'#{pane_pid}')==pids[actor],'delivery review restarted native process'
+ # Remove only this test-owned unsent draft, without submitting a turn.
+ tmux('send-keys','-t',draft_pane,'C-u')
  key('C-p');text('Problem 09')
  picker=until(lambda:(s if 'Switch session' in (s:=screen()) and 'session_09' in s else ''),'filtered full-width picker')
  assert '│' not in picker,picker
@@ -156,7 +179,7 @@ try:
   plain=subprocess.run([str(alias)],env=current_context(runtime['session']),stdin=slave,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,timeout=5)
   assert plain.returncode==0 and 'Current workspace: navigation-uat' in plain.stdout and '\x1b' not in plain.stdout,(plain.stdout,plain.stderr)
  finally:os.close(slave);os.close(master)
- result={'ok':True,'native_sessions':10,'model_calls':0,'checks':['vertical-roster-80','vertical-roster-64','tiny-session-control-50','sender-recipient-labels','direct-sender-recipient-focus','tab-shift-tab-focus','independent-sender-recipient-selection','focus-preserves-permissions','ctrl-p-search','enter-native-focus','tab-select-here','esc-preserves-selection','global-left-right','native-input','unchanged-worker-pids','amx-owned-core-context','amx-owned-view-context','amx-rejects-foreign-session-same-socket','pty-input-piped-output-is-plain']}
+ result={'ok':True,'native_sessions':10,'model_calls':0,'checks':['vertical-roster-80','vertical-roster-64','tiny-session-control-50','sender-recipient-labels','direct-sender-recipient-focus','tab-shift-tab-focus','independent-sender-recipient-selection','focus-preserves-permissions','recipient-native-delivery-review','delivery-esc-preserves-pair-focus-drafts','delivery-review-preserves-policy','ctrl-p-search','enter-native-focus','tab-select-here','esc-preserves-selection','global-left-right','native-input','unchanged-worker-pids','amx-owned-core-context','amx-owned-view-context','amx-rejects-foreign-session-same-socket','pty-input-piped-output-is-plain']}
  (root/'result.json').write_text(json.dumps(result,indent=2));print(json.dumps(result));print('Private artifacts:',root)
 except Exception:
  if started:

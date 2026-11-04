@@ -23,6 +23,8 @@ type consoleNativeAction struct {
 	field, selected, offset         int
 	approve, confirm, replaceDigits bool
 	pendingMore                     bool
+	pendingKnown                    bool
+	pendingCount                    int
 	capabilities                    nativebridge.Capabilities
 	latest                          *managed.NativeStatus
 	needsRefresh                    bool
@@ -75,11 +77,12 @@ func (m *console) reviewNativeDelivery(approve bool) {
 	if m.busy {
 		return
 	}
-	if m.offline || m.data.nativeErr != nil || m.data.native.Agent != m.selectedID() || m.data.native.Policy.Version < 1 {
+	id := m.nativeDeliveryRecipient()
+	s, available := m.nativeDeliveryStatus(id)
+	if !available {
 		m.message = "Current native delivery state unavailable. Refresh before editing or approving."
 		return
 	}
-	s := m.data.native
 	if approve && !nativePendingKnown(s) {
 		m.message = "Pending admission is unavailable; inspect task evidence. Shift+D still configures delivery."
 		return
@@ -89,7 +92,90 @@ func (m *console) reviewNativeDelivery(approve bool) {
 		return
 	}
 	m.nativeAction = &consoleNativeAction{agent: s.Agent, label: m.agentLabel(s.Agent), policy: s.Policy,
-		pending: append([]nativebridge.Delivery(nil), s.Pending...), pendingMore: s.PendingMore, capabilities: s.Capabilities, approve: approve, replaceDigits: true, adapter: s.Adapter, reason: s.Reason}
+		pending: append([]nativebridge.Delivery(nil), s.Pending...), pendingMore: s.PendingMore, pendingKnown: nativePendingKnown(s), pendingCount: max(s.PendingCount, len(s.Pending)), capabilities: s.Capabilities, approve: approve, replaceDigits: true, adapter: s.Adapter, reason: s.Reason}
+}
+
+// Connections edits the displayed recipient, independently of sender/sidebar
+// focus. Other views keep their selected session. The existing modal freezes
+// that identity and policy version before any owner-reviewed write.
+func (m console) nativeDeliveryRecipient() string {
+	if m.tab == 2 && len(m.agents) > 0 {
+		return m.agents[m.target%len(m.agents)].ID
+	}
+	return m.selectedID()
+}
+
+func (m console) nativeDeliveryStatus(id string) (managed.NativeStatus, bool) {
+	if m.offline || id == "" {
+		return managed.NativeStatus{}, false
+	}
+	active := false
+	for _, agent := range m.agents {
+		if agent.ID == id {
+			active = agent.State == "active" && agent.Config.Interaction == "interactive"
+			break
+		}
+	}
+	if !active {
+		return managed.NativeStatus{}, false
+	}
+	if id == m.selectedID() {
+		s := m.data.native
+		return s, m.data.nativeErr == nil && s.Agent == id && s.Policy.Version > 0
+	}
+	s, ok := m.data.nativeStates[id]
+	return s, ok && s.Agent == id && s.Policy.Version > 0
+}
+
+func (m console) connectionDeliverySummary(recipient string) string {
+	for _, agent := range m.agents {
+		if agent.ID == recipient && agent.State == "active" && agent.Config.Interaction == "managed" {
+			return "Receiver is a managed worker; inspect Tasks and current worker state."
+		}
+	}
+	s, available := m.nativeDeliveryStatus(recipient)
+	if !available {
+		return "Receiver delivery: unknown; refresh before choosing delivery."
+	}
+	mode := consoleContent(s.Policy.Mode, 20)
+	var message string
+	switch s.Policy.Mode {
+	case "manual":
+		message = "Manual inbox; Commands can queue tasks, but no native turn starts."
+	case "review":
+		message = "Review; each eligible queued item needs exact owner approval."
+	case "auto":
+		message = "Auto; eligible turns still require readiness, permissions and limits."
+	default:
+		return "Receiver delivery: unknown; refresh before choosing delivery."
+	}
+	return fmt.Sprintf("Receiver delivery: %s · queued %s\n%s\n%s\nShift+D reviews this recipient's settings · Shift+A reviews its pending item", mode, nativePendingCountText(s), message, consoleContent(s.Reason, 180))
+}
+
+func (a consoleNativeAction) autoQueueReview() string {
+	if a.policy.Mode != "auto" {
+		return ""
+	}
+	var out strings.Builder
+	out.WriteString("\nAuto can start existing eligible queued items, not just future instructions.\n")
+	if !a.pendingKnown {
+		out.WriteString("Queue at review: unknown; pending admission could not be evaluated.\n")
+	} else {
+		suffix := ""
+		if a.pendingMore {
+			suffix = " or more; inventory is bounded"
+		}
+		fmt.Fprintf(&out, "Queue at review: %d%s\n", a.pendingCount, suffix)
+		for i, candidate := range a.pending {
+			if i == 4 {
+				out.WriteString("Additional candidate metadata omitted from this preview.\n")
+				break
+			}
+			fmt.Fprintf(&out, "  %s from %s\n", consoleContent(candidate.Kind, 40), consoleContent(candidate.From, 100))
+		}
+	}
+	out.WriteString("This queue snapshot can change; Auto is not approval of only these items.\nChoose Review to inspect and approve one exact pending item first.\n")
+	return out.String()
 }
 
 func (a consoleNativeAction) args() (string, map[string]any) {
@@ -209,6 +295,14 @@ func (m console) nativeDeliveryKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.message = "That exact request is no longer eligible under the current review policy. Inspect its delivery before choosing another request."
 					return m, nil
 				}
+			}
+			if !a.approve {
+				// Refresh configuration-preview metadata without replacing any
+				// exact approval candidate or the owner's policy choices.
+				a.pending = append([]nativebridge.Delivery(nil), a.latest.Pending...)
+				a.pendingKnown = nativePendingKnown(*a.latest)
+				a.pendingCount = max(a.latest.PendingCount, len(a.latest.Pending))
+				a.pendingMore = a.latest.PendingMore
 			}
 			a.policy.Version = a.latest.Policy.Version
 			a.latest = nil
@@ -352,7 +446,7 @@ func (m console) nativeDeliveryPanel(width, height int) string {
 			d := a.pending[a.selected]
 			body = fmt.Sprintf("Approve this exact %s from %s\nCandidate: %s\nTask: %s\n\n%s\n\nApproval grants this candidate one native turn under policy v%d. It does not grant further commands or change peer permissions.", consoleContent(d.Kind, 40), consoleContent(d.From, 100), consoleContent(d.ID, 160), consoleContent(d.TaskID, 160), consoleContent(d.Text, len([]rune(d.Text))), a.policy.Version)
 		} else {
-			body = "Review delivery policy\n\n"
+			body = "Review delivery policy\n\n" + a.autoQueueReview()
 			for i, value := range nativeFieldValues(a.policy) {
 				body += fmt.Sprintf("%-20s %s\n", nativeFields[i], value)
 			}
@@ -429,6 +523,8 @@ func (m console) nativeDeliverySummary(width int) string {
 	fmt.Fprintf(&out, "%s\n", consoleContent(s.Reason, 250))
 	fmt.Fprintln(&out, nativeObservationSummary(s))
 	fmt.Fprintf(&out, "Turns %d/%d · hop cap %d · pending %s\n", s.Turns, s.Policy.MaxTurns, s.Policy.MaxHops, nativePendingCountText(s))
+	fmt.Fprintf(&out, "Subscriptions: notes %s · pings %s · own results %s\n", nativeEnabled(s.Policy.Notes), nativeEnabled(s.Policy.Pings), nativeEnabled(s.Policy.Results))
+	fmt.Fprintf(&out, "Shared updates: boards %s · memory %s\n", nativeEnabled(s.Policy.Boards), nativeEnabled(s.Policy.MemoryUpdates))
 	if !nativePendingKnown(s) {
 		fmt.Fprintln(&out, consoleContent(s.Coverage, 400))
 	}
@@ -465,5 +561,5 @@ func (m console) nativeDeliverySummary(width int) string {
 		out.WriteString(" · Shift+A review inbox")
 	}
 	out.WriteString("\n")
-	return consoleClip(out.String(), width, 12) + "\n"
+	return consoleClip(out.String(), width, 14) + "\n"
 }

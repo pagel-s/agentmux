@@ -439,11 +439,11 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.openSessionSwitcher()
 		return m, m.fetch
 	case "D":
-		if m.tab == 1 {
+		if m.tab == 1 || m.tab == 2 {
 			m.reviewNativeDelivery(false)
 		}
 	case "A":
-		if m.tab == 1 {
+		if m.tab == 1 || m.tab == 2 {
 			m.reviewNativeDelivery(true)
 		}
 	case "W":

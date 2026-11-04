@@ -93,7 +93,14 @@ list and version-check the exact team effects, including an initially empty set.
 Already accepted tasks need separate cancellation, and previously returned
 information remains known. Permission to send and native delivery are separate:
 note/ping subscriptions can leave an allowed message in the inbox. The controls
-show the receiver's reason and a route to its delivery settings.
+show the receiver's mode, readiness reason and known pending coverage. In terminal
+Connections, **Shift+D** configures the displayed recipient and **Shift+A**
+reviews its inbox without changing the selected sender. **Ctrl+K** exposes the
+same recipient-targeted actions. In Sessions, these keys target the selected
+session. Enabling Commands queues instructions; Manual delivery does not start a
+native turn. Auto is an explicit owner choice that can also dispatch existing
+eligible queue items. Its confirmation previews bounded queue metadata; choose
+Review to inspect and approve one exact item first.
 
 ## Recover without guessing
 

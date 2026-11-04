@@ -191,8 +191,14 @@ func (m *console) openActions() {
 	add("Rename session title", "L", 1, need)
 	add("Edit coordinated role", "V", 1, need)
 	add("Send note or instruction", "s", 1, need)
-	add("Configure native delivery", "D", 1, need)
-	add("Review native inbox", "A", 1, need)
+	if m.tab == 2 {
+		for _, action := range []struct{ label, key string }{{"Configure recipient delivery", "D"}, {"Review recipient inbox", "A"}} {
+			m.actionRows = append(m.actionRows, consoleMenuAction{label: action.label, key: action.key, tab: 2, target: m.nativeDeliveryRecipient(), kind: "native-recipient"})
+		}
+	} else {
+		add("Configure native delivery", "D", 1, need)
+		add("Review native inbox", "A", 1, need)
+	}
 	add("Review relaunch", "U", 1, need)
 	add("Admission budget", "B", 1, need)
 	add("Revoke session and descendants", "x", 1, need)
@@ -264,6 +270,19 @@ func (m console) invokeMenuAction() (tea.Model, tea.Cmd) {
 	}
 	if reason := m.menuActionReason(a); reason != "" {
 		m.message = reason
+		return m, nil
+	}
+	if a.kind == "native-recipient" {
+		for i, agent := range m.agents {
+			if agent.ID == a.target {
+				m.target = i
+				m.tab = 2
+				m.composer, m.text = "", nil
+				m.reviewNativeDelivery(a.key == "A")
+				return m, nil
+			}
+		}
+		m.message = "Recipient disappeared; reopen Actions."
 		return m, nil
 	}
 	if a.teamID != "" {
@@ -506,9 +525,15 @@ func (m console) menuActionReason(action consoleMenuAction) string {
 		if target == nil || target.State != "active" || target.Config.Interaction != "interactive" || target.External {
 			return "Requires an active owned native session"
 		}
+		n, ok := m.nativeDeliveryStatus(target.ID)
+		if !ok {
+			return "Current native delivery unavailable; refresh"
+		}
 		if action.key == "A" {
-			n, ok := m.data.nativeStates[target.ID]
-			if !ok || n.Policy.Mode != "review" || len(n.Pending) == 0 {
+			if !nativePendingKnown(n) {
+				return "Pending admission is unavailable; inspect task evidence"
+			}
+			if n.Policy.Mode != "review" || len(n.Pending) == 0 {
 				return "No pending native request in Review mode"
 			}
 		}
