@@ -28,6 +28,7 @@ type workObservationComponents struct {
 type workObservationComponent struct {
 	State      string   `json:"state"`
 	ErrorCode  *string  `json:"error_code"`
+	ReasonCode *string  `json:"reason_code"`
 	DurationMS *float64 `json:"duration_ms"`
 }
 
@@ -50,6 +51,22 @@ func beginWorkObservationComponent(component *workObservationComponent) func() {
 func (component *workObservationComponent) fail(code string) {
 	component.State = "unavailable"
 	component.ErrorCode = &code
+	component.ReasonCode = nil
+}
+
+func (component *workObservationComponent) failWithError(code string, err error) {
+	component.fail(code)
+	var problem *managed.Fault
+	if errors.As(err, &problem) {
+		if reason := problem.OperationalReadReasonCode(); reason != "" {
+			// A concurrent local deadline may supersede the server's generic
+			// cancellation classification. Do not emit a contradictory pair.
+			if code == "unavailable" && (reason == "operational_read_busy" || reason == "shutdown") ||
+				code == "canceled" && (reason == "query_budget_exhausted" || reason == "shutdown") {
+				component.ReasonCode = &reason
+			}
+		}
+	}
 }
 
 // The managed transport deliberately redacts underlying errors. Retain this

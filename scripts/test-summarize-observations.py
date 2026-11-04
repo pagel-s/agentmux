@@ -206,6 +206,41 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(result["component_availability_samples"]["runtime"]["not_recorded"], 1)
         self.assertNotIn("private injected", json.dumps(result))
 
+    def test_reported_reason_codes_are_bounded_and_do_not_imply_health(self):
+        values = []
+        cases = [
+            ("broker", "unavailable", "unavailable", "operational_read_busy", "operational_read_busy"),
+            ("native", "unavailable", "canceled", "query_budget_exhausted", "query_budget_exhausted"),
+            ("broker", "unavailable", "canceled", "shutdown", "shutdown"),
+            ("native", "unavailable", "unavailable", "shutdown", "shutdown"),
+            ("broker", "unavailable", "unavailable", None, "not_recorded"),
+            ("broker", "unavailable", "unavailable", "private reason sentinel", "other"),
+            ("broker", "unavailable", "forbidden", "query_budget_exhausted", "other"),
+            ("broker", "observed", None, "operational_read_busy", "other"),
+            ("native", "not_attempted", None, "shutdown", "other"),
+            ("runtime", "unavailable", "canceled", "shutdown", "other"),
+            ("storage", "unavailable", "unavailable", "operational_read_busy", "other"),
+        ]
+        expected = {name: {key: 0 for key in (*observations.REASON_CODES, "other", "not_recorded")} for name in observations.COMPONENTS}
+        for index, (name, state, code, reason, bucket) in enumerate(cases):
+            value = sample(index)
+            value["diagnostics"] = {"components": {name: {
+                "state": state, "error_code": code, "reason_code": reason}}}
+            values.append(value)
+            for component in expected:
+                expected[component][bucket if component == name else "not_recorded"] += 1
+        # A legacy capture has neither diagnostics nor subcause metadata.
+        values.append(sample(len(values)))
+        for component in expected:
+            expected[component]["not_recorded"] += 1
+        result = report(*values)
+        self.assertEqual(result["diagnostic_reason_code_samples"], expected)
+        self.assertNotIn("private reason sentinel", json.dumps(result))
+        self.assertNotIn("none", result["diagnostic_reason_code_samples"]["broker"])
+        self.assertEqual(result["component_availability_samples"]["native"]["not_attempted"], 1)
+        self.assertEqual(result["component_availability_samples"]["broker"]["unavailable"], 5)
+        self.assertIn("diagnostic timings/codes", observations.human(result))
+
     def test_unavailable_broker_does_not_publish_partial_snapshot_as_known(self):
         value = sample()
         value["broker_error"] = "private raw failure"

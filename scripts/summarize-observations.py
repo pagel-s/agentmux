@@ -23,6 +23,8 @@ DELIVERIES = ("pending", "dispatching", "acknowledged", "failed", "uncertain",
 RUNTIME_STATES = ("starting", "running", "attention", "stopping", "stopped", "failed", "unavailable", "not_recorded")
 ERROR_CODES = ("credential_unavailable", "unauthenticated", "forbidden", "timeout", "canceled",
                "transport", "unsupported", "invalid_response", "unavailable", "metadata_unavailable", "unknown")
+REASON_CODES = {"operational_read_busy": ("unavailable",), "query_budget_exhausted": ("canceled",),
+                "shutdown": ("unavailable", "canceled")}
 COMPONENTS = ("broker", "runtime", "native", "storage")
 FILES = ("database", "wal", "shared_memory")
 SCOPE = "Sampled operational metadata; not uptime, task quality, throughput or confirmed restart counts."
@@ -162,6 +164,7 @@ class Summary:
         self.transition_count = 0
         self.durations = {name: Gauge() for name in ("collection", *COMPONENTS)}
         self.codes = {name: {key: 0 for key in (*ERROR_CODES, "other", "none", "not_recorded")} for name in COMPONENTS}
+        self.reasons = {name: {key: 0 for key in (*REASON_CODES, "other", "not_recorded")} for name in COMPONENTS}
         self.gauges = {name: Gauge() for name in ("retained_tasks", "recovery_eligible", "attention", "active_execution_leases")}
         self.maps = {name: {key: Gauge() for key in (*keys, "other")} for name, keys in (
             ("task_states", TASK_STATES), ("recorded_deliveries", DELIVERIES), ("effective_deliveries", DELIVERIES))}
@@ -287,6 +290,14 @@ class Summary:
             code = text(component.get("error_code"))
             bucket = "not_recorded" if "error_code" not in component else "none" if code is None else code if code in ERROR_CODES else "other"
             self.codes[name][bucket] += 1
+            reason = text(component.get("reason_code"))
+            # These are reported subcauses, not proof of availability. Missing
+            # or null reasons never assert success; untrusted labels and known
+            # labels in incompatible components/states/codes stay bounded.
+            compatible = (name in ("broker", "native") and state == "unavailable"
+                          and reason in REASON_CODES and code in REASON_CODES[reason])
+            bucket = "not_recorded" if reason is None else reason if compatible else "other"
+            self.reasons[name][bucket] += 1
         return available
 
     def add_capacity(self, values, known):
@@ -373,6 +384,7 @@ class Summary:
             "availability_transitions": self.transitions,
             "availability_transitions_omitted": max(0, self.transition_count - len(self.transitions)),
             "diagnostic_error_code_samples": self.codes,
+            "diagnostic_reason_code_samples": self.reasons,
             "collection_duration_ms": {name: gauge.report() for name, gauge in self.durations.items()},
             "duration_scope": "local acquisition and decoding; concurrent component durations are not additive or model latency",
             "gauges": {name: gauge.report() for name, gauge in self.gauges.items()},

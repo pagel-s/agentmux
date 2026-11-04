@@ -136,7 +136,7 @@ or the existing human output and `complete` behavior:
 | `diagnostics.components.native` | Native summary read after a successful broker observation; `not_attempted` has null duration and error code |
 | `diagnostics.components.storage` | Metadata inspection of the three known database files |
 
-Every component has `state`, `error_code` and `duration_ms`. `observed` means
+Every component has `state`, `error_code`, nullable `reason_code` and `duration_ms`. `observed` means
 the collection succeeded, including a known unavailable runtime or absent
 storage file; it does not assert worker health. Component errors use
 `unavailable` with one of these fixed codes: `credential_unavailable`,
@@ -146,6 +146,16 @@ Successful components have a null error code. Local call deadlines and
 cancellation are classified from their context; a server cancellation can also
 produce `canceled`. Unknown causes remain unknown instead of being guessed
 from error prose. Existing free-form component errors remain separate.
+
+Updated controllers refine broker/native operational-read failures with three
+fixed reason codes: `operational_read_busy` means another operational read
+already owns the single read slot; `query_budget_exhausted` means the server's
+250 ms query budget expired; `shutdown` means the Store is closed or its
+lifetime ended during collection. Existing error codes and human errors stay
+unchanged. A shorter caller deadline does not claim a server query-budget
+expiry. Legacy controllers and unrecognized causes leave the reason null;
+null never means healthy. New clients opt into the wire field so older clients
+continue receiving the original fault shape.
 
 Durations use the local monotonic clock. Parallel components overlap, so their
 durations must not be added. Broker and native reads retain their existing
@@ -175,8 +185,13 @@ an immutable execution attestation.
 
 ## Summarize a private capture offline
 
-From a source checkout, stop the capture with Ctrl+C, then run the dependency-free
-Python reporter. Choose a gap threshold appropriate to your capture interval:
+Stop the capture with Ctrl+C, then run the dependency-free Python reporter.
+Release archives include `scripts/summarize-observations.py`; the binary
+installer installs `amx` only. Extract the `scripts/` folder from the archive
+matching your observer version, or use the corresponding source checkout.
+Run from that archive/checkout directory as below, or pass its absolute script
+path to `python3` from any directory. Choose a gap threshold appropriate to
+your capture interval:
 
 ```sh
 python3 scripts/summarize-observations.py /private/new-observations.jsonl --max-gap 5s
@@ -210,7 +225,11 @@ Native pending totals remain unknown when any listed pending count is null,
 the inventory is truncated or its collection is unavailable. Known partial
 sums are labeled separately. An unavailable inventory is not counted as a
 confirmed untruncated inventory. Legacy captures without diagnostics keep
-their collection durations and error-code observations unknown.
+their collection durations and error-code observations unknown. The JSON
+report's `diagnostic_reason_code_samples` counts only the three fixed reported
+reasons with compatible unavailable component/error states; missing or null
+reasons use `not_recorded`, and other or inconsistent values use `other`.
+These counts describe sampled reports, not authenticated cause attestations.
 
 Each file must contain one exact state identity and newline-terminated JSONL
 records. The parser rejects mixed states, unsupported schemas, duplicate keys,

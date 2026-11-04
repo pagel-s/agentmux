@@ -15,6 +15,7 @@ import (
 )
 
 const maxWireBytes = 8 << 20
+const operationalDiagnosticsHeader = "X-Agentmux-Operational-Diagnostics"
 
 type wireResponse struct {
 	Result json.RawMessage `json:"result,omitempty"`
@@ -83,7 +84,17 @@ func (s *Store) Handler() http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
-		respond := func(status int, value wireResponse) { w.WriteHeader(status); _ = json.NewEncoder(w).Encode(value) }
+		respond := func(status int, value wireResponse) {
+			// Older clients strictly decode Fault. Only opted-in observers receive
+			// additive subcauses; the original code/message wire shape is retained.
+			if value.Error != nil && r.Header.Get(operationalDiagnosticsHeader) != "1" {
+				legacy := *value.Error
+				legacy.ReasonCode = ""
+				value.Error = &legacy
+			}
+			w.WriteHeader(status)
+			_ = json.NewEncoder(w).Encode(value)
+		}
 		if r.Method != "POST" || r.URL.Path != "/v1/call" || r.URL.RawQuery != "" {
 			respond(http.StatusNotFound, wireResponse{Error: fault("not_found", "unknown endpoint")})
 			return
@@ -201,6 +212,9 @@ func (c *Client) Call(ctx context.Context, r Request) (json.RawMessage, *Fault) 
 	}
 	req.Header.Set("Authorization", "Bearer "+c.credential.Token)
 	req.Header.Set("Content-Type", "application/json")
+	if operationalRead(r) {
+		req.Header.Set(operationalDiagnosticsHeader, "1")
+	}
 	response, err := c.http.Do(req)
 	if err != nil {
 		if !isWrite(r.Operation) {
@@ -219,6 +233,9 @@ func (c *Client) Call(ctx context.Context, r Request) (json.RawMessage, *Fault) 
 	}
 	if response.StatusCode != http.StatusOK && result.Error == nil {
 		return nil, fault("transport", "unexpected broker response status")
+	}
+	if result.Error != nil {
+		result.Error.ReasonCode = result.Error.OperationalReadReasonCode()
 	}
 	return result.Result, result.Error
 }

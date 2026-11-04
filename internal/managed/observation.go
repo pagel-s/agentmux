@@ -181,32 +181,32 @@ func (s *Store) observation(ctx context.Context, q queryer, a actor, raw json.Ra
 	}
 	// A large configured history may exceed this observation budget. Return an
 	// unavailable sample instead of starving workers' 500ms lease monitors.
-	ctx, cancel := context.WithTimeout(ctx, operationalObservationReadBudget)
+	ctx, cancel := operationalQueryContext(ctx)
 	defer cancel()
 	at := time.Now()
 	result, err := taskObservationCounts(ctx, q, at)
 	if err != nil {
-		return nil, internal(err)
+		return nil, operationalQueryFault(ctx, err)
 	}
 	result.Capacity = ObservationCapacity{MaxRecords: s.cfg.Limits.MaxRecords, MaxRequests: s.cfg.Limits.MaxRequests, MaxMessages: s.cfg.Limits.MaxMessages, Tasks: result.Tasks, MaxTasks: s.cfg.Limits.MaxTasks}
 	if err = q.QueryRowContext(ctx, "SELECT COUNT(*) FROM records").Scan(&result.Capacity.Records); err != nil {
-		return nil, internal(err)
+		return nil, operationalQueryFault(ctx, err)
 	}
 	if err = q.QueryRowContext(ctx, "SELECT COUNT(*) FROM requests").Scan(&result.Capacity.Requests); err != nil {
-		return nil, internal(err)
+		return nil, operationalQueryFault(ctx, err)
 	}
 	if result.Capacity.Messages, err = count(ctx, q, "message"); err != nil {
-		return nil, internal(err)
+		return nil, operationalQueryFault(ctx, err)
 	}
 	deadline, err := s.admissionDeadline(ctx, q)
 	if err != nil {
-		return nil, internal(err)
+		return nil, operationalQueryFault(ctx, err)
 	}
 	if !deadline.IsZero() {
 		result.RuntimeDeadline = deadline.UTC().Format(time.RFC3339Nano)
 	}
 	if err = q.QueryRowContext(ctx, `SELECT COALESCE(json_extract(data,'$.at'),'') FROM records WHERE kind='event' ORDER BY seq DESC LIMIT 1`).Scan(&result.LastEventAt); err != nil && err != sql.ErrNoRows {
-		return nil, internal(err)
+		return nil, operationalQueryFault(ctx, err)
 	}
 	var problem *Fault
 	result.Attention, problem = s.observationTaskPage(ctx, q, a, at, limit, false)
@@ -281,7 +281,7 @@ func (s *Store) observationTaskPage(ctx context.Context, q queryer, a actor, at 
 	}
 	rows, err := q.QueryContext(ctx, observationTaskPageQuery(active), at.Unix(), at.Unix(), limit)
 	if err != nil {
-		return nil, internal(err)
+		return nil, operationalQueryFault(ctx, err)
 	}
 	defer rows.Close()
 	items := []ObservationTask{}
@@ -289,11 +289,11 @@ func (s *Store) observationTaskPage(ctx context.Context, q queryer, a actor, at 
 	for rows.Next() {
 		var raw []byte
 		if err = rows.Scan(&raw); err != nil {
-			return nil, internal(err)
+			return nil, operationalQueryFault(ctx, err)
 		}
 		var metadata observationRecord
 		if err = json.Unmarshal(raw, &metadata); err != nil {
-			return nil, internal(err)
+			return nil, operationalQueryFault(ctx, err)
 		}
 		record := metadata.task()
 		t := viewTask(record)
@@ -314,7 +314,7 @@ func (s *Store) observationTaskPage(ctx context.Context, q queryer, a actor, at 
 		}
 		encoded, err := json.Marshal(item)
 		if err != nil {
-			return nil, internal(err)
+			return nil, operationalQueryFault(ctx, err)
 		}
 		if bytes+len(encoded) > maxWireBytes/4 {
 			break
@@ -323,7 +323,7 @@ func (s *Store) observationTaskPage(ctx context.Context, q queryer, a actor, at 
 		items = append(items, item)
 	}
 	if err = rows.Err(); err != nil {
-		return nil, internal(err)
+		return nil, operationalQueryFault(ctx, err)
 	}
 	return items, nil
 }

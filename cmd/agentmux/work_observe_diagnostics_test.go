@@ -41,7 +41,7 @@ func assertObservationTiming(t *testing.T, diagnostics workObservationDiagnostic
 	}
 	for name, component := range observationComponents(diagnostics) {
 		if component.State == "not_attempted" {
-			if component.DurationMS != nil || component.ErrorCode != nil {
+			if component.DurationMS != nil || component.ErrorCode != nil || component.ReasonCode != nil {
 				t.Fatalf("%s unattempted component acquired fabricated evidence: %+v", name, component)
 			}
 			continue
@@ -60,6 +60,17 @@ func assertObservationCode(t *testing.T, component workObservationComponent, wan
 	t.Helper()
 	if component.State != "unavailable" || component.ErrorCode == nil || *component.ErrorCode != want {
 		t.Fatalf("wrong component classification: %+v, want unavailable/%s", component, want)
+	}
+}
+
+func TestObserveDiagnosticsLocalTimeoutSupersedesServerSubcause(t *testing.T) {
+	for _, reason := range []string{"query_budget_exhausted", "shutdown"} {
+		var component workObservationComponent
+		component.failWithError("timeout", &managed.Fault{Code: "cancelled", Message: "request cancelled", ReasonCode: reason})
+		assertObservationCode(t, component, "timeout")
+		if component.ReasonCode != nil {
+			t.Fatalf("local timeout emitted incompatible server reason: %+v", component)
+		}
 	}
 }
 
@@ -89,7 +100,7 @@ func TestObserveDiagnosticsSuccessfulBrokerAndMissingCredentials(t *testing.T) {
 		t.Fatalf("missing broker resulted in attempted native observation: %+v", result)
 	}
 	raw, err := json.Marshal(result.Diagnostics.Components.Native)
-	if err != nil || string(raw) != `{"state":"not_attempted","error_code":null,"duration_ms":null}` {
+	if err != nil || string(raw) != `{"state":"not_attempted","error_code":null,"reason_code":null,"duration_ms":null}` {
 		t.Fatalf("unknown duration is not explicit null: %s, %v", raw, err)
 	}
 	if _, err := os.Stat(missing); !os.IsNotExist(err) {
@@ -146,19 +157,27 @@ func TestObserveDiagnosticsFaultsProtocolAndUnattemptedNative(t *testing.T) {
 	state, client, _ := inventoryBroker(t)
 	observationHeadlessRuntime(t)
 	for _, test := range []struct {
-		name, operation, fault, result, code string
-		malformedWire                        bool
+		name, operation, fault, result, code, reason, wantReason string
+		malformedWire                                            bool
 	}{
 		{name: "unauthorized", operation: "observation.get", fault: "unauthorized", code: "unauthenticated"},
 		{name: "forbidden", operation: "observation.get", fault: "forbidden", code: "forbidden"},
 		{name: "old-controller", operation: "observation.get", fault: "unsupported", code: "unsupported"},
 		{name: "busy-reader", operation: "observation.get", fault: "unavailable", code: "unavailable"},
+		{name: "busy-reader-reason", operation: "observation.get", fault: "unavailable", code: "unavailable", reason: "operational_read_busy", wantReason: "operational_read_busy"},
+		{name: "query-budget", operation: "observation.get", fault: "cancelled", code: "canceled", reason: "query_budget_exhausted", wantReason: "query_budget_exhausted"},
+		{name: "shutdown", operation: "observation.get", fault: "unavailable", code: "unavailable", reason: "shutdown", wantReason: "shutdown"},
+		{name: "unknown-reason", operation: "observation.get", fault: "unavailable", code: "unavailable", reason: "private-server-reason"},
+		{name: "mismatched-reason", operation: "observation.get", fault: "forbidden", code: "forbidden", reason: "query_budget_exhausted"},
 		{name: "unknown-code", operation: "observation.get", fault: "private-server-code", code: "unknown"},
 		{name: "server-cancellation", operation: "observation.get", fault: "cancelled", code: "canceled"},
 		{name: "bad-broker-result", operation: "observation.get", result: `"private malformed result"`, code: "invalid_response"},
 		{name: "missing-observation-time", operation: "observation.get", result: `{}`, code: "invalid_response"},
 		{name: "wire-protocol", operation: "observation.get", malformedWire: true, code: "transport"},
 		{name: "native-unsupported", operation: "native.status", fault: "unsupported", code: "unsupported"},
+		{name: "native-busy", operation: "native.status", fault: "unavailable", code: "unavailable", reason: "operational_read_busy", wantReason: "operational_read_busy"},
+		{name: "native-query-budget", operation: "native.status", fault: "cancelled", code: "canceled", reason: "query_budget_exhausted", wantReason: "query_budget_exhausted"},
+		{name: "native-shutdown", operation: "native.status", fault: "cancelled", code: "canceled", reason: "shutdown", wantReason: "shutdown"},
 		{name: "native-invalid", operation: "native.status", result: `{"statuses":null}`, code: "invalid_response"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -175,7 +194,7 @@ func TestObserveDiagnosticsFaultsProtocolAndUnattemptedNative(t *testing.T) {
 				if test.malformedWire {
 					fmt.Fprint(w, "private invalid wire response")
 				} else if test.fault != "" {
-					_ = json.NewEncoder(w).Encode(map[string]any{"error": managed.Fault{Code: test.fault, Message: "private problem text: timeout unauthorized"}})
+					_ = json.NewEncoder(w).Encode(map[string]any{"error": managed.Fault{Code: test.fault, Message: "private problem text: timeout unauthorized", ReasonCode: test.reason}})
 				} else {
 					_ = json.NewEncoder(w).Encode(map[string]any{"result": json.RawMessage(test.result)})
 				}
@@ -195,6 +214,13 @@ func TestObserveDiagnosticsFaultsProtocolAndUnattemptedNative(t *testing.T) {
 				if nativeCalls.Load() != 1 || result.Diagnostics.Components.Broker.State != "observed" || result.Snapshot == nil {
 					t.Fatalf("native failure erased successful broker observation: %+v", result)
 				}
+			}
+			component := result.Diagnostics.Components.Broker
+			if test.operation == "native.status" {
+				component = result.Diagnostics.Components.Native
+			}
+			if test.wantReason == "" && component.ReasonCode != nil || test.wantReason != "" && (component.ReasonCode == nil || *component.ReasonCode != test.wantReason) {
+				t.Fatalf("lost or fabricated reason %q: %+v", test.wantReason, component)
 			}
 			raw, _ := json.Marshal(result.Diagnostics)
 			if strings.Contains(string(raw), "private") || strings.Contains(string(raw), "timeout unauthorized") {

@@ -106,7 +106,10 @@ Recorded delivery and effective uncertainty remain separate. No recent event
 does not establish that a model is stalled. Task bodies and credentials are omitted.
 --watch --json emits one JSON object per observation. Partial observations
 contain explicit component errors; a one-shot partial observation exits nonzero.
-Read-only: never starts, retries, resolves or changes a workspace.`)
+Read-only: never starts, retries, resolves or changes a workspace.
+History guide: https://pagel-s.github.io/agentmux/observability/#summarize-a-private-capture-offline
+The offline Python reporter ships in the matching release archive's scripts/ folder;
+the binary installer installs amx only.`)
 		return exitSuccess
 	}
 	flags := flag.NewFlagSet("observe", flag.ContinueOnError)
@@ -220,7 +223,7 @@ func collectWorkObservation(ctx context.Context, o workOptions, limit int) workO
 		raw, err, code := workObservationCall(ctx, client, "native.status", map[string]any{"limit": 200, "summary": true})
 		if err != nil {
 			result.NativeError = err.Error()
-			result.Diagnostics.Components.Native.fail(code)
+			result.Diagnostics.Components.Native.failWithError(code, err)
 			return
 		}
 		var native struct {
@@ -274,7 +277,7 @@ func collectWorkObservationBroker(ctx context.Context, result *workObservation, 
 	raw, err, code := workObservationCall(ctx, client, "observation.get", map[string]any{"limit": limit})
 	if err != nil {
 		result.BrokerError = err.Error()
-		result.Diagnostics.Components.Broker.fail(code)
+		result.Diagnostics.Components.Broker.failWithError(code, err)
 		var problem *managed.Fault
 		if errors.As(err, &problem) && problem.Code == "unsupported" {
 			result.BrokerError += "; workspace controller lacks observation.get; upgrade its controller explicitly after inspecting current work"
