@@ -13,7 +13,7 @@ response and second review. To inspect a
 checked fixture before configuring providers, start with
 [`amx demo`](getting-started/first-result.md).
 
-[![Actual offline report from the model-free demo, showing saved checks and the retained change](assets/guide/checked-work-report.jpg?v=d3cdf4a8e036)](getting-started/first-result.md)
+[![Actual offline report from the model-free demo, showing saved checks and the retained change](assets/guide/checked-work-report.jpg?v=a15253337515)](getting-started/first-result.md)
 
 The report above comes from `amx demo`, a deterministic fixture with no model
 calls. For your own task, the daily sequence is:

@@ -335,6 +335,27 @@ basenames and numeric identity/group/session metadata, never argv, environment
 values or full paths. Diagnostic failure cannot replace the primary failure or
 skip cleanup. Review these private records before sharing them.
 
+### Targeted regression validation
+
+The [separate November 4 regression record](assets/quality/subscription-regressions-2026-11-04.json)
+covers only credential redaction and authenticated trace display. Both passed
+**2/2** using the clean `0.15.0-rc1` source build `45ceb620…`, not a published
+release archive, with the same historical seed and frozen primary graders.
+The v0.15.0 release's `cmd` and `internal` trees match that RC; the native
+runs still used the source build, rather than the published archive.
+Both roles had 435-second limits within a shared 435-second mission and a
+480-second outer attempt. Each used Codex implementation and Claude static
+review, mandatory final checks and fixture-only application. Four additional
+native CLI admissions brought this private sequence to fifteen.
+
+The redaction implementation's extra package race-test command encountered four
+Unix-socket permission errors inside the native sandbox; subsequent focused
+checks and the frozen contract passed. No full-suite success is claimed.
+The original native **3/3** versus Agentmux **1/3** remains unchanged: no baseline
+was rerun and no pass rates are pooled. Requested aliases remained the same;
+served model revisions remain unverified. These targeted rechecks establish no
+speedup or general competitive advantage.
+
 ### Add an operator trial with Agent Deck
 
 Agent Deck's [official CLI reference](https://github.com/asheshgoplani/agent-deck/blob/main/skills/agent-deck/references/cli-reference.md)
