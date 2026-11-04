@@ -27,14 +27,18 @@ Current source includes model-free regressions for owner observation, task
 progress and native readiness:
 
 ```sh
-go test -race ./internal/managed -run 'TestObservation|TestTaskProgress|TestNativeReadiness' -count=1
+go test -race ./internal/managed -run 'TestObservation|TestTaskProgress|TestNativeReadiness|TestOperationalRead|TestNativeSummary' -count=1
 go test -race ./cmd/agentmux -run 'TestObserve|TestNativeObservation' -count=1
 node --test cmd/agentmux/workweb/app.test.cjs
 ```
 
 These check bounded full-history summaries, exact attempt/credential fences,
 separate event and worker timestamps, restart-unknown progress, unavailable
-components and read-only inspection. They make no model calls. They do not
+components and read-only inspection. Operational-read controls keep a blocked
+diagnostic connection outside the unchanged 500 ms lease monitor and verify
+one-slot admission, read-only SQL, shutdown cancellation and credential rotation.
+Native-summary controls cover unknown admission, authorization and pagination.
+They make no model calls. They do not
 prove provider acceptance, useful model progress or elapsed production use.
 See [observability](observability.md) for operational commands and interpretation.
 
