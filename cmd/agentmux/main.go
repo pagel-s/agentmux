@@ -82,6 +82,8 @@ func run(args []string) int {
 		return runWorkLayout(args[0], args[1:], os.Stdout, os.Stderr)
 	case "allow", "deny":
 		return runWorkPermission(args[0], args[1:], os.Stdout, os.Stderr)
+	case "pair":
+		return runWorkPair(args[1:], os.Stdout, os.Stderr)
 	case "start", "attach", "reply", "inbox", "board", "down", "remove", "retire", "collaborate", "disconnect", "isolate", "label":
 		return runWorkSession(args[0], args[1:], os.Stdin, os.Stdout, os.Stderr)
 	case "team":
