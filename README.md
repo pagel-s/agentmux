@@ -52,7 +52,7 @@ two native turns. Requested changes retain the full four-turn review loop,
 and final acceptance checks always run. Skipped phases
 remain explicit in the saved evidence. Published v0.13.0 uses the full loop.
 
-[![Actual checked-result report from a model-free fixture, showing retained checks and a reviewable patch](docs/assets/guide/checked-work-report.jpg?v=9e8c23859bf8)](docs/visual-guide.md#ask-for-a-checked-coding-change)
+[![Actual checked-result report from a model-free fixture, showing retained checks and a reviewable patch](docs/assets/guide/checked-work-report.jpg?v=d3cdf4a8e036)](docs/visual-guide.md#ask-for-a-checked-coding-change)
 
 The report above comes from a command-only fixture. It demonstrates the evidence
 and application controls; it does not measure provider task quality.

@@ -25,7 +25,7 @@ Agentmux [v0.14.0](getting-started/installation.md) adds structured collection d
 described below. Older v0.13.0 schema-1 captures remain readable; missing
 diagnostic timings stay unknown.
 
-![Actual amx observe output showing capacity, uncertain delivery and a live command-worker check-in](assets/guide/terminal-observability.jpg?v=d9ac7487da7c)
+![Actual amx observe output showing capacity, uncertain delivery and a live command-worker check-in](assets/guide/terminal-observability.jpg?v=3b3ac01704fa)
 
 The capture uses disposable command-only fixtures. The running worker reports a
 check-in and zero native model events; stopped delivery remains uncertain.
