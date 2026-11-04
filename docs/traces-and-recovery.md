@@ -118,6 +118,14 @@ amx managed down --state STATE
 amx managed serve --state STATE --sandbox bubblewrap
 ```
 
+If `managed down` or the shutdown stage of `managed restart` fails, keep the
+JSON fault and follow the exact-state recovery commands printed to stderr.
+Inspect status, open affected owned native terminals with `amx attach --state
+STATE`, and finish or exit their native CLIs normally. Detaching or closing an
+observer leaves those processes running. Retry `managed down` and confirm it
+succeeds before restarting a broker or resolving uncertain delivery. Broker
+and terminal availability remain unconfirmed until inspected.
+
 In another terminal, inspect the exact task and resolve its current version:
 
 ```bash

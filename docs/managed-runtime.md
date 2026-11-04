@@ -118,7 +118,22 @@ including an older task or retired recipient. Opening changes no task state;
 recovery still needs an explicit review of the exact task/version. These
 shortcuts have been available since v0.13.0; `managed call` remains available.
 
-`down` interrupts owned worker processes first, waits for their terminal processes to exit, and then stops the broker and supervisor. It removes only the attempt's tracked session. If termination or ownership cannot be confirmed, it reports attention and leaves the broker available for inspection. A stale stop request cannot stop a new attempt. Durable tasks and memory remain on disk. `restart` performs an explicit ordered stop/start; it does not silently retry uncertain deliveries or reset the persisted runtime budget. After a run's budget expires, start a new state directory for a new run.
+`down` interrupts owned worker processes first, waits for their terminal processes to exit, and then stops the broker and supervisor. It removes only the attempt's tracked session. A stale stop request cannot stop a new attempt. Durable tasks and memory remain on disk. `restart` performs an explicit ordered stop/start; it does not silently retry uncertain deliveries or reset the persisted runtime budget. After a run's budget expires, start a new state directory for a new run.
+
+If termination or ownership cannot be confirmed, shutdown fails. Inspect current
+status before assuming the broker or native terminals are available or stopped.
+The CLI retains its JSON fault and prints shell-quoted recovery commands for the
+exact state directory to stderr:
+
+```sh
+amx managed status --state DIRECTORY
+amx attach --state DIRECTORY
+# Finish or exit each affected owned native CLI normally, then:
+amx managed down --state DIRECTORY
+```
+
+Detaching or closing the workbench does not exit a native CLI. Retry a failed
+`restart` only after shutdown succeeds.
 
 For one exited workspace-owned interactive session, use `amx relaunch AGENT_ID --state DIRECTORY`. Healthy peers keep running and the stable agent identity is retained. The default starts a fresh native conversation; `--resume last`, `--resume picker`, or an explicit native ID selects history through the supported harness. A live or revoked session cannot be relaunched, and no deadline is renewed. Older running controllers require one deliberate workspace restart before individual relaunch is available. See [recovery](traces-and-recovery.md) for the distinction from retrying a broker task.
 

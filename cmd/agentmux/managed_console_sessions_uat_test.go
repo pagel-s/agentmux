@@ -92,8 +92,11 @@ try:
  key('3');until(lambda:'SENDER' in screen(),'connections view')
  initial=capture('connections-80x28')
  assert 'SENDER' in initial and 'RECIPIENT' in initial and 'Ctrl+P' in initial,initial
+ assert connection_pair(initial)==('Problem 00 [session_00]','Problem 01 [session_01]'),initial
  original_control=run('managed','call','control.get','--credential-file',state/'owner.json','--json','{}')['result']
- key(']');key('Down')
+ key(']');key('Up')
+ until(lambda:connection_pair(screen())==('Problem 00 [session_00]','Problem 00 [session_00]'),'explicit self recipient remains available')
+ key('Down')
  until(lambda:connection_pair(screen())==('Problem 00 [session_00]','Problem 01 [session_01]'),'recipient changes independently')
  key('[')
  until(lambda:'SENDER · ↑/↓ choose' in screen() and 'RECIPIENT · ] focus' in screen(),'direct sender focus')
