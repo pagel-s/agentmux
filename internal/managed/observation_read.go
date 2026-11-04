@@ -4,12 +4,24 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"maps"
 	"net/url"
 	"path/filepath"
 
 	"agentmux/internal/managedconfig"
 )
+
+var errOperationalQueryBudget = errors.New("operational observation query budget exhausted")
+
+func operationalQueryContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeoutCause(ctx, operationalObservationReadBudget, errOperationalQueryBudget)
+}
+
+func operationalReason(problem *Fault, reason string) *Fault {
+	problem.ReasonCode = reason
+	return problem
+}
 
 // Only the body-free operational projections may run outside the authority
 // lock. Decode routing with the same encoding/json field selection as native;
@@ -35,7 +47,7 @@ func (s *Store) operationalReader() (*Store, *sql.DB, chan struct{}, context.Con
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
-		return nil, nil, nil, nil, fault("unavailable", "store is closed")
+		return nil, nil, nil, nil, operationalReason(fault("unavailable", "store is closed"), "shutdown")
 	}
 	if s.observationDB == nil {
 		u := url.URL{Scheme: "file", Path: filepath.Join(s.dir, "state.sqlite")}
@@ -72,9 +84,9 @@ func (s *Store) callOperationalRead(ctx context.Context, token string, r Request
 	case slot <- struct{}{}:
 		defer func() { <-slot }()
 	default:
-		return nil, fault("unavailable", "an operational observation is already running; refresh after it finishes")
+		return nil, operationalReason(fault("unavailable", "an operational observation is already running; refresh after it finishes"), "operational_read_busy")
 	}
-	ctx, cancel := context.WithTimeout(ctx, operationalObservationReadBudget)
+	ctx, cancel := operationalQueryContext(ctx)
 	defer cancel()
 	stop := context.AfterFunc(lifetime, cancel)
 	defer stop()
@@ -102,6 +114,9 @@ func (s *Store) callOperationalRead(ctx context.Context, token string, r Request
 		return nil, fault("invalid", "request arguments exceed limit")
 	}
 	if problem := view.authenticateResearchRunner(ctx, tx, &a, r.ResearchRunnerProof); problem != nil {
+		if ctx.Err() != nil || lifetime.Err() != nil {
+			return nil, operationalReadFault(ctx, lifetime, ctx.Err())
+		}
 		return nil, problem
 	}
 	result, problem := view.dispatch(ctx, tx, a, r)
@@ -121,25 +136,37 @@ func (s *Store) callOperationalRead(ctx context.Context, token string, r Request
 		return nil, operationalReadFault(ctx, lifetime, err)
 	}
 	if problem := currentOperationalCredential(ctx, connection, token, a); problem != nil {
-		if lifetime.Err() != nil {
-			return nil, internal(lifetime.Err())
+		if ctx.Err() != nil || lifetime.Err() != nil {
+			return nil, operationalReadFault(ctx, lifetime, ctx.Err())
 		}
 		return nil, problem
 	}
-	if lifetime.Err() != nil {
-		return nil, internal(lifetime.Err())
+	if ctx.Err() != nil || lifetime.Err() != nil {
+		return nil, operationalReadFault(ctx, lifetime, ctx.Err())
 	}
 	return data, nil
 }
 
 func operationalReadFault(ctx, lifetime context.Context, err error) *Fault {
 	if ctx.Err() != nil {
-		return internal(ctx.Err())
+		problem := operationalQueryFault(ctx, ctx.Err())
+		if lifetime.Err() != nil {
+			return operationalReason(problem, "shutdown")
+		}
+		return problem
 	}
 	if lifetime.Err() != nil {
-		return internal(lifetime.Err())
+		return operationalReason(internal(lifetime.Err()), "shutdown")
 	}
 	return internal(err)
+}
+
+func operationalQueryFault(ctx context.Context, err error) *Fault {
+	problem := internal(err)
+	if problem.Code == "cancelled" && errors.Is(context.Cause(ctx), errOperationalQueryBudget) {
+		problem.ReasonCode = "query_budget_exhausted"
+	}
+	return problem
 }
 
 func currentOperationalCredential(ctx context.Context, q queryer, token string, prior actor) *Fault {

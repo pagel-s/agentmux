@@ -13,17 +13,19 @@ import (
 )
 
 type PhaseSummary struct {
-	ID      string `json:"id"`
-	State   string `json:"state"`
-	Harness string `json:"harness,omitempty"`
-	Result  string `json:"result,omitempty"`
-	Error   string `json:"error,omitempty"`
+	SkipReason string `json:"skip_reason,omitempty"`
+	ID         string `json:"id"`
+	State      string `json:"state"`
+	Harness    string `json:"harness,omitempty"`
+	Result     string `json:"result,omitempty"`
+	Error      string `json:"error,omitempty"`
 }
 type ChangedFile struct {
 	Path   string `json:"path"`
 	Status string `json:"status"`
 }
 type WorkSummary struct {
+	EarlyApproval         *EarlyApproval   `json:"early_approval,omitempty"`
 	ID                    string           `json:"id"`
 	Goal                  string           `json:"goal"`
 	State                 string           `json:"state"`
@@ -75,6 +77,7 @@ func Summarize(ctx context.Context, directory string) (WorkSummary, error) {
 func summarizeReport(ctx context.Context, r Report) (s WorkSummary) {
 	s = WorkSummary{ID: r.ID, Goal: r.Goal, State: r.State, Repository: r.Repository, Directory: r.Output, StartedAt: r.StartedAt, FinishedAt: r.FinishedAt, Error: r.Error, Phases: []PhaseSummary{}, Files: []ChangedFile{}, ReviewState: "not_recorded", NextCommand: "amx flow explain " + shellWord(r.Output)}
 	s.ProcessContainment = r.ProcessContainment
+	s.EarlyApproval = r.EarlyApproval
 	s.Storage = r.Storage
 	if s.Storage == "" {
 		s.Storage = StorageShared
@@ -96,7 +99,7 @@ func summarizeReport(ctx context.Context, r Report) (s WorkSummary) {
 		s.ReportPath = filepath.Join(r.Output, "report.html")
 	}
 	for _, step := range r.Steps {
-		s.Phases = append(s.Phases, PhaseSummary{ID: step.ID, State: step.State, Harness: step.Harness, Result: bounded(step.Result, 16<<10), Error: step.Error})
+		s.Phases = append(s.Phases, PhaseSummary{ID: step.ID, State: step.State, SkipReason: step.SkipReason, Harness: step.Harness, Result: bounded(step.Result, 16<<10), Error: step.Error})
 		if step.Review != nil {
 			s.ReviewState = step.Review.Decision
 			s.Review = step.Review.Summary

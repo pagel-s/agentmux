@@ -1,6 +1,37 @@
 # Changelog
 
-## Unreleased
+## v0.14.0 - 2026-11-04
+
+- Skip the response and second review in guided work only when the initial fresh,
+  read-only review approves the exact independently checked revision. Retain both
+  phases as skipped, preserve full structured review evidence and always run final
+  acceptance checks. Bind checks, candidate profiles, fallback execution and
+  skipped phases to the retained plan and actual attempt/verification records
+  before application. Keep failed/canceled check prefixes inspectable while
+  requiring successful completion before guided application; existing advanced
+  plans retain their behavior. Retained reports remain inspectable after
+  execution credentials are cleared, without retaining their values.
+- Add fixed observation diagnostic error codes and per-component collection
+  timings, preserving unattempted components and unknown durations explicitly.
+  Distinguish busy operational reads, exhausted query budgets and controller
+  shutdown with bounded reason codes while preserving older clients.
+- Add offline reports for saved observation JSONL and matched comparison evidence,
+  retaining sample gaps, unknown states, failures and incomplete attempts without
+  inferring uptime, model quality or a competitive winner.
+- Make Connections navigation explicit with **[** sender and **]** recipient
+  focus keys, active field labels and matching sidebar/help cues. Keep Tab focus,
+  independent selections and Left/Right view navigation unchanged. Initially
+  select a different active peer when available without retargeting later work.
+- Show the recipient's delivery mode in Connections and open its settings or
+  exact pending approval there with Shift+D/A. Preview existing queue metadata
+  before Auto, and give native agents portable delivery and task-result guidance.
+  Identify managed workers separately, including the default interaction mode,
+  rather than suggesting a refresh can enable native delivery settings.
+- Print workspace-scoped recovery commands after an unconfirmed shutdown or
+  restart, retaining the original fault, failure status and process boundaries.
+- Add focused `stop --help` and keep pending/submitted tasks visible in the
+  everyday inspection example; explain Manual's peer-turn cancellation request
+  without claiming a confirmed stop.
 
 ## v0.13.0 - 2026-11-04
 

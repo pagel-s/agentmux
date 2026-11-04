@@ -7,7 +7,7 @@ workspace. If no terminal has been selected or it has closed, the workbench open
 With several running workspaces, choose one or pass `-s NAME`.
 
 The searchable choosers, `context`, `observe`, `task`/`tasks`, exact-task workbench opening,
-bounded run lists and report opening below are included in v0.13.0.
+bounded run lists and report opening below are included in v0.14.0.
 
 ## Daily power-user loop
 
@@ -32,6 +32,11 @@ and Esc returns. While filtering, `j`, `k` and `q` are literal query text.
 Use `amx send --help`, `amx attach --help` or another command's help for focused
 options. `amx help all` retains the full reference.
 
+In Connections, `[` focuses **Sender** and `]` focuses **Recipient**. Tab or
+Shift+Tab switches fields; Up/Down changes only the highlighted identity.
+Left/Right still changes views. Focus changes neither permissions nor the
+other field's selected identity.
+
 [`amx observe`](../observability.md) separates broker connectivity, worker
 check-ins, native events, effective delivery uncertainty and retained outcomes.
 It counts complete task history and prints exact task inspection commands;
@@ -40,7 +45,7 @@ quiet reporting alone does not establish a stalled or failed model.
 ## Ask for a checked coding change
 
 The checked workflow, `--limit` and `--open` below are included in
-[v0.13.0](installation.md). For a first checked fixture
+[v0.14.0](installation.md). For a first checked fixture
 with no provider setup, run [`amx demo`](first-result.md).
 From a Git project with an initial commit and the selected native CLIs installed:
 
@@ -62,6 +67,11 @@ After an interrupted application, inspect and use `amx work recover latest` to
 resolve its journal without replaying the patch. See [work on a task](../working.md)
 for provider, isolation, deadlines and recovery details, or
 [advanced workflows](../workflows.md) for command-only comparisons and custom plans.
+
+A clean first review of the exact independently checked revision can finish
+with two native CLI turns, skipping the response and second review. Final
+acceptance checks still run; requested changes keep the full loop. Saved reports
+show skipped phases explicitly.
 
 Copy a stable run ID from `work list` when following up on older work. `--open`
 requires an explicit ID, directory or `latest`; it renders a fresh private HTML
@@ -122,7 +132,7 @@ Auto delivers eligible turns within the configured limits.
 amx send reviewer "Check the login proposal." --mode instruction -s work
 amx mode reviewer -j -s work
 amx mode reviewer --approve CANDIDATE_ID -s work
-amx tasks --to reviewer --status running -s work
+amx tasks --to reviewer -s work
 amx task TASK_ID -s work
 amx task TASK_ID --open -s work
 ```
@@ -130,6 +140,10 @@ amx task TASK_ID --open -s work
 Copy the exact pending candidate ID from the status. A queued or submitted
 item does not prove the model executed it; inspect its receipt and native
 terminal. Provider-specific guarantees are in [native collaboration](../native-delivery.md).
+
+Start with the unfiltered recipient history above so pending approval and
+submitted results stay visible. Add `--status running` only when you want to
+limit the view to running tasks.
 
 `tasks` searches retained history at the broker, newest first, with `--query`,
 `--status`, `--to` and `--limit` (1–200). Copy the printed **More** command for
@@ -151,9 +165,12 @@ amx deny claude reviewer commands -s work
 amx unlink claude reviewer -s work
 ```
 
-Manual stops future native dispatch. `deny` removes the chosen directional
-permission. `unlink` disables only the exact selected pair/group; `isolate ID` disconnects
-that session from all peers. Other groups or explicit grants can still provide access;
+Manual pauses future native dispatch and requests cancellation of an active
+peer turn where the adapter supports it. Inspect the receipt and native terminal:
+the request does not confirm that work stopped, and it does not interrupt an
+unrelated human turn. `deny` removes the chosen directional permission. `unlink`
+disables only the exact selected pair/group; `isolate ID` disconnects that session
+from all peers. Other groups or explicit grants can still provide access;
 inspect active tasks separately because already read context and completed
 effects cannot be undone.
 
@@ -178,4 +195,12 @@ also accept `-o` for `--open`. Text after a literal
 `--` keeps its original meaning. Long commands and flags remain available.
 `allow FROM TO commands|messages|pings` and the matching `deny` change only the
 selected permission; they do not enable receiver delivery or grant new memory
-access. Use [the complete command reference](../commands.md) for advanced options.
+access. In terminal Connections, inspect the recipient's delivery summary and
+press **Shift+D** for its settings or **Shift+A** to review a pending item.
+`amx delivery ID auto -s work` can dispatch existing eligible queued items and
+preserves saved subscriptions and limits. Choose Review first to inspect an
+exact item. Results of your own instructions use the correlated task channel,
+without a reverse message grant; receiving them as native turns still needs your
+own Results subscription and delivery readiness. Use `amx task TASK_ID` to inspect
+the recorded result directly. See [native collaboration](../native-delivery.md)
+and [the complete command reference](../commands.md) for advanced options.

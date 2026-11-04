@@ -531,6 +531,9 @@ func printGuidedPreview(out io.Writer, preview workflow.GuidedPreview, catalog s
 			maximum++
 		}
 	}
+	if preview.Plan.ReviewPolicy == workflow.ReviewPolicyEarlyApproval {
+		minimum = 2
+	}
 	fmt.Fprintf(out, "Preview: %s\nProject: %s\n\n", guidedLine(preview.Plan.Goal), guidedLine(preview.Repository))
 	for i, phase := range preview.Phases {
 		fmt.Fprintf(out, "  %d. %s\n", i+1, guidedLine(phase))
@@ -544,6 +547,9 @@ func printGuidedPreview(out io.Writer, preview workflow.GuidedPreview, catalog s
 	fmt.Fprintf(out, "Snapshot: %d selected files · %d bytes (limits: %d files, %d bytes)\n", preview.Selection.Files, preview.Selection.Bytes, workflow.MaxSnapshotFiles, workflow.MaxSnapshotBytes)
 	fmt.Fprintf(out, "Process containment: %s\nExecution: %s\n", guidedLine(preview.Plan.ProcessContainment), guidedLine(preview.Authority))
 	fmt.Fprintf(out, "Snapshot storage: %s · reviews: fresh context\n", guidedLine(preview.Plan.Storage))
+	if preview.Plan.ReviewPolicy == workflow.ReviewPolicyEarlyApproval {
+		fmt.Fprintln(out, "A clean first review skips the response and second review only for the same checked revision; final checks always run.")
+	}
 	fmt.Fprintln(out, "Preview only. No models started and no run files were written.")
 	if forced {
 		fmt.Fprintln(out, "Remove --dry-run to execute the approved request.")
@@ -808,6 +814,8 @@ func guidedPhaseLabel(id string) string {
 
 func guidedStateLabel(state string) string {
 	switch state {
+	case "skipped":
+		return "skipped; initial fresh review approved this revision"
 	case "verified":
 		return "checks passed"
 	case "completed":

@@ -1,0 +1,265 @@
+{
+  "schema_version": 1,
+  "kind": "subscription-route-engineering-smoke",
+  "native_tools": [
+    {
+      "provider": "codex",
+      "cli_version": "0.166.0",
+      "cli_sha256": "b8a11fedf24b2dfb59a70c9e52b030f9a508dcd49cd2dd0d41956f4c785156b8",
+      "authentication_route": "ChatGPT subscription",
+      "api_key_route": false,
+      "requested_model": "gpt-6.1-sol",
+      "requested_effort": "medium"
+    },
+    {
+      "provider": "claude",
+      "cli_version": "2.1.317",
+      "cli_sha256": "eb224419e344575faa4a1f39b290b649425a10cd5ee2ef1d003480cd9ae57eb0",
+      "authentication_route": "claude.ai first-party Pro subscription",
+      "api_key_route": false,
+      "workflow_profile_model_label": "sonnet",
+      "wrapper_requested_model": "claude-sonnet-5-5",
+      "requested_effort": "medium"
+    }
+  ],
+  "reproduce_artifact_check": {
+    "steps": [
+      "Write exercise.initial_files into one empty directory if inspecting the seed failure.",
+      "Write checked_application.final_files into another empty directory.",
+      "In the final directory, write independent_grader.contract_test_content_utf8 to external_contract_test.go.",
+      "With Go 1.27.3 (the recorded toolchain), run go test ./... -count=1 -timeout=30s. This performs no provider calls."
+    ],
+    "recorded_go_version": "go1.27.3",
+    "go_binary_sha256": "5f5eb6d0b2fb6aa0bb5d5f8c5f1c944e0de955c925f0111af92a9d8f79680b5b"
+  },
+  "recorded_date_utc": "2026-11-04",
+  "scope": "One newly authored generic standard-library Go exercise, checked and applied only to a disposable fixture. This validates the clean initial-approval workflow path; it is not a real-repository benchmark or matched timing comparison.",
+  "result": {
+    "completed": true,
+    "passed": true,
+    "elapsed_seconds": 69.093,
+    "workflow_started_at_utc": "2026-11-04T06:38:40.773541164Z",
+    "workflow_finished_at_utc": "2026-11-04T06:39:47.549172596Z",
+    "artifact_unchanged_during_independent_grading": true,
+    "observed_process_cleanup_errors": []
+  },
+  "binary": {
+    "version": "amx 0.14.0-pre (commit: bf3a578, built: 2026-11-04)",
+    "source_commit": "bf3a578bf3d8b04fd124530e8fd880dd2ca3192c",
+    "source_checkout_clean": true,
+    "sha256": "48e8647443d8261baf99bac4b68980eab43b1fe3494ac0e13442e404cc2adca6",
+    "compiler": "go1.27.3",
+    "scope": "Exact committed source build tested here, labeled 0.14.0-pre; this is not a published release archive."
+  },
+  "native_execution": {
+    "native_cli_sessions_started": 2,
+    "sequence": [
+      "codex: implement",
+      "claude: review"
+    ],
+    "nominal_preparation_estimate": 2,
+    "maximum_allowed_native_cli_sessions": 4,
+    "implementation_attempts": 1,
+    "overall_deadline_seconds": 480,
+    "review_policy": "early-approval-v1",
+    "why_two_sessions": "The original fresh review approved the exact independently checked revision; address-review and final-review were explicitly skipped. Final acceptance checks still ran before explicit fixture-only application.",
+    "early_approval": {
+      "version": 1,
+      "implementation_step": "implement",
+      "review_step": "review",
+      "tree": "eaf1c7999d690f32bea35369384154a1dd9e532a",
+      "content_sha256": "e7e69e1e216cb758dbc7ccf4a1a4adcf516592a94122d21d6d6585a1645e7378"
+    },
+    "phases": [
+      {
+        "id": "implement",
+        "state": "verified",
+        "harness": "codex",
+        "attempts": 1
+      },
+      {
+        "id": "review",
+        "state": "completed",
+        "harness": "claude",
+        "attempts": 1
+      },
+      {
+        "id": "address-review",
+        "state": "skipped",
+        "harness": "",
+        "attempts": 0,
+        "skip_reason": "initial_fresh_review_approved"
+      },
+      {
+        "id": "final-review",
+        "state": "skipped",
+        "harness": "",
+        "attempts": 0,
+        "skip_reason": "initial_fresh_review_approved"
+      },
+      {
+        "id": "final-check",
+        "state": "verified",
+        "harness": "",
+        "attempts": 0
+      }
+    ],
+    "observed_provider_resolved_model": {
+      "status": "unknown"
+    },
+    "provider_inference_requests": {
+      "status": "unknown",
+      "count": null
+    },
+    "tokens": {
+      "status": "unknown",
+      "count": null
+    },
+    "provider_charges": {
+      "status": "not_measured",
+      "amount": null
+    },
+    "route_controls": "API and alternate authentication routes were refused; no payment/authentication fallback was permitted. Subscription-route checks do not establish provider extra-usage entitlement or a financial cap.",
+    "reviews": [
+      {
+        "phase": "review",
+        "decision": "approve",
+        "findings_count": 0,
+        "reviewer_reported_running_tests": false
+      }
+    ],
+    "review_limit": "The original reviewer explicitly reported not running tests. Its approval is separate from the controller checks and frozen external grader. No second model review is claimed for the skipped final-review phase."
+  },
+  "exercise": {
+    "id": "strict-decimal-sum",
+    "source_commit": "979e7f2d7354a2f91bf8b3dedf83e0c1534dc1b7",
+    "snapshot_sha256": "dba1d389c77347aceb7bb74f257f8801f5cd67ae6e0687c1110062d9674eda25",
+    "prompt": "Implement Sum(input string) (int64, error) in the standalone sumtokens Go module. Input must contain one or more comma-separated integers. Every token must match the ASCII grammar [+-]?[0-9]+ exactly: no whitespace, empty tokens, Unicode digits, exponent/hex notation, underscores, or other characters. Leading zeros and either optional sign are accepted as decimal. Each token must fit signed int64. Add values from left to right, returning a non-nil error if any intermediate sum overflows signed int64, even if a later token would cancel it. For valid input return the exact sum and nil. The numeric return value on errors and error wording are unspecified. Use only the Go standard library and preserve this public function signature. Add useful tests. Work only on this newly authored generic exercise; do not inspect unrelated host paths or authentication files, and do not change any external evaluator files. Run the disclosed Go tests before finishing.",
+    "disclosed_check": [
+      "go",
+      "test",
+      "./...",
+      "-count=1",
+      "-timeout=30s"
+    ],
+    "check_path_normalization": "The local absolute Go executable path is represented as go in this public record.",
+    "original_task_file_sha256": "502984f6143f919ee3a09e535e7da1f72b3d41849652c8db6838f9c5c5b44241",
+    "private_project_source_files": 0,
+    "initial_files": [
+      {
+        "file": "go.mod",
+        "sha256": "88e2e00d336d85242d44689eebd47249bb937279bb0a96e4e1d97be06cb9fba9",
+        "content_utf8": "module example.org/sumtokens\n\ngo 1.24\n"
+      },
+      {
+        "file": "sum.go",
+        "sha256": "70e5f11af89386339a32c4c1085d992c50d3ba013b96e5d9741512bc2d9fb63d",
+        "content_utf8": "package sumtokens\n\nimport \"errors\"\n\n// Sum parses strict comma-separated signed decimal integers and sums them.\nfunc Sum(input string) (int64, error) {\n\treturn 0, errors.New(\"not implemented\")\n}\n"
+      },
+      {
+        "file": "sum_test.go",
+        "sha256": "4e7dc46042ca6cffa62d7ea5034e4eb815a0681b916d952e9acf521eb574249a",
+        "content_utf8": "package sumtokens\n\nimport \"testing\"\n\nfunc TestSumExamples(t *testing.T) {\n\tfor _, tc := range []struct {\n\t\tinput string\n\t\twant  int64\n\t}{\n\t\t{\"1,2,3\", 6},\n\t\t{\"-2,+5,0\", 3},\n\t\t{\"0007,-0002\", 5},\n\t} {\n\t\tgot, err := Sum(tc.input)\n\t\tif err != nil || got != tc.want {\n\t\t\tt.Errorf(\"Sum(%q) = %d, %v; want %d, nil\", tc.input, got, err, tc.want)\n\t\t}\n\t}\n}\n\nfunc TestSumRejectsInvalidExamples(t *testing.T) {\n\tfor _, input := range []string{\"\", \"1,,2\", \" 1\", \"9223372036854775807,1\"} {\n\t\tif _, err := Sum(input); err == nil {\n\t\t\tt.Errorf(\"Sum(%q) should return an error\", input)\n\t\t}\n\t}\n}\n"
+      }
+    ]
+  },
+  "independent_grader": {
+    "selected_before_execution": true,
+    "outside_actor_repository": true,
+    "test_sha256": "a5f66ff8b9817cb7602583fd23ad411aaf1d67535d4407daa55e48840a1d8370",
+    "driver_sha256": "19fc5d3fa9f0a412a0b29e911c64c11e752cd61c27626fade143c58eba26a17a",
+    "contract_test_content_utf8": "package sumtokens\n\nimport (\n\t\"math/rand\"\n\t\"strconv\"\n\t\"strings\"\n\t\"testing\"\n)\n\nfunc TestExternalContractValid(t *testing.T) {\n\tfor _, tc := range []struct {\n\t\tinput string\n\t\twant  int64\n\t}{\n\t\t{\"0\", 0}, {\"-0\", 0}, {\"+0\", 0}, {\"+17\", 17}, {\"-17\", -17},\n\t\t{\"0000000007\", 7}, {\"-00007,+0002\", -5}, {\"1,2,3\", 6},\n\t\t{\"9223372036854775807\", 9223372036854775807},\n\t\t{\"-9223372036854775808\", -9223372036854775808},\n\t\t{\"9223372036854775807,-9223372036854775808\", -1},\n\t\t{\"-9223372036854775808,9223372036854775807\", -1},\n\t\t{\"9223372036854775807,-1,1\", 9223372036854775807},\n\t} {\n\t\tgot, err := Sum(tc.input)\n\t\tif err != nil || got != tc.want {\n\t\t\tt.Errorf(\"Sum(%q) = %d, %v; want %d, nil\", tc.input, got, err, tc.want)\n\t\t}\n\t}\n}\n\nfunc TestExternalContractInvalid(t *testing.T) {\n\tfor _, input := range []string{\n\t\t\"\", \",\", \",1\", \"1,\", \"1,,2\", \"+\", \"-\", \"--1\", \"++1\", \"+-1\", \"-+1\",\n\t\t\" 1\", \"1 \", \"1, 2\", \"1\\t\", \"1\\n\", \"1\\r\", \"1\\x002\", \"1,\\n2\",\n\t\t\"\u0661\", \"\uff11\", \"1\\u00a0\", \"0x10\", \"1_000\", \"1.0\", \"1e2\", \"NaN\",\n\t\t\"9223372036854775808\", \"-9223372036854775809\", \"999999999999999999999999999999\",\n\t\t\"9223372036854775807,1\", \"-9223372036854775808,-1\",\n\t\t\"9223372036854775807,1,-1\", \"-9223372036854775808,-1,1\",\n\t} {\n\t\tif _, err := Sum(input); err == nil {\n\t\t\tt.Errorf(\"Sum(%q) accepted invalid input or intermediate overflow\", input)\n\t\t}\n\t}\n}\n\nfunc TestExternalContractGenerated(t *testing.T) {\n\trng := rand.New(rand.NewSource(719))\n\tfor iteration := 0; iteration < 200; iteration++ {\n\t\tparts := make([]string, 1+rng.Intn(30))\n\t\tvar want int64\n\t\tfor index := range parts {\n\t\t\tn := int64(rng.Intn(2000001) - 1000000)\n\t\t\tparts[index] = strconv.FormatInt(n, 10)\n\t\t\twant += n\n\t\t}\n\t\tinput := strings.Join(parts, \",\")\n\t\tgot, err := Sum(input)\n\t\tif err != nil || got != want {\n\t\t\tt.Fatalf(\"generated Sum(%q) = %d, %v; want %d\", input, got, err, want)\n\t\t}\n\t}\n}\n",
+    "passed": true,
+    "exit_code": 0,
+    "timed_out": false,
+    "grader_model_calls": 0,
+    "candidate_content_preserved": true,
+    "controls": {
+      "seed_fails": {
+        "passed": false,
+        "model_calls": 0,
+        "cleanup_errors": []
+      },
+      "known_correct_passes": {
+        "passed": true,
+        "model_calls": 0,
+        "cleanup_errors": []
+      },
+      "wrapping_overflow_mutation_fails": {
+        "passed": false,
+        "model_calls": 0,
+        "cleanup_errors": []
+      },
+      "whitespace_acceptance_mutation_fails": {
+        "passed": false,
+        "model_calls": 0,
+        "cleanup_errors": []
+      }
+    }
+  },
+  "checked_application": {
+    "controller_project_check_passed": true,
+    "controller_check_content_unchanged": true,
+    "controller_checks": [
+      {
+        "phase": "implement",
+        "passed": true,
+        "checks_passed": 1,
+        "revision_unchanged": true
+      },
+      {
+        "phase": "final-check",
+        "passed": true,
+        "checks_passed": 1,
+        "revision_unchanged": true
+      }
+    ],
+    "full_retained_report_load_verified": true,
+    "original_review_and_skip_binding_verified": true,
+    "retained_skipped_json_matches_report": true,
+    "patch_sha256": "9b453d5c337e003314c7347161bb9e385021e6ece6c89b929efdbf7e1e1353ac",
+    "confirmed_receipt": {
+      "applied": true,
+      "phase": "finished",
+      "candidate": "mission-result",
+      "patch_sha256": "9b453d5c337e003314c7347161bb9e385021e6ece6c89b929efdbf7e1e1353ac"
+    },
+    "receipt_original_bytes_sha256": "eb48cc98b59930c0bbe34f9d95edb1eaf9a880cbfe28ab560f868cd72214c082",
+    "independent_patch_reproduction": "The captured patch was separately applied to a fresh copy of the initial fixture; every resulting file matched the three final applied files byte for byte.",
+    "final_files": [
+      {
+        "file": "go.mod",
+        "sha256": "88e2e00d336d85242d44689eebd47249bb937279bb0a96e4e1d97be06cb9fba9",
+        "content_utf8": "module example.org/sumtokens\n\ngo 1.24\n"
+      },
+      {
+        "file": "sum.go",
+        "sha256": "6e8ee17c2a1ea23c59edcf55b5bc42141d3cd7d4e4d57f343dfa181a0d4655db",
+        "content_utf8": "package sumtokens\n\nimport (\n\t\"errors\"\n\t\"math\"\n\t\"strconv\"\n\t\"strings\"\n)\n\n// Sum parses strict comma-separated signed decimal integers and sums them.\nfunc Sum(input string) (int64, error) {\n\tvar total int64\n\tfor _, token := range strings.Split(input, \",\") {\n\t\tdigits := token\n\t\tif len(digits) > 0 && (digits[0] == '+' || digits[0] == '-') {\n\t\t\tdigits = digits[1:]\n\t\t}\n\t\tif len(digits) == 0 {\n\t\t\treturn 0, errors.New(\"integer requires digits\")\n\t\t}\n\t\tfor i := 0; i < len(digits); i++ {\n\t\t\tif digits[i] < '0' || digits[i] > '9' {\n\t\t\t\treturn 0, errors.New(\"invalid decimal integer\")\n\t\t\t}\n\t\t}\n\t\tvalue, err := strconv.ParseInt(token, 10, 64)\n\t\tif err != nil {\n\t\t\treturn 0, err\n\t\t}\n\t\t// Check before adding so every intermediate sum must fit int64.\n\t\tif (value > 0 && total > math.MaxInt64-value) ||\n\t\t\t(value < 0 && total < math.MinInt64-value) {\n\t\t\treturn 0, errors.New(\"sum overflows int64\")\n\t\t}\n\t\ttotal += value\n\t}\n\treturn total, nil\n}\n"
+      },
+      {
+        "file": "sum_test.go",
+        "sha256": "eab041284f75d0bdf6a6544d34cb258f20a44f49bcea0c0e66e8a04ac5edc133",
+        "content_utf8": "package sumtokens\n\nimport \"testing\"\n\nfunc TestSumBoundaries(t *testing.T) {\n\tfor _, tc := range []struct {\n\t\tinput string\n\t\twant  int64\n\t}{\n\t\t{\"0\", 0},\n\t\t{\"+0,-0,0000,-000,+000\", 0},\n\t\t{\"010,+008,-009\", 9},\n\t\t{\"9223372036854775807\", 9223372036854775807},\n\t\t{\"-9223372036854775808\", -9223372036854775808},\n\t\t{\"+0009223372036854775807\", 9223372036854775807},\n\t\t{\"-0009223372036854775808\", -9223372036854775808},\n\t\t{\"9223372036854775806,1,0\", 9223372036854775807},\n\t\t{\"-9223372036854775807,-1,0\", -9223372036854775808},\n\t\t{\"9223372036854775807,-9223372036854775808\", -1},\n\t\t{\"-9223372036854775808,9223372036854775807\", -1},\n\t\t{\"9223372036854775807,-1,1\", 9223372036854775807},\n\t\t{\"-9223372036854775808,1,-1\", -9223372036854775808},\n\t} {\n\t\tt.Run(tc.input, func(t *testing.T) {\n\t\t\tgot, err := Sum(tc.input)\n\t\t\tif err != nil || got != tc.want {\n\t\t\t\tt.Errorf(\"Sum(%q) = %d, %v; want %d, nil\", tc.input, got, err, tc.want)\n\t\t\t}\n\t\t})\n\t}\n}\n\nfunc TestSumRejectsMalformedTokens(t *testing.T) {\n\tfor _, input := range []string{\n\t\t\"\", \",\", \",1\", \"1,\", \"1,,2\", \"+\", \"-\", \"1,+,2\",\n\t\t\" 1\", \"1 \", \"1, 2\", \"1\\t\", \"\\n1\", \"1\\r\", \"1\\u00a0\",\n\t\t\"\u0661\", \"\uff11\uff12\", \"\u22121\", \"1,\u0662\", \"1\\x00\", \"\\xff\",\n\t\t\"1.0\", \"1e2\", \"0x10\", \"0XFF\", \"0b10\", \"0o10\", \"1_000\",\n\t\t\"++1\", \"--1\", \"+-1\", \"-+1\", \"1+2\", \"1-2\", \"NaN\", \"Inf\",\n\t} {\n\t\tt.Run(input, func(t *testing.T) {\n\t\t\tif _, err := Sum(input); err == nil {\n\t\t\t\tt.Errorf(\"Sum(%q) should return an error\", input)\n\t\t\t}\n\t\t})\n\t}\n}\n\nfunc TestSumRejectsOverflow(t *testing.T) {\n\tfor _, input := range []string{\n\t\t\"9223372036854775808\", \"+9223372036854775808\", \"-9223372036854775809\",\n\t\t\"9999999999999999999999999999999999999999\",\n\t\t\"9223372036854775808,-1\", \"-9223372036854775809,1\",\n\t\t\"9223372036854775807,1\", \"-9223372036854775808,-1\",\n\t\t\"9223372036854775807,1,-1\", \"-9223372036854775808,-1,1\",\n\t\t\"9223372036854775807,9223372036854775807\",\n\t\t\"-9223372036854775808,-9223372036854775808\",\n\t} {\n\t\tt.Run(input, func(t *testing.T) {\n\t\t\tif _, err := Sum(input); err == nil {\n\t\t\t\tt.Errorf(\"Sum(%q) should return an error\", input)\n\t\t\t}\n\t\t})\n\t}\n}\n\nfunc TestSumExamples(t *testing.T) {\n\tfor _, tc := range []struct {\n\t\tinput string\n\t\twant  int64\n\t}{\n\t\t{\"1,2,3\", 6},\n\t\t{\"-2,+5,0\", 3},\n\t\t{\"0007,-0002\", 5},\n\t} {\n\t\tgot, err := Sum(tc.input)\n\t\tif err != nil || got != tc.want {\n\t\t\tt.Errorf(\"Sum(%q) = %d, %v; want %d, nil\", tc.input, got, err, tc.want)\n\t\t}\n\t}\n}\n\nfunc TestSumRejectsInvalidExamples(t *testing.T) {\n\tfor _, input := range []string{\"\", \"1,,2\", \" 1\", \"9223372036854775807,1\"} {\n\t\tif _, err := Sum(input); err == nil {\n\t\t\tt.Errorf(\"Sum(%q) should return an error\", input)\n\t\t}\n\t}\n}\n"
+      }
+    ]
+  },
+  "provenance": {
+    "prepared_manifest_original_bytes_sha256": "35cc01320ae91e9281256b55b58b0ca0a9458c5e2c718dcb65c5e556600c20d0",
+    "plan_original_bytes_sha256": "ba105f6fe2a361caadab2ce8441172db9fedf8d894fe99be75a734829e8a738a",
+    "external_payload_original_bytes_sha256": "574797a2158c9a689c80429861cc40887a77243dc4c73995bbaaaeb377dfba62",
+    "smoke_result_original_bytes_sha256": "f8a03976938cac2dc5dcdf95b7797631823820745a0a6260d8c7b51ae0965efb",
+    "workflow_report_original_bytes_sha256": "8b9878bcda7fd3401d76a574bacfe35b8636f1014af14cd8d9d2bf2b8b7e3258"
+  },
+  "prior_public_smoke": {
+    "record": "subscription-smoke-2026-11-03.json",
+    "native_cli_sessions_started": 4,
+    "interpretation": "Separate descriptive engineering records; they are not matched trials and establish no speedup or competitive advantage."
+  },
+  "limits": [
+    "One small generic exercise and one successful workflow on the clean initial-approval path.",
+    "No comparison arm, equal-inference control, blinded human grading, first-time-user study, seven-day operational evidence, speedup or competitive-win claim.",
+    "The native CLIs and commands ran as trusted local tools. Outer cleanup uses pinned observed process identities; the workflow reports process-group containment. This is not a filesystem/network isolation result or a guarantee against unobserved detached host work.",
+    "Provider-native transcripts, authentication contents, account identities and local host paths are excluded from this public record."
+  ]
+}

@@ -24,7 +24,7 @@ const nativeObservedAgentsSQL = `SELECT json_extract(data,'$.id'),
  FROM records INDEXED BY records_agent_observation_metadata WHERE kind='agent' AND json_extract(data,'$.id')>?`
 
 func (s *Store) nativeObservationInventory(ctx context.Context, q queryer, after string, limit int) (any, *Fault) {
-	ctx, cancel := context.WithTimeout(ctx, operationalObservationReadBudget)
+	ctx, cancel := operationalQueryContext(ctx)
 	defer cancel()
 	if limit <= 0 || limit > 200 {
 		limit = 200
@@ -32,7 +32,7 @@ func (s *Store) nativeObservationInventory(ctx context.Context, q queryer, after
 	agents := map[string]nativeObservedAgent{}
 	for id, config := range s.cfg.Agents {
 		if err := ctx.Err(); err != nil {
-			return nil, internal(err)
+			return nil, operationalQueryFault(ctx, err)
 		}
 		if id > after {
 			agents[id] = nativeObservedAgent{ID: id, State: "active", Interaction: config.Interaction, Harness: config.Harness, NativeOnly: config.NativeOnly}
@@ -42,19 +42,19 @@ func (s *Store) nativeObservationInventory(ctx context.Context, q queryer, after
 	// Read only indexed identity/routing metadata, including retired overrides.
 	rows, err := q.QueryContext(ctx, nativeObservedAgentsSQL, after)
 	if err != nil {
-		return nil, internal(err)
+		return nil, operationalQueryFault(ctx, err)
 	}
 	for rows.Next() {
 		var agent nativeObservedAgent
 		if err = rows.Scan(&agent.ID, &agent.State, &agent.Interaction, &agent.Harness, &agent.NativeOnly, &agent.External); err != nil {
 			rows.Close()
-			return nil, internal(err)
+			return nil, operationalQueryFault(ctx, err)
 		}
 		agents[agent.ID] = agent
 	}
 	if err = rows.Err(); err != nil {
 		rows.Close()
-		return nil, internal(err)
+		return nil, operationalQueryFault(ctx, err)
 	}
 	rows.Close()
 	ids := make([]string, 0, len(agents))
@@ -73,7 +73,7 @@ func (s *Store) nativeObservationInventory(ctx context.Context, q queryer, after
 	for _, id := range ids {
 		status, err := s.nativeObservationStatus(ctx, q, agents[id])
 		if err != nil {
-			return nil, internal(err)
+			return nil, operationalQueryFault(ctx, err)
 		}
 		statuses = append(statuses, status)
 		cursor = id

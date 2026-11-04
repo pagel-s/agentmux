@@ -5,7 +5,7 @@ before applying them to your project.
 
 ## Get your first checked result
 
-[Install v0.13.0](getting-started/installation.md), then run:
+[Install v0.14.0](getting-started/installation.md), then run:
 
 ```sh
 amx demo
@@ -38,7 +38,7 @@ workspace switching and individual-session recovery. A
 [source build](getting-started/installation.md#build-from-source) remains an
 alternative to release binaries.
 
-v0.13.0 includes the daily power-user controls: `amx context` explains the selected workspace, `amx tasks`
+v0.14.0 includes the daily power-user controls: `amx context` explains the selected workspace, `amx tasks`
 searches retained delegation history, and `amx task ID --open -s NAME` opens
 the exact task's evidence and recovery controls. `amx observe` summarizes fresh
 broker/worker reporting and complete retained task counts, with bounded attention

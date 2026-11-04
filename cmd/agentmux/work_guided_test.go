@@ -56,6 +56,9 @@ func TestGuidedCLIEntireProjectJourneyWithoutJSONConfiguration(t *testing.T) {
 	if len(envelope.Result.Plan.Steps) != 5 || !strings.Contains(envelope.Result.CheckSource, "explicit") {
 		t.Fatalf("missing guided plan: %+v", envelope.Result)
 	}
+	if envelope.Result.MinNativeTurns != 2 || envelope.Result.MaxNativeTurns != 6 || envelope.Result.Plan.ReviewPolicy != workflow.ReviewPolicyEarlyApproval {
+		t.Fatalf("preview lost conditional native turn bounds: %+v", envelope.Result)
+	}
 	if envelope.Result.Selection.Files < 1 || envelope.Result.Selection.Bytes < 1 || envelope.Result.Plan.ProcessContainment != "process-group" {
 		t.Fatalf("missing snapshot or containment preflight: %+v", envelope.Result)
 	}
@@ -69,6 +72,9 @@ func TestGuidedCLIEntireProjectJourneyWithoutJSONConfiguration(t *testing.T) {
 	out, diagnostics := invokeGuidedCLI(t, exitSuccess, args...)
 	if !strings.Contains(out, "Checks:") || !strings.Contains(out, "Evidence:") || !strings.Contains(diagnostics, "Review final revision") {
 		t.Fatalf("missing everyday result/progress: %s\n%s", out, diagnostics)
+	}
+	if !strings.Contains(out, "skipped; initial fresh review approved this revision") {
+		t.Fatalf("CLI represented a skipped phase as an executed review: %s", out)
 	}
 	if _, err := os.Stat(filepath.Join(repo, "answer.txt")); !os.IsNotExist(err) {
 		t.Fatal("run changed source")
@@ -120,6 +126,9 @@ func TestGuidedCLIPreviewAndDryRunNeverStartCommands(t *testing.T) {
 		out, _ := invokeGuidedCLI(t, exitSuccess, args...)
 		if !strings.Contains(out, "Preview only") || !strings.Contains(out, "no run files") {
 			t.Fatalf("not a clear preview: %s", out)
+		}
+		if !strings.Contains(out, "native turns: 2–6") || !strings.Contains(out, "final checks always run") {
+			t.Fatalf("preview obscures conditional execution: %s", out)
 		}
 	}
 	if _, err := os.Stat(catalog); !os.IsNotExist(err) {

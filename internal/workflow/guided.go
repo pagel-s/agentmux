@@ -48,6 +48,7 @@ type GuidedPreview struct {
 	Phases         []string          `json:"phases"`
 	Authority      string            `json:"authority"`
 	MaxNativeTurns int               `json:"max_native_turns"`
+	MinNativeTurns int               `json:"min_native_turns"`
 }
 
 // MarshalJSON publishes reference metadata without the environment capabilities
@@ -152,7 +153,7 @@ func prepareGuided(ctx context.Context, options GuidedOptions) (GuidedPreview, e
 		containment = "process-group"
 	}
 	plan := Plan{
-		Version: 1, Kind: "work", Repository: repo, Goal: options.Goal, Execution: "local", Mode: "mission",
+		Version: 1, Kind: "work", ReviewPolicy: ReviewPolicyEarlyApproval, Repository: repo, Goal: options.Goal, Execution: "local", Mode: "mission",
 		Storage: options.Storage, Isolation: options.Isolation,
 		ProcessContainment: containment,
 		TimeoutSeconds:     timeout, MaxAttempts: attempts, MaxParallel: 1,
@@ -210,9 +211,10 @@ func prepareGuided(ctx context.Context, options GuidedOptions) (GuidedPreview, e
 	}
 	return GuidedPreview{
 		Plan: plan, Selection: selection, Repository: repo, Output: output, CheckSource: checkSource,
-		Phases:         []string{"Implement and check", "Review the implementation", "Address review findings", "Review the final revision", "Run final checks"},
+		Phases:         []string{"Implement and check", "Review the implementation in fresh context", "Address findings if changes are requested", "Review the final revision if findings were addressed", "Always run final checks"},
 		Authority:      authority,
 		MaxNativeTurns: 2*attempts + 2,
+		MinNativeTurns: 2,
 	}, nil
 }
 

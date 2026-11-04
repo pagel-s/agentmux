@@ -141,6 +141,7 @@ func runManagedLifecycle(operation string, options managedCLIOptions, state stri
 		runtime, err = launcher.Down(shutdownCtx)
 		cancel()
 		if err != nil {
+			printManagedShutdownRecovery(stderr, executable, state, operation)
 			return managedCLIError(stdout, operation, "", exitRuntime, err)
 		}
 	}
@@ -165,6 +166,20 @@ func runManagedLifecycle(operation string, options managedCLIOptions, state stri
 		}
 	}
 	return exitSuccess
+}
+
+func printManagedShutdownRecovery(out io.Writer, executable, state, operation string) {
+	command := func(args ...string) string {
+		return managedlaunch.ShellCommand(append([]string{executable}, args...))
+	}
+	fmt.Fprintln(out, "Shutdown could not be confirmed. Broker and native terminal availability are unconfirmed.")
+	fmt.Fprintln(out, "Inspect this exact workspace:", command("managed", "status", "--state", state))
+	fmt.Fprintln(out, "If owned native terminals are still running, open them with:", command("attach", "--state", state))
+	fmt.Fprintln(out, "Choose each affected owned terminal and finish or exit its native CLI normally. Closing the workbench or detaching does not exit a native CLI.")
+	fmt.Fprintln(out, "Then retry the ordered shutdown:", command("managed", "down", "--state", state))
+	if operation == "restart" {
+		fmt.Fprintln(out, "Only after shutdown succeeds, retry:", command("managed", "restart", "--state", state))
+	}
 }
 
 func watchManagedStatus(state string, out io.Writer) int {

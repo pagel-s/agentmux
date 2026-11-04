@@ -102,6 +102,7 @@ type console struct {
 	agents                                                []managed.AgentInfo
 	selected                                              int
 	target                                                int
+	recipientInitialized                                  bool
 	scope                                                 int
 	task                                                  int
 	tab                                                   int
@@ -623,6 +624,15 @@ func (m console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		observedID := ""
 		teamTargetID := ""
 		recipientID := ""
+		initializeRecipient := !m.recipientInitialized && len(m.agents) == 0 && m.target == 0 &&
+			m.composer == "" && len(m.text) == 0 && m.composeTarget == "" && m.failedDraft == nil &&
+			m.teamAction == nil && m.nativeAction == nil && m.ownerReview == nil &&
+			m.reader == nil && m.workspacePicker == nil && !m.busy
+		if len(m.agents) > 0 || len(msg.agents) > 0 {
+			// A first roster may contain only one session. Later joins, sender
+			// changes and refreshes must preserve the independent recipient.
+			m.recipientInitialized = true
+		}
 		if len(m.agents) > 0 {
 			teamTargetID = m.agents[m.teamMemberIndex%len(m.agents)].ID
 			recipientID = m.agents[m.target%len(m.agents)].ID
@@ -657,6 +667,14 @@ func (m console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if len(m.agents) > 0 && m.selected >= len(m.agents) {
 			m.selected = len(m.agents) - 1
+		}
+		if initializeRecipient {
+			for i, a := range m.agents {
+				if a.ID != m.selectedID() && a.State == "active" {
+					m.target = i
+					break
+				}
+			}
 		}
 		m.resetSessionHistory(previousID, m.selectedID())
 		m.syncHistoryScopes()

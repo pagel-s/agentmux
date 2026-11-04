@@ -68,7 +68,7 @@ func Run(ctx context.Context, plan Plan, output string, allowModels bool) (repor
 	if err != nil {
 		return report, err
 	}
-	report = Report{Kind: plan.Kind, Storage: plan.Storage, Isolation: plan.Isolation, ReviewContext: "fresh", Version: 1, ID: randomRunID(), Mode: plan.Mode, Goal: plan.Goal, Execution: plan.Execution, ProcessContainment: plan.ProcessContainment, State: "running", Repository: plan.Repository, Output: dir, StartedAt: timestamp()}
+	report = Report{Kind: plan.Kind, ReviewPolicy: plan.ReviewPolicy, Storage: plan.Storage, Isolation: plan.Isolation, ReviewContext: "fresh", Version: 1, ID: randomRunID(), Mode: plan.Mode, Goal: plan.Goal, Execution: plan.Execution, ProcessContainment: plan.ProcessContainment, State: "running", Repository: plan.Repository, Output: dir, StartedAt: timestamp()}
 	defer func() {
 		defer func() { runErr = redactEarlyIsolationError(ctx, runErr) }()
 		runErr = redactEarlyIsolationError(ctx, runErr)
@@ -239,9 +239,28 @@ func runMission(ctx context.Context, p Plan, report Report) (Report, error) {
 		if err = ctx.Err(); err != nil {
 			return report, err
 		}
+		if step.ID == "address-review" && p.ReviewPolicy == ReviewPolicyEarlyApproval {
+			report.EarlyApproval, err = selectEarlyApproval(ctx, report)
+			if err != nil {
+				return report, err
+			}
+		}
 		sdir := filepath.Join(report.Output, "steps", step.ID)
 		if err = os.Mkdir(sdir, 0700); err != nil {
 			return report, err
+		}
+		if report.EarlyApproval != nil && (step.ID == "address-review" || step.ID == "final-review") {
+			skipped := StepResult{ID: step.ID, DependsOn: step.DependsOn, ReadOnly: step.ReadOnly, GateReview: step.GateReview, SkipReason: earlyApprovalSkipReason,
+				CandidateResult: CandidateResult{ID: step.ID, State: "skipped", Worktree: report.Worktree, StartedAt: timestamp(), FinishedAt: timestamp(), EvidencePath: filepath.Join(sdir, "skipped.json")}}
+			if err = saveIsolationJSON(ctx, skipped.EvidencePath, &skipped); err != nil {
+				return report, err
+			}
+			report.Steps = append(report.Steps, skipped)
+			completed[step.ID] = skipped
+			if err = saveIsolationJSON(ctx, filepath.Join(report.Output, "report.json"), &report); err != nil {
+				return report, err
+			}
+			continue
 		}
 		result := CandidateResult{ID: step.ID, State: "running", Worktree: report.Worktree, StartedAt: timestamp()}
 		report.Steps = append(report.Steps, StepResult{ID: step.ID, DependsOn: step.DependsOn, ReadOnly: step.ReadOnly, GateReview: step.GateReview, CandidateResult: result})
@@ -395,6 +414,16 @@ func missionStepGoal(p Plan, step Step, candidate Candidate, completed map[strin
 
 func executeCandidate(ctx context.Context, p Plan, c Candidate, r CandidateResult, dir, goal string, verify bool) (result CandidateResult) {
 	result = r
+	if p.ReviewPolicy == ReviewPolicyEarlyApproval {
+		result.CandidateID = c.ID
+		var err error
+		result.ProfileSHA256, err = candidateProfileDigest(c)
+		if err != nil {
+			result.State = "failed"
+			result.Error = "retain workflow candidate profile identity"
+			return
+		}
+	}
 	start := time.Now()
 	result.State = "running"
 	defer func() {
@@ -784,9 +813,21 @@ func compactReport(r Report) Report {
 		}
 		return &copy
 	}
+	compactUsage := func(raw json.RawMessage) json.RawMessage {
+		canonical, err := canonicalUsageJSON(raw)
+		if err != nil || len(canonical) > 8192 {
+			r.DiagnosticsTruncated = true
+			return nil
+		}
+		return canonical
+	}
 	compactCandidate := func(c CandidateResult) CandidateResult {
 		var cut bool
-		if c.Review != nil {
+		// The explicit guided policy validates its original review verdict on
+		// reload. Parsing already bounds the entire verdict to 128 KiB; preserve
+		// those authority-bearing bytes and findings rather than excerpting them.
+		preserveReview := r.ReviewPolicy == ReviewPolicyEarlyApproval && c.Review != nil
+		if c.Review != nil && !preserveReview {
 			copy := *c.Review
 			copy.Summary, cut = trim(copy.Summary, 4096)
 			c.ReviewTruncated = c.ReviewTruncated || cut
@@ -805,22 +846,18 @@ func compactReport(r Report) Report {
 		c.Input, cut = trim(c.Input, 32<<10)
 		c.InputTruncated = c.InputTruncated || cut
 		r.DiagnosticsTruncated = r.DiagnosticsTruncated || cut
-		c.Result, cut = trim(c.Result, 64<<10)
-		c.Truncated = c.Truncated || cut
-		r.DiagnosticsTruncated = r.DiagnosticsTruncated || cut
+		if !preserveReview {
+			c.Result, cut = trim(c.Result, 64<<10)
+			c.Truncated = c.Truncated || cut
+			r.DiagnosticsTruncated = r.DiagnosticsTruncated || cut
+		}
 		c.Error, cut = trim(c.Error, 4096)
 		r.DiagnosticsTruncated = r.DiagnosticsTruncated || cut
 		c.Verification = compactVerification(c.Verification)
-		if len(c.Usage) > 8192 {
-			c.Usage = nil
-			r.DiagnosticsTruncated = true
-		}
+		c.Usage = compactUsage(c.Usage)
 		c.UsageRecords = append([]AttemptUsage(nil), c.UsageRecords...)
 		for i := range c.UsageRecords {
-			if len(c.UsageRecords[i].Usage) > 8192 {
-				c.UsageRecords[i].Usage = nil
-				r.DiagnosticsTruncated = true
-			}
+			c.UsageRecords[i].Usage = compactUsage(c.UsageRecords[i].Usage)
 		}
 		return c
 	}
@@ -838,10 +875,15 @@ func compactReport(r Report) Report {
 	if data, err := json.MarshalIndent(r, "", "  "); err == nil && len(data) > 24<<20 {
 		r.DiagnosticsTruncated = true
 		strip := func(c CandidateResult) CandidateResult {
+			if c.State == "skipped" {
+				return c
+			}
 			c.Input = ""
 			c.InputTruncated = true
-			c.Result = ""
-			c.Truncated = true
+			if r.ReviewPolicy != ReviewPolicyEarlyApproval || c.Review == nil {
+				c.Result = ""
+				c.Truncated = true
+			}
 			c.Usage = nil
 			c.UsageRecords = nil
 			if c.Verification != nil {

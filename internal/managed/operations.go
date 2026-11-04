@@ -20,8 +20,9 @@ type Request struct {
 	Args                json.RawMessage `json:"args"`
 }
 type Fault struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
+	Code       string `json:"code"`
+	Message    string `json:"message"`
+	ReasonCode string `json:"reason_code,omitempty"`
 }
 
 func (f *Fault) Error() string          { return f.Code + ": " + f.Message }
@@ -34,6 +35,30 @@ func internal(err error) *Fault {
 		return fault("cancelled", "request cancelled")
 	}
 	return fault("internal", "coordination storage operation failed")
+}
+
+// OperationalReadReasonCode is a bounded, additive refinement of existing fault
+// codes. Older controllers omit it. Unknown or incompatible wire values never
+// become diagnostic labels, even when a server includes private error details.
+func (f *Fault) OperationalReadReasonCode() string {
+	if f == nil {
+		return ""
+	}
+	switch f.ReasonCode {
+	case "operational_read_busy":
+		if f.Code == "unavailable" {
+			return f.ReasonCode
+		}
+	case "query_budget_exhausted":
+		if f.Code == "cancelled" {
+			return f.ReasonCode
+		}
+	case "shutdown":
+		if f.Code == "unavailable" || f.Code == "cancelled" {
+			return f.ReasonCode
+		}
+	}
+	return ""
 }
 
 func isWrite(op string) bool {

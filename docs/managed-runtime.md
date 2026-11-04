@@ -107,18 +107,33 @@ The CLI generates a random request ID when one is omitted. Within the same authe
 
 When `--state` is omitted, `up` uses `.agentmux-state/SESSION` under the current directory. Choose a short explicit path if the Unix socket path would exceed 100 bytes. An existing state directory must contain identical saved configuration; use a different directory for a changed experiment or team definition.
 
-Each run uses its own private `STATE/tmux.sock`, with an attempt ID on the session and tracked panes. It does not connect to the user's default tmux server. A supervisor watches the authenticated agent registry and adds windows for newly spawned agents. Worker or broker crashes are observed rather than automatically restarted. The owner workbench shows the roster, native terminal previews, coordination content, tasks, shared memory, and live permission controls. It is a content-sensitive owner surface; agents must not receive its credential. For a metadata summary in v0.13.0, use [`amx observe --watch --state STATE`](observability.md); `managed status --watch` retains the lower-level lifecycle view.
+Each run uses its own private `STATE/tmux.sock`, with an attempt ID on the session and tracked panes. It does not connect to the user's default tmux server. A supervisor watches the authenticated agent registry and adds windows for newly spawned agents. Worker or broker crashes are observed rather than automatically restarted. The owner workbench shows the roster, native terminal previews, coordination content, tasks, shared memory, and live permission controls. It is a content-sensitive owner surface; agents must not receive its credential. For a metadata summary, use [`amx observe --watch --state STATE`](observability.md); v0.14.0 adds fixed collection diagnostics and offline capture reports. `managed status --watch` retains the lower-level lifecycle view.
 
 Use `managed activity --state DIRECTORY` for a content-sensitive owner JSON snapshot of recent messages, task results/failures, events, and reported usage. Add `--watch` for a bounded terminal view; model and message text is quoted to escape terminal controls and Unicode direction controls. This view always uses the state's owner credential, includes private coordination content, and is not an agent-facing API. The default workbench also uses the owner credential and displays coordination content. See [interactive work sessions](work-sessions.md) for its shortcuts and native terminal workflow.
 
-v0.13.0 also provides `amx tasks --state DIRECTORY` for filtered,
+Use `amx tasks --state DIRECTORY` for filtered,
 paginated retained task history, and `amx task TASK_ID --state DIRECTORY` for
 one exact record. Add `--open` to open that task directly in the workbench,
 including an older task or retired recipient. Opening changes no task state;
 recovery still needs an explicit review of the exact task/version. These
-shortcuts are included in v0.13.0; `managed call` remains available.
+shortcuts have been available since v0.13.0; `managed call` remains available.
 
-`down` interrupts owned worker processes first, waits for their terminal processes to exit, and then stops the broker and supervisor. It removes only the attempt's tracked session. If termination or ownership cannot be confirmed, it reports attention and leaves the broker available for inspection. A stale stop request cannot stop a new attempt. Durable tasks and memory remain on disk. `restart` performs an explicit ordered stop/start; it does not silently retry uncertain deliveries or reset the persisted runtime budget. After a run's budget expires, start a new state directory for a new run.
+`down` interrupts owned worker processes first, waits for their terminal processes to exit, and then stops the broker and supervisor. It removes only the attempt's tracked session. A stale stop request cannot stop a new attempt. Durable tasks and memory remain on disk. `restart` performs an explicit ordered stop/start; it does not silently retry uncertain deliveries or reset the persisted runtime budget. After a run's budget expires, start a new state directory for a new run.
+
+If termination or ownership cannot be confirmed, shutdown fails. Inspect current
+status before assuming the broker or native terminals are available or stopped.
+The CLI retains its JSON fault and prints shell-quoted recovery commands for the
+exact state directory to stderr:
+
+```sh
+amx managed status --state DIRECTORY
+amx attach --state DIRECTORY
+# Finish or exit each affected owned native CLI normally, then:
+amx managed down --state DIRECTORY
+```
+
+Detaching or closing the workbench does not exit a native CLI. Retry a failed
+`restart` only after shutdown succeeds.
 
 For one exited workspace-owned interactive session, use `amx relaunch AGENT_ID --state DIRECTORY`. Healthy peers keep running and the stable agent identity is retained. The default starts a fresh native conversation; `--resume last`, `--resume picker`, or an explicit native ID selects history through the supported harness. A live or revoked session cannot be relaunched, and no deadline is renewed. Older running controllers require one deliberate workspace restart before individual relaunch is available. See [recovery](traces-and-recovery.md) for the distinction from retrying a broker task.
 
@@ -180,7 +195,7 @@ Roles describe responsibilities. They grant no authority. Policy defaults to den
 
 `board.post`, `message.send`, `ping.send` and `instruct` accept optional `reply_to` for a visible message or instruction task. The broker derives `thread_id`; callers cannot choose a root. A board reply retains the original board, while each direct recipient must already be able to read the referenced message. A reply adds no authority or ancestor access. `task.list` supports `state`, `to`, `query`, `order`, `after` and `limit`, with a returned `has_more` flag; use `task.get` for an exact task. Native provider-only chat turns are outside this broker history.
 
-v0.13.0 workers publish metadata-only check-ins while a task is leased.
+Since v0.13.0, workers publish metadata-only check-ins while a task is leased.
 `task.observe` does not change task state/version, renew a lease, consume a
 durable request receipt or prove model activity. Worker check-in and native
 event times are set separately by the broker. Owner task reads may include this

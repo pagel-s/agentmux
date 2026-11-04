@@ -76,11 +76,30 @@ func TestDeliveryCLIPreservesPolicyAndApprovesExactCandidate(t *testing.T) {
 	if status.Mode != "review" || status.Policy.MaxTurns != 7 || !status.Policy.Notes {
 		t.Fatalf("failed edit changed prior policy: %+v", status.Policy)
 	}
+	code, out = run("receiver", "auto", "--json")
+	if code != 0 || json.Unmarshal([]byte(out), &status) != nil {
+		t.Fatalf("mode-only edit: %d %s", code, out)
+	}
+	if status.Mode != "auto" || status.Policy.MaxTurns != 7 || !status.Policy.Notes || !status.Policy.Results || status.Policy.Pings || status.Policy.Boards || status.Policy.MemoryUpdates {
+		t.Fatalf("mode-only edit widened subscriptions or reset limits: %+v", status.Policy)
+	}
 }
 
 func TestDeliveryCLIRejectsAmbiguousWorkspaceBeforeIO(t *testing.T) {
 	var out, diagnostics bytes.Buffer
 	if code := runWorkDelivery([]string{"receiver", "auto", "--session", "another", "--state", "/missing/state"}, &out, &diagnostics); code == 0 || !strings.Contains(diagnostics.String(), "either") {
 		t.Fatalf("selector validation %d %s", code, diagnostics.String())
+	}
+}
+
+func TestDeliveryCLIHelpIsPortableAndExplainsAdmission(t *testing.T) {
+	var out, diagnostics bytes.Buffer
+	if code := runWorkDelivery([]string{"--help"}, &out, &diagnostics); code != 0 || diagnostics.Len() != 0 {
+		t.Fatalf("help unexpectedly required a workspace: %d %s", code, diagnostics.String())
+	}
+	for _, want := range []string{"existing eligible queued items", "unspecified subscriptions and limits stay saved", "Results need no reverse message grant", "Only the owner"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("missing help guidance %q", want)
+		}
 	}
 }

@@ -16,20 +16,28 @@ go vet ./...
 node cmd/agentmux/workweb/app.test.cjs
 python3 scripts/test-validate-workflows.py
 python3 scripts/test-soak-workflows.py
+python3 scripts/test-workflow-review-evidence.py
 ```
 
 Conditional integrations report skips when their prerequisites are absent.
 A passing default suite does not establish that those integrations ran.
+When testing a binary outside `bin/amx`, set both `AGENTMUX_TEST_BINARY`
+(terminal journeys) and `AGENTMUX_INTEGRATION_BINARY` (workflow/report
+integrations) to its absolute path. Otherwise terminal journeys use the
+checkout's last built binary.
 
 ## Observation and reporting
 
-Current source includes model-free regressions for owner observation, task
+The v0.14.0 source includes model-free regressions for owner observation, task
 progress and native readiness:
 
 ```sh
 go test -race ./internal/managed -run 'TestObservation|TestTaskProgress|TestNativeReadiness|TestOperationalRead|TestNativeSummary' -count=1
 go test -race ./cmd/agentmux -run 'TestObserve|TestNativeObservation' -count=1
 node --test cmd/agentmux/workweb/app.test.cjs
+python3 scripts/test-summarize-observations.py
+AGENTMUX_INTEGRATION_BINARY="$PWD/bin/amx" python3 scripts/test-summarize-observations.py
+python3 scripts/test-summarize-comparison.py
 ```
 
 These check bounded full-history summaries, exact attempt/credential fences,
@@ -38,9 +46,46 @@ components and read-only inspection. Operational-read controls keep a blocked
 diagnostic connection outside the unchanged 500 ms lease monitor and verify
 one-slot admission, read-only SQL, shutdown cancellation and credential rotation.
 Native-summary controls cover unknown admission, authorization and pagination.
+Structured-diagnostic controls distinguish credential, authorization, local
+timeout/cancellation, transport, protocol and storage failures without guessing
+from prose. They check acquisition/decoding durations and explicit null timing
+for unattempted native reads; existing completion and human output stay intact.
+The offline reporter rejects malformed, mixed-state and oversized captures,
+omits injected private fields and keeps legacy/missing timings unknown. Its
+memory and episode bounds do not grow with capture length. Setting
+`AGENTMUX_INTEGRATION_BINARY` runs a real command-only managed workspace through
+live, completed and stopped-broker captures, checks source/task preservation and
+offline-report privacy, and confirms shutdown of that exact fixture runtime.
+Without the variable, that integration reports a skip; the other reporter
+controls still run. Comparison-summary controls additionally exercise the
+actual deterministic actor/check failure harness and contradictory records.
 They make no model calls. They do not
 prove provider acceptance, useful model progress or elapsed production use.
 See [observability](observability.md) for operational commands and interpretation.
+
+## Exact initial approval and final acceptance
+
+Guided work in v0.14.0 declares `review_policy: early-approval-v1`. Its clean
+path runs an implementation, independent checks and a fresh read-only review.
+Only an untruncated approval of that exact checked revision can mark
+`address-review` and `final-review` as skipped. Their retained evidence records
+the skip reason and zero execution attempts. The original approval is retained;
+it is not replaced by a fabricated final review. `final-check` always executes
+the configured acceptance commands against the final revision.
+
+```sh
+go test -race ./internal/workflow -run 'TestEarlyApproval' -count=1
+python3 scripts/test-workflow-review-evidence.py
+```
+
+The minimum clean path uses two native CLI turns; retries can increase that
+count. Requested changes retain the coder response and fresh final review.
+Legacy plans with no review policy retain their full loop. Controls reject
+missing/forged approval identity, changed dependencies, synthetic execution or
+usage evidence, stale source/results, altered checked revisions, invalid reviews
+and failed or canceled final checks. Readiness for application still requires
+fresh passing evidence, and application remains explicit. These command-only
+controls do not measure model quality or prove a native-provider speedup.
 
 ## Model-free workflow journeys
 

@@ -22,6 +22,12 @@ func runWorkDelivery(args []string, out, diagnostics io.Writer) int {
 Show or control delivery into one native terminal. Default: manual.
 Review requires approval of each exact queued item; auto delivers eligible turns.
 Sender command permissions are configured separately in Connections.
+Auto can start existing eligible queued items as well as future items.
+Auto changes only the receiver mode; unspecified subscriptions and limits stay saved.
+Notes, pings, boards and shared-memory updates start off; own-instruction results
+start on unless explicitly configured otherwise. Results need no reverse message grant.
+Only the owner may configure delivery or approve a request. Inspect without changes:
+  amx delivery ID --json --session NAME
 Manual pauses future deliveries and requests cancellation of an active peer turn
 where supported. It never types into or interrupts unrelated human input.`)
 		return exitSuccess
@@ -152,6 +158,8 @@ where supported. It never types into or interrupts unrelated human input.`)
 		fmt.Fprintln(out, consoleContent(status.Coverage, 700))
 	}
 	fmt.Fprintf(out, "Native turns %d/%d · %s pending on this page · cooldown %ds · max hops %d\n", status.Turns, status.Policy.MaxTurns, pending, status.Policy.CooldownSeconds, status.Policy.MaxHops)
+	fmt.Fprintf(out, "Subscriptions: notes %s · pings %s · own results %s\n", nativeEnabled(status.Policy.Notes), nativeEnabled(status.Policy.Pings), nativeEnabled(status.Policy.Results))
+	fmt.Fprintf(out, "Shared updates: boards %s · memory %s (mode changes preserve these settings)\n", nativeEnabled(status.Policy.Boards), nativeEnabled(status.Policy.MemoryUpdates))
 	if status.PendingMore {
 		fmt.Fprintln(out, "More pending items follow as this queue advances; message bodies are never truncated for approval.")
 	}

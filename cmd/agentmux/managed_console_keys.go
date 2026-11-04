@@ -439,11 +439,11 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.openSessionSwitcher()
 		return m, m.fetch
 	case "D":
-		if m.tab == 1 {
+		if m.tab == 1 || m.tab == 2 {
 			m.reviewNativeDelivery(false)
 		}
 	case "A":
-		if m.tab == 1 {
+		if m.tab == 1 || m.tab == 2 {
 			m.reviewNativeDelivery(true)
 		}
 	case "W":
@@ -642,8 +642,17 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "]":
 		m.contentFocus = true
+		if m.tab == 2 {
+			m.message = ""
+			return m, nil
+		}
 		m.stepContent(1)
 	case "[":
+		if m.tab == 2 {
+			m.contentFocus = false
+			m.message = ""
+			return m, nil
+		}
 		m.contentFocus = true
 		m.stepContent(-1)
 	case "alt+right", "l":

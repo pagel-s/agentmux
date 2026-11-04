@@ -39,6 +39,22 @@ unchanged 500 ms lease monitor. Tests block the actual read path, retain the
 publication. Worker check-ins remain separate from native events; unknown
 reporting never becomes a successful task outcome.
 
+Agentmux v0.14.0 adds fixed diagnostic codes and local collection timings to
+schema-1 observations. The [offline operational report](observability.md#summarize-a-private-capture-offline)
+summarizes sampled availability, gaps, retained-state/capacity gauges and
+storage changes, while preserving missing evidence as unknown. It omits source
+paths, task identities and raw errors, and records the complete input hash.
+Regression controls cover malformed captures, privacy and bounded memory;
+an optional actual-CLI integration exercises a live command-only task and a
+partial observation after shutdown. This prepares operational evidence
+collection; it does not supply seven days of native use or unaided user results.
+
+The [comparison summary](evaluation.md#summarize-retained-comparison-evidence)
+keeps failures, incomplete/unstarted attempts and paired outcomes visible.
+Its timing summaries do not infer a winner, model quality or unknown provider
+usage. Deterministic fixture results validate that reporting route, rather than
+establishing a competitive advantage.
+
 Fresh AI peer reviews added reproducible controls for escaped secret publication,
 ambiguous signed trace envelopes, concurrent trace changes and cancellation
 races. These are scoped code reviews and regressions, not an external human
@@ -61,9 +77,27 @@ preceding duplicate-flag setup failure remains recorded. The workflow's `sonnet`
 profile was overridden by the pinned `claude-sonnet-5-5` request; the provider's
 resolved model and inference-request count remain unknown. This small route
 check establishes no comparative productivity or long-term reliability result.
-It also identifies a future optimization: avoid the response and second-review
-turns after an exact initial approval, with explicit skip evidence and unchanged
-final checks, review freshness and application guards.
+
+Guided work in v0.14.0 addresses the redundant-turn case identified by
+that smoke. After independently passing implementation checks, an initial
+fresh-context approval of the exact same revision can skip the response and
+second-review phases. Retained reports mark those phases `skipped` with their
+reason, rather than recording imaginary model turns. Final acceptance checks
+still run, and source/result freshness plus explicit application guards remain.
+With one implementation attempt, the clean path uses two native CLI turns;
+retries increase that count and requested changes keep the full review loop.
+Legacy plans without the declared
+policy retain their previous behavior. Model-free controls establish those
+branches and rejection behavior.
+
+A [November 4 subscription smoke](assets/quality/subscription-smoke-2026-11-04.json)
+exercised that clean path in 69.093 seconds with exactly two native CLI sessions:
+Codex implementation and Claude review. The original approval, both skipped
+phases, final checks, full retained-report load, external grader and confirmed
+fixture-only application were verified. Its generic final files and grader
+contract reproduce without models. This used the clean `bf3a578` source build
+labeled `0.14.0-pre`, not a published release archive. The separate November 3
+and November 4 records establish no speedup or competitive advantage.
 
 Use [workflow validation](workflow-validation.md) for engineering checks,
 [evaluation](evaluation.md) for usability and comparative task studies, and

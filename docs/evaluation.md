@@ -14,6 +14,7 @@ Run from a checkout:
 
 ```sh
 python3 scripts/test-compare-workflows.py
+python3 scripts/test-summarize-comparison.py
 python3 examples/evaluation/run-offline-controls.py --output /tmp/amx-controls-NEW
 ```
 
@@ -143,6 +144,50 @@ containment, run each entire attempt in a separately enforced disposable
 environment. Logs and repositories may contain prompts, credentials and
 proprietary code; review and redact evidence before publishing it.
 
+### Summarize retained comparison evidence
+
+The offline summary reads the frozen configuration and `comparison.json` from
+one evidence directory. It invokes no actor, grader, Git command or provider:
+
+Run these commands from a source checkout or extract the `scripts` directory
+from the matching release archive. The binary installer installs only `amx`.
+Keep the extracted scripts together and use an absolute Python script path
+when running the report outside that directory.
+
+```sh
+python3 scripts/summarize-comparison.py /private/study/run-NEW
+python3 scripts/summarize-comparison.py /private/study/run-NEW --json \
+  > /private/study/comparison-summary.json
+```
+
+It checks the recorded configuration hash, source commit pin, planned order,
+attempt/check identities and verdict consistency before reporting. Inputs are
+limited to regular, non-symlink JSON files of 16 MiB each and 200 planned
+attempts. Invalid or contradictory evidence exits nonzero without echoing its
+paths or error contents. This is a consistency check of retained records; it
+does not rerun grading or authenticate the grader, logs or candidate bytes.
+
+Per-arm totals keep planned, attempted, completed, passed, failed, incomplete
+and unstarted attempts separate. Actor/check timeouts and cleanup failures
+remain visible. `cleanup_failures` counts command records containing one or
+more cleanup errors, not individual errors or processes. A valid summary exits
+zero even when the recorded study contains failed attempts; that exit status
+does not change the runner's verdict.
+
+Pairwise timing ratios use the same task and repeat, and include only pairs
+where both actors and all independent checks passed with known, positive,
+finite durations. Every other outcome remains in the paired counts. The number
+of usable timing pairs is explicit; a missing or zero duration does not become
+a measured speedup. Timings include actor execution and cleanup, excluding
+source preparation and independent grading.
+
+The summary retains declared arm names and input/configuration hashes, while
+omitting source paths, prompts, argv, logs and raw errors. Review arm names
+before sharing. Human interventions, inference requests, tokens and cost remain
+null. Fixture runs are labeled **not an AI benchmark**. Repeated runs of one
+task are not independent task samples; no confidence interval, overall score
+or winner is inferred.
+
 ## Grade artifacts without revealing the arm
 
 Before collecting results, define a rubric for functional correctness,
@@ -239,8 +284,13 @@ python3 scripts/compare-workflows.py \
 ```
 
 Each arm gets 480 seconds. The baseline permits one native Codex invocation;
-Agentmux permits four native coder/reviewer invocations, one implementation
-attempt per phase and a 7m15s workflow deadline. Codex uses `gpt-6.1-sol` at
+the original v0.13-era pinned pilot permits up to four native coder/reviewer
+invocations, one implementation attempt per phase and a 7m15s workflow deadline.
+Guided work in v0.14.0 can use two of those permitted turns after an exact
+initial approval, while still running final checks. Record actual executed and
+skipped phases for each pinned build; keep historical four-call route-smoke
+evidence unchanged. Neither a native CLI turn nor its allowance establishes
+the provider's inference-request count. Codex uses `gpt-6.1-sol` at
 medium reasoning; the Claude reviewer uses `claude-sonnet-5-5` at medium effort,
 with no automatic model/provider fallback. The selected model pins can be
 changed explicitly when preparing a new study. Agentmux's retained plan can

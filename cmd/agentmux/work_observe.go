@@ -39,6 +39,7 @@ type workObservation struct {
 	NativeMore      bool                         `json:"native_more"`
 	NativeError     string                       `json:"native_error,omitempty"`
 	Storage         workStorageObservation       `json:"storage"`
+	Diagnostics     workObservationDiagnostics   `json:"diagnostics"`
 }
 
 type workStorageObservation struct {
@@ -105,7 +106,10 @@ Recorded delivery and effective uncertainty remain separate. No recent event
 does not establish that a model is stalled. Task bodies and credentials are omitted.
 --watch --json emits one JSON object per observation. Partial observations
 contain explicit component errors; a one-shot partial observation exits nonzero.
-Read-only: never starts, retries, resolves or changes a workspace.`)
+Read-only: never starts, retries, resolves or changes a workspace.
+History guide: https://pagel-s.github.io/agentmux/observability/#summarize-a-private-capture-offline
+The offline Python reporter ships in the matching release archive's scripts/ folder;
+the binary installer installs amx only.`)
 		return exitSuccess
 	}
 	flags := flag.NewFlagSet("observe", flag.ContinueOnError)
@@ -169,28 +173,38 @@ Read-only: never starts, retries, resolves or changes a workspace.`)
 }
 
 func collectWorkObservation(ctx context.Context, o workOptions, limit int) workObservation {
+	started := time.Now()
 	ctx, cancel := context.WithTimeout(ctx, 4*time.Second)
 	defer cancel()
-	result := workObservation{SchemaVersion: 1, ObserverVersion: versionString(), Workspace: o.session, State: o.state, Source: o.selectionSource, Broker: "unavailable", Native: []workNativeObservation{}}
+	result := workObservation{SchemaVersion: 1, ObserverVersion: versionString(), Workspace: o.session, State: o.state, Source: o.selectionSource, Broker: "unavailable", Native: []workNativeObservation{}, Diagnostics: newWorkObservationDiagnostics()}
 	// Each goroutine owns separate result fields; all reads wait for completion.
 	var pending sync.WaitGroup
 	pending.Add(3)
 	go func() {
 		defer pending.Done()
+		defer beginWorkObservationComponent(&result.Diagnostics.Components.Storage)()
 		result.Storage = observeWorkStorage(o.state)
+		for _, file := range result.Storage.Files {
+			if file.State == "unknown" {
+				result.Diagnostics.Components.Storage.fail("metadata_unavailable")
+			}
+		}
 	}()
 	go func() {
 		defer pending.Done()
+		defer beginWorkObservationComponent(&result.Diagnostics.Components.Runtime)()
 		runtime, errRuntime := describeWorkRuntime(ctx, o.state)
 		result.Runtime = runtime
 		if errRuntime != nil {
 			if os.IsNotExist(errRuntime) {
 				result.Runtime.State = "not_recorded"
 				result.Runtime.Agents = map[string]managedlaunch.AgentPane{}
+				result.Diagnostics.Components.Runtime.State = "not_recorded"
 				return
 			}
 			result.RuntimeError = errRuntime.Error()
 			result.Runtime.State = "unknown"
+			result.Diagnostics.Components.Runtime.fail(workObservationErrorCode(ctx, errRuntime))
 		}
 		for id, pane := range result.Runtime.Agents {
 			if errRuntime != nil || (pane.State == "running" && result.Runtime.State != "running" && result.Runtime.State != "starting") {
@@ -201,34 +215,15 @@ func collectWorkObservation(ctx context.Context, o workOptions, limit int) workO
 	}()
 	go func() {
 		defer pending.Done()
-		credential, err := managed.LoadCredential(managed.CredentialPath(o.state, ""))
-		if err != nil {
-			result.BrokerError = "owner credential unavailable; check amx context with the same selector"
+		client := collectWorkObservationBroker(ctx, &result, limit)
+		if client == nil {
 			return
 		}
-		client := managed.NewClient(credential)
-		raw, err := workCall(ctx, client, "observation.get", map[string]any{"limit": limit})
-		if err != nil {
-			result.BrokerError = err.Error()
-			var problem *managed.Fault
-			if errors.As(err, &problem) && problem.Code == "unsupported" {
-				result.BrokerError += "; workspace controller lacks observation.get; upgrade its controller explicitly after inspecting current work"
-			}
-			return
-		}
-		var snapshot managed.ObservationSnapshot
-		if err = json.Unmarshal(raw, &snapshot); err != nil {
-			result.BrokerError = "invalid broker observation"
-			return
-		}
-		if _, err = time.Parse(time.RFC3339Nano, snapshot.ObservedAt); err != nil {
-			result.BrokerError = "broker observation has no valid observation time; update the workspace controller"
-			return
-		}
-		result.Snapshot, result.Broker = &snapshot, "connected"
-		raw, err = workCall(ctx, client, "native.status", map[string]any{"limit": 200, "summary": true})
+		defer beginWorkObservationComponent(&result.Diagnostics.Components.Native)()
+		raw, err, code := workObservationCall(ctx, client, "native.status", map[string]any{"limit": 200, "summary": true})
 		if err != nil {
 			result.NativeError = err.Error()
+			result.Diagnostics.Components.Native.failWithError(code, err)
 			return
 		}
 		var native struct {
@@ -237,6 +232,7 @@ func collectWorkObservation(ctx context.Context, o workOptions, limit int) workO
 		}
 		if json.Unmarshal(raw, &native) != nil || native.Statuses == nil {
 			result.NativeError = "invalid native reporting inventory"
+			result.Diagnostics.Components.Native.fail("invalid_response")
 			return
 		}
 		// native.status includes queued content for individual agents; its owner
@@ -265,7 +261,42 @@ func collectWorkObservation(ctx context.Context, o workOptions, limit int) workO
 			result.Complete = false
 		}
 	}
+	result.Diagnostics.CollectionDurationMS = float64(time.Since(started)) / float64(time.Millisecond)
 	return result
+}
+
+func collectWorkObservationBroker(ctx context.Context, result *workObservation, limit int) *managed.Client {
+	defer beginWorkObservationComponent(&result.Diagnostics.Components.Broker)()
+	credential, err := managed.LoadCredential(managed.CredentialPath(result.State, ""))
+	if err != nil {
+		result.BrokerError = "owner credential unavailable; check amx context with the same selector"
+		result.Diagnostics.Components.Broker.fail("credential_unavailable")
+		return nil
+	}
+	client := managed.NewClient(credential)
+	raw, err, code := workObservationCall(ctx, client, "observation.get", map[string]any{"limit": limit})
+	if err != nil {
+		result.BrokerError = err.Error()
+		result.Diagnostics.Components.Broker.failWithError(code, err)
+		var problem *managed.Fault
+		if errors.As(err, &problem) && problem.Code == "unsupported" {
+			result.BrokerError += "; workspace controller lacks observation.get; upgrade its controller explicitly after inspecting current work"
+		}
+		return nil
+	}
+	var snapshot managed.ObservationSnapshot
+	if err = json.Unmarshal(raw, &snapshot); err != nil {
+		result.BrokerError = "invalid broker observation"
+		result.Diagnostics.Components.Broker.fail("invalid_response")
+		return nil
+	}
+	if _, err = time.Parse(time.RFC3339Nano, snapshot.ObservedAt); err != nil {
+		result.BrokerError = "broker observation has no valid observation time; update the workspace controller"
+		result.Diagnostics.Components.Broker.fail("invalid_response")
+		return nil
+	}
+	result.Snapshot, result.Broker = &snapshot, "connected"
+	return client
 }
 
 func formatWorkObservation(out io.Writer, r workObservation) error {

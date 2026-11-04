@@ -24,6 +24,9 @@ PROCESS_SOURCE = Path(__file__).with_name("workflow_processes.py").resolve()
 _process_spec = importlib.util.spec_from_file_location("workflow_evidence_processes", PROCESS_SOURCE)
 PROCESS = importlib.util.module_from_spec(_process_spec)
 _process_spec.loader.exec_module(PROCESS)
+_review_spec = importlib.util.spec_from_file_location("workflow_review_evidence", Path(__file__).with_name("workflow_review_evidence.py"))
+REVIEW = importlib.util.module_from_spec(_review_spec)
+_review_spec.loader.exec_module(REVIEW)
 
 IMPLEMENTATION = '''def normalize_tags(tags):
     values = set()
@@ -720,11 +723,15 @@ class WorkflowOracle:
             actual = objects(result.get("steps"), "mission step outcomes are missing")
             require([item.get("id") for item in actual] == [item["id"] for item in plan["steps"]], "mission step coverage or order differs")
             profiles = {item["id"]: item for item in plan["candidates"]}
+            skipped = REVIEW.early_skips(result, plan)
             current = snapshot
             for item, step in zip(actual, plan["steps"]):
                 require(all(type(step.get(flag, False)) is bool
                             for flag in ("verify", "read_only", "review", "gate_review")),
                         "planned mission roles must be booleans")
+                if item["id"] in skipped:
+                    self.retained(Path(item["evidence_path"]), item)
+                    continue
                 profile = profiles.get(step.get("candidate"), {})
                 require(type(item.get("attempts")) is int and item["attempts"] == (1 if step.get("candidate") else 0), "mission step attempt count differs from its planned admission bound")
                 require(item.get("harness", "") == profile.get("harness", "") and item.get("model", "") == profile.get("model", "") and item.get("depends_on", []) == step.get("depends_on", []), "mission step profile or dependency differs")
@@ -775,9 +782,9 @@ class WorkflowOracle:
         require([(p.get("id"), p.get("harness"), p.get("model")) for p in candidates] == expected, "guided provider profiles differ")
         steps = objects(plan.get("steps"), "guided planned steps are missing")
         require([s.get("id") for s in steps] == ["implement", "review", "address-review", "final-review", "final-check"], "guided plan step coverage or order differs")
-        flags = ("verify", "read_only", "review", "gate_review")
-        roles = [(True, False, False, False), (False, True, True, False),
-                 (True, False, False, False), (False, True, True, True), (True, False, False, False)]
+        flags = ("verify", "read_only", "review", "gate_review", "require_result")
+        roles = [(True, False, False, False, False), (False, True, True, False, True),
+                 (True, False, False, False, False), (False, True, True, True, True), (True, False, False, False, False)]
         require(all(step.get(flag, False) is expected
                     for step, role in zip(steps, roles) for flag, expected in zip(flags, role))
                 and [s.get("candidate") for s in steps] == ["coder", "reviewer", "coder", "reviewer", None]
@@ -785,7 +792,9 @@ class WorkflowOracle:
                 "guided verification or review gates differ")
         require(same_json(plan.get("checks"), [dict(self.plan["checks"][0], name="project-check", timeout_seconds=60)]), "guided acceptance command differs")
         require(type(plan.get("max_attempts")) is int and plan["max_attempts"] == 1
-                and exact_int(plan.get("max_parallel"), 1) and exact_int(result.get("max_native_turns"), 4), "guided planned provider admission bound differs")
+                and exact_int(plan.get("max_parallel"), 1) and exact_int(result.get("max_native_turns"), 4)
+                and exact_int(result.get("min_native_turns"), 2) and plan.get("review_policy") == REVIEW.POLICY,
+                "guided planned provider admission bound or early-review policy differs")
         self.guided_plan = plan
 
     def validate(self, name, result, argv, root_command):
@@ -866,7 +875,10 @@ class WorkflowOracle:
             require(result.get("storage") == self.plan["storage"] and result.get("process_containment") == self.plan["process_containment"]
                     and result.get("isolation", "none") == (self.plan.get("isolation") or {}).get("mode", "none"), "guided status storage or isolation policy differs")
             phases = objects(result.get("phases"), "guided status phases are missing")
-            require([(s.get("id"), s.get("state")) for s in phases] == [(s["id"], s["state"]) for s in self.guided["steps"]], "guided status phase coverage differs")
+            require([(s.get("id"), s.get("state"), s.get("skip_reason", "")) for s in phases]
+                    == [(s["id"], s["state"], s.get("skip_reason", "")) for s in self.guided["steps"]]
+                    and same_json(result.get("early_approval"), self.guided.get("early_approval")),
+                    "guided status phase coverage or original approval differs")
             expected = "uncertain" if name == "work-interrupted-status" else "applied" if name == "work-applied-status" else "none"
             application = result.get("application")
             require(isinstance(application, dict) and application.get("state") == expected and result.get("can_apply") is (expected == "none"), "guided application status or guidance differs")

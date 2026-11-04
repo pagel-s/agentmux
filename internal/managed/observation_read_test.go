@@ -43,6 +43,7 @@ func TestOperationalReadBlockedConnectionCannotStarveExactLeaseMonitor(t *testin
 			defer held.Close()
 			waits := reader.Stats().WaitCount
 			finished := make(chan *Fault, 1)
+			started := time.Now()
 			go func() {
 				raw, problem := s.Call(context.Background(), owner.Token, request)
 				if raw != nil {
@@ -60,11 +61,14 @@ func TestOperationalReadBlockedConnectionCannotStarveExactLeaseMonitor(t *testin
 			if err != nil || current.ID != task.ID || current.Delivery != "dispatching" {
 				t.Fatalf("blocked observation starved the unchanged 500ms monitor: %v", err)
 			}
-			if _, problem := s.Call(context.Background(), owner.Token, request); problem == nil || problem.Code != "unavailable" {
+			if _, problem := s.Call(context.Background(), owner.Token, request); problem == nil || problem.Code != "unavailable" || problem.ReasonCode != "operational_read_busy" {
 				t.Fatalf("concurrent diagnostic was not bounded: %v", problem)
 			}
-			if problem := <-finished; problem == nil || problem.Code != "cancelled" {
+			if problem := <-finished; problem == nil || problem.Code != "cancelled" || problem.ReasonCode != "query_budget_exhausted" {
 				t.Fatalf("blocked observer did not honor the unchanged query budget: %v", problem)
+			}
+			if elapsed := time.Since(started); elapsed < operationalObservationReadBudget || elapsed > 2*time.Second {
+				t.Fatalf("single blocked read changed its 250ms query budget: %v", elapsed)
 			}
 			// The one authenticated worker read legitimately records one
 			// instruction disclosure. Neither owner observation adds anything.
@@ -78,6 +82,12 @@ func TestOperationalReadBlockedConnectionCannotStarveExactLeaseMonitor(t *testin
 }
 
 func TestOperationalReadConnectionIsReadOnlyAndCloseCancelsIt(t *testing.T) {
+	for _, request := range []Request{{Operation: "observation.get"}, {Operation: "native.status", Args: json.RawMessage(`{"summary":true}`)}} {
+		t.Run(request.Operation, func(t *testing.T) { testOperationalReadClose(t, request) })
+	}
+}
+
+func testOperationalReadClose(t *testing.T, request Request) {
 	s := testStore(t, testConfig())
 	owner := credential(t, s, "")
 	_, reader, _, _, problem := s.operationalReader()
@@ -109,13 +119,13 @@ func TestOperationalReadConnectionIsReadOnlyAndCloseCancelsIt(t *testing.T) {
 	waits := reader.Stats().WaitCount
 	finished := make(chan *Fault, 1)
 	go func() {
-		_, problem := s.Call(context.Background(), owner.Token, Request{Operation: "observation.get"})
+		_, problem := s.Call(context.Background(), owner.Token, request)
 		finished <- problem
 	}()
 	waitForOperationalConnection(t, reader, waits)
 	closed := make(chan error, 1)
 	go func() { closed <- s.Close() }()
-	if problem := <-finished; problem == nil || problem.Code != "cancelled" {
+	if problem := <-finished; problem == nil || problem.Code != "cancelled" || problem.ReasonCode != "shutdown" {
 		t.Fatalf("Close did not cancel the observation lifetime: %v", problem)
 	}
 	if err := held.Close(); err != nil {
@@ -124,7 +134,7 @@ func TestOperationalReadConnectionIsReadOnlyAndCloseCancelsIt(t *testing.T) {
 	if err := <-closed; err != nil {
 		t.Fatal(err)
 	}
-	if _, problem := s.Call(context.Background(), owner.Token, Request{Operation: "observation.get"}); problem == nil || problem.Code != "unavailable" {
+	if _, problem := s.Call(context.Background(), owner.Token, request); problem == nil || problem.Code != "unavailable" || problem.ReasonCode != "shutdown" {
 		t.Fatalf("closed store admitted an observation: %v", problem)
 	}
 }

@@ -151,31 +151,35 @@ class ValidationEvidenceTests(unittest.TestCase):
     def test_guided_preview_requires_exact_boolean_step_roles(self):
         base = {"repository": "/source", "storage": "private", "process_containment": "process-group",
                 "checks": [{"name": "contract", "command": [sys.executable, "-c", "print('ok')"]}]}
-        plan = dict(base, mode="mission", kind="work", max_attempts=1, max_parallel=1,
+        plan = dict(base, mode="mission", kind="work", max_attempts=1, max_parallel=1, review_policy=VALIDATOR.REVIEW.POLICY,
                     candidates=[{"id": "coder", "harness": "codex", "model": "gpt-6.1-sol"},
                                 {"id": "reviewer", "harness": "antigravity", "model": "gemini-3.8-flash-low"}],
                     checks=[dict(base["checks"][0], name="project-check", timeout_seconds=60)],
                     steps=[{"id": "implement", "candidate": "coder", "verify": True},
-                           {"id": "review", "candidate": "reviewer", "depends_on": ["implement"], "review": True, "read_only": True},
+                           {"id": "review", "candidate": "reviewer", "depends_on": ["implement"], "review": True, "read_only": True, "require_result": True},
                            {"id": "address-review", "candidate": "coder", "depends_on": ["implement", "review"], "verify": True},
                            {"id": "final-review", "candidate": "reviewer", "depends_on": ["implement", "review", "address-review"],
-                            "review": True, "read_only": True, "gate_review": True},
+                            "review": True, "read_only": True, "gate_review": True, "require_result": True},
                            {"id": "final-check", "depends_on": ["final-review"], "verify": True}])
         oracle = VALIDATOR.WorkflowOracle(Path("/tmp"), base, {})
-        oracle.preview({"plan": plan, "max_native_turns": 4})
+        oracle.preview({"plan": plan, "min_native_turns": 2, "max_native_turns": 4})
         explicit = copy.deepcopy(plan)
         for step in explicit["steps"]:
-            for flag in ("verify", "read_only", "review", "gate_review"):
+            for flag in ("verify", "read_only", "review", "gate_review", "require_result"):
                 step.setdefault(flag, False)
-        oracle.preview({"plan": explicit, "max_native_turns": 4})
+        oracle.preview({"plan": explicit, "min_native_turns": 2, "max_native_turns": 4})
         for number, flag, value in ((0, "read_only", 0), (2, "review", 0), (4, "read_only", ""),
                                     (0, "gate_review", 0), (3, "gate_review", 1), (1, "review", 1.0),
                                     (2, "read_only", None), (0, "read_only", True), (3, "review", False),
-                                    (0, "verify", 1), (1, "verify", 0)):
+                                    (0, "verify", 1), (1, "verify", 0), (1, "require_result", False), (3, "require_result", 1)):
             altered = copy.deepcopy(plan)
             altered["steps"][number][flag] = value
             with self.subTest(step=number, flag=flag, value=value), self.assertRaisesRegex(ValueError, "verification or review gates"):
-                oracle.preview({"plan": altered, "max_native_turns": 4})
+                oracle.preview({"plan": altered, "min_native_turns": 2, "max_native_turns": 4})
+        for key, invalid in (("min_native_turns", None), ("min_native_turns", True), ("min_native_turns", 4),
+                             ("max_native_turns", 2), ("max_native_turns", 4.0)):
+            preview = {"plan": plan, "min_native_turns": 2, "max_native_turns": 4};preview[key] = invalid
+            with self.subTest(bound=key, value=invalid), self.assertRaises(ValueError):oracle.preview(preview)
 
     def test_diagnostic_case_evidence_uses_one_completion_authority_across_finalization(self):
         with tempfile.TemporaryDirectory(prefix="amx-validator-diagnostic-transaction-") as temporary:

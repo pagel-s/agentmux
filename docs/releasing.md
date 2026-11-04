@@ -65,9 +65,9 @@ authenticated GitHub tooling as appropriate for repository access. A complete
 independent smoke run needs all four platform archives:
 
 ```sh
-gh release download v0.13.0 --repo pagel-s/agentmux --dir /tmp/amx-v0.13.0-artifacts
-python3 scripts/smoke-release.py --artifact-dir /tmp/amx-v0.13.0-artifacts \
-  --version v0.13.0 --output /tmp/amx-v0.13.0-installed-check
+gh release download v0.14.0 --repo pagel-s/agentmux --dir /tmp/amx-v0.14.0-artifacts
+python3 scripts/smoke-release.py --artifact-dir /tmp/amx-v0.14.0-artifacts \
+  --version v0.14.0 --output /tmp/amx-v0.14.0-installed-check
 ```
 
 The final v0.12.0 archives predate the MIT license file and remain verifiable.
