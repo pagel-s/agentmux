@@ -8,7 +8,8 @@ POSIX shell after installation. Native sessions additionally require **tmux
 ## Install a published binary (recommended)
 
 Release **[v0.13.0](https://github.com/pagel-s/agentmux/releases/tag/v0.13.0)**
-provides Linux/macOS binaries for x86-64 and ARM64. Agentmux uses MIT;
+provides Linux and macOS 13+ binaries for x86-64 and ARM64. The macOS minimum
+follows the [release toolchain](https://go.dev/doc/go1.27#darwin). Agentmux uses MIT;
 [dependency notices](../third-party-notices.txt) are bundled separately. It includes
 `amx demo`, checked `work`/`flow` journeys, native sessions, searchable workspace
 choosers, `context`, `observe`, retained `task`/`tasks` inspection and exact-task

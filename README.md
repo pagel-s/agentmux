@@ -9,7 +9,7 @@ and Antigravity. The managed runtime and workbench are experimental.
 ## Get your first checked result
 
 [Install v0.13.0](docs/getting-started/installation.md#install-a-published-binary-recommended)
-for Linux or macOS, then run:
+for Linux or macOS 13+, then run:
 
 ```sh
 amx demo
