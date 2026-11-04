@@ -18,6 +18,9 @@
 - Make Connections navigation explicit with **[** sender and **]** recipient
   focus keys, active field labels and matching sidebar/help cues. Keep Tab focus,
   independent selections and Left/Right view navigation unchanged.
+- Show the recipient's delivery mode in Connections and open its settings or
+  exact pending approval there with Shift+D/A. Preview existing queue metadata
+  before Auto, and give native agents portable delivery and task-result guidance.
 
 ## v0.13.0 - 2026-11-04
 
