@@ -132,7 +132,7 @@ Auto delivers eligible turns within the configured limits.
 amx send reviewer "Check the login proposal." --mode instruction -s work
 amx mode reviewer -j -s work
 amx mode reviewer --approve CANDIDATE_ID -s work
-amx tasks --to reviewer --status running -s work
+amx tasks --to reviewer -s work
 amx task TASK_ID -s work
 amx task TASK_ID --open -s work
 ```
@@ -140,6 +140,10 @@ amx task TASK_ID --open -s work
 Copy the exact pending candidate ID from the status. A queued or submitted
 item does not prove the model executed it; inspect its receipt and native
 terminal. Provider-specific guarantees are in [native collaboration](../native-delivery.md).
+
+Start with the unfiltered recipient history above so pending approval and
+submitted results stay visible. Add `--status running` only when you want to
+limit the view to running tasks.
 
 `tasks` searches retained history at the broker, newest first, with `--query`,
 `--status`, `--to` and `--limit` (1–200). Copy the printed **More** command for
@@ -161,9 +165,12 @@ amx deny claude reviewer commands -s work
 amx unlink claude reviewer -s work
 ```
 
-Manual stops future native dispatch. `deny` removes the chosen directional
-permission. `unlink` disables only the exact selected pair/group; `isolate ID` disconnects
-that session from all peers. Other groups or explicit grants can still provide access;
+Manual pauses future native dispatch and requests cancellation of an active
+peer turn where the adapter supports it. Inspect the receipt and native terminal:
+the request does not confirm that work stopped, and it does not interrupt an
+unrelated human turn. `deny` removes the chosen directional permission. `unlink`
+disables only the exact selected pair/group; `isolate ID` disconnects that session
+from all peers. Other groups or explicit grants can still provide access;
 inspect active tasks separately because already read context and completed
 effects cannot be undone.
 

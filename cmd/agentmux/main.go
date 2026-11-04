@@ -1161,6 +1161,19 @@ func runRerun(args []string) int {
 }
 
 func runStop(args []string) int {
+	if workHelpRequested(args) {
+		fmt.Fprintln(os.Stdout, `Usage: amx stop SESSION PANE [--json]
+
+Legacy tmux pane control: stop the process in the explicitly named pane and
+leave an interactive shell in the same pane, preserving the layout.
+SESSION and PANE are explicit legacy names. --json formats the stop result.
+
+For ordered managed-workspace shutdown, use one workspace selector:
+  amx down --session NAME
+  amx down --state DIR
+Inspect current tasks and native terminals before shutdown or retry.`)
+		return exitSuccess
+	}
 	jsonOut := hasFlag(args, "--json")
 	opts, err := cli.ParseStop(args)
 	if err != nil {
