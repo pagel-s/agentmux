@@ -180,7 +180,7 @@ Roles describe responsibilities. They grant no authority. Policy defaults to den
 
 `board.post`, `message.send`, `ping.send` and `instruct` accept optional `reply_to` for a visible message or instruction task. The broker derives `thread_id`; callers cannot choose a root. A board reply retains the original board, while each direct recipient must already be able to read the referenced message. A reply adds no authority or ancestor access. `task.list` supports `state`, `to`, `query`, `order`, `after` and `limit`, with a returned `has_more` flag; use `task.get` for an exact task. Native provider-only chat turns are outside this broker history.
 
-Current source workers publish metadata-only check-ins while a task is leased.
+v0.13.0 workers publish metadata-only check-ins while a task is leased.
 `task.observe` does not change task state/version, renew a lease, consume a
 durable request receipt or prove model activity. Worker check-in and native
 event times are set separately by the broker. Owner task reads may include this

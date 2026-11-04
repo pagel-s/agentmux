@@ -218,7 +218,7 @@ instructions, results or IDs; an empty search clears the filter. Web Tasks offer
 search, recipient/state filters and Load older. These pages do not include human
 turns typed only into a native provider's own conversation UI.
 
-Current source builds also expose direct CLI inspection:
+v0.13.0 also exposes direct CLI inspection:
 
 ```sh
 amx tasks --to codex --query "login" --limit 25 --session billing
@@ -579,7 +579,7 @@ apply to configured agents and owner-added native/bridged sessions. The graph
 displays at most 40 active agents, keeping selected identities visible; the roster
 reads every broker registry page. Recent activity snapshots are bounded to 40
 records per category; Board, Events and Tasks separately search/page retained
-broker history. Current source Actions opens the selected session's task history,
+broker history. Actions opens the selected session's task history,
 and attention rows offer **Inspect tasks** for historical recipients too. Copy
 the attach command or focus an existing tmux window for native
 input. Terminal emulation remains in tmux.
