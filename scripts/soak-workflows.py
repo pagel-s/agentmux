@@ -703,9 +703,12 @@ class Soak:
         value = str(self.iteration + 1)
         checks = [self.python, "-B", "-c", "from pathlib import Path; assert Path('answer.txt').read_text()==" + repr(value + "\n")]
         options = ["--repo", repository, "--catalog", self.root / "history", "--output", root / "run", "--storage", self.args.storage,
-                   "--containment", self.args.containment, "--attempts", "1", "--timeout", "90s", "--json"]
+                   "--containment", self.args.containment, "--attempts", "1", "--timeout", "90s", "--json",
+                   # Pin the protocol fixtures instead of testing installed-CLI
+                   # discovery, whose user-facing default may legitimately change.
+                   "--coder", "codex", "--reviewer", "claude" if self.args.isolation == "bubblewrap" else "antigravity"]
         if self.args.isolation == "bubblewrap":
-            options.extend(["--isolation", "bubblewrap", "--network", "none", "--read-only-path", self.fixture_directory, "--reviewer", "claude"])
+            options.extend(["--isolation", "bubblewrap", "--network", "none", "--read-only-path", self.fixture_directory])
         result = self.call("guided-run", "work", "SOAK_VALUE:" + value, *options, "--allow-models", "--", *checks)
         self.assert_report(result, repository, root / "run", "mission", "completed", "SOAK_VALUE:" + value)
         steps = result.get("steps")

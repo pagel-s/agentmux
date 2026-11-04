@@ -68,6 +68,36 @@ class WorkflowSoakTests(unittest.TestCase):
         options.update(extra)
         return SimpleNamespace(**options)
 
+    def test_guided_history_pins_protocol_profiles_before_cli_execution(self):
+        class ReachedCLI(Exception):
+            pass
+
+        for isolation, reviewer in (("none", "antigravity"), ("bubblewrap", "claude")):
+            with self.subTest(isolation=isolation), tempfile.TemporaryDirectory(prefix="amx-soak-guided-profiles-") as temporary:
+                root = Path(temporary)
+                (root / "guided" / "project").mkdir(parents=True)
+                # Intercept the first command before any Git, native fixture or
+                # isolation process runs. The profile oracle stays independent
+                # of provider discovery and its ambient installed-CLI ordering.
+                runner = object.__new__(SOAK.Soak)
+                runner.root, runner.iteration = root, 0
+                runner.python = "/fixture/python"
+                runner.fixture_directory = root / "fixture-providers"
+                runner.args = SimpleNamespace(storage="private", containment="process-group", isolation=isolation)
+                runner.source = mock.Mock(return_value={})
+                runner.call = mock.Mock(side_effect=ReachedCLI)
+                with self.assertRaises(ReachedCLI):
+                    runner.case_guided_history(root / "case")
+                runner.call.assert_called_once()
+                arguments = runner.call.call_args.args
+                self.assertEqual(arguments[:3], ("guided-run", "work", "SOAK_VALUE:1"))
+                for flag, expected in (("--coder", "codex"), ("--reviewer", reviewer)):
+                    self.assertEqual([arguments[index + 1] for index, value in enumerate(arguments[:-1]) if value == flag], [expected])
+                self.assertEqual("--isolation" in arguments, isolation == "bubblewrap")
+                if isolation == "bubblewrap":
+                    self.assertEqual(arguments[arguments.index("--network") + 1], "none")
+                    self.assertEqual(arguments[arguments.index("--read-only-path") + 1], runner.fixture_directory)
+
     def test_fixture_disables_automatic_maintenance_before_first_commit(self):
         with tempfile.TemporaryDirectory(prefix="amx-soak-maintenance-") as temporary:
             root = Path(temporary)
