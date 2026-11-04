@@ -9,7 +9,8 @@
   skipped phases to the retained plan and actual attempt/verification records
   before application. Keep failed/canceled check prefixes inspectable while
   requiring successful completion before guided application; existing advanced
-  plans retain their behavior.
+  plans retain their behavior. Retained reports remain inspectable after
+  execution credentials are cleared, without retaining their values.
 - Add fixed observation diagnostic error codes and per-component collection
   timings, preserving unattempted components and unknown durations explicitly.
   Distinguish busy operational reads, exhausted query budgets and controller
