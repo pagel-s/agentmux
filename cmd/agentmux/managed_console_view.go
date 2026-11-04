@@ -53,7 +53,11 @@ func (m console) roster(width, height int) string {
 	if len(m.agents) > 0 {
 		position = m.selected + 1
 	}
-	if !m.contentFocus {
+	if m.tab == 2 && !m.contentFocus {
+		out.WriteString(consoleSelected.Render(" SENDER · ↑/↓ ") + "\n")
+	} else if m.tab == 2 {
+		out.WriteString(consoleMuted.Render("SENDER · [ focus") + "\n")
+	} else if !m.contentFocus {
 		out.WriteString(consoleSelected.Render(" SESSIONS · ↑/↓ ") + "\n")
 	} else {
 		out.WriteString(consoleMuted.Render("SESSIONS · Tab focus") + "\n")
@@ -85,6 +89,9 @@ func (m console) roster(width, height int) string {
 	hint := m.nativeEntryHint()
 	if m.contentFocus {
 		hint = "Tab: focus sessions\nCtrl+P: find a session"
+	}
+	if m.tab == 2 {
+		hint = "[ sender · ] recipient\nTab: switch focus"
 	}
 	if m.data.headless {
 		hint = "↑/↓ select · / find\nTasks output · Events state"
@@ -239,7 +246,7 @@ func (m console) panel(width, height int) string {
 		out.WriteString(consoleAccent.Render("Connections") + consoleMuted.Render(fmt.Sprintf("  revision %d", m.data.boundaries.Version)) + "\n\n")
 		if len(m.agents) > 0 {
 			target := m.agents[m.target%len(m.agents)].ID
-			fmt.Fprintf(&out, "%s\n%s\n%s\n%s\n\n", consoleMuted.Render("SENDER · Tab → sessions"), consoleAccent.Render(consoleClip(consoleContent(m.agentLabel(m.selectedID()), 300), width, 1)), consoleMuted.Render("RECIPIENT · ↑/↓ here · h/l"), consoleAccent.Render(consoleClip(consoleContent(m.agentLabel(target), 300), width, 1)))
+			fmt.Fprintf(&out, "%s\n%s\n%s\n%s\n\n", m.connectionFocusLabel(false), consoleAccent.Render(consoleClip(consoleContent(m.agentLabel(m.selectedID()), 300), width, 1)), m.connectionFocusLabel(true), consoleAccent.Render(consoleClip(consoleContent(m.agentLabel(target), 300), width, 1)))
 			for _, row := range []struct{ key, action, label string }{{"m", "message.send", "Messages"}, {"p", "ping.send", "Pings"}, {"i", "instruct", "Commands"}} {
 				enabled := boundaryAllows(m.data.boundaries, target, row.action)
 				value := "○  denied"

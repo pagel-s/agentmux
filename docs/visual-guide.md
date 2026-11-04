@@ -155,8 +155,11 @@ You do not need to unselect a session before choosing another one.
 
 Uppercase shortcuts mean hold Shift. In an editor, letters and arrows edit the
 draft; cancel or save it before using workbench navigation. The footer always
-describes the current context. In **Connections**, the sidebar chooses the sender. Tab focuses recipients;
-Up/Down, **h/l** or **Alt+Left/Right** chooses one. Left/Right still changes views.
+describes the current context. In **Connections**, **[** focuses **SENDER** in
+the sidebar and **]** focuses **RECIPIENT**. **Tab** or **Shift+Tab** switches
+between them; **Up/Down** changes only the focused identity. Its label is purple
+and shows the arrow hint. Focus changes preserve both selections and permissions.
+**h/l** or **Alt+Left/Right** also chooses a recipient. **Left/Right** still changes views.
 
 [![Searchable terminal session switcher distinguishes two poem sessions by title and stable ID](assets/guide/terminal-switcher.jpg?v=a7fb991ec145)](assets/guide/terminal-switcher.jpg?v=a7fb991ec145)
 

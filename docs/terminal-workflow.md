@@ -26,6 +26,12 @@ and Esc cancels. **Ctrl+K** opens searchable Actions. Esc closes an editor,
 reader or namespace first; from ordinary content it focuses the sidebar.
 **F1** returns from a native terminal to your dashboard.
 
+In **Connections**, press **[** to focus **SENDER** or **]** to focus
+**RECIPIENT**, then **Up/Down** to choose that identity. **Tab** and
+**Shift+Tab** also switch between them. Only the focused label shows the arrow
+hint and purple highlight. Focus changes preserve both selected identities and
+permissions; **Left/Right** continues to change views.
+
 ## Choose a session's folder
 
 Start the default Claude/Codex pair in a project:

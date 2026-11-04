@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Make Connections navigation explicit with **[** sender and **]** recipient
+  focus keys, active field labels and matching sidebar/help cues. Keep Tab focus,
+  independent selections and Left/Right view navigation unchanged.
+
 ## v0.13.0 - 2026-11-04
 
 - Add `amx observe` with live worker check-ins, native event metadata,

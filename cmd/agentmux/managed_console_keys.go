@@ -642,8 +642,17 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "]":
 		m.contentFocus = true
+		if m.tab == 2 {
+			m.message = ""
+			return m, nil
+		}
 		m.stepContent(1)
 	case "[":
+		if m.tab == 2 {
+			m.contentFocus = false
+			m.message = ""
+			return m, nil
+		}
 		m.contentFocus = true
 		m.stepContent(-1)
 	case "alt+right", "l":

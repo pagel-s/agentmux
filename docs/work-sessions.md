@@ -404,6 +404,8 @@ prefix applies to the other Ctrl-b bindings. Shortcuts below depend on the
 active view and selected record; the footer shows the actions available there.
 Use Left/Right or a view number to switch between all eight views.
 Tab changes sidebar/content focus. Up/Down navigates the focused area.
+In Connections, **[** focuses the sender and **]** focuses the recipient;
+only the focused identity shows the arrow hint and purple highlight.
 Connections and Teams use h/l or Alt-Left/Alt-Right for their recipient/target.
 Below 100 columns, the terminal labels **Connections** as **Links** and
 **Existing terminals** as **Existing**; their view numbers and controls stay the same.
@@ -445,6 +447,7 @@ use **Ctrl-G** for help and **Esc** to cancel before using navigation shortcuts.
 | f in Board | Filter all coordination, team board, or selected agent inbox |
 | [ / ] then r in Board | Select a message and reply |
 | h/l or Alt+←/→ in Connections | Select the recipient for the selected sender |
+| [ / ] in Connections | Focus sender / recipient, then Up/Down chooses that identity; focus changes preserve both selections and permissions |
 | c / d in Connections | Connect selected sender/recipient in a group / make sender independent |
 | c in Existing terminals | Prepare a bridge for the selected observed terminal; paste setup manually |
 | m / p / i in Connections | Toggle messages / pings / commands |

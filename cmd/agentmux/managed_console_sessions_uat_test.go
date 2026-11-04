@@ -66,6 +66,14 @@ def current_list(session):
  assert p.returncode==0,(p.stdout,p.stderr)
  assert all('ID '+actor+' · command · workspace coordination active · worker running' in p.stdout for actor in agents),p.stdout
  assert all(str(root/('project-'+str(i))) in p.stdout for i in range(10)),p.stdout
+def connection_pair(value):
+ lines=[line.split('│',1)[-1].strip() for line in value.splitlines()]
+ start=next((i for i,line in enumerate(lines) if 'Connections' in line and 'revision' in line),None)
+ if start is None:return None
+ def identity(label):
+  index=next((i for i in range(start+1,len(lines)-1) if lines[i].startswith(label+' ·')),None)
+  return lines[index+1] if index is not None else None
+ return identity('SENDER'),identity('RECIPIENT')
 try:
  agents={}
  for i in range(10):
@@ -83,7 +91,21 @@ try:
  pids={a:tmux('display-message','-p','-t',p['pane_id'],'#{pane_pid}') for a,p in runtime['agents'].items()}
  key('3');until(lambda:'SENDER' in screen(),'connections view')
  initial=capture('connections-80x28')
- assert 'SESSIONS' in initial and 'RECIPIENT' in initial and 'Ctrl+P' in initial,initial
+ assert 'SENDER' in initial and 'RECIPIENT' in initial and 'Ctrl+P' in initial,initial
+ original_control=run('managed','call','control.get','--credential-file',state/'owner.json','--json','{}')['result']
+ key(']');key('Down')
+ until(lambda:connection_pair(screen())==('Problem 00 [session_00]','Problem 01 [session_01]'),'recipient changes independently')
+ key('[')
+ until(lambda:'SENDER · ↑/↓ choose' in screen() and 'RECIPIENT · ] focus' in screen(),'direct sender focus')
+ assert connection_pair(screen())==('Problem 00 [session_00]','Problem 01 [session_01]')
+ key('Down')
+ until(lambda:connection_pair(screen())==('Problem 01 [session_01]','Problem 01 [session_01]'),'sender changes without recipient retargeting')
+ key('Tab');key('Down')
+ until(lambda:connection_pair(screen())==('Problem 01 [session_01]','Problem 02 [session_02]'),'Tab changes only focused recipient')
+ key('S-Tab');key('Up')
+ until(lambda:connection_pair(screen())==('Problem 00 [session_00]','Problem 02 [session_02]'),'Shift-Tab changes only focused sender')
+ assert run('managed','call','control.get','--credential-file',state/'owner.json','--json','{}')['result']==original_control
+ capture('connections-explicit-focus-80x28')
  key('C-p');text('Problem 09')
  picker=until(lambda:(s if 'Switch session' in (s:=screen()) and 'session_09' in s else ''),'filtered full-width picker')
  assert '│' not in picker,picker
@@ -102,7 +124,7 @@ try:
  until(lambda:'SENDER' in screen() and 'Problem 02 [session_02]' in screen(),'Tab selects sender in current view')
  assert tmux('display-message','-p','-t',runtime['session'],'#{pane_id}')==dashboard
  tmux('resize-window','-t',dashboard,'-x','64','-y','24')
- until(lambda:'SESSIONS' in screen() and 'SENDER' in screen(),'narrow vertical sidebar')
+ until(lambda:(s:=screen()).startswith('AGENTMUX') and 'SENDER' in s and 'RECIPIENT' in s,'narrow vertical sidebar after resize')
  narrow=capture('connections-64x24')
  assert 'RECIPIENT' in narrow and '↑/↓' in narrow,narrow
  key('Right');until(lambda:'4 Memory' in screen() and 'Shared boundaries' in screen(),'global right view navigation')
@@ -110,7 +132,7 @@ try:
  key('C-p');text('Problem 07');until(lambda:'Search: Problem 07' in (s:=screen()) and 'Switch session 1/1' in s and 'session_07' in s,'cancelable session search');key('Escape')
  until(lambda:'Problem 02 [session_02]' in screen() and 'SENDER' in screen(),'Esc preserves sender')
  tmux('resize-window','-t',dashboard,'-x','50','-y','20')
- until(lambda:'Session 3/10' in screen(),'tiny selected-session control')
+ until(lambda:(s:=screen()).startswith('AGENTMUX') and 'Session 3/10' in s,'tiny selected-session control after resize')
  tiny=capture('connections-50x20');assert 'Ctrl+P switch' in tiny and '│' not in tiny,tiny
  tmux('resize-window','-t',dashboard,'-x','80','-y','28')
  key('Enter')
@@ -134,7 +156,7 @@ try:
   plain=subprocess.run([str(alias)],env=current_context(runtime['session']),stdin=slave,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,timeout=5)
   assert plain.returncode==0 and 'Current workspace: navigation-uat' in plain.stdout and '\x1b' not in plain.stdout,(plain.stdout,plain.stderr)
  finally:os.close(slave);os.close(master)
- result={'ok':True,'native_sessions':10,'model_calls':0,'checks':['vertical-roster-80','vertical-roster-64','tiny-session-control-50','sender-recipient-labels','ctrl-p-search','enter-native-focus','tab-select-here','esc-preserves-selection','global-left-right','native-input','unchanged-worker-pids','amx-owned-core-context','amx-owned-view-context','amx-rejects-foreign-session-same-socket','pty-input-piped-output-is-plain']}
+ result={'ok':True,'native_sessions':10,'model_calls':0,'checks':['vertical-roster-80','vertical-roster-64','tiny-session-control-50','sender-recipient-labels','direct-sender-recipient-focus','tab-shift-tab-focus','independent-sender-recipient-selection','focus-preserves-permissions','ctrl-p-search','enter-native-focus','tab-select-here','esc-preserves-selection','global-left-right','native-input','unchanged-worker-pids','amx-owned-core-context','amx-owned-view-context','amx-rejects-foreign-session-same-socket','pty-input-piped-output-is-plain']}
  (root/'result.json').write_text(json.dumps(result,indent=2));print(json.dumps(result));print('Private artifacts:',root)
 except Exception:
  if started:
