@@ -65,6 +65,8 @@ const guidedReviewSchema = `{"type":"object","additionalProperties":false,"requi
 
 const guidedReviewInstructions = `Start an independent review using only the owner's objective, acceptance criteria and current worktree supplied in this fresh session. Read the actual files using the available read-only tools. Do not edit, create or delete files. Do not delegate or invoke other models. Return JSON only, with no Markdown fences, in exactly this shape: {"decision":"approve"|"request_changes","summary":"specific conclusion","findings":[{"file":"relative/path","line":1,"message":"specific actionable defect"}]}. Approve requires an empty findings array. Request_changes requires at least one actionable finding. An approval means the inspected revision satisfies this review; it is not a guarantee of general correctness.`
 
+const guidedCheckBudgetInstructions = `Choose targeted checks for the requested change; Agentmux independently runs the declared acceptance check. Start only tool commands that fit your turn and remaining overall budget, and wait for each to finish. Do not leave background work or unfinished broader test suites running.`
+
 // PrepareGuided validates a useful end-to-end plan before any model can run.
 // Default checks are deliberately narrow: Go tests, or an existing npm test
 // script. Multi-stack and unsupported projects need an explicit argv command.
@@ -140,6 +142,15 @@ func prepareGuided(ctx context.Context, options GuidedOptions) (GuidedPreview, e
 		attempts = 2
 	}
 	profiles := guidedCandidateSelections(options)
+	for i := range profiles {
+		profile := &profiles[i]
+		if profile.TimeoutSeconds == 0 && (profile.Harness == "codex" || profile.Harness == "claude") {
+			// The overall run context bounds all turns and checks cumulatively.
+			// Native profiles share that budget instead of imposing a hidden
+			// three-minute limit. Keep the existing plan/harness ten-minute cap.
+			profile.TimeoutSeconds = min(timeout, 600)
+		}
+	}
 	coder, err := guidedCandidate("coder", &profiles[0])
 	if err != nil {
 		return preview, err
@@ -160,9 +171,9 @@ func prepareGuided(ctx context.Context, options GuidedOptions) (GuidedPreview, e
 		Candidates: []Candidate{coder, reviewer},
 		Checks:     []Check{{Name: "project-check", Command: checks, TimeoutSeconds: checkTimeout}},
 		Steps: []Step{
-			{ID: "implement", Candidate: coder.ID, Verify: true, Goal: "Implement the requested work in this worktree. Preserve unrelated work, do not delegate or invoke other models, and use the declared checks to validate the changes. Report what changed and any remaining limitations."},
+			{ID: "implement", Candidate: coder.ID, Verify: true, Goal: "Implement the requested work in this worktree. Preserve unrelated work, do not delegate or invoke other models, and use the declared checks to validate the changes. Report what changed and any remaining limitations. " + guidedCheckBudgetInstructions},
 			{ID: "review", Candidate: reviewer.ID, DependsOn: []string{"implement"}, ReadOnly: true, Review: true, RequireResult: true, Goal: "Inspect the implemented revision. Report actionable defects and return the required structured review. Do not change files."},
-			{ID: "address-review", Candidate: coder.ID, DependsOn: []string{"implement", "review"}, Verify: true, Goal: "Address the preceding review's actionable findings and rerun the declared checks. If the review approved without findings, preserve the implementation and report that no changes were needed. Do not make unrelated improvements, delegate or invoke other models."},
+			{ID: "address-review", Candidate: coder.ID, DependsOn: []string{"implement", "review"}, Verify: true, Goal: "Address the preceding review's actionable findings and rerun the declared checks. If the review approved without findings, preserve the implementation and report that no changes were needed. Do not make unrelated improvements, delegate or invoke other models. " + guidedCheckBudgetInstructions},
 			{ID: "final-review", Candidate: reviewer.ID, DependsOn: []string{"implement", "review", "address-review"}, ReadOnly: true, Review: true, GateReview: true, RequireResult: true, Goal: "Inspect the exact final revision after the review response. Return the required structured review. Approve only when no actionable defects remain; otherwise request_changes and identify them. Do not change files."},
 			{ID: "final-check", Verify: true, DependsOn: []string{"final-review"}},
 		},

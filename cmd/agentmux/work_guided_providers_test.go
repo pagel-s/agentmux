@@ -88,11 +88,11 @@ func TestGuidedNativePreviewDiscoversAndPinsProfilesWithoutLaunching(t *testing.
 	t.Setenv("PATH", tools)
 	catalog := filepath.Join(root, "history")
 	var out, diagnostics bytes.Buffer
-	args := []string{"Describe the existing fixture", "--repo", plan.Repository, "--catalog", catalog, "--", "/bin/true"}
+	args := []string{"Describe the existing fixture", "--repo", plan.Repository, "--catalog", catalog, "--timeout", "435s", "--", "/bin/true"}
 	if code := runGuidedWorkIO(context.Background(), args, &out, &diagnostics); code != exitSuccess {
 		t.Fatalf("preview exit=%d stdout=%s stderr=%s", code, &out, &diagnostics)
 	}
-	for _, want := range []string{"Coder: codex · reviewer: claude (fresh context)", "'--coder' 'codex'", "'--reviewer' 'claude'", "Preview only. No models started and no run files were written."} {
+	for _, want := range []string{"Coder: codex · reviewer: claude (fresh context)", "Profile turn limits: coder 7m15s · reviewer 7m15s (10m ceiling).", "Turns and acceptance checks share the remaining overall deadline.", "'--coder' 'codex'", "'--reviewer' 'claude'", "--timeout 7m15s", "Preview only. No models started and no run files were written."} {
 		if !strings.Contains(out.String(), want) {
 			t.Fatalf("preview lost %q: %s", want, &out)
 		}
@@ -121,5 +121,26 @@ func TestGuidedNativePreviewDiscoversAndPinsProfilesWithoutLaunching(t *testing.
 	}
 	if _, err := os.Stat(marker); !os.IsNotExist(err) {
 		t.Fatalf("preview/refusal launched a provider: %v", err)
+	}
+}
+
+func TestGuidedTurnBudgetDisplayIncludesNativeLimits(t *testing.T) {
+	var out bytes.Buffer
+	printGuidedTurnBudgets(&out, []workflow.Candidate{
+		{ID: "coder", Harness: "codex", TimeoutSeconds: 435},
+		{ID: "reviewer", Harness: "antigravity", TimeoutSeconds: 90, Command: []string{"agy", "--mode", "plan", "--print-timeout", "90s"}},
+	})
+	for _, want := range []string{"coder 7m15s · reviewer 1m30s", "share the remaining overall deadline", "Native print option (reviewer): --print-timeout '90s'"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("preview hid %q: %s", want, &out)
+		}
+	}
+	out.Reset()
+	printGuidedTurnBudgets(&out, []workflow.Candidate{
+		{ID: "coder", Harness: "codex", TimeoutSeconds: 600},
+		{ID: "reviewer", Harness: "antigravity-bridge", TimeoutSeconds: 180},
+	})
+	if !strings.Contains(out.String(), "coder 10m0s · reviewer 3m0s") || !strings.Contains(out.String(), "Bridge request limit (reviewer): 1m30s") {
+		t.Fatalf("bridge request/profile limits were conflated: %s", &out)
 	}
 }

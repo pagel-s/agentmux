@@ -42,7 +42,7 @@ Options:
   --repo DIR       Project directory (default: current directory)
   --output DIR     New result directory outside the project (default: private catalog)
   --catalog DIR    Private run catalog (default: XDG state directory)
-  --timeout 10m    Overall deadline, from 1s to 24h in whole seconds
+  --timeout 10m    Shared overall deadline, from 1s to 24h in whole seconds
   --check-timeout 1m  Deadline per acceptance check, from 1s to 10m
   --attempts 2     Bounded implementation correction attempts
   --containment process-group  Use process-group or Linux pid-namespace containment
@@ -67,6 +67,9 @@ Interrupted work is retained and never automatically replayed.
 Profiles: codex, claude, antigravity or antigravity-bridge.
 Explicit profiles are never replaced. Isolated defaults remain Codex coding
 and the Antigravity bridge reviewer; select other isolated profiles explicitly.
+Implicit Codex/Claude turn limits follow --timeout, up to the existing 10m
+per-turn ceiling. Turns and acceptance checks share the overall deadline;
+native CLI limits also apply. Preview shows the effective profile turn limits.
 Isolated previews and runs inspect selected auth before output. Their CLI output
 is deferred until completion and checked in bounded memory; unsafe output is refused.
 See docs/working.md.`
@@ -205,6 +208,7 @@ func runGuidedWorkUnguardedIO(ctx context.Context, args []string, out, diagnosti
 	if !*asJSON {
 		fmt.Fprintf(out, "Working on: %s\nProject: %s\n", guidedLine(options.Goal), guidedLine(preview.Repository))
 		printGuidedProfiles(out, preview.Plan.Candidates)
+		printGuidedTurnBudgets(out, preview.Plan.Candidates)
 		fmt.Fprintf(out, "Plan: normally four native turns, up to %d within %s. Check timeout: %s.\n", preview.MaxNativeTurns, *timeout, *checkTimeout)
 		fmt.Fprintln(out, "Agentmux integrates no changes into the source until you explicitly apply a checked result.")
 	}
@@ -529,6 +533,39 @@ func runGuidedHistory(ctx context.Context, operation string, args []string, out,
 	return exitSuccess
 }
 
+func printGuidedTurnBudgets(out io.Writer, candidates []workflow.Candidate) {
+	if len(candidates) != 2 {
+		return
+	}
+	limit := func(candidate workflow.Candidate) time.Duration {
+		seconds := candidate.TimeoutSeconds
+		if seconds == 0 {
+			seconds = 600 // The workflow runner's existing default turn ceiling.
+		}
+		return time.Duration(seconds) * time.Second
+	}
+	fmt.Fprintf(out, "Profile turn limits: coder %s · reviewer %s (10m ceiling).\n", limit(candidates[0]), limit(candidates[1]))
+	fmt.Fprintln(out, "Turns and acceptance checks share the remaining overall deadline.")
+	for _, candidate := range candidates {
+		if candidate.Harness == "antigravity" {
+			for i, argument := range candidate.Command {
+				if argument == "--print-timeout" && i+1 < len(candidate.Command) {
+					fmt.Fprintf(out, "Native print option (%s): --print-timeout %s\n", guidedLine(candidate.ID), guidedLine(guidedShellWord(candidate.Command[i+1])))
+				}
+			}
+		}
+		if candidate.Harness == "antigravity-bridge" {
+			// Match the existing inference-request bound in workflow/isolation.go;
+			// this is separate from the client's profile turn limit above.
+			bridgeLimit := 90 * time.Second
+			if candidate.TimeoutSeconds > 0 && candidate.TimeoutSeconds <= 120 {
+				bridgeLimit = limit(candidate)
+			}
+			fmt.Fprintf(out, "Bridge request limit (%s): %s\n", guidedLine(candidate.ID), bridgeLimit)
+		}
+	}
+}
+
 func printGuidedPreview(out io.Writer, preview workflow.GuidedPreview, catalog string, explicitOutput, forced bool) {
 	minimum, maximum := 0, 0
 	for _, step := range preview.Plan.Steps {
@@ -547,6 +584,7 @@ func printGuidedPreview(out io.Writer, preview workflow.GuidedPreview, catalog s
 	}
 	fmt.Fprintf(out, "Preview: %s\nProject: %s\n\n", guidedLine(preview.Plan.Goal), guidedLine(preview.Repository))
 	printGuidedProfiles(out, preview.Plan.Candidates)
+	printGuidedTurnBudgets(out, preview.Plan.Candidates)
 	for i, phase := range preview.Phases {
 		fmt.Fprintf(out, "  %d. %s\n", i+1, guidedLine(phase))
 	}
