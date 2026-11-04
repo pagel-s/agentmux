@@ -234,7 +234,7 @@ func (m console) contextualKeys() string {
 		}
 	case 2:
 		if m.selectedID() != "" {
-			context = "[ sender · ] recipient · Tab switch · ↑/↓ choose\nShift+D recipient delivery · Shift+A review · c connect · d isolate"
+			context = "[ sender · ] recipient · Tab switch · ↑/↓ choose\nShift+C pair tasks · Shift+D delivery · Shift+A review · c shared group"
 			if !m.offline && m.data.boundaries.Agent == m.selectedID() {
 				context += "\nm/p/i note/ping/task · Shift+M/P/I reset override · o details"
 			}

@@ -740,6 +740,10 @@ func (m console) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.reviewTeamAction("team.transfer")
 			return m, nil
 		}
+	case "C":
+		if m.tab == 2 {
+			return m, m.reviewTaskPair()
+		}
 	case "B":
 		if m.tab == 0 || m.tab == 1 {
 			m.reviewBudget()

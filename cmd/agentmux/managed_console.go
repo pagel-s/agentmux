@@ -82,6 +82,8 @@ type console struct {
 	eventMore, eventScope                                 bool
 	taskRecipient, taskState                              string
 	ownerReview                                           *consoleOwnerReview
+	pairRequest                                           uint64
+	pairLoading                                           bool
 	actionIndex                                           int
 	actionRows                                            []consoleMenuAction
 	pendingFocus                                          string
@@ -505,6 +507,13 @@ type consoleAttachGuidance struct{ command string }
 
 func (m console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case consoleTaskPairRead:
+		m.receiveTaskPairRead(msg)
+	case consoleTaskPairApplied:
+		m.receiveTaskPairApplied(msg)
+		if msg.state == m.state {
+			return m, m.fetch
+		}
 	case consoleExposureRead:
 		if msg.request != m.readRequest {
 			return m, nil
