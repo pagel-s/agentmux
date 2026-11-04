@@ -8,6 +8,7 @@ import io
 import json
 import os
 from pathlib import Path
+import select
 import signal
 import stat
 import subprocess
@@ -169,6 +170,7 @@ class WorkflowSoakTests(unittest.TestCase):
             with self.subTest(changed_during_scan=changed_during_scan):
                 root = mock.Mock(spec=helper.PinnedProcess)
                 root.identity = {"pid": 900001, "start_ticks": "admitted", "parent_pid": os.getpid(), "state": "S"}
+                root.exited.return_value = False
                 root.current.side_effect = [root.identity, None] if changed_during_scan else [None]
                 child = mock.Mock(spec=helper.PinnedProcess)
                 child.identity = {"pid": 900002, "start_ticks": "unrelated", "parent_pid": 900001, "state": "S"}
@@ -192,6 +194,226 @@ class WorkflowSoakTests(unittest.TestCase):
                     child.send_signal.assert_not_called()
                     numeric_kill.assert_not_called()
                     group_kill.assert_not_called()
+
+    def read_process_fixture_line(self, process, deadline):
+        remaining = deadline - time.monotonic()
+        self.assertGreater(remaining, 0, "process fixture exceeded its lifetime boundary")
+        ready, _, _ = select.select([process.stdout], [], [], remaining)
+        self.assertTrue(ready, "process fixture did not acknowledge its next state")
+        line = process.stdout.readline()
+        self.assertTrue(line, "process fixture exited before its acknowledgement")
+        return line.strip()
+
+    def reap_admitted_fixture_children(self, identities):
+        pending = {(row["pid"], row["start_ticks"]): row for row in identities}
+        deadline = time.monotonic() + 5
+        while pending and time.monotonic() < deadline:
+            for key, identity in list(pending.items()):
+                try:
+                    current = SOAK.PROCESS._read_process_identity(identity["pid"])
+                except (FileNotFoundError, ProcessLookupError):
+                    del pending[key]
+                    continue
+                if current["start_ticks"] != identity["start_ticks"]:
+                    del pending[key]
+                    continue
+                if current["parent_pid"] == os.getpid() and current["state"] == "Z":
+                    os.waitpid(identity["pid"], os.WNOHANG)
+            if pending:
+                time.sleep(.01)
+        self.assertFalse(pending, "fixture children remained present after identity-bound reaping")
+
+    def test_process_tree_retires_over_512_sequential_exited_children(self):
+        helper = SOAK.PROCESS
+        controller = (
+            "import os,sys\n"
+            "for command in sys.stdin:\n"
+            " if command.strip()!='spawn': raise RuntimeError('invalid fixture state')\n"
+            " read,write=os.pipe(); child=os.fork()\n"
+            " if child==0:\n"
+            "  os.close(write); os.read(read,1); os._exit(0)\n"
+            " os.close(read); print(child,flush=True)\n"
+            " if sys.stdin.readline().strip()!='release': raise RuntimeError('invalid release')\n"
+            " os.close(write); os.waitpid(child,0); print('released',flush=True)\n"
+        )
+        process = helper.launch_pinned([sys.executable, "-u", "-c", controller],
+                                      stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        tree = process._validation_tree
+        admitted = set()
+        deadline = time.monotonic() + 60
+        try:
+            for _ in range(520):
+                process.stdin.write(b"spawn\n")
+                process.stdin.flush()
+                child = int(self.read_process_fixture_line(process, deadline))
+                identities = tree.observe()
+                self.assertEqual([identity["pid"] for identity in identities], [child])
+                admitted.add((child, identities[0]["start_ticks"]))
+                child_handle = tree.descendants()[0]
+                self.assertEqual(len(tree.handles), 2)
+                process.stdin.write(b"release\n")
+                process.stdin.flush()
+                self.assertEqual(self.read_process_fixture_line(process, deadline), b"released")
+                self.assertEqual(tree.observe(), [])
+                self.assertIsNone(child_handle.descriptor)
+                self.assertEqual(len(tree.handles), 1)
+            self.assertEqual(len(admitted), 520)
+            self.assertEqual(helper.MAX_PROCESSES, 512)
+            process.stdin.close()
+            process.wait(timeout=5)
+            self.assertEqual(process.returncode, 0)
+            self.assertEqual(tree.observe(), [])
+            self.assertFalse(tree.handles)
+        finally:
+            if not process.stdin.closed:
+                process.stdin.close()
+            tree.signal(signal.SIGKILL)
+            process.wait(timeout=5)
+            tree.close()
+            process.stdout.close()
+            process.stderr.close()
+
+    def test_process_tree_still_rejects_and_cleans_live_identity_overflow(self):
+        helper = SOAK.PROCESS
+        SOAK.enable_subreaper()
+        # Exercise genuine concurrent children at a small test-only bound;
+        # production remains 512, without a 513-process test-host flood.
+        controller = (
+            "import os,sys\n"
+            "read,write=os.pipe(); children=[]\n"
+            "for _ in range(8):\n"
+            " child=os.fork()\n"
+            " if child==0:\n"
+            "  os.close(write); os.read(read,1); os._exit(0)\n"
+            " children.append(child)\n"
+            "os.close(read); print('ready '+' '.join(map(str,children)),flush=True); sys.stdin.read(); os.close(write)\n"
+            "for child in children: os.waitpid(child,0)\n"
+        )
+        process = helper.launch_pinned([sys.executable, "-u", "-c", controller],
+                                      stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        tree = process._validation_tree
+        cleanup_children = []
+        try:
+            ready = self.read_process_fixture_line(process, time.monotonic() + 10).split()
+            self.assertEqual(ready[0], b"ready")
+            for child in map(int, ready[1:]):
+                handle = helper.PinnedProcess.open(child, parent_pid=process.pid)
+                self.assertIsNotNone(handle)
+                cleanup_children.append(handle)
+            self.assertEqual(len(cleanup_children), 8)
+            with mock.patch.object(helper, "MAX_PROCESSES", 8), \
+                    self.assertRaisesRegex(RuntimeError, "tree exceeded 8 processes"):
+                tree.observe()
+            self.assertEqual(len(tree.handles), 9, "overflow must retain admitted handles for cleanup")
+            self.assertEqual(len(tree.live()), 9)
+            tree.signal(signal.SIGKILL)
+            process.wait(timeout=5)
+            deadline = time.monotonic() + 5
+            while tree.live() and time.monotonic() < deadline:
+                time.sleep(.01)
+            self.assertFalse(tree.live(), "overflow cleanup left an observed live process")
+            self.reap_admitted_fixture_children([handle.identity for handle in cleanup_children])
+            self.assertEqual(tree.observe(), [])
+            self.assertFalse(tree.handles)
+        finally:
+            tree.signal(signal.SIGKILL)
+            for handle in cleanup_children:
+                handle.send_signal(signal.SIGKILL)
+            process.wait(timeout=5)
+            self.reap_admitted_fixture_children([handle.identity for handle in cleanup_children])
+            for handle in cleanup_children:
+                handle.close()
+            tree.close()
+            process.stdin.close()
+            process.stdout.close()
+            process.stderr.close()
+
+    def test_retiring_an_exited_parent_preserves_its_live_descendant(self):
+        helper = SOAK.PROCESS
+        SOAK.enable_subreaper()
+        controller = (
+            "import os,sys,time\n"
+            "child=os.fork()\n"
+            "if child==0:\n"
+            " os.setsid(); time.sleep(120); os._exit(0)\n"
+            "print(child,flush=True); sys.stdin.readline(); os._exit(0)\n"
+        )
+        process = helper.launch_pinned([sys.executable, "-u", "-c", controller],
+                                      stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        tree = process._validation_tree
+        cleanup_child = None
+        try:
+            child = int(self.read_process_fixture_line(process, time.monotonic() + 10))
+            cleanup_child = helper.PinnedProcess.open(child, parent_pid=process.pid)
+            self.assertIsNotNone(cleanup_child)
+            self.assertEqual([row["pid"] for row in tree.observe()], [child])
+            process.stdin.write(b"exit\n")
+            process.stdin.flush()
+            process.wait(timeout=5)
+            self.assertEqual([row["pid"] for row in tree.observe()], [child])
+            self.assertIsNone(tree.root.descriptor)
+            self.assertEqual(len(tree.handles), 1)
+            self.assertTrue(tree.descendants()[0].live())
+            tree.signal(signal.SIGKILL)
+            deadline = time.monotonic() + 5
+            while tree.live() and time.monotonic() < deadline:
+                time.sleep(.01)
+            self.assertFalse(tree.live())
+            self.reap_admitted_fixture_children([cleanup_child.identity])
+            self.assertEqual(tree.observe(), [])
+        finally:
+            tree.signal(signal.SIGKILL)
+            if cleanup_child is not None:
+                cleanup_child.send_signal(signal.SIGKILL)
+            process.wait(timeout=5)
+            if cleanup_child is not None:
+                self.reap_admitted_fixture_children([cleanup_child.identity])
+                cleanup_child.close()
+            tree.close()
+            process.stdin.close()
+            process.stdout.close()
+            process.stderr.close()
+
+    def test_pidfd_exit_retirement_requires_kernel_exit_or_reap_readiness(self):
+        helper = SOAK.PROCESS
+        cases = (([], False), (select.POLLIN, True), (select.POLLHUP, True),
+                 (select.POLLIN | select.POLLHUP, True), (select.POLLERR, None),
+                 (select.POLLNVAL, None), (select.POLLIN | select.POLLERR, None),
+                 (select.POLLOUT, None), (OSError("poll denied"), None))
+        for event, expected in cases:
+            with self.subTest(event=event):
+                descriptor = os.pidfd_open(os.getpid())
+                handle = helper.PinnedProcess({"pid": os.getpid(), "start_ticks": "fixture"}, descriptor)
+                tree = helper.ProcessTree.__new__(helper.ProcessTree)
+                tree.root = handle
+                tree.handles = {(os.getpid(), "fixture"): handle}
+                poller = mock.Mock()
+                if isinstance(event, BaseException):
+                    poller.poll.side_effect = event
+                else:
+                    poller.poll.return_value = [] if event == [] else [(descriptor, event)]
+                try:
+                    with mock.patch.object(helper.select, "poll", return_value=poller), \
+                            mock.patch.object(handle, "current", return_value=None), \
+                            mock.patch.object(os, "kill") as numeric_kill, mock.patch.object(os, "killpg") as group_kill:
+                        if expected is None:
+                            with self.assertRaises((RuntimeError, OSError)):
+                                tree.observe()
+                            self.assertIsNotNone(handle.descriptor)
+                            self.assertEqual(len(tree.handles), 1)
+                        else:
+                            self.assertEqual(tree.observe(), [])
+                            self.assertEqual(handle.descriptor is None, expected)
+                            self.assertEqual(bool(tree.handles), not expected)
+                        numeric_kill.assert_not_called()
+                        group_kill.assert_not_called()
+                finally:
+                    tree.close()
+                if expected is True:
+                    self.assertEqual(tree.observe(), [], "confirmed-exit cleanup must be repeatable")
+                else:
+                    with self.assertRaisesRegex(RuntimeError, "closed admitted pidfd"):
+                        tree.observe()
 
     def test_pidfd_signals_never_retarget_a_reaped_identity(self):
         process = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(.05)"])
