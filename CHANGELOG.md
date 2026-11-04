@@ -1,7 +1,20 @@
 # Changelog
 
-## Unreleased
+## v0.14.0 - 2026-11-04
 
+- Skip the response and second review in guided work only when the initial fresh,
+  read-only review approves the exact independently checked revision. Retain both
+  phases as skipped, preserve full structured review evidence and always run final
+  acceptance checks. Bind checks, candidate profiles, fallback execution and
+  skipped phases to the retained plan and actual attempt/verification records
+  before application. Keep failed/canceled check prefixes inspectable while
+  requiring successful completion before guided application; existing advanced
+  plans retain their behavior.
+- Add fixed observation diagnostic error codes and per-component collection
+  timings, preserving unattempted components and unknown durations explicitly.
+- Add offline reports for saved observation JSONL and matched comparison evidence,
+  retaining sample gaps, unknown states, failures and incomplete attempts without
+  inferring uptime, model quality or a competitive winner.
 - Make Connections navigation explicit with **[** sender and **]** recipient
   focus keys, active field labels and matching sidebar/help cues. Keep Tab focus,
   independent selections and Left/Right view navigation unchanged.

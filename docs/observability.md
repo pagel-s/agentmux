@@ -15,12 +15,15 @@ target another workspace. All four commands are read-only. Opening a task
 does not retry it or resolve its delivery.
 
 `amx observe`, live managed-turn progress and the reporting timestamps on
-this page are included in [v0.13.0](getting-started/installation.md).
+this page were introduced in v0.13.0.
 Upgrade an older workspace's
 controller and workers explicitly; installing a new CLI does not replace a
 running controller. An older controller can report this operation as unsupported. The output records
 `observer_version` and the pinned controller path separately; installing a new
 observer does not prove that an existing workspace upgraded its controller.
+Agentmux [v0.14.0](getting-started/installation.md) adds structured collection diagnostics and the offline summary
+described below. Older v0.13.0 schema-1 captures remain readable; missing
+diagnostic timings stay unknown.
 
 ![Actual amx observe output showing capacity, uncertain delivery and a live command-worker check-in](assets/guide/terminal-observability.jpg?v=d9ac7487da7c)
 
@@ -120,6 +123,36 @@ Agentmux has no bundled OTLP/Prometheus exporter or cross-workspace trend
 database. Preserve sample timestamps, `complete` and component errors in any
 external aggregation; unavailable samples do not mean zero work.
 
+### Structured collection diagnostics
+
+Agentmux v0.14.0 adds `diagnostics` without changing observation schema version 1
+or the existing human output and `complete` behavior:
+
+| Field | Meaning |
+| --- | --- |
+| `diagnostics.collection_duration_ms` | Local elapsed collection time, including acquisition and decoding; excludes the watch delay and final output formatting |
+| `diagnostics.components.broker` | Owner credential loading and the broker observation read |
+| `diagnostics.components.runtime` | Ownership-checked runtime inspection; `not_recorded` is a legitimate headless workspace |
+| `diagnostics.components.native` | Native summary read after a successful broker observation; `not_attempted` has null duration and error code |
+| `diagnostics.components.storage` | Metadata inspection of the three known database files |
+
+Every component has `state`, `error_code` and `duration_ms`. `observed` means
+the collection succeeded, including a known unavailable runtime or absent
+storage file; it does not assert worker health. Component errors use
+`unavailable` with one of these fixed codes: `credential_unavailable`,
+`unauthenticated`, `forbidden`, `timeout`, `canceled`, `transport`, `unsupported`,
+`invalid_response`, `unavailable`, `metadata_unavailable` or `unknown`.
+Successful components have a null error code. Local call deadlines and
+cancellation are classified from their context; a server cancellation can also
+produce `canceled`. Unknown causes remain unknown instead of being guessed
+from error prose. Existing free-form component errors remain separate.
+
+Durations use the local monotonic clock. Parallel components overlap, so their
+durations must not be added. Broker and native reads retain their existing
+three-second call limits within the collection's four-second context. These
+measurements describe local collection, not model latency, task completion or
+an uptime guarantee.
+
 The native inventory is a fast reporting/receipt summary. It deliberately does
 not evaluate all queued admission candidates; `native[].pending_count` is
 `null` when not computed. Use `amx delivery ID` and the exact task view to
@@ -139,6 +172,58 @@ and credentials. It still contains local paths, task/session identities,
 timestamps and authenticated trace metadata. Keep captures private and review
 them before sharing. This is an operational record, not a credential bundle or
 an immutable execution attestation.
+
+## Summarize a private capture offline
+
+From a source checkout, stop the capture with Ctrl+C, then run the dependency-free
+Python reporter. Choose a gap threshold appropriate to your capture interval:
+
+```sh
+python3 scripts/summarize-observations.py /private/new-observations.jsonl --max-gap 5s
+python3 scripts/summarize-observations.py /private/new-observations.jsonl --max-gap 5s \
+  --json > /private/new-observation-report.json
+```
+
+The command also accepts `-` for standard input. It makes no provider calls,
+does not open the workspace and does not write the input capture. A successful
+report records the SHA256 of every original input byte. That hash identifies
+the consumed capture; it does not authenticate who produced it.
+
+The report includes sample count, first/last timestamps, observed time span,
+forward gaps above the chosen threshold and backward/repeated timestamps.
+First and last follow file order; span means maximum minus minimum timestamp.
+It counts reported completeness and component availability **at samples**,
+with bounded gap and availability-transition examples. These counts do not
+estimate uptime between samples or establish task quality.
+
+Retained tasks, task states, recorded/effective delivery, recovery eligibility,
+attention and live leases remain gauges. Their first, last and known peaks are
+not completed-task throughput or success rates. Capacity ratios use each
+sample's own ceiling; changing ceilings remain visible. Database, WAL and
+shared-memory sizes distinguish absent zero-byte files from unknown sizes.
+Adjacent size decreases can reflect checkpointing or replacement. Observed
+runtime attempt-identity changes count adjacent known samples, not actual
+restarts. Missing samples break those comparisons; progress event counts are
+never correlated across attempts.
+
+Native pending totals remain unknown when any listed pending count is null,
+the inventory is truncated or its collection is unavailable. Known partial
+sums are labeled separately. An unavailable inventory is not counted as a
+confirmed untruncated inventory. Legacy captures without diagnostics keep
+their collection durations and error-code observations unknown.
+
+Each file must contain one exact state identity and newline-terminated JSONL
+records. The parser rejects mixed states, unsupported schemas, duplicate keys,
+malformed UTF-8/JSON, non-finite numbers, records over 2 MiB and inventories over
+200 items. It streams one bounded record at a time and retains at most 16
+examples of each episode category, with omitted counts. A rejected capture
+exits nonzero and emits no report or partial-input hash.
+
+Only fixed aggregate fields enter the report: workspace paths, task/agent/trace
+identities, MACs, raw errors and unknown fields are omitted; unrecognized map
+labels and diagnostic codes use aggregate buckets. Original captures still
+contain sensitive operational metadata and remain private. Review even the
+filtered report before sharing it.
 
 ## Diagnose silence and interruption
 

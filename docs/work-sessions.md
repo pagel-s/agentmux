@@ -17,7 +17,7 @@ managed task execution. Both modes share the coordination broker and its permiss
 Each agent has one terminal/worker lock. Changing interaction mode requires a
 new launch definition/run rather than a second process sharing a conversation.
 
-v0.13.0 includes `amx context`, `amx task` / `tasks`, exact task opening
+v0.14.0 includes `amx context`, `amx task` / `tasks`, exact task opening
 with `task ID --open`, `amx observe`, the searchable running-workspace chooser and direct
 session task history in Actions. See [installation](getting-started/installation.md)
 and explicitly upgrade an older workspace controller before using its new controls.
@@ -191,7 +191,7 @@ amx attach codex --session billing
 amx dashboard --session billing
 ```
 
-In v0.13.0, `amx context --session billing` explains the target,
+`amx context --session billing` explains the target,
 selection source and runtime status without attaching or starting agents.
 Bare `amx` / `amx a` outside an attachment uses a sole running workspace or
 offers a running-workspace chooser. In that chooser, `/` or Ctrl+F starts a
@@ -210,7 +210,10 @@ broker/task uncertainty and upgrades.
 For project directories, shell splits, multiple agents in one tmux window,
 normal tmux keys and last-session reattachment, see
 [terminal folders and layouts](terminal-workflow.md). Tab switches sidebar/content
-focus; ↑/↓ navigates that focused area and ←/→ changes views.
+focus; ↑/↓ navigates that focused area and ←/→ changes views. In Connections,
+`[` focuses **Sender** and `]` focuses **Recipient** directly. Tab or Shift+Tab
+switches between them. Up/Down changes only the focused identity; changing
+focus preserves the other selection and never changes permissions.
 
 Tasks in both consoles browse complete retained broker history. In the terminal,
 `PgDn` loads older records, `PgUp` returns toward newer records and `f` searches
@@ -218,7 +221,7 @@ instructions, results or IDs; an empty search clears the filter. Web Tasks offer
 search, recipient/state filters and Load older. These pages do not include human
 turns typed only into a native provider's own conversation UI.
 
-v0.13.0 also exposes direct CLI inspection:
+Direct CLI inspection is also available:
 
 ```sh
 amx tasks --to codex --query "login" --limit 25 --session billing
@@ -568,7 +571,7 @@ shared-memory inspection and versioned editing, role/profile setup, autonomy and
 admission controls, and the same live permission switches as the terminal
 dashboard. Board is the main focus pane. **Connections** shows directional message/ping/command
 connections and shared board/memory access; select a connection to adjust it.
-In v0.13.0, enabled connections automatically group connected
+Since v0.13.0, enabled connections automatically group connected
 nodes. Denied preview edges do not affect arrangement. Dragging or **Shift+Arrow**
 pins a node; its position persists locally for that workspace and study attempt,
 including after topology changes. Unpinned nodes arrange around pins after a drag.

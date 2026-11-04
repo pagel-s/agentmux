@@ -32,6 +32,9 @@ PROCESS_SOURCE = Path(__file__).with_name("workflow_processes.py").resolve()
 _process_spec = importlib.util.spec_from_file_location("workflow_evidence_processes", PROCESS_SOURCE)
 PROCESS = importlib.util.module_from_spec(_process_spec)
 _process_spec.loader.exec_module(PROCESS)
+_review_spec = importlib.util.spec_from_file_location("workflow_review_evidence", Path(__file__).with_name("workflow_review_evidence.py"))
+REVIEW = importlib.util.module_from_spec(_review_spec)
+_review_spec.loader.exec_module(REVIEW)
 
 
 SCENARIOS = (
@@ -634,9 +637,10 @@ class Soak:
         self.check(isinstance(summary, dict) and all(summary.get(key) == report.get(key) for key in
                    ("id", "goal", "state", "repository", "started_at", "finished_at"))
                    and summary.get("directory") == report["output"], "guided inspection identifies the exact retained completed report")
-        phases = [{key: row.get(key, "") for key in ("id", "state", "harness")} for row in report["steps"]]
+        phases = [{key: row.get(key, "") for key in ("id", "state", "harness", "skip_reason")} for row in report["steps"]]
         self.check(isinstance(summary.get("phases"), list)
-                   and [{key: row.get(key, "") for key in ("id", "state", "harness")} for row in summary["phases"]] == phases,
+                   and [{key: row.get(key, "") for key in ("id", "state", "harness", "skip_reason")} for row in summary["phases"]] == phases
+                   and same_json(summary.get("early_approval"), report.get("early_approval")),
                    "guided inspection retained every recorded phase and outcome")
         checks = report["verification"]["checks"]
         self.check(exact_int(summary.get("checks_passed"), len(checks)) and exact_int(summary.get("checks_total"), len(checks))
@@ -708,8 +712,17 @@ class Soak:
         self.check(isinstance(steps, list) and [step.get("id") for step in steps] == ["implement", "review", "address-review", "final-review", "final-check"],
                    "guided work retained every required coding, review and verification phase")
         declared = [{"name": "project-check", "command": checks}]
+        try:
+            skipped = REVIEW.early_skips(result, read_json(root / "run/plan.json"))
+        except ValueError as error:
+            raise SoakFailure(str(error)) from None
+        self.check(skipped == {"address-review", "final-review"}, "clean fresh fixture approval skipped exactly the redundant response and final review")
         current = result["snapshot"]
         for step in steps:
+            if step["id"] in skipped:
+                self.check(same_json(read_json(Path(step["evidence_path"])), step),
+                           "skipped phase retained its exact no-execution evidence")
+                continue
             reviewer = step["id"] in ("review", "final-review")
             harness = ("claude" if self.args.isolation == "bubblewrap" else "antigravity") if reviewer else "codex"
             verifier_only = step["id"] == "final-check"
@@ -740,7 +753,7 @@ class Soak:
         self.assert_same_revision(result["final_snapshot"], current)
         self.assert_same_revision(result["verification"], current)
         self.check((Path(result["worktree"]) / "answer.txt").read_bytes() == (value + "\n").encode()
-                   and (Path(result["worktree"]) / "provider-turns.txt").read_text() == str(2 * (self.iteration + 1)),
+                   and (Path(result["worktree"]) / "provider-turns.txt").read_text() == str(self.iteration + 1),
                    "guided result retained the exact requested answer and bounded fixture turn count")
         self.guided_reports.append(result)
         self.check(self.source(repository) == before, "guided work preserved source and staging before explicit application")
@@ -761,7 +774,7 @@ class Soak:
             self.check(before["git_metadata_sha256"] == after["git_metadata_sha256"], "private guided application left source Git objects, refs and worktree metadata unchanged")
         self.check((repository / "answer.txt").read_text() == value + "\n", "guided application retained the exact requested answer")
         self.check((repository / "owner.txt").read_text() == "unstaged owner work\n" and (repository / "owner.bin").read_bytes() == bytes([0, 1, 2, 255]), "guided application preserved unrelated owner bytes")
-        self.check(int((repository / "provider-turns.txt").read_text()) == 2 * (self.iteration + 1), "guided coding attempts were bounded without hidden replay")
+        self.check(int((repository / "provider-turns.txt").read_text()) == self.iteration + 1, "guided coding attempts were bounded without hidden replay")
         runs = self.call("growing-history", "work", "list", "--repo", repository, "--catalog", self.root / "history", "--json")
         self.assert_history(runs)
 

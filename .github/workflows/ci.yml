@@ -47,6 +47,13 @@ jobs:
           go build -o bin/amx ./cmd/agentmux
           ln -sfn amx bin/agentmux
 
+      - name: Verify operational and comparison evidence summaries without providers
+        env:
+          AGENTMUX_INTEGRATION_BINARY: '${{ github.workspace }}/bin/amx'
+        run: |
+          python3 scripts/test-summarize-observations.py
+          python3 scripts/test-summarize-comparison.py
+
       - name: Run test suite
         env:
           AGENTMUX_MANAGED_INTEGRATION: '1'
@@ -64,7 +71,9 @@ jobs:
         run: python3 scripts/validate-workflows.py --binary bin/amx --output "$RUNNER_TEMP/agentmux-shared-validation" --storage shared
 
       - name: Verify workflow acceptance evidence cannot report false success
-        run: python3 scripts/test-validate-workflows.py
+        run: |
+          python3 scripts/test-validate-workflows.py
+          python3 scripts/test-workflow-review-evidence.py
 
       - name: Verify workflow soak admission, audit and cleanup safety
         run: python3 scripts/test-soak-workflows.py

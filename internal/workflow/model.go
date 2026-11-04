@@ -21,6 +21,7 @@ import (
 // are constrained only when the explicit isolation policy is required.
 type Plan struct {
 	Kind               string            `json:"kind,omitempty"`
+	ReviewPolicy       string            `json:"review_policy,omitempty"`
 	Storage            string            `json:"storage,omitempty"`
 	Isolation          *IsolationOptions `json:"isolation,omitempty"`
 	Version            int               `json:"version"`
@@ -67,6 +68,8 @@ type Step struct {
 }
 
 type CandidateResult struct {
+	CandidateID          string          `json:"candidate_id,omitempty"`
+	ProfileSHA256        string          `json:"profile_sha256,omitempty"`
 	ReviewContext        string          `json:"review_context,omitempty"`
 	RuntimeHarness       string          `json:"runtime_harness,omitempty"`
 	CredentialsRedacted  bool            `json:"credentials_redacted,omitempty"`
@@ -109,6 +112,7 @@ type AttemptUsage struct {
 }
 
 type StepResult struct {
+	SkipReason string   `json:"skip_reason,omitempty"`
 	ReadOnly   bool     `json:"read_only,omitempty"`
 	GateReview bool     `json:"gate_review,omitempty"`
 	ID         string   `json:"id"`
@@ -117,6 +121,8 @@ type StepResult struct {
 }
 
 type Report struct {
+	ReviewPolicy         string                          `json:"review_policy,omitempty"`
+	EarlyApproval        *EarlyApproval                  `json:"early_approval,omitempty"`
 	ReviewContext        string                          `json:"review_context,omitempty"`
 	Kind                 string                          `json:"kind,omitempty"`
 	Storage              string                          `json:"storage,omitempty"`
@@ -173,7 +179,25 @@ func LoadReport(directory string) (Report, error) {
 	if err := decodeFile(directory+string(os.PathSeparator)+"report.json", &r); err != nil {
 		return r, err
 	}
-	return r, validateReport(directory, r)
+	// The separately retained owner plan fences selective report downgrades.
+	// These remain owner-controlled records, not a cryptographic attestation.
+	var plan Plan
+	if err := DecodeFile(filepath.Join(directory, "plan.json"), &plan); err != nil {
+		if r.ReviewPolicy != "" || !errors.Is(err, os.ErrNotExist) {
+			return r, errors.New("workflow report requires its readable retained plan")
+		}
+	} else if plan.ReviewPolicy != r.ReviewPolicy {
+		return r, errors.New("workflow report review policy differs from its retained plan")
+	}
+	if err := validateReport(directory, r); err != nil {
+		return r, err
+	}
+	if r.ReviewPolicy != "" {
+		if err := validateRetainedPolicyEvidence(r, plan); err != nil {
+			return r, err
+		}
+	}
+	return r, nil
 }
 
 func validateReport(directory string, r Report) error {
@@ -189,6 +213,9 @@ func validateReport(directory string, r Report) error {
 	}
 	if r.ReviewContext != "" && r.ReviewContext != "fresh" {
 		return invalid("unknown review context policy")
+	}
+	if err := validateEarlyApprovalReport(r); err != nil {
+		return invalid(err.Error())
 	}
 	if r.ProcessContainment != "" && r.ProcessContainment != ProcessGroups && r.ProcessContainment != PIDNamespace {
 		return invalid("unknown process containment policy")
@@ -274,7 +301,7 @@ func validateReport(directory string, r Report) error {
 		}
 		seen[id] = true
 		switch c.State {
-		case "pending", "running", "not_started", "failed", "uncertain", "completed", "verified", "checks_failed", "interrupted", "stale", "empty_result", "review_invalid", "review_modified", "changes_requested", "credential_leak":
+		case "pending", "running", "not_started", "failed", "uncertain", "completed", "verified", "checks_failed", "interrupted", "stale", "empty_result", "review_invalid", "review_modified", "changes_requested", "credential_leak", "skipped":
 		default:
 			return invalid("unknown candidate state")
 		}
@@ -662,6 +689,9 @@ func ValidatePlan(p Plan) error {
 	}
 	if p.Mode == "mission" {
 		steps, err := orderedSteps(p)
+		if err == nil {
+			err = validateEarlyApprovalPlan(p, steps)
+		}
 		if err == nil && p.Kind == "work" {
 			gate := -1
 			for i, s := range steps {
@@ -682,6 +712,9 @@ func ValidatePlan(p Plan) error {
 	}
 	if p.Kind == "work" {
 		return errors.New("guided work requires mission mode")
+	}
+	if p.ReviewPolicy != "" {
+		return errors.New("review policies require guided mission work")
 	}
 	if len(p.Steps) > 0 {
 		return errors.New("steps are only supported in mission mode")

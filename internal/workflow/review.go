@@ -55,11 +55,17 @@ func ParseReviewResult(text string) (ReviewResult, error) {
 }
 
 func RequireApprovedReview(r Report) error {
+	if err := validateEarlyApprovalReport(r); err != nil {
+		return err
+	}
 	if r.Kind != "work" {
 		return nil
 	}
 	if r.FinalSnapshot == nil {
 		return errors.New("work has no final checked snapshot")
+	}
+	if r.ReviewPolicy == ReviewPolicyEarlyApproval {
+		return requirePolicyApprovedReview(r)
 	}
 	var last *StepResult
 	for i := range r.Steps {

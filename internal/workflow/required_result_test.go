@@ -13,7 +13,11 @@ func TestWatchRejectsEmptyReviewerResultWithoutReplay(t *testing.T) {
 	repo, root := fixtureRepo(t)
 	p := auditPlan(repo, []string{"python3", "-c", "print('  \\t')"})
 	p.MaxAttempts = 3
-	r, err := Watch(context.Background(), p, filepath.Join(root, "watch"), false, WatchOptions{IntervalSeconds: 1, MaxRuns: 1, TimeoutSeconds: 5})
+	// This checks empty-result rejection and absence of replay. Leave enough
+	// time for private Git validation on a loaded race-test runner; deadline
+	// behavior is exercised by the cancellation and timeout tests.
+	p.TimeoutSeconds = 30
+	r, err := Watch(context.Background(), p, filepath.Join(root, "watch"), false, WatchOptions{IntervalSeconds: 1, MaxRuns: 1, TimeoutSeconds: 30})
 	if err == nil || r.State != "failed" || len(r.Runs) != 1 || r.Runs[0].State != "empty_review" {
 		t.Fatalf("empty review accepted: %+v %v", r, err)
 	}

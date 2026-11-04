@@ -1,12 +1,15 @@
 # Ask for work, inspect the result, apply it
 
 `amx work` turns one request into a checked coding-and-review journey. Codex
-implements the change, Antigravity reviews it, Codex addresses the findings,
-Antigravity reviews the final revision, and the project checks run again. You
-receive a saved report and a patch in a separate Git worktree. Agentmux does not
-integrate that patch into your project until you explicitly apply it.
+implements the change and Antigravity independently reviews the checked files.
+If the review requests changes, Codex addresses them and Antigravity reviews
+the final revision. Final acceptance checks always run. You receive a saved
+report and a patch in a separate Git worktree. Agentmux does not integrate that
+patch into your project until you explicitly apply it.
 
-Available in [Agentmux v0.13.0](getting-started/installation.md). To inspect a
+The clean-approval shortcut described below is included in
+[Agentmux v0.14.0](getting-started/installation.md). v0.13.0 always executes the
+response and second review. To inspect a
 checked fixture before configuring providers, start with
 [`amx demo`](getting-started/first-result.md).
 
@@ -25,8 +28,10 @@ calls. For your own task, the daily sequence is:
 v0.13.0 includes run-ID listing and report opening. The base journey also works
 in v0.12.0; see [inspection](#inspect-the-result) for the older report route.
 
-The five execution phases retain checks and review evidence. Failed or uncertain
-work remains available to inspect; it does not become an approved application.
+All five phases remain in the report. A clean initial approval marks the response
+and second review as **skipped**, with the original review and exact checked
+revision retained as evidence. Failed or uncertain work remains available to
+inspect; it does not become an approved application.
 
 ## Preview your first request
 
@@ -74,11 +79,13 @@ such a run. The usual path is:
 
 1. Implement the requested change and run the declared check.
 2. Review the implementation without changing its checked content.
-3. Address the review findings and check the changes.
-4. Review the exact final revision.
+3. If changes are requested, address the findings and check the changes.
+4. If findings were addressed, review the exact final revision in fresh context.
 5. Run final acceptance checks and retain the patch.
 
-Final review must explicitly approve the revision. An empty review, malformed
+A fresh review must explicitly approve the exact final checked revision. A clean
+first review can supply that approval only while the checked content remains
+unchanged; it never replaces final acceptance checks. An empty review, malformed
 review, review edits, remaining requested changes or failed acceptance checks
 stop the journey and remain visible in the result. A model saying “finished”
 does not replace review approval and executable checks.
@@ -92,10 +99,14 @@ findings and earlier approvals are excluded from that review’s input.
 Workflow profiles that request native resume, continue or transcript selection
 are rejected before admission. Codex workflow turns also use ephemeral sessions.
 
-Normally the plan uses four native turns; completed implementation-check
-failures can use up to six with the default two correction attempts. Native
-turns can contain multiple provider requests, so this is not a monetary cap.
-Transport failures and uncertain turns are not automatically replayed.
+In v0.14.0, a clean first review uses two native turns when implementation checks
+pass on the first attempt: implementation and independent review. Requested
+changes normally use four turns. Completed coding-check
+failures can use up to six with the default two attempts per coding phase; the
+preview shows the full 2–6 range. In v0.13.0 the range is 4–6. Native turns can
+contain multiple provider requests, so these counts do not measure inference
+requests or subscription usage. Transport failures and uncertain turns are not
+automatically replayed.
 
 Useful controls are:
 
@@ -198,7 +209,7 @@ amx work show RUN_ID --open
 ```
 
 These commands use the current Git project. `status` explains the recorded
-phases, checks, final review, changed files and next action. `show` also prints
+phases, checks, accepted review, changed files and next action. `show` also prints
 the hash-checked patch preview and saved HTML report path. The preview is capped
 at 64 KiB, preserves code line breaks and escapes terminal control characters;
 truncated previews identify the full retained patch. Use the retained artifact
@@ -291,6 +302,23 @@ or undo external side effects. A failed final review remains available for
 inspection; it is not silently treated as approval.
 
 ## Execution and evidence
+
+v0.14.0 guided reports record the explicit `early-approval-v1` review policy.
+The original review binds both the Git tree and selected raw content; skipped
+phases have no model attempts or invented review results. Complete structured
+review verdicts, including findings, remain available within the 128 KiB review
+limit. Inputs and check diagnostics can still be excerpts with retained evidence
+references. Reading a completed report compares its declared checks, candidate
+profiles and phase execution with the separately retained plan and actual
+attempt, skip and verification records. Candidate profile fingerprints exclude
+environment credentials and identify declared settings, not a provider's resolved
+model. These are owner-controlled records, not provider attestations or protection
+against an owner rewriting all evidence. Existing advanced plans
+without this policy retain their declared execution phases.
+
+Failed or interrupted runs can retain only the checks reached before stopping.
+Those exact planned prefixes remain inspectable; they never authorize application.
+The guided policy requires successful completion and all final checks before apply.
 
 Without `--isolation bubblewrap`, native tools and checks use trusted local
 execution with host authority. Private Git stores separate retained data; they

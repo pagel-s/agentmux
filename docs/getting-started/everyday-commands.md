@@ -7,7 +7,7 @@ workspace. If no terminal has been selected or it has closed, the workbench open
 With several running workspaces, choose one or pass `-s NAME`.
 
 The searchable choosers, `context`, `observe`, `task`/`tasks`, exact-task workbench opening,
-bounded run lists and report opening below are included in v0.13.0.
+bounded run lists and report opening below are included in v0.14.0.
 
 ## Daily power-user loop
 
@@ -32,6 +32,11 @@ and Esc returns. While filtering, `j`, `k` and `q` are literal query text.
 Use `amx send --help`, `amx attach --help` or another command's help for focused
 options. `amx help all` retains the full reference.
 
+In Connections, `[` focuses **Sender** and `]` focuses **Recipient**. Tab or
+Shift+Tab switches fields; Up/Down changes only the highlighted identity.
+Left/Right still changes views. Focus changes neither permissions nor the
+other field's selected identity.
+
 [`amx observe`](../observability.md) separates broker connectivity, worker
 check-ins, native events, effective delivery uncertainty and retained outcomes.
 It counts complete task history and prints exact task inspection commands;
@@ -40,7 +45,7 @@ quiet reporting alone does not establish a stalled or failed model.
 ## Ask for a checked coding change
 
 The checked workflow, `--limit` and `--open` below are included in
-[v0.13.0](installation.md). For a first checked fixture
+[v0.14.0](installation.md). For a first checked fixture
 with no provider setup, run [`amx demo`](first-result.md).
 From a Git project with an initial commit and the selected native CLIs installed:
 
@@ -62,6 +67,11 @@ After an interrupted application, inspect and use `amx work recover latest` to
 resolve its journal without replaying the patch. See [work on a task](../working.md)
 for provider, isolation, deadlines and recovery details, or
 [advanced workflows](../workflows.md) for command-only comparisons and custom plans.
+
+A clean first review of the exact independently checked revision can finish
+with two native CLI turns, skipping the response and second review. Final
+acceptance checks still run; requested changes keep the full loop. Saved reports
+show skipped phases explicitly.
 
 Copy a stable run ID from `work list` when following up on older work. `--open`
 requires an explicit ID, directory or `latest`; it renders a fresh private HTML

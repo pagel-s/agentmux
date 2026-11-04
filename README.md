@@ -8,7 +8,7 @@ and Antigravity. The managed runtime and workbench are experimental.
 
 ## Get your first checked result
 
-[Install v0.13.0](docs/getting-started/installation.md#install-a-published-binary-recommended)
+[Install v0.14.0](docs/getting-started/installation.md#install-a-published-binary-recommended)
 for Linux or macOS 13+, then run:
 
 ```sh
@@ -32,8 +32,7 @@ amx work "Fix the login redirect" -- go test ./...
 ```
 
 The preview starts no models and creates no run files. Replace `go test ./...`
-with your project's check. Add `--allow-models` to permit provider execution,
-which can incur charges:
+with your project's check. Add `--allow-models` to run the selected native CLIs:
 
 ```sh
 amx work "Fix the login redirect" --allow-models -- go test ./...
@@ -46,6 +45,12 @@ your project. See [work on a task](docs/working.md) for provider choices, fresh
 reviews, deadlines and recovery. Each run retains private Git evidence;
 filesystem and network isolation require the explicit
 [Linux isolation option](docs/workflows.md#private-storage-and-full-isolation).
+
+Agentmux v0.14.0 skips the response and second review when the first fresh
+review approves the same checked revision. Without coding retries, that uses
+two native turns. Requested changes retain the full four-turn review loop,
+and final acceptance checks always run. Skipped phases
+remain explicit in the saved evidence. Published v0.13.0 uses the full loop.
 
 [![Actual checked-result report from a model-free fixture, showing retained checks and a reviewable patch](docs/assets/guide/checked-work-report.jpg?v=9e8c23859bf8)](docs/visual-guide.md#ask-for-a-checked-coding-change)
 
@@ -88,6 +93,21 @@ live reporting and retained task attention into one read-only view; `--watch --j
 records JSONL. See [observability](docs/observability.md) for fresh/stale evidence
 and exact-task drilldown. These controls ship in [v0.13.0](docs/getting-started/installation.md).
 Existing workspaces retain their pinned controller until explicitly upgraded.
+
+v0.14.0 also adds fixed diagnostic error codes and local collection
+timings to observation JSON. Repository tools summarize saved observation captures
+and matched comparison evidence offline:
+
+```sh
+python3 scripts/summarize-observations.py /private/observe.jsonl --json
+python3 scripts/summarize-comparison.py /private/comparison-evidence --json
+```
+
+These Python 3 tools start no models and change no workspace state. Observation
+reports preserve gaps and unknown values; comparison reports retain failures and
+incomplete attempts. They do not establish uptime, task quality or a competitive
+winner. See [observability](docs/observability.md) and
+[evaluation](docs/evaluation.md) for capture instructions and evidence limits.
 
 `make install` installs `amx`, the Agentmux command. Use
 `amx` to open the workbench, `amx a` to restore the last live terminal, `amx a claude -s work`

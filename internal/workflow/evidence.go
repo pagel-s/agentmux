@@ -27,6 +27,7 @@ type Explanation struct {
 }
 
 type EvidenceItem struct {
+	SkipReason          string        `json:"skip_reason,omitempty"`
 	ReviewContext       string        `json:"review_context,omitempty"`
 	RuntimeHarness      string        `json:"runtime_harness,omitempty"`
 	CredentialsRedacted bool          `json:"credentials_redacted,omitempty"`
@@ -105,6 +106,7 @@ func explainReport(directory string, r Report) (Explanation, error) {
 	for _, s := range r.Steps {
 		v := item(s.CandidateResult, s.DependsOn, false)
 		v.ID = s.ID
+		v.SkipReason = s.SkipReason
 		e.Items = append(e.Items, v)
 	}
 	if r.Mode == "mission" {
@@ -169,6 +171,9 @@ func Handoff(directory, candidateID string) (string, error) {
 		b.WriteString("\n## Mission steps\n\n")
 		for _, s := range r.Steps {
 			fmt.Fprintf(&b, "- %s: %s", s.ID, s.State)
+			if s.SkipReason != "" {
+				fmt.Fprintf(&b, " — %s", s.SkipReason)
+			}
 			if len(s.DependsOn) > 0 {
 				fmt.Fprintf(&b, " (after %s)", strings.Join(s.DependsOn, ", "))
 			}

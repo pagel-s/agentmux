@@ -4,7 +4,7 @@ For current reporting, start with `amx observe --session work`, then inspect
 the printed exact task with `amx task TASK_ID --open --session work`. The
 [observability guide](observability.md) separates worker check-ins, native event
 observations, adapter readiness and retained outcomes. These controls
-are included in v0.13.0. Live progress contains metadata only; opt-in
+are included in v0.14.0. Live progress contains metadata only; opt-in
 traces below contain sensitive prepared input and adapter events.
 
 ```yaml
@@ -93,7 +93,7 @@ an agent are not performed. A missing/invalid source stops new claims.
 An interactive native process retains its prepared snapshot until exit;
 relaunch it when a refreshed source must be loaded.
 
-With a running v0.13.0 broker, use direct owner inspection:
+With a running v0.13.0-or-newer broker, use direct owner inspection:
 
 ```sh
 amx tasks --status running --state STATE
@@ -104,7 +104,7 @@ amx task TASK_ID --open --state STATE
 `--open` pins the exact task in the workbench, including older tasks and retired
 recipients. It shows recorded delivery, current recovery evidence and the
 explicit task/version review; opening never retries or resolves the task.
-These shortcuts are included in v0.13.0. Trace verification and bundle
+These shortcuts have been available since v0.13.0. Trace verification and bundle
 inspection above also work without a running broker.
 
 The lower-level `managed activity`, `managed status`, `task.list`, `task.get`

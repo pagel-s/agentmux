@@ -46,6 +46,9 @@ func Apply(ctx context.Context, directory, candidateID string) (ApplyResult, err
 	if err != nil {
 		return ApplyResult{}, err
 	}
+	if r.ReviewPolicy == ReviewPolicyEarlyApproval && r.State != "completed" {
+		return ApplyResult{}, errors.New("guided work must complete successfully before application")
+	}
 	source := SourceSnapshot(r)
 	sourceObjects := source
 	if r.Snapshot.Store != "" {

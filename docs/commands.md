@@ -6,13 +6,15 @@ For a guided native-terminal workflow, see [work sessions](work-sessions.md).
 For original YAML pane-layout examples, see [recipes](recipes.md).
 
 `context`, `observe`, `task`/`tasks` (including `task ID --open`), `work list --limit`
-and `work show --open` are included in v0.13.0. Older workspace controllers
-need an explicit upgrade before they can serve the new controls.
+and `work show --open` are included in v0.14.0. These inspection routes have been
+available since v0.13.0; controllers older than that need an explicit upgrade
+before they can serve their broker APIs. The v0.14.0 observer adds structured
+collection diagnostics while preserving schema-1 compatibility.
 
 ## Checked coding requests
 
 `demo`, `work` and `flow` are included in
-[Agentmux v0.13.0](getting-started/installation.md). `work` and `flow` select a Git project,
+[Agentmux v0.14.0](getting-started/installation.md). `work` and `flow` select a Git project,
 independently of an interactive workspace's `-s NAME` selector.
 
 | Command | Use it to |
