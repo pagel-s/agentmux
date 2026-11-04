@@ -124,8 +124,33 @@ func TestWorkflowCLIMissionWatchAndLab(t *testing.T) {
 	reviewPlan.Checks = []workflow.Check{{Name: "fixture-intact", Command: []string{"python3", "-c", "from pathlib import Path; assert Path('README').read_text() == 'fixture' + chr(10)"}}}
 	reviewPath := filepath.Join(root, "review.json")
 	writeWorkflowTestJSON(t, reviewPath, reviewPlan)
-	invokeWorkflowCLI(t, exitSuccess, "watch", reviewPath, "--output", filepath.Join(root, "watch"), "--interval", "1s", "--max-runs", "1", "--duration", "10s")
-	invokeWorkflowCLI(t, exitSuccess, "status", filepath.Join(root, "watch"))
+	// This happy path includes private Git setup/validation and the stability
+	// interval; it is not a deadline oracle for a loaded integration runner.
+	watchDir := filepath.Join(root, "watch")
+	invokeWorkflowCLI(t, exitSuccess, "watch", reviewPath, "--output", watchDir, "--interval", "1s", "--max-runs", "1", "--duration", "30s")
+	var watch workflow.WatchReport
+	if err := workflow.DecodeFile(filepath.Join(watchDir, "watch.json"), &watch); err != nil || watch.State != "completed" || len(watch.Runs) != 1 || watch.Runs[0].State != "completed" || watch.Runs[0].Superseded {
+		t.Fatalf("watch did not complete one current review: %+v %v", watch, err)
+	}
+	review, err := workflow.LoadReport(watch.Runs[0].Output)
+	if err != nil || review.State != "completed" || len(review.Candidates) != 1 {
+		t.Fatalf("watch lacks its retained child report: %+v %v", review, err)
+	}
+	reviewer := review.Candidates[0]
+	if reviewer.ID != "reviewer" || reviewer.State != "verified" || reviewer.Verification == nil || !reviewer.Verification.Passed || !strings.Contains(reviewer.Result, "Read-only review completed") {
+		t.Fatalf("watch lacks the executed review and passing verification: %+v", reviewer)
+	}
+	checks := reviewer.Verification.Checks
+	if len(checks) != 1 || checks[0].Name != "fixture-intact" || !checks[0].Passed {
+		t.Fatalf("watch omitted its source-content acceptance check: %+v", checks)
+	}
+	if data, err := os.ReadFile(filepath.Join(plan.Repository, "README")); err != nil || string(data) != "fixture\n" {
+		t.Fatalf("watch changed the source fixture: %q %v", data, err)
+	}
+	if _, err := os.Stat(filepath.Join(plan.Repository, "answer.txt")); !os.IsNotExist(err) {
+		t.Fatal("mission or watch applied changes to source")
+	}
+	invokeWorkflowCLI(t, exitSuccess, "status", watchDir)
 	invokeWorkflowCLI(t, exitSuccess, "lab", planPath, "--output", filepath.Join(root, "lab"), "--repetitions", "2")
 	invokeWorkflowCLI(t, exitSuccess, "status", filepath.Join(root, "lab"))
 }
