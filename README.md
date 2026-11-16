@@ -87,7 +87,6 @@ A clean initial approval can skip redundant response/review turns; final checks
 always run. Replace `go test ./...` with your project's acceptance check.
 See [work on a task](docs/working.md) for isolated profiles and recovery.
 
-[![Actual checked-result report from a model-free fixture](docs/assets/guide/checked-work-report.jpg?v=a15253337515)](docs/visual-guide.md#ask-for-a-checked-coding-change)
 
 To inspect that workflow without provider setup, run `amx demo`. It makes and
 checks a deterministic change only in its own disposable project; it measures
