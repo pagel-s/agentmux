@@ -1,0 +1,2833 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://pagel-s.github.io/agentmux/working/">
+      
+      
+        <link rel="prev" href="../tutorials/portable-bundles/">
+      
+      
+        <link rel="next" href="../workflows/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+    
+    
+      
+        <title>Work on a Task - Agentmux</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="deep-purple" data-md-color-accent="deep-purple">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#ask-for-work-inspect-the-result-apply-it" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Agentmux" class="md-header__button md-logo" aria-label="Agentmux" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Agentmux
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Work on a Task
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="deep-purple" data-md-color-accent="deep-purple"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="deep-purple" data-md-color-accent="deep-purple"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/pagel-s/agentmux/" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    pagel-s/agentmux
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../getting-started/installation/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../getting-started/native-walkthrough/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Tutorials
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="./" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Coding Workflows
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../architecture/mental-model/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Core Concepts
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../work-sessions/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Managed Teams
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../quality/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Agentmux" class="md-nav__button md-logo" aria-label="Agentmux" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Agentmux
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/pagel-s/agentmux/" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    pagel-s/agentmux
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/first-result/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Your first checked result
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../visual-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Visual workflow guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/everyday-commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Everyday commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../terminal-workflow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terminal folders and layouts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/native-walkthrough/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verify native collaboration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/hello-team/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Legacy Layout Handoff
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/portable-bundles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Portable Bundles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coding Workflows
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Coding Workflows
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Work on a Task
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Work on a Task
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#preview-your-first-request" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Preview your first request
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#one-deadline-visible-turn-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        One deadline, visible turn limits
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#start-the-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Start the work
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Start the work">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#require-process-containment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Require process containment
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#private-snapshots-and-full-isolation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Private snapshots and full isolation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#inspect-the-result" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inspect the result
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#apply-only-the-result-you-inspected" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Apply only the result you inspected
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Apply only the result you inspected">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#recover-an-interrupted-application" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recover an interrupted application
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#return-after-interruption" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Return after interruption
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#execution-and-evidence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Execution and evidence
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workflows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced Workflows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workflow-validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Validation and Boundaries
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core Concepts
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Core Concepts
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/mental-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Layout Compiler (v1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/coordination/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pane Coordination (v1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Managed Teams
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Managed Teams
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../work-sessions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Work Sessions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../usability-control-center/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Control Center
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../native-delivery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Native Collaboration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../managed-runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runtime
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../managed-setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../autonomous-workflows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Persistent Workflows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../autonomy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Autonomous Wakeup Policies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../antigravity-bridge/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Antigravity Bridge
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hardening/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardening
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Trust Boundaries
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../memory-lifecycle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Memory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../live-permissions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Live Permissions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dynamic-teams/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dynamic Teams
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../traces-and-recovery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Traces and Recovery
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../remote-workers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SSH and Scale
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Research
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../experiments/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pilot Runner
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research-study/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Controlled Studies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../provider-compatibility/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Provider Compatibility
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mixed-harness-acceptance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mixed Harness Scenario
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research-environments/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Environments
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quality/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quality and Evidence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../evaluation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Workflow Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../releasing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Validation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../config-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Layout Configuration (v1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../harnesses/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pane Harnesses (v1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Recipes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pane Runtime (v1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#preview-your-first-request" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Preview your first request
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#one-deadline-visible-turn-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        One deadline, visible turn limits
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#start-the-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Start the work
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Start the work">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#require-process-containment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Require process containment
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#private-snapshots-and-full-isolation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Private snapshots and full isolation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#inspect-the-result" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inspect the result
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#apply-only-the-result-you-inspected" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Apply only the result you inspected
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Apply only the result you inspected">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#recover-an-interrupted-application" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recover an interrupted application
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#return-after-interruption" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Return after interruption
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#execution-and-evidence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Execution and evidence
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="ask-for-work-inspect-the-result-apply-it">Ask for work, inspect the result, apply it</h1>
+<p><code>amx work</code> turns one request into a checked coding-and-review journey. A coding
+provider implements the change and a fresh review context examines the checked
+files. If the review requests changes, the coder addresses them and a fresh
+review examines the final revision. Final acceptance checks always run. You receive a saved
+report and a patch in a separate Git worktree. Agentmux does not integrate that
+patch into your project until you explicitly apply it.</p>
+<p>The clean-approval shortcut, introduced in v0.14.0, is included in
+<a href="../getting-started/installation/">Agentmux v0.15.0</a>. v0.13.0 always executes the
+response and second review. To inspect a
+checked fixture before configuring providers, start with
+<a href="../getting-started/first-result/"><code>amx demo</code></a>.</p>
+<p><a href="../getting-started/first-result/"><img alt="Actual offline report from the model-free demo, showing saved checks and the retained change" src="../assets/guide/checked-work-report.jpg?v=a15253337515" /></a></p>
+<p>The report above comes from <code>amx demo</code>, a deterministic fixture with no model
+calls. For your own task, the daily sequence is:</p>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>Command</th>
+<th>What happens</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Preview</td>
+<td><code>amx work "Change" -- CHECK</code></td>
+<td>Review the plan without starting models</td>
+</tr>
+<tr>
+<td>Run</td>
+<td>Add <code>--allow-models</code> before <code>--</code></td>
+<td>Implement, review and check in a retained worktree</td>
+</tr>
+<tr>
+<td>Inspect</td>
+<td><code>amx work show RUN_ID --open</code></td>
+<td>Read fresh report evidence and the patch</td>
+</tr>
+<tr>
+<td>Apply</td>
+<td><code>amx work apply RUN_ID</code></td>
+<td>Recheck and apply the selected result explicitly</td>
+</tr>
+</tbody>
+</table>
+<p>v0.13.0 includes run-ID listing and report opening. The base journey also works
+in v0.12.0; see <a href="#inspect-the-result">inspection</a> for the older report route.</p>
+<p>All five phases remain in the report. A clean initial approval marks the response
+and second review as <strong>skipped</strong>, with the original review and exact checked
+revision retained as evidence. Failed or uncertain work remains available to
+inspect; it does not become an approved application.</p>
+<h2 id="preview-your-first-request">Preview your first request</h2>
+<p>From an existing Git project with an initial commit:</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>amx<span class="w"> </span>work<span class="w"> </span><span class="s2">"Fix the login redirect"</span><span class="w"> </span>--<span class="w"> </span>go<span class="w"> </span><span class="nb">test</span><span class="w"> </span>./...
+</span></code></pre></div>
+<p>This is a preview. It explains the five phases, exact check command, deadline,
+planned native turns and private result location. It does not start models,
+create worktrees or write a run catalog. Go projects can omit the command to
+use <code>go test ./...</code>; npm projects with an existing test script can use <code>npm test</code>.
+If both apply or no supported check can be identified, choose the check
+explicitly after <code>--</code>.</p>
+<p>The check is literal executable argv, not a shell command. For example:</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>amx<span class="w"> </span>work<span class="w"> </span><span class="s2">"Correct the parser"</span><span class="w"> </span>--<span class="w"> </span>python3<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>tests/test_parser.py
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>amx<span class="w"> </span>work<span class="w"> </span><span class="s2">"Handle empty input"</span><span class="w"> </span>--<span class="w"> </span>npm<span class="w"> </span><span class="nb">test</span>
+</span></code></pre></div>
+<p>Pipes, redirects and <code>&amp;&amp;</code> are ordinary arguments after <code>--</code>; they are never
+silently interpreted by a shell. Use an owner-maintained check script when a
+check needs several commands.</p>
+<p>Preflight checks the Git project, executable availability, check selection and
+output paths. It cannot establish that provider accounts are signed in. Install
+and sign in to the selected native CLIs before executing a request. Trusted-local
+setup discovers installed Codex, Claude Code or Antigravity tools without
+launching them; executable discovery does not check subscription login.</p>
+<h2 id="one-deadline-visible-turn-limits">One deadline, visible turn limits</h2>
+<p>From v0.15.0, an implicit Codex or Claude turn can use the chosen overall
+<code>--timeout</code>, up to the existing ten-minute per-turn ceiling. All turns and
+acceptance checks <strong>share</strong> that overall budget; their limits do not add together,
+and time is not reserved for a later review. Explicit role limits remain saved.
+Antigravity print/bridge requests retain their own shorter limits, which the
+preview displays separately.</p>
+<p>For example, <code>--timeout 435s</code> gives implicit Codex/Claude profiles a maximum of
+7m15s each within one shared 7m15s run, rather than a hidden three-minute cutoff.
+The agent is encouraged to run targeted checks and finish started commands;
+that guidance does not guarantee completion. Controller acceptance checks and
+explicit application remain mandatory. See <a href="../workflows/">process containment</a>
+for the difference between process groups and Linux namespace containment.</p>
+<h2 id="start-the-work">Start the work</h2>
+<p>Add <code>--allow-models</code> before <code>--</code>:</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>amx<span class="w"> </span>work<span class="w"> </span><span class="s2">"Fix the login redirect"</span><span class="w"> </span>--allow-models<span class="w"> </span>--<span class="w"> </span>go<span class="w"> </span><span class="nb">test</span><span class="w"> </span>./...
+</span></code></pre></div>
+<p>Without full isolation, the command prints the result location immediately
+and reports phase changes as they are recorded. Isolated CLI runs defer stdout
+and stderr until completion so selected credentials can be checked before
+publication. Use an explicit <code>--output</code> path to locate retained evidence during
+such a run. The usual path is:</p>
+<ol>
+<li>Implement the requested change and run the declared check.</li>
+<li>Review the implementation without changing its checked content.</li>
+<li>If changes are requested, address the findings and check the changes.</li>
+<li>If findings were addressed, review the exact final revision in fresh context.</li>
+<li>Run final acceptance checks and retain the patch.</li>
+</ol>
+<p>A fresh review must explicitly approve the exact final checked revision. A clean
+first review can supply that approval only while the checked content remains
+unchanged; it never replaces final acceptance checks. An empty review, malformed
+review, review edits, remaining requested changes or failed acceptance checks
+stop the journey and remain visible in the result. A model saying “finished”
+does not replace review approval and executable checks.</p>
+<p>From v0.15.0, trusted-local defaults select an installed CLI: Codex first for coding, then
+Claude for review when available. A different installed provider is preferred
+for review; a single installed CLI uses separate fresh contexts for both roles.
+The preview names and pins both profiles in its suggested run command.
+<code>--coder</code> and <code>--reviewer</code> remain authoritative; failures never switch providers.
+Isolated defaults remain Codex and the Antigravity bridge because their selected
+credentials and network/runtime boundaries are explicit. Availability depends
+on your account and CLI versions. Each review starts a new native session with the owner’s task,
+acceptance criteria and current files. Implementation narrative, earlier review
+findings and earlier approvals are excluded from that review’s input.
+Workflow profiles that request native resume, continue or transcript selection
+are rejected before admission. Codex workflow turns also use ephemeral sessions.</p>
+<p>In v0.14.0, a clean first review uses two native turns when implementation checks
+pass on the first attempt: implementation and independent review. Requested
+changes normally use four turns. Completed coding-check
+failures can use up to six with the default two attempts per coding phase; the
+preview shows the full 2–6 range. In v0.13.0 the range is 4–6. Native turns can
+contain multiple provider requests, so these counts do not measure inference
+requests or subscription usage. Transport failures and uncertain turns are not
+automatically replayed.</p>
+<p>Useful controls are:</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>amx<span class="w"> </span>work<span class="w"> </span><span class="s2">"Fix the redirect"</span><span class="w"> </span>--timeout<span class="w"> </span>8m<span class="w"> </span>--check-timeout<span class="w"> </span>2m<span class="w"> </span>--attempts<span class="w"> </span><span class="m">2</span><span class="w"> </span>--allow-models<span class="w"> </span>--<span class="w"> </span>go<span class="w"> </span><span class="nb">test</span><span class="w"> </span>./...
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>amx<span class="w"> </span>work<span class="w"> </span><span class="s2">"Fix the redirect"</span><span class="w"> </span>--dry-run<span class="w"> </span>--allow-models<span class="w"> </span>--<span class="w"> </span>go<span class="w"> </span><span class="nb">test</span><span class="w"> </span>./...
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>amx<span class="w"> </span>work<span class="w"> </span><span class="s2">"Fix the redirect"</span><span class="w"> </span>--repo<span class="w"> </span>/path/to/project<span class="w"> </span>--output<span class="w"> </span>/private/new-run<span class="w"> </span>--allow-models<span class="w"> </span>--<span class="w"> </span>go<span class="w"> </span><span class="nb">test</span><span class="w"> </span>./...
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>amx<span class="w"> </span>work<span class="w"> </span><span class="s2">"Fix the redirect"</span><span class="w"> </span>--containment<span class="w"> </span>pid-namespace<span class="w"> </span>--allow-models<span class="w"> </span>--<span class="w"> </span>go<span class="w"> </span><span class="nb">test</span><span class="w"> </span>./...
+</span></code></pre></div>
+<p>The overall deadline is 1 second to 24 hours. Per-check deadlines are 1 second
+to 10 minutes. <code>--attempts</code> is 1–5 and applies separately to the two coding
+phases. <code>--dry-run</code> always previews, including when <code>--allow-models</code> is present.</p>
+<h3 id="require-process-containment">Require process containment</h3>
+<p>On Linux, <code>--containment pid-namespace</code> requires Bubblewrap and a working user/PID
+namespace boundary. Execution probes that boundary before starting workflow
+work; an unavailable boundary fails without falling back. Native tools, checks,
+Git filters, integration and freshness checks inherit the recorded requirement.
+A descendant that creates another session or process group remains in the PID
+namespace and is terminated with it. The default <code>process-group</code> policy retains
+the ordinary process-group cleanup behavior.</p>
+<p>This option alone preserves host filesystem, network, devices and native
+authentication access. Requests to independent host services are outside its
+process-descendant boundary. Use the full isolation option below to restrict
+filesystem and network authority too.</p>
+<p>Preview also shows selected file and byte counts. Snapshot admission is bounded
+to 100,000 existing selected files and 512 MiB, checked before raw working-content
+snapshot objects are written and checked again while fingerprinting. These are protective
+selection bounds; trusted filters and unrelated writers are not a disk quota.</p>
+<h3 id="private-snapshots-and-full-isolation">Private snapshots and full isolation</h3>
+<p>New runs default to <code>--storage private</code>. Snapshot objects live in the private
+run directory, and every candidate has an independent Git object store without
+alternates or shared hardlinks. Capturing and running a task leaves the source’s
+index, objects, refs and Git configuration unchanged. Explicit application uses
+a persistent <code>.git/agentmux-apply.lock</code> coordination file while preserving the
+source index, objects, refs and configuration. <code>--storage shared</code> explicitly
+selects the legacy source-object-store behavior; full isolation requires private
+storage. Deleting a private run removes its retained copies, but cannot erase
+filesystem backups or independently copied evidence.</p>
+<p>On Linux, <code>--isolation bubblewrap</code> requires real user, PID, mount and network
+namespaces and capped private HOME and temporary filesystems. Required probes
+fail closed. Native tools see their selected candidate workspace, system runtime
+files and explicit <code>--read-only-path</code> dependencies. Reviewer workspaces are
+read-only. Checks can create build output in their assigned worktree, receive
+no provider credentials or network, and fail verification if selected files change.
+The default network policy is <code>none</code>; provider turns need the exact inference
+origins you deliberately grant:</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>amx<span class="w"> </span>work<span class="w"> </span><span class="s2">"Fix the redirect"</span><span class="w"> </span>--isolation<span class="w"> </span>bubblewrap<span class="w"> </span>--network<span class="w"> </span>allowlist<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>--coder<span class="w"> </span>codex<span class="w"> </span>--reviewer<span class="w"> </span>claude<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>--allow-origin<span class="w"> </span>https://YOUR-CODEX-INFERENCE-ORIGIN<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span>--allow-origin<span class="w"> </span>https://YOUR-CLAUDE-INFERENCE-ORIGIN<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span>--auth<span class="w"> </span><span class="nv">coder</span><span class="o">=</span>/private/codex-auth.json<span class="w"> </span>--auth<span class="w"> </span><span class="nv">reviewer</span><span class="o">=</span>/private/claude-auth.json<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">  </span>--read-only-path<span class="w"> </span>/opt/selected-native-runtime<span class="w"> </span>--allow-models<span class="w"> </span>--<span class="w"> </span>/usr/bin/python3<span class="w"> </span>-m<span class="w"> </span>unittest
+</span></code></pre></div>
+<p>Replace the origin placeholders with the actual origins needed by your selected
+profiles. Grants match exact scheme, host and port; redirects to another origin
+need their own grant. HTTPS is inspected by a trusted per-turn proxy: an
+ephemeral public CA is mounted read-only, each HTTP/1.1 Host or HTTP/2 authority
+is checked, and upstream certificates and hostnames are verified. The signing
+key stays in controller memory. Certificate-pinned, mutual-TLS or custom-trust
+clients may fail closed; opaque tunnels and HTTP upgrades are refused. Runtime directories and executable dependencies outside
+the system runtime must be selected explicitly. Do not grant a broad home or
+credential directory as a runtime dependency. Selected credential files must
+remain outside the source project and exposed dependencies. Supported fields
+are filtered into a sealed anonymous, read-only handoff for that candidate;
+the original login file and ambient login directories are not mounted. This
+selection does not establish that a provider account or endpoint is usable.</p>
+<p>With full isolation the default Antigravity reviewer uses <code>antigravity-bridge</code>:
+an explicit Gemini model runs through a bounded host inference bridge, while
+Pi performs the model’s tools inside the isolated workspace. The host bridge
+does not execute model tools or export Antigravity login files. Its inference
+requests are counted and capped separately from native turns. See the
+<a href="../workflows/">advanced guide</a> for plan fields and direct provider selection.</p>
+<p>The Go controller remains trusted: it reads source inputs, runs the selected
+host inference adapter and admits explicit source application after its checks.
+Independent host services and unrelated host writers are outside its authority.
+HOME and temporary filesystems default to 64 MiB each. Workspace growth has no
+hard disk quota; selection bounds and post-run evidence limits do not provide
+one. Keep reports private because they contain task and code data.</p>
+<h2 id="inspect-the-result">Inspect the result</h2>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>amx<span class="w"> </span>work<span class="w"> </span>status
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>amx<span class="w"> </span>work<span class="w"> </span>show<span class="w"> </span>latest
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>amx<span class="w"> </span>work<span class="w"> </span>list<span class="w"> </span>--limit<span class="w"> </span><span class="m">10</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>amx<span class="w"> </span>work<span class="w"> </span>show<span class="w"> </span>RUN_ID<span class="w"> </span>--open
+</span></code></pre></div>
+<p>These commands use the current Git project. <code>status</code> explains the recorded
+phases, checks, accepted review, changed files and next action. <code>show</code> also prints
+the hash-checked patch preview and saved HTML report path. The preview is capped
+at 64 KiB, preserves code line breaks and escapes terminal control characters;
+truncated previews identify the full retained patch. Use the retained artifact
+or explicit apply command for integration, because displayed escapes are for
+inspection. Ordinary inspection starts no model and opens no browser. <code>list</code>
+shows stable run IDs for this project, newest first. Omit <code>--limit</code> to retain
+the full list; an explicit limit accepts 1–1024.</p>
+<p>In v0.13.0, <code>show RUN_ID --open</code> renders a fresh private,
+script-free HTML report from the selected run's saved evidence and asks the
+system browser to open it. Use an explicit ID, directory or <code>latest</code>; it
+resolves that selector once and never starts another run. Existing <code>report.html</code>
+is not opened. The generated file path is printed and retained even if the
+browser cannot open it. <code>--open</code> and <code>--json</code> cannot be combined. Stable IDs
+and <code>--limit</code> are included in v0.13.0.</p>
+<p>Use an explicit directory or run ID to inspect another recorded attempt:</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>amx<span class="w"> </span>work<span class="w"> </span>show<span class="w"> </span>/private/run-directory<span class="w"> </span>--repo<span class="w"> </span>/path/to/project
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>amx<span class="w"> </span>work<span class="w"> </span>status<span class="w"> </span>RUN_ID<span class="w"> </span>--repo<span class="w"> </span>/path/to/project
+</span></code></pre></div>
+<p>A run belonging to another project is refused. The catalog cannot redirect an
+application into a different repository.</p>
+<p>By default, private run state lives under
+<code>$XDG_STATE_HOME/agentmux/workflows</code>, or
+<code>~/.local/state/agentmux/workflows</code>. <code>--catalog DIR</code> selects another private
+catalog; use the same option to list or resolve its latest run. Explicit result
+directories are indexed too. Outputs never overwrite an existing run.
+For an explicit <code>--output</code>, its parent directory must already exist; omitting
+the option lets Agentmux prepare its private catalog hierarchy for you.</p>
+<p><code>--json</code> prints structured output on stdout. Phase progress remains on stderr:</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>amx<span class="w"> </span>work<span class="w"> </span>status<span class="w"> </span>latest<span class="w"> </span>--json
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>amx<span class="w"> </span>work<span class="w"> </span><span class="s2">"Fix the redirect"</span><span class="w"> </span>--json<span class="w"> </span>--allow-models<span class="w"> </span>--<span class="w"> </span>go<span class="w"> </span><span class="nb">test</span><span class="w"> </span>./...
+</span></code></pre></div>
+<h2 id="apply-only-the-result-you-inspected">Apply only the result you inspected</h2>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>amx<span class="w"> </span>work<span class="w"> </span>apply<span class="w"> </span>latest
+</span></code></pre></div>
+<p>Application is explicit. It rechecks the original source, final result,
+verification and patch, and refuses stale or incompatible work. It does not
+commit, push, publish or merge conflicts. Your staging remains unchanged;
+inspect your source diff before committing.</p>
+<p>If unrelated work changed the source or candidate since the run, keep both
+results and reconcile deliberately. An application with uncertain effects
+reports whether changes may already be present; inspect before retrying.</p>
+<h3 id="recover-an-interrupted-application">Recover an interrupted application</h3>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>amx<span class="w"> </span>work<span class="w"> </span>status<span class="w"> </span>latest
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>amx<span class="w"> </span>work<span class="w"> </span>recover<span class="w"> </span>latest
+</span></code></pre></div>
+<p>Before admitting source mutation, Agentmux saves an uncertain application intent.
+After applying and checking the source, it finalizes that same record. Changed
+files and directory entries are synced before a confirmed receipt is saved.
+Unsupported directory durability fails closed. The application lock survives in
+an admitted Git writer if its controller dies, and releases when the writer
+exits. A stale coordination filename by itself does not hold the kernel lock.</p>
+<p>Recovery takes the same lock and compares source HEAD and exact content with the
+recorded starting and final snapshots. An exact match can resolve the saved
+intent as <code>not_applied</code> or <code>applied</code>; divergent or uninspectable content remains
+uncertain. Recovery updates existing records, never reapplies a patch or undoes
+source files. Damaged history blocks application until inspected. Settle unrelated
+writers first; Agentmux's lock coordinates Agentmux operations, not every host
+application. Filesystem and hardware must honor their sync guarantees.</p>
+<h2 id="return-after-interruption">Return after interruption</h2>
+<p>Ctrl+C cancels active work and retains its recorded partial outcome. A valid
+run is registered during execution and again after completion so it remains
+discoverable through <code>status</code> and <code>list</code>. The printed result directory provides
+a direct route if catalog registration was unavailable.</p>
+<p>Recorded <code>running</code> is not proof that a process is still alive. After a hard
+process or machine interruption, inspect its evidence before starting a new
+attempt. This command does not automatically resume an uncertain provider turn
+or undo external side effects. A failed final review remains available for
+inspection; it is not silently treated as approval.</p>
+<h2 id="execution-and-evidence">Execution and evidence</h2>
+<p>v0.14.0 guided reports record the explicit <code>early-approval-v1</code> review policy.
+The original review binds both the Git tree and selected raw content; skipped
+phases have no model attempts or invented review results. Complete structured
+review verdicts, including findings, remain available within the 128 KiB review
+limit. Inputs and check diagnostics can still be excerpts with retained evidence
+references. Reading a completed report compares its declared checks, candidate
+profiles and phase execution with the separately retained plan and actual
+attempt, skip and verification records. Candidate profile fingerprints exclude
+environment credentials and identify declared settings, not a provider's resolved
+model. These are owner-controlled records, not provider attestations or protection
+against an owner rewriting all evidence. Existing advanced plans
+without this policy retain their declared execution phases.</p>
+<p>Failed or interrupted runs can retain only the checks reached before stopping.
+Those exact planned prefixes remain inspectable; they never authorize application.
+The guided policy requires successful completion and all final checks before apply.</p>
+<p>Without <code>--isolation bubblewrap</code>, native tools and checks use trusted local
+execution with host authority. Private Git stores separate retained data; they
+do not themselves confine a process. With full isolation, the recorded policy is
+required again for inspection, verification, recovery and application helpers.
+Unavailable boundaries remain visible as failures. The trusted controller and
+owner-selected runtime dependencies are part of that boundary.</p>
+<p>For individual comparisons, custom mission plans, exact handoff delivery,
+snapshot watchers and repeated trials, use <a href="../workflows/">the advanced workflow
+guide</a>. The <a href="../workflow-validation/">validation guide</a> explains
+how to check your build, selected providers and isolation boundaries.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.indexes", "content.code.copy"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  </body>
+</html>

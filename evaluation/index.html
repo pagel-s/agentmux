@@ -1,0 +1,2888 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://pagel-s.github.io/agentmux/evaluation/">
+      
+      
+        <link rel="prev" href="../quality/">
+      
+      
+        <link rel="next" href="../releasing/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+    
+    
+      
+        <title>Workflow Evaluation - Agentmux</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="deep-purple" data-md-color-accent="deep-purple">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#evaluate-agentmux-against-alternatives" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Agentmux" class="md-header__button md-logo" aria-label="Agentmux" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Agentmux
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Workflow Evaluation
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="deep-purple" data-md-color-accent="deep-purple"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="deep-purple" data-md-color-accent="deep-purple"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/pagel-s/agentmux/" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    pagel-s/agentmux
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../getting-started/installation/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../getting-started/native-walkthrough/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Tutorials
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../working/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Coding Workflows
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../architecture/mental-model/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Core Concepts
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../work-sessions/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Managed Teams
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../quality/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Agentmux" class="md-nav__button md-logo" aria-label="Agentmux" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Agentmux
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/pagel-s/agentmux/" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    pagel-s/agentmux
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/first-result/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Your first checked result
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../visual-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Visual workflow guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/everyday-commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Everyday commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../terminal-workflow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terminal folders and layouts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/native-walkthrough/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verify native collaboration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/hello-team/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Legacy Layout Handoff
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/portable-bundles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Portable Bundles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coding Workflows
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Coding Workflows
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../working/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Work on a Task
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workflows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced Workflows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workflow-validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Validation and Boundaries
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core Concepts
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Core Concepts
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/mental-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Layout Compiler (v1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/coordination/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pane Coordination (v1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Managed Teams
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Managed Teams
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../work-sessions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Work Sessions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../usability-control-center/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Control Center
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../native-delivery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Native Collaboration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../managed-runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runtime
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../managed-setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../autonomous-workflows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Persistent Workflows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../autonomy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Autonomous Wakeup Policies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../antigravity-bridge/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Antigravity Bridge
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hardening/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardening
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Trust Boundaries
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../memory-lifecycle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Memory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../live-permissions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Live Permissions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dynamic-teams/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dynamic Teams
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../traces-and-recovery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Traces and Recovery
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../remote-workers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SSH and Scale
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Research
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../experiments/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pilot Runner
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research-study/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Controlled Studies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../provider-compatibility/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Provider Compatibility
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mixed-harness-acceptance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mixed Harness Scenario
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research-environments/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Environments
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quality/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quality and Evidence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Workflow Evaluation
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Workflow Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#first-verify-the-evaluator-without-models" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        First verify the evaluator without models
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#declare-a-matched-live-comparison" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Declare a matched live comparison
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#inspect-evidence-and-its-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inspect evidence and its limits
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Inspect evidence and its limits">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#summarize-retained-comparison-evidence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summarize retained comparison evidence
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#grade-artifacts-without-revealing-the-arm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Grade artifacts without revealing the arm
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#run-a-small-usability-pilot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Run a small usability pilot
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#evidence-needed-for-a-strong-rating" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Evidence needed for a strong rating
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prepare-a-native-subscription-pilot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prepare a native-subscription pilot
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Prepare a native-subscription pilot">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#recorded-exploratory-pilot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recorded exploratory pilot
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#targeted-regression-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Targeted regression validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#add-an-operator-trial-with-agent-deck" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Add an operator trial with Agent Deck
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../releasing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Validation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../config-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Layout Configuration (v1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../harnesses/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pane Harnesses (v1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Recipes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pane Runtime (v1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#first-verify-the-evaluator-without-models" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        First verify the evaluator without models
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#declare-a-matched-live-comparison" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Declare a matched live comparison
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#inspect-evidence-and-its-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inspect evidence and its limits
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Inspect evidence and its limits">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#summarize-retained-comparison-evidence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summarize retained comparison evidence
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#grade-artifacts-without-revealing-the-arm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Grade artifacts without revealing the arm
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#run-a-small-usability-pilot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Run a small usability pilot
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#evidence-needed-for-a-strong-rating" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Evidence needed for a strong rating
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prepare-a-native-subscription-pilot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prepare a native-subscription pilot
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Prepare a native-subscription pilot">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#recorded-exploratory-pilot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recorded exploratory pilot
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#targeted-regression-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Targeted regression validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#add-an-operator-trial-with-agent-deck" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Add an operator trial with Agent Deck
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="evaluate-agentmux-against-alternatives">Evaluate Agentmux against alternatives</h1>
+<p>Agentmux has no established public task-quality ranking. A passing regression
+suite establishes the exercised implementation behavior. It does not show that
+an Agentmux team produces better patches, saves time or costs less than one
+coding agent or another orchestrator. <code>scripts/benchmark-managed.py</code> measures
+logical broker API throughput; it does not measure native agent task quality or
+simultaneous model-worker scale.</p>
+<h2 id="first-verify-the-evaluator-without-models">First verify the evaluator without models</h2>
+<p>The matched-attempt runner requires Linux, Git and Python with pidfd support. Process tracking bounds
+active identities and each observation scan separately. Kernel-confirmed exited
+identities release tracking slots; an unreadable process record does not prove
+exit. Cleanup and supervision failures remain attempt failures, even if a patch
+passes its task contract.
+Run from a checkout:</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>python3<span class="w"> </span>scripts/test-compare-workflows.py
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>python3<span class="w"> </span>scripts/test-summarize-comparison.py
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>python3<span class="w"> </span>examples/evaluation/run-offline-controls.py<span class="w"> </span>--output<span class="w"> </span>/tmp/amx-controls-NEW
+</span></code></pre></div>
+<p>Choose a new output path. The control suite creates a tiny pinned source
+repository and runs deterministic actors that produce a correct artifact,
+produce an incorrect artifact while exiting zero, exit nonzero with a correct
+artifact, and exceed their deadline. It verifies that failures remain failures,
+unknown usage/cost remain unknown, and the original Git state and dirty files
+are preserved. <code>controls-result.json</code> is a harness test result, <strong>not an AI
+benchmark</strong>. Its deterministic actors are not Agentmux or competitor results.</p>
+<h2 id="declare-a-matched-live-comparison">Declare a matched live comparison</h2>
+<p>Copy <a href="https://github.com/pagel-s/agentmux/blob/main/examples/evaluation/live-plan.example.json">the example plan</a> outside
+the checkout and replace every placeholder. It deliberately refuses to run
+until a real local repository and full commit object ID are supplied. The tiny
+normalization task and example grader illustrate the interface; they cannot
+support general coding-quality claims.</p>
+<p>Use a preregistered task set that includes representative bug fixes, tests,
+refactors and changes spanning files. Include a single-agent baseline,
+Agentmux and named alternatives relevant to the intended workflow. Record exact
+tool/wrapper versions and hashes, model names/settings, authentication route,
+machine, dependencies, task selection and exclusion rules before execution.
+Freeze checks before viewing results. Every task needs evaluator-selected
+independent checks; a model's completion message is never the result authority.
+Keep disclosed development checks separate from held-out grading.
+Each independent check declares absolute <code>evaluator_files</code> outside the source
+repository. The runner pins their resolved paths and content hashes before any
+arm starts and rejects changed evaluators before or after grading. Include the
+grader and every grading dependency you own. Merely running a project test
+inside the actor-writable repository is a development check, not an independent
+oracle. This detects changed pinned files; it does not sandbox graders or hide
+their contents from a trusted local arm.
+Grading must inspect without changing the candidate files. The runner hashes
+all candidate files and symlink targets, excluding the root <code>.git</code> metadata,
+before and after each check and invalidates a check that changes them, including
+a grader that repairs an incorrect answer before exiting zero. Traversal does
+not follow symlinks and has the same file-count/byte/deadline bounds. Put test
+caches and generated outputs outside the candidate repository; Python bytecode
+writing is disabled for invoked commands. The fingerprint is content evidence,
+not isolation against an independent hostile host writer.</p>
+<p>Each arm is an executable argv list. <code>{repo}</code> names a newly initialized private
+Git repository containing the same pinned source files, <code>{task}</code> names a JSON
+file with the task ID, prompt and optional disclosed <code>development_check</code>, and
+<code>{output}</code> names its private artifact directory. Substitutions never invoke a
+shell. Wrappers must work in the supplied repository, save relevant evidence,
+return their actual status and finish with the proposed patch in that
+repository. They must not push or merge into the original project. The example
+Agentmux adapter runs <code>amx work</code> and explicitly applies its checked result to
+that disposable repository; applying to the study copy is part of that arm's
+timed workflow. You supply pinned single-agent and competitor wrappers for the
+chosen native CLIs/SDKs. A tool requiring human interaction belongs in the
+usability pilot, rather than being recorded as an unsupported unattended arm.</p>
+<p>Declare which question is being tested:</p>
+<ul>
+<li><strong>Equal-budget comparison:</strong> match the available model family, reasoning,
+  context, total inference allowance and task time across arms. Report where a
+  workflow cannot meet those constraints.</li>
+<li><strong>Whole-workflow comparison:</strong> use each workflow's intended coder/reviewer
+  configuration. Report extra model turns, time and measured expense alongside
+  outcome. A four-turn team beating a one-turn baseline does not isolate an
+  orchestration effect.</li>
+</ul>
+<p>Run only after reviewing the commands and native profiles:</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>python3<span class="w"> </span>scripts/compare-workflows.py<span class="w"> </span>--config<span class="w"> </span>/private/study/plan.json<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>--output<span class="w"> </span>/private/study/run-NEW<span class="w"> </span>--allow-models
+</span></code></pre></div>
+<p><code>--allow-models</code> authorizes live arms and their potential charges. A fixture plan
+instead requires <code>--fixtures</code>; those modes cannot be combined. The declaration
+is an operator-controlled label, not an executable classifier or a sandbox.
+No provider calls are required to prepare the plan or run the offline controls.</p>
+<p>For each repeat and task, the runner rotates arm order; alternate complete
+blocks reverse it. Use a multiple of twice the arm count for full position and
+direction balance. This deterministic ordering is recorded and reproducible;
+it is not randomized sampling. Run arms serially on otherwise comparable hosts
+and control caches, provider limits, previous conversation context and service
+changes. Do not silently rerun a failed attempt. Any replacement must retain
+the original and be reported as an additional declared run.</p>
+<h2 id="inspect-evidence-and-its-limits">Inspect evidence and its limits</h2>
+<p>The new output directory is mode 0700. It retains the configuration, its hash,
+source commit/content fingerprint, attempt repositories, actor/check logs,
+artifacts and <code>comparison.json</code>. A source snapshot accepts only regular tracked
+files; symlinks, submodules, ambiguous paths, trees over 10,000 files or 128 MiB
+are refused. Source Git reads disable optional locks, lazy fetching and inherited
+Git configuration, replacement objects and graft files. Only the pinned commit's
+tree is read, not a history traversal. Partial/promisor sources are refused, and
+Git transports are disabled, including on Git versions without the lazy-fetch
+guard. Source preparation and materialization
+share the overall deadline; each Git subprocess is additionally limited to 30
+seconds. Each attempt gets its own initialized object store, with no
+worktree, alternates or source-object borrowing. Dirty, staged and untracked
+source files are not task inputs. Git configuration inherited by commands is
+also cleared so environment-based Git redirection cannot target the source.</p>
+<p>Read <code>completed</code>, <code>planned_attempts</code>, each attempt's <code>completed</code>/<code>passed</code>, actor
+status and every independent check. Failed actors are graded too, preserving
+partial outcomes. A zero actor exit cannot override a failed check, and a good
+artifact cannot override a nonzero or timed-out actor. Missing/interrupted
+final evidence is not success. The runner's exit status is zero only if every
+planned attempt completes and passes; mixed success is normal study data and
+returns nonzero. Analyze all attempted outcomes, including setup failures,
+timeouts and incorrect patches, using the declared exclusion rules.</p>
+<p>Elapsed wall time includes local command execution and process cleanup. Token
+usage and cost are explicitly <strong>unknown</strong> in this schema, even for successful
+attempts. Obtain independent provider receipts or native metering and bind them
+to attempt IDs before making cost claims; unknown is never zero. No aggregate
+score or product ranking is generated. Report per-task outcomes, uncertainty,
+sample sizes and configuration differences instead of treating a small average
+as a general winner.</p>
+<p>The commands and checks are trusted local code. This runner is not a sandbox,
+disk quota or provider billing cap. The controller uses pinned Linux process
+identities to stop observed descendants when a command ends or times out.
+Very short-lived detached descendants can escape observation, and independent
+host services remain outside that boundary. For hostile code or strict process
+containment, run each entire attempt in a separately enforced disposable
+environment. Logs and repositories may contain prompts, credentials and
+proprietary code; review and redact evidence before publishing it.</p>
+<h3 id="summarize-retained-comparison-evidence">Summarize retained comparison evidence</h3>
+<p>The offline summary reads the frozen configuration and <code>comparison.json</code> from
+one evidence directory. It invokes no actor, grader, Git command or provider:</p>
+<p>Run these commands from a source checkout or extract the <code>scripts</code> directory
+from the matching release archive. The binary installer installs only <code>amx</code>.
+Keep the extracted scripts together and use an absolute Python script path
+when running the report outside that directory.</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>python3<span class="w"> </span>scripts/summarize-comparison.py<span class="w"> </span>/private/study/run-NEW
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>python3<span class="w"> </span>scripts/summarize-comparison.py<span class="w"> </span>/private/study/run-NEW<span class="w"> </span>--json<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span>&gt;<span class="w"> </span>/private/study/comparison-summary.json
+</span></code></pre></div>
+<p>It checks the recorded configuration hash, source commit pin, planned order,
+attempt/check identities and verdict consistency before reporting. Inputs are
+limited to regular, non-symlink JSON files of 16 MiB each and 200 planned
+attempts. Invalid or contradictory evidence exits nonzero without echoing its
+paths or error contents. This is a consistency check of retained records; it
+does not rerun grading or authenticate the grader, logs or candidate bytes.</p>
+<p>Per-arm totals keep planned, attempted, completed, passed, failed, incomplete
+and unstarted attempts separate. Actor/check timeouts and cleanup failures
+remain visible. <code>cleanup_failures</code> counts command records containing one or
+more cleanup errors, not individual errors or processes. A valid summary exits
+zero even when the recorded study contains failed attempts; that exit status
+does not change the runner's verdict.</p>
+<p>Pairwise timing ratios use the same task and repeat, and include only pairs
+where both actors and all independent checks passed with known, positive,
+finite durations. Every other outcome remains in the paired counts. The number
+of usable timing pairs is explicit; a missing or zero duration does not become
+a measured speedup. Timings include actor execution and cleanup, excluding
+source preparation and independent grading.</p>
+<p>The summary retains declared arm names and input/configuration hashes, while
+omitting source paths, prompts, argv, logs and raw errors. Review arm names
+before sharing. Human interventions, inference requests, tokens and cost remain
+null. Fixture runs are labeled <strong>not an AI benchmark</strong>. Repeated runs of one
+task are not independent task samples; no confidence interval, overall score
+or winner is inferred.</p>
+<h2 id="grade-artifacts-without-revealing-the-arm">Grade artifacts without revealing the arm</h2>
+<p>Before collecting results, define a rubric for functional correctness,
+regressions, maintainability and unnecessary changes. Have a separate person
+export proposed file changes under neutral attempt IDs, remove tool-identifying
+metadata where feasible, and retain the mapping privately. Give graders the
+same pinned task, acceptance contract and development context, excluding arm
+names, transcripts and elapsed time. Do not label missing artifacts as missing
+data to be discarded: record the declared failure outcome. Two independent
+graders should score artifacts before discussing disagreements; record both
+scores, agreement and an adjudicated result. State where patch style or native
+metadata makes full blinding impossible. Functional checks complement grading;
+neither alone proves arbitrary task correctness.</p>
+<h2 id="run-a-small-usability-pilot">Run a small usability pilot</h2>
+<p>Recruit 6–8 developers who did not build Agentmux and represent its intended
+power-user audience. Include experienced CLI/tmux users and record prior
+familiarity with Agentmux and the comparison tool. Evaluate novices separately
+if making beginner-accessibility claims. Treat this as a qualitative pilot,
+not a statistically powered product ranking. Counterbalance the order of Agentmux and the selected
+alternative. Give each participant an equivalent disposable repository and
+the same tasks: install, resume a workspace, launch two agents, delegate a task,
+find an agent needing attention, inspect the exact delegated task, review/apply
+a change, revoke collaboration and recover an interrupted task.
+Predeclare task completion criteria and a time limit. Keep a facilitator script
+and separate unassisted performance from assistance.</p>
+<p>Record successful completion, time, navigation mistakes, permission surprises,
+recovery failures and help needed. Ask participants to explain what they believe
+the controls allow before revealing the answer. Follow with a consistent short
+usability questionnaire and an interview. Retain failures and observations,
+then fix repeated problems and repeat the pilot with fresh participants. Never
+present these small-sample preferences as evidence of better coding quality.</p>
+<h2 id="evidence-needed-for-a-strong-rating">Evidence needed for a strong rating</h2>
+<p>A future 9/10 assessment needs delivered behavior and independent evidence,
+not a larger feature list or a self-assigned score. Set thresholds before
+collecting data and publish the failures as well as successes:</p>
+<table>
+<thead>
+<tr>
+<th>Dimension</th>
+<th>Evidence that would justify reconsidering a high rating</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>First-run usability</td>
+<td>Fresh users complete the core journey without developer assistance; predefined completion/time thresholds hold across supported platforms.</td>
+</tr>
+<tr>
+<td>Reliability</td>
+<td>Repeated realistic native-provider runs, restart/credential-refresh faults and multi-day observation meet a declared failure/recovery target; no silently lost tasks or falsely passing evidence.</td>
+</tr>
+<tr>
+<td>Task value</td>
+<td>A representative, adequately sized matched study shows useful outcomes against single-agent and relevant competitor baselines, with blinded grading and uncertainty.</td>
+</tr>
+<tr>
+<td>Safety and authority</td>
+<td>Independent adversarial review confirms the declared boundaries and failure behavior; fixes are retained as regressions.</td>
+</tr>
+<tr>
+<td>Maintainability and distribution</td>
+<td>Released, reproducible install paths; tested upgrades; bounded compatibility support; independently reproduced fixes and contributions.</td>
+</tr>
+</tbody>
+</table>
+<p>Agree on quantitative thresholds and sample-size justification for the target
+users before the study. An illustrative target is a high unassisted core-task
+completion rate with no serious permission misunderstanding, but a small pilot
+cannot establish that rate. Passing the evaluator or meeting one dimension's
+target does not automatically upgrade the overall rating. Public stars and
+downloads can describe reach; they do not establish correctness or superiority.</p>
+<h2 id="prepare-a-native-subscription-pilot">Prepare a native-subscription pilot</h2>
+<p>The repository includes a small <strong>whole-workflow pilot</strong>, separate from a
+representative benchmark or human usability study. Three selected tasks use
+historical source <code>d52e940c473be6a3b7d7983a704e2bac9547e6de</code>: escaped native
+credential redaction, authenticated trace display during concurrent mutation,
+and a reusable worker credential-discovery refactor. A separate reviewer wrote
+external Go-overlay graders and checked that the historical source fails and
+the corrected implementation passes. These selected repository tasks do not
+establish general coding quality or productivity.</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>python3<span class="w"> </span>scripts/test-subscription-pilot.py
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>python3<span class="w"> </span>examples/evaluation/subscription-pilot.py<span class="w"> </span>prepare<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span>--output<span class="w"> </span>/tmp/amx-subscription-pilot-NEW<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span>--go<span class="w"> </span>/absolute/path/to/go<span class="w"> </span>--amx<span class="w"> </span>/absolute/path/to/pinned/amx
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>python3<span class="w"> </span>examples/evaluation/subscription-pilot.py<span class="w"> </span>preflight<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">  </span>--manifest<span class="w"> </span>/tmp/amx-subscription-pilot-NEW/pilot.json
+</span></code></pre></div>
+<p>Preparation makes no model calls. It freezes private grader copies and records
+tool versions, executable/wrapper/grader hashes, model settings, native auth
+paths and the protocol. Preflight retains only the authentication route summary.
+It requires existing Codex ChatGPT authentication and Claude first-party
+Pro/Max authentication, refuses API/alternate-provider environment variables,
+and does not install tools or copy account credentials. Codex's
+<a href="https://learn.chatgpt.com/docs/auth">authentication methods</a> and
+<a href="https://learn.chatgpt.com/docs/config-file/config-reference#forced_login_method">forced login setting</a>
+distinguish subscription access from API-key access. Model availability still
+depends on the account; an unavailable model is a retained setup failure.</p>
+<p>Review <code>plan.json</code>, then explicitly start the six live attempts:</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>python3<span class="w"> </span>scripts/compare-workflows.py<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>--config<span class="w"> </span>/tmp/amx-subscription-pilot-NEW/plan.json<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>--output<span class="w"> </span>/tmp/amx-subscription-pilot-NEW/results<span class="w"> </span>--allow-models
+</span></code></pre></div>
+<p>Each arm gets 480 seconds. The baseline permits one native Codex invocation;
+the original v0.13-era pinned pilot permits up to four native coder/reviewer
+invocations, one implementation attempt per phase and a 7m15s workflow deadline.
+Guided work in v0.14.0 can use two of those permitted turns after an exact
+initial approval, while still running final checks. Record actual executed and
+skipped phases for each pinned build; keep historical four-call route-smoke
+evidence unchanged. Neither a native CLI turn nor its allowance establishes
+the provider's inference-request count. Codex uses <code>gpt-6.1-sol</code> at
+medium reasoning; the Claude reviewer uses <code>claude-sonnet-5-5</code> at medium effort,
+with no automatic model/provider fallback. The selected model pins can be
+changed explicitly when preparing a new study. Agentmux's retained plan can
+still name its <code>sonnet</code> profile alias; the pinned native wrapper supplies the
+recorded full reviewer model. This is a workflow comparison with different
+inference allowances, not an isolated orchestration experiment.</p>
+<p>Failures and limit responses remain failures. No automatic paid fallback or
+retry is provided. Authentication status does not expose account billing or
+extra-usage entitlement, so these local controls do not establish a financial
+cap. Usage and cost remain unknown in the comparison schema. Native command
+output stays in private attempt files; review it before publishing. Changed
+pinned files invalidate the study: prepare a new directory, preserving existing
+records. Functional grading is external and frozen, but these trusted local
+arms can read host files; the graders are not hidden by an isolation boundary.</p>
+<h3 id="recorded-exploratory-pilot">Recorded exploratory pilot</h3>
+<p>The <a href="../assets/quality/subscription-pilot-2026-11-04.json">reviewed November 4 aggregate</a>
+identifies the actual v0.14.0 controller, patched process tracker, frozen protocol
+and historical task seed. Native Codex passed 3/3 selected tasks; the Agentmux
+workflow passed 1/3. Its two failures hit the 180-second implementation profile
+limit before review/application, and the supervisor separately rejected observed
+background work. All tracked cleanup completed. The successful Agentmux arm used
+Codex plus Claude static review, then controller checks, external grading and
+fixture-only application.</p>
+<p>Four earlier native admissions remain invalidated process-limit evidence; seven
+were admitted in the corrected frozen study. Comparable token usage, inference-request count,
+actual subscription cost and immutable served-model revisions remain unknown.
+No competitor UI or unaided human journey was included. Budget fixes and their
+later targeted validation are separate evidence, not replacements for these six
+original attempts or a basis to pool a better pass rate.</p>
+<p>New comparison failures can retain at most 32 identity-checked background-process
+records with explicit omitted/unknown counts. Records contain safe executable
+basenames and numeric identity/group/session metadata, never argv, environment
+values or full paths. Diagnostic failure cannot replace the primary failure or
+skip cleanup. Review these private records before sharing them.</p>
+<h3 id="targeted-regression-validation">Targeted regression validation</h3>
+<p>The <a href="../assets/quality/subscription-regressions-2026-11-04.json">separate November 4 regression record</a>
+covers only credential redaction and authenticated trace display. Both passed
+<strong>2/2</strong> using the clean <code>0.15.0-rc1</code> source build <code>45ceb620…</code>, not a published
+release archive, with the same historical seed and frozen primary graders.
+The v0.15.0 release's <code>cmd</code> and <code>internal</code> trees match that RC; the native
+runs still used the source build, rather than the published archive.
+Both roles had 435-second limits within a shared 435-second mission and a
+480-second outer attempt. Each used Codex implementation and Claude static
+review, mandatory final checks and fixture-only application. Four additional
+native CLI admissions brought this private sequence to fifteen.</p>
+<p>The redaction implementation's extra package race-test command encountered four
+Unix-socket permission errors inside the native sandbox; subsequent focused
+checks and the frozen contract passed. No full-suite success is claimed.
+The original native <strong>3/3</strong> versus Agentmux <strong>1/3</strong> remains unchanged: no baseline
+was rerun and no pass rates are pooled. Requested aliases remained the same;
+served model revisions remain unverified. These targeted rechecks establish no
+speedup or general competitive advantage.</p>
+<h3 id="add-an-operator-trial-with-agent-deck">Add an operator trial with Agent Deck</h3>
+<p>Agent Deck's <a href="https://github.com/asheshgoplani/agent-deck/blob/main/skills/agent-deck/references/cli-reference.md">official CLI reference</a>
+documents native session management and <code>session send --wait --json</code>.
+It has its own completion/confirmation semantics and native hook setup.
+An unattended adapter has not been validated here; its absence from the six
+attempts is not a failed competitor result.</p>
+<p>For an operator comparison, pin the Agent Deck release/binary and use a private
+disposable profile, XDG directories and tmux socket. Give the operator the same
+source commit, task, model settings, development checks and eight-minute limit.
+Record setup separately from task time, capture every operator intervention,
+retain the native delivery/confirmation fields, then grade the resulting patch
+with the same frozen grader. Use its supported launch/send controls rather than
+equating an idle pane or zero command exit with task completion. Keep results
+separate until the adapter and supervision/cleanup have their own controls.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.indexes", "content.code.copy"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  </body>
+</html>

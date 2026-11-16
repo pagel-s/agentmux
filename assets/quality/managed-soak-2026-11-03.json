@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "turns_verified": 60,
+  "tasks_audited": 61,
+  "clean_restarts": 12,
+  "seconds": 66.66,
+  "binary_sha256": "94d085bd3a3ac3c885c8a0b5c8fcef58eabc59d9c8d10934e729300b5956419b",
+  "session_deadline_unchanged": true,
+  "every_completed_trace_verified_after_recovery": true,
+  "inflight_broker_crash": "uncertain, process stopped, no automatic replay, owner resolved fail",
+  "model_calls": 0,
+  "coverage": "bounded soak only; no multi-day availability claim",
+  "source_commit": "e27b3efc6ff0805e0a280b118c5e335c46398636",
+  "evidence_kind": "deterministic local command-worker validation",
+  "scope": "Disposable owner-controlled fixtures; no live user workspace or provider inference."
+}

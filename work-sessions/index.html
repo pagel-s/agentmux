@@ -1,0 +1,3289 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://pagel-s.github.io/agentmux/work-sessions/">
+      
+      
+        <link rel="prev" href="../architecture/coordination/">
+      
+      
+        <link rel="next" href="../usability-control-center/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+    
+    
+      
+        <title>Work Sessions - Agentmux</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="deep-purple" data-md-color-accent="deep-purple">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#interactive-work-sessions" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Agentmux" class="md-header__button md-logo" aria-label="Agentmux" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Agentmux
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Work Sessions
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="deep-purple" data-md-color-accent="deep-purple"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="deep-purple" data-md-color-accent="deep-purple"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/pagel-s/agentmux/" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    pagel-s/agentmux
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../getting-started/installation/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../getting-started/native-walkthrough/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Tutorials
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../working/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Coding Workflows
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../architecture/mental-model/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Core Concepts
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="./" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Managed Teams
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../quality/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Agentmux" class="md-nav__button md-logo" aria-label="Agentmux" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Agentmux
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/pagel-s/agentmux/" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    pagel-s/agentmux
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/first-result/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Your first checked result
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../visual-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Visual workflow guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/everyday-commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Everyday commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../terminal-workflow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terminal folders and layouts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/native-walkthrough/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verify native collaboration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/hello-team/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Legacy Layout Handoff
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/portable-bundles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Portable Bundles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coding Workflows
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Coding Workflows
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../working/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Work on a Task
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workflows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced Workflows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workflow-validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Validation and Boundaries
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core Concepts
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Core Concepts
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/mental-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Layout Compiler (v1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/coordination/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pane Coordination (v1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Managed Teams
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Managed Teams
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Work Sessions
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Work Sessions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#inspect-running-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inspect running work
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recognize-sessions-throughout-the-day" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recognize sessions throughout the day
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#start-and-attach" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Start and attach
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#existing-sessions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Existing sessions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#terminal-dashboard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Terminal dashboard
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#web-app" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Web app
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#live-boundaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Live boundaries
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#consented-teams-and-capacity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Consented teams and capacity
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#limits-and-verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Limits and verification
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../usability-control-center/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Control Center
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../native-delivery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Native Collaboration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../managed-runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runtime
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../managed-setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../autonomous-workflows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Persistent Workflows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../autonomy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Autonomous Wakeup Policies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../antigravity-bridge/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Antigravity Bridge
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hardening/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardening
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Trust Boundaries
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../memory-lifecycle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Memory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../live-permissions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Live Permissions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dynamic-teams/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dynamic Teams
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../traces-and-recovery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Traces and Recovery
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../remote-workers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SSH and Scale
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Research
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../experiments/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pilot Runner
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research-study/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Controlled Studies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../provider-compatibility/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Provider Compatibility
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mixed-harness-acceptance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mixed Harness Scenario
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research-environments/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Environments
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quality/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quality and Evidence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../evaluation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Workflow Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../releasing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Validation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../config-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Layout Configuration (v1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../harnesses/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pane Harnesses (v1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Recipes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pane Runtime (v1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#inspect-running-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inspect running work
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recognize-sessions-throughout-the-day" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recognize sessions throughout the day
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#start-and-attach" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Start and attach
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#existing-sessions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Existing sessions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#terminal-dashboard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Terminal dashboard
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#web-app" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Web app
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#live-boundaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Live boundaries
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#consented-teams-and-capacity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Consented teams and capacity
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#limits-and-verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Limits and verification
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="interactive-work-sessions">Interactive work sessions</h1>
+<p>Start with <code>amx start</code> from your project directory after installing and
+logging in to Claude Code and Codex. It opens a workbench for the default
+workspace <code>work</code>; select a session and press Enter to type into its native CLI.
+F1 returns to the workbench. A workspace contains sessions and an owner
+coordination service (the broker).</p>
+<p>For a coding request that runs through implementation, fresh reviews and checks
+without a persistent terminal workspace, use <a href="../working/"><code>amx work</code></a>. Its
+saved patch is applied explicitly. <a href="../workflows/"><code>amx flow</code></a> provides advanced
+comparisons, missions and handoffs; those runs do not join this workspace or
+inherit its permissions automatically.</p>
+<p>Use <code>interaction: interactive</code> per agent for a native terminal; omit it for
+managed task execution. Both modes share the coordination broker and its permissions.
+Each agent has one terminal/worker lock. Changing interaction mode requires a
+new launch definition/run rather than a second process sharing a conversation.</p>
+<p>v0.15.0 includes <code>amx context</code>, <code>amx task</code> / <code>tasks</code>, exact task opening
+with <code>task ID --open</code>, <code>amx observe</code>, the searchable running-workspace chooser and direct
+session task history in Actions. See <a href="../getting-started/installation/">installation</a>
+and explicitly upgrade an older workspace controller before using its new controls.</p>
+<h2 id="inspect-running-work">Inspect running work</h2>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>amx<span class="w"> </span>observe<span class="w"> </span>--session<span class="w"> </span>work
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>amx<span class="w"> </span>observe<span class="w"> </span>--session<span class="w"> </span>work<span class="w"> </span>--watch<span class="w"> </span>--json
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>amx<span class="w"> </span>task<span class="w"> </span>TASK_ID<span class="w"> </span>--open<span class="w"> </span>--session<span class="w"> </span>work
+</span></code></pre></div>
+<p>The operational view separates broker availability, ownership-checked worker
+panes, live leases, worker check-ins, native event metadata and adapter readiness.
+Counts include all retained tasks; bounded attention keeps old failures and
+uncertain attempts visible. Silence alone leaves model progress unknown.
+Use the printed exact task command for results, native receipts, traces and
+reviewed recovery. See <a href="../observability/">observability</a> for freshness, JSONL,
+partial observations and the separate evidence used by coding runs and research.</p>
+<h2 id="recognize-sessions-throughout-the-day">Recognize sessions throughout the day</h2>
+<p>Use a task title such as “Fix login redirect” to recognize a conversation. Titles
+are editable and may repeat; the permanent session ID remains visible and is
+used for every attach, message, permission and collaboration operation.</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>amx<span class="w"> </span>add<span class="w"> </span>--harness<span class="w"> </span>claude<span class="w"> </span>--project<span class="w"> </span>~/projects/api<span class="w"> </span>--title<span class="w"> </span><span class="s2">"Fix login redirect"</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># The command prints a generated stable ID; choosing a name is optional.</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>amx<span class="w"> </span>label<span class="w"> </span>SESSION_ID<span class="w"> </span><span class="s2">"Investigate expired login cookie"</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>amx<span class="w"> </span>label<span class="w"> </span>SESSION_ID<span class="w"> </span><span class="s2">""</span><span class="w">  </span><span class="c1"># Clear the title without changing the session.</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>amx<span class="w"> </span>sessions
+</span></code></pre></div>
+<p>The workbench and web app show title, project, provider and ID. Session details
+also distinguish workspace sessions from connected external terminals and show
+creation/start times and tmux/TTY locations when available. Untitled sessions use
+a project/provider fallback. No task description is inferred from prompts or
+transcripts. Two sessions with the same title remain separate identities.</p>
+<p>In the terminal press Ctrl+P (or <code>/</code>) to find a session by task, project,
+provider, ID or terminal location. Enter opens the exact native terminal; Tab
+selects it in the workbench; Esc cancels. Discovered terminals open details
+for their original terminal instead. <code>L</code> edits the selected task
+title. <code>N</code> asks for an optional title and reviews a new generated ID using the
+selected session's provider, project and coordinated/native-only choice. In the
+web app use <strong>Find a session</strong>, <strong>Rename</strong>, and <strong>Sessions</strong>. Titles are labels,
+not role instructions; editing one never restarts the native conversation.
+When adding a session, <code>--harness</code> selects Claude Code, Codex, Pi or prompt-free
+native Antigravity;
+<code>--title</code> labels the human task, while <code>--role</code> supplies optional instructions
+to the agent at launch.</p>
+<p>For a pristine native launch, use <code>amx add --harness claude --native-only</code>.
+This appends no Agentmux prompt or role and preserves the native CLI's local
+configuration. Broker credentials remain available for coordination you request
+manually; listing/attaching works normally. It cannot be combined with <code>--role</code>.
+Native Antigravity is available with <code>--harness antigravity --native-only</code>; its
+direct CLI does not expose a verified appended-system-role interface. Use the
+Pi bridge when you want injected Agentmux context with that provider.</p>
+<p>Change a coordinated session's role with <code>amx role SESSION_ID "New role"</code>,
+or press <strong>V</strong> in the terminal workbench. The role editor uses version checking
+and preserves a failed draft. <strong>Ctrl-R</strong> reviews the latest role; Enter adopts
+only the reviewed version before a separate save. Managed workers capture the
+current role when claiming the next task. Native conversations stay running and
+receive an informational inbox notice; <code>managed call identity</code> returns the
+current role and <code>role_version</code>. Manual mode leaves it in the broker inbox;
+Review/Auto can deliver an attributed role/boundary notice through the native
+adapter. Roles grant no broker permissions. In the quick <strong>N</strong> flow, <strong>Ctrl+O</strong>
+opens advanced provider, project, coordinated/native-only and role settings;
+Actions also exposes <strong>Advanced new session</strong>. The quick review explicitly shows
+the provider-default model and trusted local host execution. It does not copy
+an existing model override or sandbox; use explicit CLI launch flags for those
+choices.</p>
+<table>
+<thead>
+<tr>
+<th>Name or ID</th>
+<th>Where to use it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Workspace name, such as <code>work</code></td>
+<td><code>--session work</code> selects the team and saved state</td>
+</tr>
+<tr>
+<td>Registered session ID, such as <code>claude</code> or an ID printed by <code>add</code>/<code>connect</code></td>
+<td><code>attach</code>, <code>send</code>, <code>label</code>, <code>role</code>, <code>relaunch</code>, <code>collaborate</code>, <code>isolate</code>, <code>remove</code></td>
+</tr>
+<tr>
+<td>Observed terminal ID from <code>sessions</code></td>
+<td><code>connect</code> registers that live external terminal</td>
+</tr>
+<tr>
+<td>Group ID printed by <code>collaborate</code></td>
+<td><code>board --group ID</code> selects its shared board</td>
+</tr>
+</tbody>
+</table>
+<p>Provider-native conversation IDs belong to the provider's own history UI;
+they are not Agentmux session IDs. Uppercase placeholders in examples below
+must be replaced with the IDs or paths from your own workspace.</p>
+<h2 id="start-and-attach">Start and attach</h2>
+<p>With Claude Code and Codex installed and logged in:</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>amx<span class="w"> </span>start<span class="w"> </span>--project<span class="w"> </span>/path/to/project
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1"># In another terminal:</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>amx<span class="w"> </span>attach<span class="w"> </span>claude
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>amx<span class="w"> </span>attach<span class="w"> </span>codex
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>amx<span class="w"> </span>dashboard
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>amx<span class="w"> </span>web<span class="w"> </span>--open
+</span></code></pre></div>
+<p><code>start --detach</code> starts without attachment. Commands accept <code>--session NAME</code> or
+<code>--state DIRECTORY</code>. Inside an owned tmux attachment, an omitted selector uses
+that verified workspace; outside, ordinary commands default to <code>work</code>.
+<code>start</code> always defaults to <code>work</code> when no selector is given. These are alternative selectors
+for existing workspaces: supplying both is rejected. <code>start</code> may combine them to
+name a workspace stored in a custom directory. Do not reuse a saved session
+for a different project or definition. <code>down</code> stops owned agents and broker in
+order, retaining their data. Detaching or closing a dashboard leaves them running.
+Running the same <code>start</code> command again, including <code>--config FILE</code>, attaches to
+the running workspace only if the configuration still matches its saved definition.
+Each attachment has its own dashboard process, selection and drafts. Only the
+underlying agent terminals are shared; attaching twice to the same agent still
+shows the same native conversation. Runtime service windows stay out of normal
+navigation. <strong>Ctrl-b</strong>, release, then <strong>Shift+D</strong> opens read-only service logs.
+An explicit <code>--sandbox</code> must also match the running broker's mode; reopening never
+changes that mode. A mismatch is rejected without restarting the workspace.
+Use <code>managed restart --state DIRECTORY</code> for explicit whole-workspace restart.</p>
+<p>Use <code>amx relaunch AGENT_ID</code> to restart one exited workspace-owned native
+session under the same ID while its healthy peers keep their processes. It starts
+a fresh native conversation by default. <code>--resume picker</code>, <code>--resume last</code> or
+<code>--resume NATIVE_ID</code> makes the native history choice explicit; it does not renew
+deadlines or revive revoked identities. The dashboard offers the same flow with
+<code>U</code>. A controller started before this feature needs one explicit workspace restart
+after upgrading; it is never silently replaced.
+Antigravity accepts <code>--resume last</code> or an explicit conversation ID; it has no
+picker mapping. External bridges, revoked agents and still-running native CLIs
+cannot be relaunched through this command.</p>
+<p>Native updates may exit successfully and ask you to restart. Agentmux retains
+the final output and marks that CLI <code>exited</code>; it never restarts it automatically.
+New trusted-local interactive setups save the selected public launcher, so a
+normal symlink-based native update is used on the next explicit relaunch.
+Managed and sandboxed definitions retain their frozen executable dependencies.
+If an older local definition directly invokes a removed or outdated native
+binary, select its installed public launcher for this one invocation:</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>amx<span class="w"> </span>relaunch<span class="w"> </span>codex<span class="w"> </span>--native-launcher<span class="w"> </span><span class="s2">"</span><span class="k">$(</span><span class="nb">command</span><span class="w"> </span>-v<span class="w"> </span>codex<span class="k">)</span><span class="s2">"</span>
+</span></code></pre></div>
+<p>This requires an updated running controller and an absolute executable path.
+It applies only to trusted-local interactive sessions, preserves trailing
+arguments, and does not rewrite the saved definition or change sandbox mounts.
+It does not repair interpreter-plus-script definitions such as
+<code>node /old/package/cli.js</code>: their script argument is preserved too. Review those
+definitions explicitly, or create a new session with the updated setup.
+An older controller rejects this option with upgrade guidance; it is never
+silently ignored. Add the workspace's <code>--session NAME</code> or <code>--state DIR</code> selector
+when it is not the default workspace.</p>
+<p><code>amx workspaces</code> lists named workspaces and remembered custom state paths.
+Use <code>--json</code> for structured inventory or <code>--register DIR</code> to add an older custom
+location. <strong>Ctrl+W</strong> (also <strong>Shift+W</strong>) opens the workspace chooser. From an
+interactive attachment, Enter hands off to that workspace while preserving the
+previous workbench and drafts. A standalone observer shows an exact attach
+command when native input needs a different tmux server. The web Sessions view
+lists workspace commands. Identical names remain distinct by state
+path. A failed or exhausted live check reports unknown instead of inventing a
+stopped process; opening an unknown workspace attempts observation without starting
+agents.</p>
+<p>The current directory does not select a workspace for later commands. Outside
+an owned attachment, if you used <code>start --session api</code>, keep using <code>--session api</code>, including on <code>add</code>,
+<code>sessions</code>, <code>connect</code>, <code>attach</code>, <code>web</code> and <code>down</code>. For a second workspace:</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>amx<span class="w"> </span>start<span class="w"> </span>--session<span class="w"> </span>billing<span class="w"> </span>--project<span class="w"> </span>/path/to/billing
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="c1"># Later, from any directory:</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>amx<span class="w"> </span>attach<span class="w"> </span>codex<span class="w"> </span>--session<span class="w"> </span>billing
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>amx<span class="w"> </span>dashboard<span class="w"> </span>--session<span class="w"> </span>billing
+</span></code></pre></div>
+<p><code>amx context --session billing</code> explains the target,
+selection source and runtime status without attaching or starting agents.
+Bare <code>amx</code> / <code>amx a</code> outside an attachment uses a sole running workspace or
+offers a running-workspace chooser. In that chooser, <code>/</code> or Ctrl+F starts a
+name/path/status filter, arrows or Ctrl+N/P choose a result, Ctrl+U clears and
+Enter opens its exact state path. This selection does not change the default
+for later ID-based commands in an unrelated shell.</p>
+<p>If <code>start</code> reports a different saved project, use <code>attach --session NAME</code> to
+reopen that workspace, or choose a fresh name for the new project. If you only
+detached, attach again; no restart is needed. After <code>down</code>, running the original
+<code>start</code> command launches the saved definition again. Choose prior conversations
+through each provider's native history controls; relaunching does not promise
+automatic conversation resumption. See <a href="../traces-and-recovery/">recovery</a> for
+broker/task uncertainty and upgrades.</p>
+<p>For project directories, shell splits, multiple agents in one tmux window,
+normal tmux keys and last-session reattachment, see
+<a href="../terminal-workflow/">terminal folders and layouts</a>. Tab switches sidebar/content
+focus; ↑/↓ navigates that focused area and ←/→ changes views. In Connections,
+<code>[</code> focuses <strong>Sender</strong> and <code>]</code> focuses <strong>Recipient</strong> directly. Tab or Shift+Tab
+switches between them. Up/Down changes only the focused identity; changing
+focus preserves the other selection and never changes permissions.</p>
+<p>Tasks in both consoles browse complete retained broker history. In the terminal,
+<code>PgDn</code> loads older records, <code>PgUp</code> returns toward newer records and <code>f</code> searches
+instructions, results or IDs; an empty search clears the filter. Web Tasks offers
+search, recipient/state filters and Load older. These pages do not include human
+turns typed only into a native provider's own conversation UI.</p>
+<p>Direct CLI inspection is also available:</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>amx<span class="w"> </span>tasks<span class="w"> </span>--to<span class="w"> </span>codex<span class="w"> </span>--query<span class="w"> </span><span class="s2">"login"</span><span class="w"> </span>--limit<span class="w"> </span><span class="m">25</span><span class="w"> </span>--session<span class="w"> </span>billing
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>amx<span class="w"> </span>task<span class="w"> </span>TASK_ID<span class="w"> </span>--session<span class="w"> </span>billing
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>amx<span class="w"> </span>task<span class="w"> </span>TASK_ID<span class="w"> </span>--open<span class="w"> </span>--session<span class="w"> </span>billing
+</span></code></pre></div>
+<p><code>tasks</code> pages retained history newest first; its <strong>More</strong> command preserves the
+workspace and filters. <code>task --open</code> loads the exact task directly, even when
+it is older than the first page or its recipient is retired. It shows the
+current task/version, instruction, result and delivery/recovery evidence.
+<strong>Ctrl+K</strong> opens recovery actions when available; confirmation keeps the exact
+task/version. Opening never retries, resolves, cancels or approves a task.
+Terminal/web Actions offers <strong>Tasks for selected session</strong> to reset old filters
+and open that recipient's history. Web attention rows also offer <strong>Inspect tasks</strong>.</p>
+<p>The coding preset preserves the normal local Claude/Codex environment, tools,
+skills, MCP configuration, native approval prompts, login and history. It does
+not enable Claude safe mode or suppress Pi customizations. Codex keeps the native
+sandbox policy from your configuration. This is trusted host execution: broker
+ACLs control coordination APIs, but do not isolate local files or same-user
+credentials. Choose a sandbox when those boundaries are required.</p>
+<p><code>start --sandbox bubblewrap</code> uses selected credential snapshots, private homes,
+separate native history, and an isolated broker. It cannot transparently inherit
+arbitrary host skills/MCPs or their filesystem/network authority. Codex then
+explicitly relies on the outer sandbox, while retaining native approvals. No
+host policy is changed. A sandbox failure never falls back to local execution.</p>
+<p>The preset creates the <code>team</code>/<code>project</code> namespaces with no agent access, denies
+peer coordination, and disables automatic wakeups. It sets
+<code>interactive_workspace: true</code>, so ordinary native terminals run until you close
+them instead of expiring after a workday. This mode requires every initial agent
+to be interactive and delegated spawning disabled. Managed automation/research
+retains positive runtime budgets and durable deadlines. An explicit existing
+deadline is still honored. Saved configurations are never silently migrated.
+The controller is always checksum-pinned outside writable projects before launch,
+including projects added later.</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>amx<span class="w"> </span>add<span class="w"> </span>backend<span class="w"> </span>--harness<span class="w"> </span>claude<span class="w"> </span>--project<span class="w"> </span>~/projects/backend
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>amx<span class="w"> </span>add<span class="w"> </span>review<span class="w"> </span>--harness<span class="w"> </span>codex<span class="w"> </span>--project<span class="w"> </span>~/projects/frontend<span class="w"> </span>--role<span class="w"> </span><span class="s2">"Review changes"</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>amx<span class="w"> </span>collaborate<span class="w"> </span>backend<span class="w"> </span>review
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>amx<span class="w"> </span>board<span class="w"> </span><span class="s2">"Use the group's API proposal as context."</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>amx<span class="w"> </span>isolate<span class="w"> </span>review
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>amx<span class="w"> </span>remove<span class="w"> </span>backend
+</span></code></pre></div>
+<p>One workspace can contain sessions from unrelated projects. <code>add</code> starts another
+native session with a stable name/ID, normal local configuration by default, and
+no peer authority. <code>remove</code> closes its owned terminal and revokes its bridge,
+retaining native history. Names are not silently reused for different identities.
+For an isolated addition use <code>--sandbox bubblewrap</code>; Pi also requires an explicit
+<code>--auth-file</code> and <code>--auth-provider</code>. Dynamic additions require an owner broker able
+to inspect the selected host project and authentication boundaries. An isolated
+broker fails closed when those paths are unavailable; configure such teams before
+launch instead of exposing host paths to the broker.</p>
+<p><code>collaborate A B</code> enables notes/pings and creates a dedicated owner-managed group
+with its own board and memory. The exact member set reuses its stable group and
+history after reconnect/restart. Other groups do not gain access. A notes-only
+group contributes no command authority; pre-existing configuration or explicit
+owner command grants still apply. Inspect effective Connections permissions. <code>board</code> selects the only active
+group automatically; with multiple groups use <code>--group ID</code> or <code>--board NAMESPACE</code>.
+<code>isolate A</code> revokes both directions of peer coordination, shared scopes and group
+membership, and fences future delegated spawning/team formation. It leaves native
+input running. It does not cancel already accepted tasks or erase previous context.
+These owner-managed groups are distinct from consent-based agent-created research
+teams; neither operation bypasses those teams' membership rules.</p>
+<p>For several independent groups, save the <strong>Group</strong>, <strong>Board</strong>, and <strong>Memory</strong>
+values printed by each <code>collaborate</code> call. The web app lists them in
+<strong>Groups &amp; teams → Owner collaboration groups</strong>; select the exact board in the Board
+view or the exact memory namespace in Memory.</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Assume api, api-review, billing and billing-review are registered IDs.</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>amx<span class="w"> </span>collaborate<span class="w"> </span>api<span class="w"> </span>api-review
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>amx<span class="w"> </span>collaborate<span class="w"> </span>billing<span class="w"> </span>billing-review
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="c1"># Replace GROUP_ID with the first command's printed Group value:</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>amx<span class="w"> </span>board<span class="w"> </span><span class="s2">"API proposal ready for review"</span><span class="w"> </span>--group<span class="w"> </span>GROUP_ID
+</span></code></pre></div>
+<p>Repeating <code>collaborate</code> with the same complete member set reuses its group and
+restores current membership in its retained history; explicit owner scope denies
+remain effective until reset. A different member set
+creates another group. A session in two groups can read both authorized contexts;
+it can carry that information between them. <code>isolate api-review</code> removes that
+session from <strong>all</strong> its groups and revokes peer coordination in both directions,
+not just the board currently displayed. It leaves other members running.</p>
+<p>Collaboration groups contribute permissions independently. Disabling one group
+removes its note/ping/optional command contribution and its own scoped access;
+another active overlapping group keeps its grants. Explicit owner edge/scope
+overrides take precedence, including denies. Notes-only does not revoke a
+configured command relationship. Connections shows each effective grant's source;
+Memory distinguishes stored owner intent from effective read/write permission.</p>
+<p>Isolation adds labeled suspension overlays without overwriting existing owner
+intent. Reconnecting selected sessions removes their pair's isolation overlays,
+restores their configured static scope intent, and rejoins the selected group.
+Unrelated isolated relationships remain blocked. Explicit denies survive reconnect.
+Use Connections <strong>M/P/I</strong> or Memory <strong>R</strong> to reset an exact override to underlying
+policy. Already-read knowledge and accepted tasks are never erased.</p>
+<p>Older saved groups have no contribution version and require an explicit migration
+choice before a group edit; no changes are made by default. Review the historical
+pair grants, then choose <code>--legacy-policy preserve</code> to keep them as direct owner
+intent, or <code>--legacy-policy group</code> to remove untagged pair allows while retaining
+all denies and unrelated controls. Connections <strong>c</strong> provides an explicit <strong>1/2</strong>
+review for a legacy pair; larger groups can use the CLI or web. A reviewed/new
+group contributes permissions independently. See <a href="../live-permissions/">live permissions and resource
+controls</a> for exact migration and reset semantics.</p>
+<p>Each <code>attach</code> opens an independent tmux client view. You can keep Claude in one
+terminal window and Codex in another; switching one does not move the other.
+Detaching removes that view, not the agent. Session IDs remain distinct from the
+workspace name, tmux panes, and provider-native conversation IDs.</p>
+<p>To review/edit a configured team before launch:</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>amx<span class="w"> </span>managed<span class="w"> </span>setup<span class="w"> </span>--preset<span class="w"> </span>coding<span class="w"> </span>--output<span class="w"> </span>team.yaml
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>amx<span class="w"> </span>start<span class="w"> </span>--config<span class="w"> </span>team.yaml<span class="w"> </span>--session<span class="w"> </span>my-team
+</span></code></pre></div>
+<p>For an idle managed review team, select <code>--preset reviewer-pair</code>; for coordinator,
+analyst and critic roles select <code>--preset research-team</code>. These preserve explicit
+authentication and sandbox choices, provide a shared board/memory, and queue no
+initial tasks. They do not enable automatic wakeups, spawning or dynamic-team
+authority. Use the research runner for a bounded experimental study and its
+preregistration/analysis rather than treating a role preset as a research design.</p>
+<h2 id="existing-sessions">Existing sessions</h2>
+<p>These commands use an already running Agentmux workspace. If you have none,
+start one first with <code>amx start --detach</code>. The independently started native
+terminal remains in its original window throughout discovery and connection.</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>amx<span class="w"> </span>sessions
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>amx<span class="w"> </span>connect<span class="w"> </span>OBSERVATION_ID<span class="w"> </span>--title<span class="w"> </span><span class="s2">"Review login changes"</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="c1"># Optional: --name existing-review chooses the stable ID explicitly.</span>
+</span></code></pre></div>
+<p>Discovery inspects current-user live TTY process names and the default tmux
+server. It reads no prompts, transcripts, command arguments, target environments
+or authentication files. Observation IDs include process lifetime identity so PID
+reuse does not attach an old identity to a new process. Generic <code>node</code> wrappers,
+non-TTY clients and some platform metadata cannot be identified reliably.</p>
+<p>Connecting prepares a private per-agent helper and prints a short setup to paste
+into the existing native conversation. There is no automatic input injection,
+restart, model request or claim that the agent consumed the setup. The helper pins
+its assigned credential and broker socket; it cannot act as the owner. The session
+can then read permissions/inbox and use authorized coordination tools through its
+normal shell capability. Native tool access must permit that helper path.</p>
+<p>A bridge does not retrofit process/filesystem isolation into an existing terminal.
+Disconnecting it revokes broker access and leaves the external process alone.
+Use <code>amx remove REGISTERED_ID</code> to disconnect that bridge; <code>isolate</code> keeps
+the bridge available but disables its peer collaboration. <code>attach</code> cannot move
+an external session into the workspace; return to its original terminal.
+Transport failures never trigger automatic registration retries. Explicit reconnect
+with the same name safely recovers an uncertain registration and preserves identity.
+If an observation is no longer live, run <code>sessions</code> again and select the new
+observation; an exited process cannot be reconnected by its old observation ID.
+If a terminal is absent from discovery, use <code>add</code> for a new supported native
+session instead of guessing an ID.</p>
+<p>Without <code>--project</code>, preset setup creates separate workspaces. JSON setup specs
+accept <code>interaction</code> and optional <code>workdir</code> per agent. Pi interactive sessions
+support configured compatible endpoints and selected authentication. Native
+Antigravity is available with <code>--native-only</code>; use its Pi bridge for injected
+coordination context. See <a href="../provider-compatibility/">provider compatibility</a>
+for supported routes and separate startup, inference and tool checks.</p>
+<h2 id="terminal-dashboard">Terminal dashboard</h2>
+<p>Keys are case-sensitive: <code>N</code>, <code>L</code>, <code>V</code>, and <code>P</code> mean Shift plus that letter. For
+<code>Ctrl-b b</code>, press Ctrl-b, release both keys, then press b. The same two-step
+prefix applies to the other Ctrl-b bindings. Shortcuts below depend on the
+active view and selected record; the footer shows the actions available there.
+Use Left/Right or a view number to switch between all eight views.
+Tab changes sidebar/content focus. Up/Down navigates the focused area.
+In Connections, <strong>[</strong> focuses the sender and <strong>]</strong> focuses the recipient;
+only the focused identity shows the arrow hint and purple highlight.
+Connections and Teams use h/l or Alt-Left/Alt-Right for their recipient/target.
+Below 100 columns, the terminal labels <strong>Connections</strong> as <strong>Links</strong> and
+<strong>Existing terminals</strong> as <strong>Existing</strong>; their view numbers and controls stay the same.
+In an editor, printable characters are text;
+use <strong>Ctrl-G</strong> for help and <strong>Esc</strong> to cancel before using navigation shortcuts.</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>↑/↓ or j/k</td>
+<td>Navigate the focused sidebar or content</td>
+</tr>
+<tr>
+<td>Enter</td>
+<td>Open the focused native terminal or content reader; an exited native CLI opens a same-ID relaunch review. Outside tmux, open an independent attachment</td>
+</tr>
+<tr>
+<td>Ctrl+P or /</td>
+<td>Find by task, project, provider, ID or terminal location; Enter opens native, Tab selects here, Esc cancels</td>
+</tr>
+<tr>
+<td>Shift+L</td>
+<td>Edit the selected session's human task title; empty clears</td>
+</tr>
+<tr>
+<td>Shift+V</td>
+<td>Edit its coordinated role with CAS; prompt-free native sessions reject injected roles</td>
+</tr>
+<tr>
+<td>Ctrl+K</td>
+<td>Search and invoke Actions with exact targets and unavailable reasons</td>
+</tr>
+<tr>
+<td>Shift+N</td>
+<td>Quick new session using selected provider/project/profile; optional title, then review model default and host execution; Ctrl+O opens advanced settings</td>
+</tr>
+<tr>
+<td>Ctrl+W / Shift+W</td>
+<td>Choose another workspace; an attachment hands off interactively and retains prior drafts</td>
+</tr>
+<tr>
+<td>Shift+U</td>
+<td>Deliberately relaunch the selected exited owned native session</td>
+</tr>
+<tr>
+<td>? / Ctrl-G</td>
+<td>Open context help outside an editor / while editing or reviewing</td>
+</tr>
+<tr>
+<td>F1 / Ctrl-b g in a native session</td>
+<td>Return to the workbench</td>
+</tr>
+<tr>
+<td>Ctrl-b, then b / Shift+P / m / t in a native session</td>
+<td>Open Board / Connections / Memory / Tasks in a popup</td>
+</tr>
+<tr>
+<td>Ctrl-b, then Shift+D</td>
+<td>Choose read-only Broker or Supervisor logs without leaving the current terminal</td>
+</tr>
+<tr>
+<td>Tab / Shift-Tab</td>
+<td>Focus sidebar or content</td>
+</tr>
+<tr>
+<td>1–8</td>
+<td>Select Board, Sessions, Connections, Memory, Tasks, Existing terminals, Teams, Events</td>
+</tr>
+<tr>
+<td>←/→ or Ctrl+←/→ in every view</td>
+<td>Switch views; editors, readers and reviews keep their own arrow keys</td>
+</tr>
+<tr>
+<td>[ / ] in Teams; h/l or Alt+←/→</td>
+<td>Choose a team; choose an exact agent for a membership action</td>
+</tr>
+<tr>
+<td>i / r / d in Teams</td>
+<td>Review invite / remove or revoke invitation / dissolve with the current version; hints follow target membership</td>
+</tr>
+<tr>
+<td>e / t in Teams</td>
+<td>Edit team name/mission / propose the selected member as owner; acceptance is separate</td>
+</tr>
+<tr>
+<td>b / v in Teams</td>
+<td>Compose to its board / inspect its shared memory as owner</td>
+</tr>
+<tr>
+<td>[ / ] in Events; Home</td>
+<td>Inspect an event; return to following the newest event</td>
+</tr>
+<tr>
+<td>PgDn / PgUp / Shift+F in Board or Events</td>
+<td>Page older / newer retained broker history / search within its scope</td>
+</tr>
+<tr>
+<td>g in Events</td>
+<td>Toggle all events versus the selected session's events</td>
+</tr>
+<tr>
+<td>P / R / S / T in Events</td>
+<td>Research pause / resume / one phase / stop, each with a reason and separate review</td>
+</tr>
+<tr>
+<td>x</td>
+<td>Revoke the selected session and descendants after review; owned shutdown is requested</td>
+</tr>
+<tr>
+<td>s / b</td>
+<td>Compose a direct message/instruction or selected shared-board note</td>
+</tr>
+<tr>
+<td>+ / − in Board</td>
+<td>Select an allowed board namespace</td>
+</tr>
+<tr>
+<td>Enter / Esc in composer</td>
+<td>Submit / cancel; Alt-Enter inserts a newline</td>
+</tr>
+<tr>
+<td>Ctrl-T in a direct-message/reply composer</td>
+<td>Switch the frozen draft's note/instruction intent without changing its text or recipient</td>
+</tr>
+<tr>
+<td>←/→ / Home / End in composer</td>
+<td>Edit the draft without changing its recipient</td>
+</tr>
+<tr>
+<td>f in Board</td>
+<td>Filter all coordination, team board, or selected agent inbox</td>
+</tr>
+<tr>
+<td>[ / ] then r in Board</td>
+<td>Select a message and reply</td>
+</tr>
+<tr>
+<td>h/l or Alt+←/→ in Connections</td>
+<td>Select the recipient for the selected sender</td>
+</tr>
+<tr>
+<td>[ / ] in Connections</td>
+<td>Focus sender / recipient, then Up/Down chooses that identity; focus changes preserve both selections and permissions</td>
+</tr>
+<tr>
+<td>c / d in Connections</td>
+<td>Connect selected sender/recipient in a group / make sender independent</td>
+</tr>
+<tr>
+<td>c in Existing terminals</td>
+<td>Prepare a bridge for the selected observed terminal; paste setup manually</td>
+</tr>
+<tr>
+<td>m / p / i in Connections</td>
+<td>Toggle messages / pings / commands</td>
+</tr>
+<tr>
+<td>Shift+M / Shift+P / Shift+I in Connections</td>
+<td>Reset the selected explicit override to the underlying effective policy</td>
+</tr>
+<tr>
+<td>[ / ] in Memory</td>
+<td>Select a board or memory namespace</td>
+</tr>
+<tr>
+<td>r / w in Memory</td>
+<td>Toggle read / write</td>
+</tr>
+<tr>
+<td>Shift+R in Memory</td>
+<td>Reset the selected explicit scope override; membership remains authoritative</td>
+</tr>
+<tr>
+<td>v in Memory</td>
+<td>Inspect shared entries; [ / ] selects an entry</td>
+</tr>
+<tr>
+<td>e / n in memory entries</td>
+<td>Edit an existing entry / create a key and value</td>
+</tr>
+<tr>
+<td>[ / ] in Tasks</td>
+<td>Select a task in the loaded history page</td>
+</tr>
+<tr>
+<td>PgDn / PgUp / f in Tasks</td>
+<td>Load older / newer history pages / search all task instructions, results or IDs</td>
+</tr>
+<tr>
+<td>y / z in Tasks</td>
+<td>Toggle recipient / cycle state; an explicit filter leaves a CLI-opened exact-task view</td>
+</tr>
+<tr>
+<td>r / c in Tasks</td>
+<td>Follow up / cancel</td>
+</tr>
+<tr>
+<td>o in Board, Sessions, Memory, Tasks, Existing terminals, Teams or Events</td>
+<td>Open the selected loaded content in a frozen, read-only reader</td>
+</tr>
+<tr>
+<td>↑/↓ or j/k in the reader</td>
+<td>Scroll one line</td>
+</tr>
+<tr>
+<td>PgUp / PgDn; Home / End in the reader</td>
+<td>Scroll a page; jump to the start / end</td>
+</tr>
+<tr>
+<td>Esc / q / o in the reader</td>
+<td>Return to the previous view while keeping the observer open</td>
+</tr>
+<tr>
+<td>Ctrl-R outside a composer</td>
+<td>Restore the last failed message, board, memory, role or new-session draft for review</td>
+</tr>
+<tr>
+<td>Ctrl-R inside a memory/role editor</td>
+<td>Review the latest saved value/version alongside the retained draft; adopting a version does not save</td>
+</tr>
+<tr>
+<td>Shift+B in Board or Sessions</td>
+<td>Review four agent admission-budget fields, then confirm with the current resource version</td>
+</tr>
+<tr>
+<td>a</td>
+<td>Pause/resume configured autonomy; does not stop in-flight work</td>
+</tr>
+<tr>
+<td>q</td>
+<td>Detach from the persistent workbench, or close a popup/standalone view; team stays running</td>
+</tr>
+</tbody>
+</table>
+<p>The <strong>Teams</strong> view is for consent-based teams created by permitted agents. An
+empty Teams view does not mean your native sessions are missing. For everyday
+pairing, press <strong>3</strong> for Connections, choose a recipient with <strong>h/l</strong> or
+<strong>Alt+←/→</strong>, then <strong>c</strong>. Those owner collaboration groups share a scoped board and memory.</p>
+<p>The roster keeps process state visible even with long project names. A native
+CLI marked <code>exited</code> can still have an active coordination identity; it does not
+necessarily mean the CLI failed. <strong>Enter</strong> or <strong>Shift+U</strong> opens a deliberate
+relaunch review. Nothing restarts until you confirm; retained output is labeled
+as last output instead of live output.</p>
+<p><strong>Ctrl+W</strong> (also <strong>Shift+W</strong>) opens the workspace chooser even while a draft or
+review is open. An interactive <code>amx attach</code> hands off between tmux servers using
+its outer client; other attachments remain where they are, and returning
+restores the previous workbench and draft. A standalone observer instead
+shows an exact attach command for native input in another server.</p>
+<p>Use <code>o</code> when a preview is too short. The reader keeps the selected record and
+its loaded text fixed while activity refreshes, so scrolling cannot switch to a
+different result. Tasks show the result first, followed by the instruction and
+provenance/reported trace. The Sessions view shows session details and a loaded terminal
+preview or unconfirmed external-bridge setup. Memory shows the selected entry,
+destination author and asserted source claims, or full boundary details;
+Existing terminals can show loaded bridge setup, and Teams/Events show full record details.
+Previously loaded content remains readable offline. The reader does not fetch
+older history; close and reopen it to read a refreshed record. Control and
+mutation keys are inactive while reading.</p>
+<p>After a failed send/reply, board post, memory/role save or new-session setup, inspect
+current delivery/state before retrying: a lost response may follow a successful
+write. Close any newer composer with Esc, then press Ctrl-R to review the retained
+draft. It restores the original recipient, intent, reply reference or namespace/key;
+memory/role edits retain their original version check, and new-session drafts retain
+provider, project, prompt-free/coordinated profile and role. Nothing is sent automatically. Failed title edits
+are restored separately with <code>L</code> on their original session.</p>
+<p>For a memory or role version conflict, press Ctrl-R <strong>inside that editor</strong>. This
+loads a frozen comparison of the current saved value/version and your retained
+draft. Enter in that reader adopts only the displayed version and returns to
+the editor; it does not save. Esc/q/o returns with the original version and
+draft. After reviewing or editing your draft, a separate Enter in the editor
+saves with the adopted version check. A later concurrent change still conflicts.
+Offline or failed reviews retain the draft without adopting a new version.</p>
+<p>Human input goes directly to the native CLI, including its normal approval
+prompts. Broker messages do not inject keystrokes or impersonate user input.
+In the default Manual mode, ask an interactive agent to read its broker inbox.
+For integrated Claude, Codex and Pi sessions, choose Review or Auto in terminal
+<strong>Sessions</strong> or web <strong>Session detail</strong>, or use <code>amx delivery ID review|auto</code> to
+enable attributed native turns.
+Sender Commands permission and receiver delivery mode are separate. See
+<a href="../native-delivery/">native delivery</a> for approvals, subscriptions, lifecycle
+evidence, limits and provider-specific capabilities.</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>amx<span class="w"> </span>send<span class="w"> </span>codex<span class="w"> </span><span class="s2">"Please read the proposed API on the team board."</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>amx<span class="w"> </span>board<span class="w"> </span><span class="s2">"Proposal: keep parsing and persistence separate."</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>amx<span class="w"> </span>inbox
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>amx<span class="w"> </span>reply<span class="w"> </span>TASK_OR_MESSAGE_ID<span class="w"> </span><span class="s2">"Please also check error handling."</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>amx<span class="w"> </span>reply<span class="w"> </span>MESSAGE_ID<span class="w"> </span><span class="s2">"A note, no task."</span><span class="w"> </span>--mode<span class="w"> </span>note
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>amx<span class="w"> </span>reply<span class="w"> </span>BOARD_MESSAGE_ID<span class="w"> </span><span class="s2">"For this board."</span><span class="w"> </span>--board<span class="w"> </span>BOARD_NAMESPACE
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>amx<span class="w"> </span>reply<span class="w"> </span>BOARD_MESSAGE_ID<span class="w"> </span><span class="s2">"Private follow-up."</span><span class="w"> </span>--to<span class="w"> </span>codex<span class="w"> </span>--mode<span class="w"> </span>note
+</span></code></pre></div>
+<p><code>send</code>/<code>reply</code> default to <code>--mode auto</code>: a note for interactive agents and an
+instruction task for managed workers. Choose <code>--mode note</code> for information or
+<code>--mode instruction</code> for a task explicitly. An instruction to a native terminal
+stays queued in Manual mode; Review/Auto can deliver it through the native adapter. Both
+forms print the record ID. They never automatically retry writes;
+a transport failure can leave delivery uncertain. The lower-level <code>managed call</code>
+API exposes explicit request IDs for durable retries.</p>
+<p><code>reply</code> accepts direct messages and tasks. Messages and instruction tasks retain
+broker-validated <code>reply_to</code> and a stable <code>thread_id</code> instead of changing the text
+to simulate ancestry. A shared board post has several possible audiences, so
+choose <code>reply ID "Follow-up" --board NAMESPACE</code> to retain the same board, or
+<code>reply ID "Follow-up" --to AGENT_ID</code> for a private follow-up to an existing reader.
+Reply references cannot widen a private conversation or move a thread to a
+different board. Every direct recipient must already be able to read the
+referenced message; replies grant no history access. To share something with a
+new audience, compose a new message explicitly rather than attaching a private
+reference. Board replies are informational notes, never instruction tasks.
+Empty replies are rejected before creating any message or task.</p>
+<h2 id="web-app">Web app</h2>
+<p><code>amx web --open</code> opens a local full-screen app; without <code>--open</code>, it prints a
+private link. <code>--port NUMBER</code> selects a loopback port; by default one is allocated.
+Ctrl-C stops the web process independently of the team. Never give its private
+owner link to agents.</p>
+<p>The app offers agent selection, read-only terminal previews, recent messages,
+follow-ups with explicit intent, searchable retained message/event/task history, cancellation,
+shared-memory inspection and versioned editing, role/profile setup, autonomy and
+admission controls, and the same live permission switches as the terminal
+dashboard. Board is the main focus pane. <strong>Connections</strong> shows directional message/ping/command
+connections and shared board/memory access; select a connection to adjust it.
+Since v0.13.0, enabled connections automatically group connected
+nodes. Denied preview edges do not affect arrangement. Dragging or <strong>Shift+Arrow</strong>
+pins a node; its position persists locally for that workspace and study attempt,
+including after topology changes. Unpinned nodes arrange around pins after a drag.
+<strong>Auto arrange</strong> releases pins and refits; <strong>Fit</strong> only adjusts the viewport.
+Ordinary refreshes, title changes and selection do not rearrange an unchanged
+visible topology. Arrangement does not write permissions or establish cooperation.
+Fit and zoom controls work by keyboard and on narrow screens; native terminal
+input remains in tmux.
+Spawned agents retain inherited delegation limits; live overlay edits currently
+apply to configured agents and owner-added native/bridged sessions. The graph
+displays at most 40 active agents, keeping selected identities visible; the roster
+reads every broker registry page. Recent activity snapshots are bounded to 40
+records per category; Board, Events and Tasks separately search/page retained
+broker history. Actions opens the selected session's task history,
+and attention rows offer <strong>Inspect tasks</strong> for historical recipients too. Copy
+the attach command or focus an existing tmux window for native
+input. Terminal emulation remains in tmux.</p>
+<p>No external scripts, fonts, services or analytics are loaded. APIs require a
+random bearer capability and validate Host/Origin. A restrictive content policy
+and text-only rendering protect the owner interface from agent-authored output.
+This is not a remote collaboration server.</p>
+<h2 id="live-boundaries">Live boundaries</h2>
+<p>Owner-only <code>control.update</code> overlays immutable launch configuration, with version
+checks, durable request receipts and audited events. Agents cannot edit controls
+or inspect another agent's permissions. Shared namespace edits cannot expose
+private memory or bypass team consent. Coordinated native sessions initially
+receive role, broker usage and effective-boundary context; <code>--native-only</code>
+appends none of that prompt. Managed workers fetch a fresh boundary snapshot and
+capture the current owner role at each task claim.</p>
+<p>Agents query <code>managed call boundaries.get</code>; <code>identity</code> and inbox listings also
+report <code>boundaries_version</code>. Interactive models receive no automatic model turn
+or replacement system prompt after an owner edit. They must recheck live
+permissions before coordinating; broker enforcement applies regardless of stale
+context.</p>
+<p>Removing instruction authority prevents new tasks; cancel accepted tasks
+separately. Removing read access stops future board/shared-memory reads but
+cannot remove information already present in history. Provider networking and
+project filesystem sharing are separate process boundaries.</p>
+<p>From a workspace-native agent's shell, the authenticated bridge is:</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="s2">"</span><span class="nv">$AGENTMUX_CLI</span><span class="s2">"</span><span class="w"> </span>managed<span class="w"> </span>call<span class="w"> </span>identity<span class="w"> </span>--json<span class="w"> </span><span class="s1">'{}'</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="s2">"</span><span class="nv">$AGENTMUX_CLI</span><span class="s2">"</span><span class="w"> </span>managed<span class="w"> </span>call<span class="w"> </span>boundaries.get<span class="w"> </span>--json<span class="w"> </span><span class="s1">'{}'</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="s2">"</span><span class="nv">$AGENTMUX_CLI</span><span class="s2">"</span><span class="w"> </span>managed<span class="w"> </span>call<span class="w"> </span>message.list<span class="w"> </span>--json<span class="w"> </span><span class="s1">'{}'</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="s2">"</span><span class="nv">$AGENTMUX_CLI</span><span class="s2">"</span><span class="w"> </span>managed<span class="w"> </span>call<span class="w"> </span>task.list<span class="w"> </span>--json<span class="w"> </span><span class="s1">'{}'</span>
+</span></code></pre></div>
+<p>The native process receives its own credential/socket through its environment;
+the agent should not print or locate credential contents. If the owner's native
+shell policy filters out the bridge variables, report that rather than searching
+owner state. These are agent-credential checks. The human's <code>send</code>, <code>board</code> and
+dashboard use owner authority, so a successful owner send does not prove a peer
+is permitted to send. Check the exact shared namespaces returned by
+<code>boundaries.get</code> or printed by <code>collaborate</code>; the coding preset's configured
+<code>team</code> and <code>project</code> names remain unshared until explicitly granted. After
+isolation, test future reads of the old explicit board/memory namespace: an
+unfiltered inbox may still contain the agent's own authored/direct receipts.</p>
+<h2 id="consented-teams-and-capacity">Consented teams and capacity</h2>
+<p>Owner collaboration groups and consented dynamic teams have separate lifecycles.
+The coding preset leaves dynamic teams and spawning disabled. A configured
+managed team can enable and delegate them; <code>amx team --help</code> documents
+create/list, metadata edits, invitations, removal/dissolution, ownership proposals,
+participant acceptance and atomic invited moves. Team name/mission edits retain
+the same namespace identities. An ownership proposal changes no authority until
+the proposed owner accepts with its own credential. A participant move requires
+its pending destination invitation and both current team versions.</p>
+<p><code>capacity.get {}</code> and <code>identity.capacity</code> report the caller's remaining lifetime
+spawns/teams, depth, team slots, templates and admission reasons; the owner can
+inspect a selected agent. A snapshot reserves no capacity. <strong>Shift+B</strong> in Board/Sessions
+reviews the selected agent's four admission-budget fields; the web uses the same
+CAS broker rules. Lower-level owner <code>capacity.update</code> can edit complete agent or
+session admission-budget objects and shorten the admission deadline. It cannot
+refund permanently charged attempts, extend the original process deadline or
+change enforced launch resource caps. These are conservative broker admissions,
+not hard external provider billing limits. See <a href="../live-permissions/">live permissions and
+resources</a> and <a href="../dynamic-teams/">dynamic teams</a>.</p>
+<h2 id="limits-and-verification">Limits and verification</h2>
+<p>Isolated native history is stored per agent. After restart, choose an exact
+prior conversation through the native UI; uncertain managed turns are never
+silently resumed. Credential snapshots are read-only: refresh externally, exit
+and deliberately relaunch the affected native session if its login needs renewal.
+Managed workers reload selected authentication between turns.</p>
+<p>Interactive mode currently rejects managed conversation leases, automatic
+wakeups, structured turn traces, disk capsules and allowlist egress rather than
+skipping their guarantees. Bubblewrap host/none networking and process resource
+limits remain available. Managed workers retain existing hardening features.
+Native tool output in terminal/history is not a complete immutable broker trace.</p>
+<p>Dashboards page the agent registry, retained message/event/task history and
+memory entries. Board/Event searches and pages are scoped at the broker before
+pagination. An older controller without those history APIs exposes only a
+labeled partial recent snapshot, never a complete search or older page.
+Retained broker history is not a native-provider transcript or an unlimited
+archive of external activity.
+The owner-added registry is limited to 200 definitions, and owner collaboration
+groups to 128 lifetime groups. Permission overlays are limited to 4,096 explicit
+edge/scope overrides. Switches
+edit configured and owner-managed agents/shared namespaces; dynamic children retain bounded
+inherited capabilities and dynamic teams retain consent operations.</p>
+<p><code>python3 scripts/smoke-managed-interactive.py</code> checks real tmux input/focus, two independent terminal clients, popup composition and
+detach/cleanup, isolated terminal fixtures and broker, message/input separation,
+live grant revocation/restoration and authenticated web controls. It makes no model
+calls. Native model behavior requires separate provider validation.</p>
+<p><code>python3 scripts/smoke-managed-workspace.py</code> exercises ten live model-free terminals
+in separate projects: dynamic additions, three disjoint pairs, overlapping groups,
+private/shared data checks through assigned credentials, isolation without losing
+native input, stable reconnects and closing one session while nine remain usable.
+Research and dynamic workflows use the same observability surfaces. Agent-created
+teams remain distinct from owner collaboration groups: an invitation grants no
+context until the participant accepts. Team namespace access follows actual
+membership, including parent-delegation and revocation fences. Membership changes
+invalidate displayed permission versions immediately.</p>
+<p>Terminal <strong>Sessions</strong> and web <strong>Session detail</strong> distinguish automatic admission
+state from accepted work still executing, report pending/used turn counts and
+persistent-history fences, and show parent/template/children for spawned workers. Events report observed actor,
+subject and membership changes rather than inventing an agent's intent.</p>
+<p>Research and legacy experiment workers run headlessly. Their consoles expose
+tasks, results, reported traces and lifecycle information; they do not offer a
+native tmux pane. Research adds reviewed phase-barrier controls and a separate
+runner heartbeat. See <a href="../research/#observe-and-intervene-live">live research</a> and
+the <a href="../experiments/#observe-a-running-pilot">single-task pilot</a>.</p>
+<p>The <a href="../usability-control-center/">control center guide</a> describes reviewed
+shutdown, scoped history, attention, exact group disconnect, retirement,
+exposure receipts and continuous study observation. Existing <code>--view agents</code>
+and <code>--view sessions</code> names remain compatible for registered-session detail
+and discovered terminals respectively.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.indexes", "content.code.copy"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  </body>
+</html>

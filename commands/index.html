@@ -1,0 +1,4272 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://pagel-s.github.io/agentmux/commands/">
+      
+      
+        <link rel="prev" href="../harnesses/">
+      
+      
+        <link rel="next" href="../recipes/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+    
+    
+      
+        <title>CLI Commands - Agentmux</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="deep-purple" data-md-color-accent="deep-purple">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#agentmux-commands" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Agentmux" class="md-header__button md-logo" aria-label="Agentmux" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Agentmux
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              CLI Commands
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="deep-purple" data-md-color-accent="deep-purple"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="deep-purple" data-md-color-accent="deep-purple"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/pagel-s/agentmux/" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    pagel-s/agentmux
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../getting-started/installation/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../getting-started/native-walkthrough/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Tutorials
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../working/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Coding Workflows
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../architecture/mental-model/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Core Concepts
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../work-sessions/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Managed Teams
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../quality/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Agentmux" class="md-nav__button md-logo" aria-label="Agentmux" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Agentmux
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/pagel-s/agentmux/" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    pagel-s/agentmux
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/first-result/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Your first checked result
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../visual-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Visual workflow guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/everyday-commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Everyday commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../terminal-workflow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terminal folders and layouts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/native-walkthrough/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verify native collaboration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/hello-team/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Legacy Layout Handoff
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/portable-bundles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Portable Bundles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coding Workflows
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Coding Workflows
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../working/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Work on a Task
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workflows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced Workflows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workflow-validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Validation and Boundaries
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core Concepts
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Core Concepts
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/mental-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Layout Compiler (v1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/coordination/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pane Coordination (v1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Managed Teams
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Managed Teams
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../work-sessions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Work Sessions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../usability-control-center/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Control Center
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../native-delivery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Native Collaboration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../managed-runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runtime
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../managed-setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../autonomous-workflows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Persistent Workflows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../autonomy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Autonomous Wakeup Policies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../antigravity-bridge/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Antigravity Bridge
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hardening/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardening
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Trust Boundaries
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../memory-lifecycle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Memory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../live-permissions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Live Permissions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dynamic-teams/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dynamic Teams
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../traces-and-recovery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Traces and Recovery
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../remote-workers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SSH and Scale
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Research
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../experiments/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pilot Runner
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research-study/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Controlled Studies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../provider-compatibility/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Provider Compatibility
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mixed-harness-acceptance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mixed Harness Scenario
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research-environments/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Environments
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quality/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quality and Evidence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../evaluation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Workflow Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../releasing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Validation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../config-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Layout Configuration (v1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../harnesses/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pane Harnesses (v1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Commands
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#checked-coding-requests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Checked coding requests
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#advanced-workflow-plans" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Advanced workflow plans
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#everyday-work-sessions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Everyday work sessions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#consented-teams-and-admission-controls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Consented teams and admission controls
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#memory-transfers-and-portable-traces" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Memory transfers and portable traces
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#existing-workspace-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Existing workspace commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Existing workspace commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-short-version" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The short version
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#starter-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Starter Commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Starter Commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#templates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        templates
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#init" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        init
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#edit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        edit
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#remember" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        remember
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#config-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Config Commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Config Commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#validate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        validate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#render" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        render
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        pack
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tools
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#prompt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        prompt
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tool-call" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tool-call
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mcp-server" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        mcp-server
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#session-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Session Commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Session Commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#load" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        load
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reload" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        reload
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#list" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        list
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#runtime-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Runtime Commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Runtime Commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        status
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#focus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        focus
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#restart" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        restart
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rerun" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        rerun
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stop
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#kill" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        kill
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#capture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        capture
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#send-session-pane-command" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        send SESSION PANE -- COMMAND
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#agentic-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agentic Commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Agentic Commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#dashboard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        dashboard
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#inspect" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        inspect
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#kv-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        kv-set
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#kv-get" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        kv-get
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#kv-list" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        kv-list
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#kv-del" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        kv-del
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#wait" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        wait
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scale" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        scale
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#utility-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Utility Commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Utility Commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#doctor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        doctor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#version" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        version
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-help" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --help
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#common-flows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common Flows
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Common Flows">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#new-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        New workflow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#edit-and-reapply" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Edit and reapply
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#inspect-and-interact-with-a-live-pane" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inspect and interact with a live pane
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Recipes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pane Runtime (v1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#checked-coding-requests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Checked coding requests
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#advanced-workflow-plans" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Advanced workflow plans
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#everyday-work-sessions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Everyday work sessions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#consented-teams-and-admission-controls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Consented teams and admission controls
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#memory-transfers-and-portable-traces" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Memory transfers and portable traces
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#existing-workspace-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Existing workspace commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Existing workspace commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-short-version" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The short version
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#starter-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Starter Commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Starter Commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#templates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        templates
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#init" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        init
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#edit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        edit
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#remember" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        remember
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#config-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Config Commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Config Commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#validate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        validate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#render" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        render
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        pack
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tools
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#prompt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        prompt
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tool-call" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tool-call
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mcp-server" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        mcp-server
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#session-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Session Commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Session Commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#load" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        load
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reload" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        reload
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#list" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        list
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#runtime-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Runtime Commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Runtime Commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        status
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#focus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        focus
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#restart" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        restart
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rerun" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        rerun
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stop
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#kill" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        kill
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#capture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        capture
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#send-session-pane-command" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        send SESSION PANE -- COMMAND
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#agentic-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agentic Commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Agentic Commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#dashboard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        dashboard
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#inspect" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        inspect
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#kv-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        kv-set
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#kv-get" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        kv-get
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#kv-list" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        kv-list
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#kv-del" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        kv-del
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#wait" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        wait
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scale" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        scale
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#utility-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Utility Commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Utility Commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#doctor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        doctor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#version" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        version
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-help" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --help
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#common-flows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common Flows
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Common Flows">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#new-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        New workflow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#edit-and-reapply" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Edit and reapply
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#inspect-and-interact-with-a-live-pane" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inspect and interact with a live pane
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="agentmux-commands">Agentmux Commands</h1>
+<p>This guide explains what each command is for, when to use it, and the most useful examples.</p>
+<p>For a guided native-terminal workflow, see <a href="../work-sessions/">work sessions</a>.
+For original YAML pane-layout examples, see <a href="../recipes/">recipes</a>.</p>
+<p><code>context</code>, <code>observe</code>, <code>task</code>/<code>tasks</code> (including <code>task ID --open</code>), <code>work list --limit</code>
+and <code>work show --open</code> are included in v0.15.0. These inspection routes have been
+available since v0.13.0; controllers older than that need an explicit upgrade
+before they can serve their broker APIs. The v0.14.0 observer adds structured
+collection diagnostics while preserving schema-1 compatibility.</p>
+<h2 id="checked-coding-requests">Checked coding requests</h2>
+<p><code>demo</code>, <code>work</code> and <code>flow</code> are included in
+<a href="../getting-started/installation/">Agentmux v0.15.0</a>. <code>work</code> and <code>flow</code> select a Git project,
+independently of an interactive workspace's <code>-s NAME</code> selector.</p>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Use it to</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>amx demo [--output NEW_DIR]</code></td>
+<td>Run a deterministic checked fixture, retain evidence, and apply its patch only to a generated disposable repository; no models</td>
+</tr>
+<tr>
+<td><code>amx work "Change description" -- CHECK [ARG...]</code></td>
+<td>Preview implementation, fresh review and checks without models or run files</td>
+</tr>
+<tr>
+<td><code>amx work "Change description" --allow-models -- CHECK [ARG...]</code></td>
+<td>Execute the bounded journey with the explicitly selected provider profiles</td>
+</tr>
+<tr>
+<td><code>amx work status [RUN\|latest]</code></td>
+<td>Inspect recorded phases, checks, review and next action for the project</td>
+</tr>
+<tr>
+<td><code>amx work show [RUN\|latest]</code></td>
+<td>Inspect the checked patch preview and retained HTML report path</td>
+</tr>
+<tr>
+<td><code>amx work list [--limit N]</code></td>
+<td>List retained runs and stable IDs for the selected project; omitted limit retains all history</td>
+</tr>
+<tr>
+<td><code>amx work show RUN --open</code></td>
+<td>Render a fresh private HTML report from saved evidence and open it in the system browser</td>
+</tr>
+<tr>
+<td><code>amx work apply [RUN\|latest]</code></td>
+<td>Revalidate and explicitly apply an approved result to the original project</td>
+</tr>
+<tr>
+<td><code>amx work recover [RUN\|latest]</code></td>
+<td>Resolve an interrupted application's journal against exact source content without replaying its patch</td>
+</tr>
+</tbody>
+</table>
+<p>Use <code>--repo DIR</code> for another Git project and <code>--catalog DIR</code> for a custom private
+history. <code>--output DIR</code> selects a new result directory outside the project; its
+parent must already exist. Run <code>amx work --help</code> for profile, deadline, attempt,
+storage, containment and isolation controls. Checks after <code>--</code> are literal argv;
+use a check script when shell logic is required. See <a href="../working/">work on a task</a>
+for the complete journey and <a href="../visual-guide/#ask-for-a-checked-coding-change">its visual overview</a>.</p>
+<h2 id="advanced-workflow-plans">Advanced workflow plans</h2>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Use it to</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>amx flow run PLAN.json --repo DIR --output RUN</code></td>
+<td>Compare independent candidates from one captured revision</td>
+</tr>
+<tr>
+<td><code>amx flow mission PLAN.json --repo DIR --output RUN</code></td>
+<td>Execute bounded dependency steps and final acceptance checks</td>
+</tr>
+<tr>
+<td><code>amx flow watch PLAN.json --repo DIR --output RUN</code></td>
+<td>Review stable changed snapshots within duration and run-count limits</td>
+</tr>
+<tr>
+<td><code>amx flow lab PLAN.json --repo DIR --output RUN --repetitions 3</code></td>
+<td>Repeat comparisons against a pinned starting snapshot with rotated order</td>
+</tr>
+<tr>
+<td><code>amx flow check --repo DIR --checks CHECKS.json --output FILE</code></td>
+<td>Record revision-bound executable checks and a private sibling <code>FILE.git</code> fingerprint store</td>
+</tr>
+<tr>
+<td><code>amx flow status RUN</code>, <code>amx flow explain RUN</code></td>
+<td>Read the saved report, or explain evidence with patch integrity and current freshness</td>
+</tr>
+<tr>
+<td><code>amx flow report RUN --output FILE.html</code></td>
+<td>Render a private offline report to a new file</td>
+</tr>
+<tr>
+<td><code>amx flow handoff RUN [--candidate ID] --output FILE.md</code></td>
+<td>Save a private revision-bound handoff brief</td>
+</tr>
+<tr>
+<td><code>amx flow apply RUN [--candidate ID]</code></td>
+<td>Explicitly apply the selected checked result</td>
+</tr>
+<tr>
+<td><code>amx flow recover RUN [--candidate ID]</code></td>
+<td>Inspect and resolve an interrupted application</td>
+</tr>
+</tbody>
+</table>
+<p>Provider turns require <code>--allow-models</code>; command-only plans and checks can execute
+owner-selected code without that flag. Plans are strict JSON and choose
+<code>"execution": "local"</code>. Private Git storage is the default and does not confine
+trusted host execution. Select <code>--isolation bubblewrap</code> for <code>work</code>, or a private
+plan's <code>isolation</code> object for <code>flow</code>, to require filesystem, PID and network
+boundaries on Linux. Required boundaries fail closed. Application is separate
+from execution and never commits or pushes. See <a href="../workflows/">advanced workflows</a>
+for model-free examples, plan fields, exact saved-brief delivery and limitations.</p>
+<h2 id="everyday-work-sessions">Everyday work sessions</h2>
+<p>Install <code>amx</code> using the <a href="../getting-started/installation/">release installer or source build</a>.
+The <a href="../getting-started/everyday-commands/">short command reference</a>
+covers <code>amx a</code>, <code>ui</code>, <code>ls</code>, <code>link</code>, <code>mode</code>, and directional <code>allow</code>/<code>deny</code>.
+Everyday commands accept <code>-s NAME</code> for the workspace, before or after the command.
+Inside an owned tmux attachment the workspace is inferred from that exact
+attachment; explicit selectors take precedence. Outside, it defaults to <code>work</code>.
+<code>start</code> / <code>up</code> is the creation exception: its default is always <code>work</code>.</p>
+<p>After installation, check <code>command -v amx</code>. With Claude Code and Codex installed and
+logged in, run <code>amx start</code> from your project directory. It creates the
+default workspace <code>work</code> and opens its workbench.</p>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Use it to</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>amx start</code></td>
+<td>Start the default native Claude/Codex team, or attach when that same team is running</td>
+</tr>
+<tr>
+<td><code>amx a</code></td>
+<td>Restore the last live native terminal, or open the workspace chooser</td>
+</tr>
+<tr>
+<td><code>amx split FIRST SECOND</code></td>
+<td>Combine existing native terminals in one tmux window</td>
+</tr>
+<tr>
+<td><code>amx unsplit ID</code></td>
+<td>Return one agent to its own window</td>
+</tr>
+<tr>
+<td><code>amx attach AGENT_ID</code></td>
+<td>Open one workspace-owned native conversation for direct typing</td>
+</tr>
+<tr>
+<td><code>amx dashboard</code></td>
+<td>Return to the owner workbench</td>
+</tr>
+<tr>
+<td><code>amx web --open</code></td>
+<td>Open the local owner app</td>
+</tr>
+<tr>
+<td><code>amx add --harness claude --project DIR --title "Task"</code></td>
+<td>Start another native session; copy its printed stable ID</td>
+</tr>
+<tr>
+<td><code>amx add --harness antigravity --native-only --project DIR</code></td>
+<td>Start native Antigravity without an injected Agentmux prompt</td>
+</tr>
+<tr>
+<td><code>amx sessions</code></td>
+<td>List registered sessions and separately observed external terminals</td>
+</tr>
+<tr>
+<td><code>amx context [--json]</code></td>
+<td>Explain the ordinary command target, selection source and runtime status without starting anything</td>
+</tr>
+<tr>
+<td><code>amx observe [--watch] [--json] [--limit N]</code></td>
+<td>Inspect fresh broker/worker reporting, retained task attention and capacity; drill into exact task evidence using the <a href="../observability/">observability guide</a></td>
+</tr>
+<tr>
+<td><code>amx task TASK_ID [--json]</code></td>
+<td>Read one delegated instruction, its result, version, delivery and recovery evidence</td>
+</tr>
+<tr>
+<td><code>amx task TASK_ID --open</code></td>
+<td>Open that exact task in the workbench's Tasks view; recovery still requires explicit review and confirmation</td>
+</tr>
+<tr>
+<td><code>amx tasks [--to ID] [--status STATE] [--query TEXT] [--limit N] [--after TASK_ID] [--json]</code></td>
+<td>Search retained delegation history, newest first; copy the continuation command to read more</td>
+</tr>
+<tr>
+<td><code>amx workspaces [--register DIR]</code></td>
+<td>Find named and remembered custom workspaces; register an older custom location</td>
+</tr>
+<tr>
+<td><code>amx relaunch AGENT_ID [--resume ID\|last\|picker] [--native-launcher ABSOLUTE_PATH]</code></td>
+<td>Relaunch one exited native session, retaining its stable ID and healthy peers; optional launcher recovery applies only to trusted-local interactive sessions</td>
+</tr>
+<tr>
+<td><code>amx pair A B [--delivery review\|auto] [--apply]</code></td>
+<td>Preview task pairing; <code>--apply</code> atomically configures mutual Commands, both receiver modes and returned results while retaining limits and other permissions</td>
+</tr>
+<tr>
+<td><code>amx delivery AGENT_ID [manual\|review\|auto] [--approve CANDIDATE_ID]</code></td>
+<td>Inspect native delivery evidence, set receiver mode, or approve an exact queued item; <code>--help</code> lists limits and subscriptions</td>
+</tr>
+<tr>
+<td><code>amx connect OBSERVED_ID --title "Task"</code></td>
+<td>Prepare a helper for an existing external session; paste the printed setup into its original terminal</td>
+</tr>
+<tr>
+<td><code>amx label AGENT_ID "Task"</code></td>
+<td>Rename its display title while keeping its ID and conversation</td>
+</tr>
+<tr>
+<td><code>amx role AGENT_ID "Role"</code></td>
+<td>Change the owner role with CAS; managed workers use it at their next claim, native agents receive an inbox notice</td>
+</tr>
+<tr>
+<td><code>amx collaborate AGENT_ID OTHER_ID</code></td>
+<td>Give those sessions a dedicated board/memory group and allow notes/pings</td>
+</tr>
+<tr>
+<td><code>amx send AGENT_ID "Message" [--mode note\|instruction\|auto]</code></td>
+<td>Choose an informational inbox note or an instruction task; auto follows the agent's interaction mode</td>
+</tr>
+<tr>
+<td><code>amx inbox</code></td>
+<td>Inspect recent coordination and task activity as the owner</td>
+</tr>
+<tr>
+<td><code>amx board "Note" --group GROUP_ID</code></td>
+<td>Post to a particular collaboration group's board</td>
+</tr>
+<tr>
+<td><code>amx reply TASK_OR_MESSAGE_ID "Follow-up" [--mode auto\|note\|instruction]</code></td>
+<td>Follow up with broker-validated structured ancestry; shared board posts require <code>--board NAMESPACE</code> or <code>--to AGENT_ID</code></td>
+</tr>
+<tr>
+<td><code>amx isolate AGENT_ID</code></td>
+<td>Revoke its peer coordination and memberships across groups; native input stays open</td>
+</tr>
+<tr>
+<td><code>amx remove AGENT_ID</code></td>
+<td>Close an owned terminal or disconnect an external bridge; retain saved history</td>
+</tr>
+<tr>
+<td><code>amx down</code></td>
+<td>Stop the workspace's owned processes while keeping saved data</td>
+</tr>
+</tbody>
+</table>
+<p>Replace uppercase placeholders with actual paths or IDs. <code>DIR</code> must already
+exist. <code>--harness</code> chooses the native CLI (<code>claude</code>, <code>codex</code>, <code>pi</code>, or native-only <code>antigravity</code>);
+<code>--title</code> is a display label and <code>--role</code> supplies optional agent instructions.
+Choose <code>--native-only</code> to append no Agentmux prompt; it cannot be combined with
+a nonempty role. Native Antigravity requires this option. Roles never grant
+coordination permissions. Use <code>role ID ""</code> to clear a coordinated session's role.
+Session titles can repeat; commands address the stable ID shown under the title.
+An observed terminal must be connected before its registered ID can be used for
+collaboration. A prepared bridge does not mean the agent read the pasted setup;
+external sessions keep their original terminals for typing.</p>
+<p>Outside an owned attachment, these interactive commands select workspace <code>work</code>
+by default, regardless of your current directory. Inside an owned attachment,
+they infer its checked workspace identity as described above. For another
+workspace use <code>--session NAME</code> on each command, or select its exact directory
+with <code>--state DIR</code>. For example:</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>amx<span class="w"> </span>start<span class="w"> </span>--session<span class="w"> </span>review<span class="w"> </span>--project<span class="w"> </span>/path/to/project
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># In another terminal:</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>amx<span class="w"> </span>attach<span class="w"> </span>codex<span class="w"> </span>--session<span class="w"> </span>review
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>amx<span class="w"> </span>web<span class="w"> </span>--session<span class="w"> </span>review<span class="w"> </span>--open
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>amx<span class="w"> </span>down<span class="w"> </span>--session<span class="w"> </span>review
+</span></code></pre></div>
+<p><code>send</code> queues coordination. Integrated native sessions can receive attributed
+turns when their receiver policy is Review/Auto and current permissions allow;
+Manual remains the default. It never types terminal keystrokes. See
+<a href="../native-delivery/">native delivery</a>. Use <code>attach</code> to talk directly. With several groups, copy the
+group ID printed by <code>collaborate</code> or shown under <strong>Teams → Owner collaboration
+groups</strong> in the web app. <code>board</code> can choose the only active group automatically;
+with multiple groups select <code>--group ID</code> or <code>--board NAMESPACE</code> explicitly.
+Board replies use <code>reply ID "Text" --board NAMESPACE</code>; a private follow-up uses
+<code>--to AGENT_ID</code>. Direct recipients must already be able to read the referenced
+message. Broker-inferred <code>thread_id</code> and <code>reply_to</code> retain ancestry without
+adding a prose prefix. There is no user-supplied thread-root override.
+For terminal shortcuts, recovery and native history, see <a href="../work-sessions/">work
+sessions</a>. For bounded headless studies see
+<a href="../research/">research</a>.</p>
+<h2 id="consented-teams-and-admission-controls">Consented teams and admission controls</h2>
+<p>Owner collaboration groups created by <code>collaborate</code> are distinct from dynamic
+consented teams. The latter require <code>teams.enabled</code> and delegated capabilities
+in the selected managed configuration; the everyday coding preset leaves them
+disabled. Use <code>amx team --help</code> for the complete command syntax:</p>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>amx team list</code>, <code>amx team create NAME</code></td>
+<td>Inspect visible teams or create one within configured authority and lifetime limits</td>
+</tr>
+<tr>
+<td><code>amx team edit ID --name NAME --description TEXT</code></td>
+<td>Change live metadata, retaining the team's ID and namespaces</td>
+</tr>
+<tr>
+<td><code>amx team invite ID AGENT</code>, <code>amx team remove ID AGENT</code>, <code>amx team dissolve ID</code></td>
+<td>Review membership invitations, revocation or closure as a manager</td>
+</tr>
+<tr>
+<td><code>amx team transfer ID AGENT</code></td>
+<td>Propose ownership; the proposed owner must accept separately</td>
+</tr>
+<tr>
+<td><code>amx team join ID</code>, <code>amx team leave ID</code>, <code>amx team accept-owner ID</code></td>
+<td>Decide using <code>--credential-file FILE</code> for the actual acting participant</td>
+</tr>
+<tr>
+<td><code>amx team move SOURCE DESTINATION</code></td>
+<td>Use the participant's credential and an existing destination invitation to move atomically</td>
+</tr>
+</tbody>
+</table>
+<p>Add <code>--session NAME</code> or <code>--state DIR</code> to select the workspace. <code>--version N</code>
+pins a reviewed version; moves also accept <code>--to-version N</code>. Omitted versions
+are read once, never retried after a conflict or uncertain response. A human
+owner cannot impersonate an agent's consent. See <a href="../dynamic-teams/">dynamic teams</a>.</p>
+<p><code>managed call</code> exposes effective boundaries and capacity through the selected
+credential. For example, an agent's own shell can run:</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="s2">"</span><span class="nv">$AGENTMUX_CLI</span><span class="s2">"</span><span class="w"> </span>managed<span class="w"> </span>call<span class="w"> </span>boundaries.get<span class="w"> </span>--json<span class="w"> </span><span class="s1">'{}'</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="s2">"</span><span class="nv">$AGENTMUX_CLI</span><span class="s2">"</span><span class="w"> </span>managed<span class="w"> </span>call<span class="w"> </span>capacity.get<span class="w"> </span>--json<span class="w"> </span><span class="s1">'{}'</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="s2">"</span><span class="nv">$AGENTMUX_CLI</span><span class="s2">"</span><span class="w"> </span>managed<span class="w"> </span>call<span class="w"> </span>budget.status<span class="w"> </span>--json<span class="w"> </span><span class="s1">'{}'</span>
+</span></code></pre></div>
+<p>These bridge variables are supplied to workspace-native agents. An owner outside
+their terminal selects <code>--credential-file STATE/owner.json</code> explicitly and can
+inspect a particular agent with <code>capacity.get --json '{"agent":"AGENT_ID"}'</code>.
+<code>capacity.update</code> is an owner-only CAS edit of complete admission-budget objects
+and a shorter admission deadline; it does not rewrite launch configuration,
+refund past reservations or impose a hard provider bill cap. The terminal
+<strong>B</strong> editor and web capacity controls use the same broker rules. See <a href="../live-permissions/">live
+permissions and resources</a> for fields and constraints.</p>
+<h2 id="memory-transfers-and-portable-traces">Memory transfers and portable traces</h2>
+<p>Use <code>managed memory export|import|search|index|prune</code> for explicitly credential-
+scoped memory operations; <a href="../memory-lifecycle/">memory lifecycle</a> covers CAS,
+TTL, replacement and asserted import provenance. These are separate from native
+conversation history.</p>
+<p><code>managed trace list|verify|show</code> inspects owner-accessible local traces.
+<code>managed trace export --state STATE --agent ID --id TRACE_ID --output NEW_FILE</code>
+signs a locally verified trace without exporting secret keys. On another machine,
+<code>managed trace verify-bundle --input FILE --trust OWNER_PUBLIC_KEY_SHA256</code>
+requires an independently obtained trust fingerprint and no broker state.
+Use <code>--mac TASK_MAC</code> during local verification/export to pin an existing task
+anchor. These are owner-exporter attestations, not provider attestations; see
+<a href="../traces-and-recovery/">traces and recovery</a>.</p>
+<h2 id="existing-workspace-commands">Existing workspace commands</h2>
+<p>The reference below covers the original YAML layout mode (<code>init</code> / <code>load</code>).
+Its pane IDs, raw terminal input and shared key/value store are separate from
+the work-session broker's messages, memory and permissions. In particular,
+<code>dashboard SESSION</code> opens the legacy pane dashboard; use
+<code>dashboard --session NAME</code> for a managed workbench. Legacy <code>send SESSION PANE --
+COMMAND</code> types into a pane, unlike the queued message form above.</p>
+<h3 id="the-short-version">The short version</h3>
+<p>If you only remember a few commands, remember these:</p>
+<ul>
+<li><code>templates</code>: show built-in starter configs</li>
+<li><code>init</code>: create a new config from a starter</li>
+<li><code>load</code>: create a tmux session from a config</li>
+<li><code>reload</code>: recreate an existing session from the config</li>
+<li><code>status</code>: inspect a live session</li>
+<li><code>capture</code>: read output from a named pane</li>
+<li><code>send</code>: send text into a named pane</li>
+<li><code>edit</code>: reopen the config file</li>
+</ul>
+<h2 id="starter-commands">Starter Commands</h2>
+<h3 id="templates"><code>templates</code></h3>
+<p>What it does:
+- lists the built-in starter templates that ship with Agentmux
+- shows friendly aliases like <code>default</code></p>
+<p>When to use it:
+- when starting a new config
+- when you forget the built-in template names</p>
+<p>Examples:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>./bin/amx<span class="w"> </span>templates
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>./bin/amx<span class="w"> </span>init<span class="w"> </span>coding-starter<span class="w"> </span>coding.yaml
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>./bin/amx<span class="w"> </span>init<span class="w"> </span>review-starter<span class="w"> </span>review.yaml
+</span></code></pre></div>
+<h3 id="init"><code>init</code></h3>
+<p>What it does:
+- writes a starter template to a target path
+- rewrites the top-level <code>session</code> field from the target filename by default</p>
+<p>When to use it:
+- when creating a new config
+- when you want a starting point instead of hand-writing YAML from scratch</p>
+<p>Examples:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>./bin/amx<span class="w"> </span>init<span class="w"> </span>coding-starter<span class="w"> </span>coding.yaml
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>./bin/amx<span class="w"> </span>init<span class="w"> </span>default<span class="w"> </span>my-workflow.yaml
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>./bin/amx<span class="w"> </span>init<span class="w"> </span>minimal<span class="w"> </span>scratch.yaml
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>./bin/amx<span class="w"> </span>init<span class="w"> </span>ai-dev<span class="w"> </span>work/review.yaml<span class="w"> </span>--force
+</span></code></pre></div>
+<p>Useful notes:
+- <code>default</code> is an alias for <code>ai-dev</code>
+- <code>coding-starter</code> and <code>review-starter</code> are built-in minimal copy-and-tweak starters
+- <code>--force</code> overwrites an existing file</p>
+<h3 id="edit"><code>edit</code></h3>
+<p>What it does:
+- opens a config path directly, or
+- opens the config path remembered for a live session</p>
+<p>When to use it:
+- when editing a config you already have on disk
+- when you know the session name but do not want to remember where the file lives</p>
+<p>Examples:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>./bin/amx<span class="w"> </span>edit<span class="w"> </span>my-workflow.yaml
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>./bin/amx<span class="w"> </span>edit<span class="w"> </span>my-workflow
+</span></code></pre></div>
+<p>Useful notes:
+- <code>edit &lt;session&gt;</code> works best for sessions created or reloaded through current Agentmux
+- if metadata is missing, use <code>remember</code></p>
+<h3 id="remember"><code>remember</code></h3>
+<p>What it does:
+- attaches a config path to an already-running session without reloading it</p>
+<p>When to use it:
+- when a session is older and missing config-path metadata
+- when you want <code>edit &lt;session&gt;</code> to work immediately</p>
+<p>Examples:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>./bin/amx<span class="w"> </span>remember<span class="w"> </span>my-workflow<span class="w"> </span>./my-workflow.yaml
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>./bin/amx<span class="w"> </span>edit<span class="w"> </span>my-workflow
+</span></code></pre></div>
+<h2 id="config-commands">Config Commands</h2>
+<h3 id="validate"><code>validate</code></h3>
+<p>What it does:
+- checks YAML shape, references, and config rules
+- prints errors and warnings without launching tmux</p>
+<p>When to use it:
+- after editing a config
+- before <code>load</code> if you want a fast safety check</p>
+<p>Examples:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>./bin/amx<span class="w"> </span>validate<span class="w"> </span>my-workflow.yaml
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>./bin/amx<span class="w"> </span>validate<span class="w"> </span>my-workflow.yaml<span class="w"> </span>--strict
+</span></code></pre></div>
+<p>Useful flags:
+- <code>--param key=value</code>: override config params
+- <code>--strict</code>: treat warnings as errors</p>
+<h3 id="render"><code>render</code></h3>
+<p>What it does:
+- prints the fully resolved config
+- prints the launch plan Agentmux would execute</p>
+<p>When to use it:
+- when debugging params, env, cwd, or layout resolution
+- when you want to inspect what will actually run</p>
+<p>Examples:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>./bin/amx<span class="w"> </span>render<span class="w"> </span>my-workflow.yaml
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>./bin/amx<span class="w"> </span>render<span class="w"> </span>my-workflow.yaml<span class="w"> </span>--param<span class="w"> </span><span class="nv">project_dir</span><span class="o">=</span>.
+</span></code></pre></div>
+<h3 id="pack"><code>pack</code></h3>
+<p>What it does:
+- creates a shareable, self-contained <code>.amx</code> bundle (a ZIP archive)
+- bundles the configuration file, any local <code>include</code> files, and local scripts</p>
+<p>When to use it:
+- when you want to share a complex agentic team setup with someone else
+- to distribute workflows that rely on local assets via <code>{{config_dir}}</code></p>
+<p>Examples:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>./bin/amx<span class="w"> </span>pack<span class="w"> </span>my-workflow.yaml
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>./bin/amx<span class="w"> </span>pack<span class="w"> </span>my-workflow.yaml<span class="w"> </span>my-team.amx
+</span></code></pre></div>
+<p>Useful note:
+- <code>.amx</code> bundles can be loaded directly with <code>amx load my-team.amx</code>
+- you can host <code>.amx</code> bundles online and load them directly from a URL</p>
+<h3 id="tools"><code>tools</code></h3>
+<p>What it does:
+- generates a JSON Schema export of Agentmux coordination tools
+- output can be rendered in provider-friendly shapes such as <code>openai</code>, <code>codex</code>, <code>gemini</code>, or <code>claude</code></p>
+<p>When to use it:
+- when you need a compatibility/debug export of the coordination tool schemas
+- when comparing Agentmux tool shapes across provider formats</p>
+<p>Examples:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>./bin/amx<span class="w"> </span>tools<span class="w"> </span>--format<span class="w"> </span>openai
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>./bin/amx<span class="w"> </span>tools<span class="w"> </span>--format<span class="w"> </span>claude
+</span></code></pre></div>
+<h3 id="prompt"><code>prompt</code></h3>
+<p>What it does:
+- generates the Agentmux operational runtime contract for AI agents
+- describes either the native MCP tool path or the CLI bridge path, depending on <code>--mode</code></p>
+<p>When to use it:
+- as the operational system/bootstrap prompt prefix for LLM agents that run inside an Agentmux pane
+- when you want to inspect the exact coordination contract a pane will receive</p>
+<p>Useful note:
+- this command describes coordination behavior, not necessarily persona delivery
+- persona may be delivered through a provider channel such as Claude's appended system prompt or a Gemini workspace context file</p>
+<p>Examples:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>./bin/amx<span class="w"> </span>prompt
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>./bin/amx<span class="w"> </span>prompt<span class="w"> </span>--provider<span class="w"> </span>claude
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>./bin/amx<span class="w"> </span>prompt<span class="w"> </span>--provider<span class="w"> </span>claude<span class="w"> </span>--mode<span class="w"> </span>native-mcp
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>./bin/amx<span class="w"> </span>prompt<span class="w"> </span>--provider<span class="w"> </span>gemini<span class="w"> </span>--mode<span class="w"> </span>native-mcp
+</span></code></pre></div>
+<h3 id="tool-call"><code>tool-call</code></h3>
+<p>What it does:
+- executes a real Agentmux coordination action through a stable JSON envelope
+- maps canonical tool names like <code>kv_set</code>, <code>wait</code>, or <code>send</code> onto the existing CLI subcommands
+- accepts payloads from <code>--from-json</code>, <code>--from-file</code>, or <code>--from-stdin</code></p>
+<p>When to use it:
+- from LLM/provider runtimes that need machine-stable coordination behavior
+- when you want structured JSON success/error output without scraping human text</p>
+<p>Examples:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>./bin/amx<span class="w"> </span>tool-call<span class="w"> </span>kv_set<span class="w"> </span>--from-json<span class="w"> </span><span class="s1">'{"session":"demo","key":"task","value":"review"}'</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>./bin/amx<span class="w"> </span>tool-call<span class="w"> </span>kv_get<span class="w"> </span>--from-stdin<span class="w"> </span><span class="s">&lt;&lt;EOF</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="s">{"session":"demo","key":"task"}</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="s">EOF</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>./bin/amx<span class="w"> </span>tool-call<span class="w"> </span>kv_set<span class="w"> </span>--from-file<span class="w"> </span>/tmp/agentmux-tool.json
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>./bin/amx<span class="w"> </span>tool-call<span class="w"> </span><span class="nb">wait</span><span class="w"> </span>--from-json<span class="w"> </span><span class="s1">'{"session":"demo","pane":"planner","pattern":"PLAN_READY","timeout":"30s"}'</span>
+</span></code></pre></div>
+<h3 id="mcp-server"><code>mcp-server</code></h3>
+<p>What it does:
+- exposes the Agentmux tool registry as an MCP stdio server
+- backs the native MCP integrations for supported providers</p>
+<p>When to use it:
+- indirectly through provider-native launch paths such as Claude, Gemini, or Codex
+- directly only when testing MCP integration by hand</p>
+<h2 id="session-commands">Session Commands</h2>
+<h3 id="load"><code>load</code></h3>
+<p>What it does:
+- creates a tmux session from a config or a remote URL</p>
+<p>When to use it:
+- the first time you launch a config
+- when replacing an existing session from scratch
+- when launching a shared session from a URL</p>
+<p>Examples:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>./bin/amx<span class="w"> </span>load<span class="w"> </span>my-workflow.yaml
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>./bin/amx<span class="w"> </span>load<span class="w"> </span>https://example.com/team.amx
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>./bin/amx<span class="w"> </span>load<span class="w"> </span>my-workflow.yaml<span class="w"> </span>--replace<span class="w"> </span>--no-attach
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>./bin/amx<span class="w"> </span>load<span class="w"> </span>my-workflow.yaml<span class="w"> </span>--dry-run
+</span></code></pre></div>
+<p>Useful flags:
+- <code>--replace</code>: replace an existing session
+- <code>--no-attach</code>: do not attach after launch
+- <code>--dry-run</code>: print the launch plan only
+- <code>--verbose</code>: print underlying tmux commands</p>
+<h3 id="reload"><code>reload</code></h3>
+<p>What it does:
+- reconciles an existing session from a config without destroying the whole session
+- surgically updates pane metadata or respawns individual panes if their config changed
+- preserves history and layout for untouched panes</p>
+<p>When to use it:
+- after editing a config for a session that already exists</p>
+<p>Examples:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>./bin/amx<span class="w"> </span>reload<span class="w"> </span>my-workflow.yaml<span class="w"> </span>--no-attach
+</span></code></pre></div>
+<p>Useful note:
+- unlike <code>load</code>, <code>reload</code> expects the session to already exist
+- if the session structure (window or pane count) has changed significantly, it falls back to a destructive replace with a warning
+- if you are running <code>reload</code> from inside one of the session's panes, and that pane's config changed, it will be respawned last</p>
+<h3 id="list"><code>list</code></h3>
+<p>What it does:
+- lists tmux session names</p>
+<p>When to use it:
+- when checking whether a session exists
+- when troubleshooting runtime commands</p>
+<p>Examples:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>./bin/amx<span class="w"> </span>list
+</span></code></pre></div>
+<h2 id="runtime-commands">Runtime Commands</h2>
+<p>These commands operate on live sessions and mostly target named panes.</p>
+<h3 id="status"><code>status</code></h3>
+<p>What it does:
+- shows live panes in a session
+- reports metadata like pane name, title, source, <code>on_exit</code>, current command, and <code>dead</code>
+- includes PID for running panes and exit status for dead panes</p>
+<p>When to use it:
+- as the first runtime debugging step
+- to discover pane names
+- to inspect a single pane with <code>--pane</code></p>
+<p>Examples:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>./bin/amx<span class="w"> </span>status<span class="w"> </span>my-workflow
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>./bin/amx<span class="w"> </span>status<span class="w"> </span>my-workflow<span class="w"> </span>--json
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>./bin/amx<span class="w"> </span>status<span class="w"> </span>my-workflow<span class="w"> </span>--pane<span class="w"> </span>review
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>./bin/amx<span class="w"> </span>status<span class="w"> </span>my-workflow<span class="w"> </span>--pane<span class="w"> </span>review<span class="w"> </span>--json
+</span></code></pre></div>
+<h3 id="focus"><code>focus</code></h3>
+<p>What it does:
+- switches the active tmux client focus to a named pane</p>
+<p>When to use it:
+- when jumping directly to a pane by name instead of navigating manually</p>
+<p>Examples:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>./bin/amx<span class="w"> </span>focus<span class="w"> </span>my-workflow<span class="w"> </span>review
+</span></code></pre></div>
+<h3 id="restart"><code>restart</code></h3>
+<p>What it does:
+- respawns a named pane with its stored startup command</p>
+<p>When to use it:
+- when a pane is stuck or you want to restart its workflow endpoint</p>
+<p>Examples:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>./bin/amx<span class="w"> </span>restart<span class="w"> </span>my-workflow<span class="w"> </span>review
+</span></code></pre></div>
+<h3 id="rerun"><code>rerun</code></h3>
+<p>What it does:
+- re-executes the stored startup command for a named pane</p>
+<p>When to use it:
+- when you want to re-run the pane’s original command in place</p>
+<p>Examples:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>./bin/amx<span class="w"> </span>rerun<span class="w"> </span>my-workflow<span class="w"> </span>review
+</span></code></pre></div>
+<p>Useful note:
+- in the current version, <code>restart</code> and <code>rerun</code> are intentionally equivalent</p>
+<h3 id="stop"><code>stop</code></h3>
+<p>What it does:
+- stops the current pane process
+- leaves a usable interactive shell in the same pane</p>
+<p>When to use it:
+- when you want to stop a running pane without destroying the layout</p>
+<p>Examples:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>./bin/amx<span class="w"> </span>stop<span class="w"> </span>my-workflow<span class="w"> </span>review
+</span></code></pre></div>
+<h3 id="kill"><code>kill</code></h3>
+<p>What it does:
+- destroys the target tmux pane entirely</p>
+<p>When to use it:
+- when you really want the pane removed from the layout</p>
+<p>Examples:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>./bin/amx<span class="w"> </span><span class="nb">kill</span><span class="w"> </span>my-workflow<span class="w"> </span>build
+</span></code></pre></div>
+<p>Useful note:
+- this is destructive and can collapse the layout</p>
+<h3 id="capture"><code>capture</code></h3>
+<p>What it does:
+- reads the current captured output of a named pane</p>
+<p>When to use it:
+- for quick inspection
+- for small polling scripts
+- for automation that needs to read pane output</p>
+<p>Examples:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>./bin/amx<span class="w"> </span>capture<span class="w"> </span>my-workflow<span class="w"> </span>review
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>./bin/amx<span class="w"> </span>capture<span class="w"> </span>my-workflow<span class="w"> </span>review<span class="w"> </span>--tail<span class="w"> </span><span class="m">20</span>
+</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>./bin/amx<span class="w"> </span>capture<span class="w"> </span>my-workflow<span class="w"> </span>review<span class="w"> </span>--tail<span class="w"> </span><span class="m">20</span><span class="w"> </span>--strip-empty
+</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>./bin/amx<span class="w"> </span>capture<span class="w"> </span>my-workflow<span class="w"> </span>review<span class="w"> </span>--json<span class="w"> </span>--tail<span class="w"> </span><span class="m">20</span><span class="w"> </span>--strip-empty
+</span></code></pre></div>
+<p>Useful flags:
+- <code>--tail N</code>: keep only the last <code>N</code> lines
+- <code>--strip-empty</code>: remove blank and whitespace-only lines
+- <code>--json</code>: structured output</p>
+<h3 id="send-session-pane-command"><code>send SESSION PANE -- COMMAND</code></h3>
+<p>What it does:
+- writes text into a named pane
+- presses Enter by default</p>
+<p>When to use it:
+- when treating a pane like a live workflow endpoint</p>
+<p>Examples:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>./bin/amx<span class="w"> </span>send<span class="w"> </span>my-workflow<span class="w"> </span>review<span class="w"> </span>--<span class="w"> </span><span class="s2">"git status --short"</span>
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>./bin/amx<span class="w"> </span>send<span class="w"> </span>my-workflow<span class="w"> </span>review<span class="w"> </span>--no-enter<span class="w"> </span>--<span class="w"> </span><span class="s2">"printf 'queued\n'"</span>
+</span></code></pre></div>
+<p>Useful note:
+- <code>--no-enter</code> stages the text without executing it yet</p>
+<h2 id="agentic-commands">Agentic Commands</h2>
+<p>These commands enable coordination and orchestration between multiple agents.</p>
+<h3 id="dashboard"><code>dashboard</code></h3>
+<p>What it does:
+- launches a full-screen, real-time TUI (Terminal User Interface)
+- provides a "Mission Control" view of all panes, the selected pane's live output, and the shared Blackboard (KV-store)</p>
+<p>When to use it:
+- to monitor an agentic team in real-time
+- to see live pane activity, including provider MCP/tool traces, without repeatedly running <code>capture</code> and <code>inspect</code>
+- to see the current state of shared variables without repeatedly running <code>status</code></p>
+<p>Examples:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>./bin/amx<span class="w"> </span>dashboard<span class="w"> </span>my-workflow
+</span></code></pre></div>
+<p>Useful shortcuts inside the dashboard:
+- <code>f</code>: quit the dashboard and attach/switch to the selected pane
+- <code>r</code>: restart the selected pane
+- <code>q</code>: quit the dashboard
+- <code>up/down</code>: change the selected pane and refresh its live output</p>
+<h3 id="inspect"><code>inspect</code></h3>
+<p>What it does:
+- provides a deep, comprehensive diagnostic report for a single pane
+- shows real-time metrics (CPU, Memory), lifecycle metadata (start time, exit code), and recent logs</p>
+<p>When to use it:
+- when a pane is crashing and you need to see its exact configuration and last output
+- to verify the environment variables injected into a specific agent</p>
+<p>Examples:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>./bin/amx<span class="w"> </span>inspect<span class="w"> </span>my-workflow<span class="w"> </span>reviewer
+</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>./bin/amx<span class="w"> </span>inspect<span class="w"> </span>my-workflow<span class="w"> </span>reviewer<span class="w"> </span>--json
+</span></code></pre></div>
+<h3 id="kv-set"><code>kv-set</code></h3>
+<p>What it does:
+- sets a shared key-value pair in the session's "Blackboard"
+- uses tmux session options for storage</p>
+<p>When to use it:
+- to signal state between panes (e.g., <code>status=ready</code>)
+- to share data like file paths or task IDs</p>
+<p>Examples:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>./bin/amx<span class="w"> </span>kv-set<span class="w"> </span>my-team<span class="w"> </span>current_task<span class="w"> </span><span class="s2">"researching-agent-scaling"</span>
+</span></code></pre></div>
+<h3 id="kv-get"><code>kv-get</code></h3>
+<p>What it does:
+- retrieves a value from the session's Blackboard</p>
+<p>Examples:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>./bin/amx<span class="w"> </span>kv-get<span class="w"> </span>my-team<span class="w"> </span>current_task
+</span></code></pre></div>
+<h3 id="kv-list"><code>kv-list</code></h3>
+<p>What it does:
+- lists all keys and values currently stored in the Blackboard</p>
+<p>Examples:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>./bin/amx<span class="w"> </span>kv-list<span class="w"> </span>my-team
+</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>./bin/amx<span class="w"> </span>kv-list<span class="w"> </span>my-team<span class="w"> </span>--json
+</span></code></pre></div>
+<h3 id="kv-del"><code>kv-del</code></h3>
+<p>What it does:
+- removes a key from the Blackboard</p>
+<p>Examples:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>./bin/amx<span class="w"> </span>kv-del<span class="w"> </span>my-team<span class="w"> </span>current_task
+</span></code></pre></div>
+<h3 id="wait"><code>wait</code></h3>
+<p>What it does:
+- blocks until a specific regex pattern appears in a pane's emitted output
+- by default ignores active input/composer text in interactive panes
+- line anchors like <code>^...$</code> work against output lines by default
+- supports <code>--scope visible</code> for legacy raw screen matching</p>
+<p>When to use it:
+- to synchronize handoffs (e.g., wait for "BUILD SUCCESSFUL")
+- to wait for real agent output rather than matching text still sitting in the input composer</p>
+<p>Examples:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>./bin/amx<span class="w"> </span><span class="nb">wait</span><span class="w"> </span>my-team<span class="w"> </span>builder<span class="w"> </span><span class="s2">"SUCCESS"</span><span class="w"> </span>--timeout<span class="w"> </span>5m
+</span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a>./bin/amx<span class="w"> </span><span class="nb">wait</span><span class="w"> </span>my-team<span class="w"> </span>reviewer<span class="w"> </span><span class="s1">'^• REVIEW_DONE$'</span><span class="w"> </span>--timeout<span class="w"> </span>2m
+</span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a>./bin/amx<span class="w"> </span><span class="nb">wait</span><span class="w"> </span>my-team<span class="w"> </span>builder<span class="w"> </span><span class="s2">"SUCCESS"</span><span class="w"> </span>--scope<span class="w"> </span>visible<span class="w"> </span>--timeout<span class="w"> </span>5m
+</span></code></pre></div>
+<h3 id="scale"><code>scale</code></h3>
+<p>What it does:
+- dynamically adds or removes instances of a specific agent</p>
+<p>When to use it:
+- to adjust workforce based on load (e.g., spawn 3 more "Researchers")</p>
+<p>Examples:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>./bin/amx<span class="w"> </span>scale<span class="w"> </span>my-team<span class="w"> </span>researcher<span class="w"> </span><span class="m">5</span>
+</span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a>./bin/amx<span class="w"> </span>scale<span class="w"> </span>my-team<span class="w"> </span>researcher<span class="w"> </span><span class="m">1</span>
+</span></code></pre></div>
+<p>Useful note:
+- scaling up creates new panes with unique names like <code>researcher-2</code>
+- scaling down removes panes with the highest IDs</p>
+<h2 id="utility-commands">Utility Commands</h2>
+<h3 id="doctor"><code>doctor</code></h3>
+<p>What it does:
+- prints environment and dependency information
+- can check requirements for a specific config file
+- inspects configured provider CLIs, alias warnings, and likely stale model hints</p>
+<p>When to use it:
+- when tmux or environment issues look suspicious
+- to verify if a shared config will run on your machine</p>
+<p>Examples:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a>./bin/amx<span class="w"> </span>doctor
+</span><span id="__span-31-2"><a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a>./bin/amx<span class="w"> </span>doctor<span class="w"> </span>./shared-team-config.yaml
+</span></code></pre></div>
+<h3 id="version"><code>version</code></h3>
+<p>What it does:
+- prints the current Agentmux version string</p>
+<p>Examples:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a>./bin/amx<span class="w"> </span>version
+</span><span id="__span-32-2"><a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a>./bin/amx<span class="w"> </span>--version
+</span></code></pre></div>
+<h3 id="-help"><code>--help</code></h3>
+<p>What it does:
+- prints built-in CLI usage</p>
+<p>Examples:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-33-1"><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a>./bin/amx<span class="w"> </span>--help
+</span></code></pre></div>
+<h2 id="common-flows">Common Flows</h2>
+<h3 id="new-workflow">New workflow</h3>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-34-1"><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a>./bin/amx<span class="w"> </span>templates
+</span><span id="__span-34-2"><a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a>./bin/amx<span class="w"> </span>init<span class="w"> </span>default<span class="w"> </span>my-workflow.yaml
+</span><span id="__span-34-3"><a id="__codelineno-34-3" name="__codelineno-34-3" href="#__codelineno-34-3"></a>./bin/amx<span class="w"> </span>validate<span class="w"> </span>my-workflow.yaml
+</span><span id="__span-34-4"><a id="__codelineno-34-4" name="__codelineno-34-4" href="#__codelineno-34-4"></a>./bin/amx<span class="w"> </span>load<span class="w"> </span>my-workflow.yaml<span class="w"> </span>--replace<span class="w"> </span>--no-attach
+</span></code></pre></div>
+<h3 id="edit-and-reapply">Edit and reapply</h3>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-35-1"><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a>./bin/amx<span class="w"> </span>edit<span class="w"> </span>my-workflow
+</span><span id="__span-35-2"><a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a>./bin/amx<span class="w"> </span>validate<span class="w"> </span>my-workflow.yaml
+</span><span id="__span-35-3"><a id="__codelineno-35-3" name="__codelineno-35-3" href="#__codelineno-35-3"></a>./bin/amx<span class="w"> </span>reload<span class="w"> </span>my-workflow.yaml<span class="w"> </span>--no-attach
+</span></code></pre></div>
+<h3 id="inspect-and-interact-with-a-live-pane">Inspect and interact with a live pane</h3>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-36-1"><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a>./bin/amx<span class="w"> </span>status<span class="w"> </span>my-workflow<span class="w"> </span>--pane<span class="w"> </span>review
+</span><span id="__span-36-2"><a id="__codelineno-36-2" name="__codelineno-36-2" href="#__codelineno-36-2"></a>./bin/amx<span class="w"> </span>capture<span class="w"> </span>my-workflow<span class="w"> </span>review<span class="w"> </span>--tail<span class="w"> </span><span class="m">20</span><span class="w"> </span>--strip-empty
+</span><span id="__span-36-3"><a id="__codelineno-36-3" name="__codelineno-36-3" href="#__codelineno-36-3"></a>./bin/amx<span class="w"> </span>send<span class="w"> </span>my-workflow<span class="w"> </span>review<span class="w"> </span><span class="s2">"git status --short"</span>
+</span></code></pre></div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.indexes", "content.code.copy"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  </body>
+</html>

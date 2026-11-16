@@ -1,0 +1,126 @@
+{
+  "schema": 1,
+  "kind": "post-fix native regression validations",
+  "completed": true,
+  "passed": true,
+  "cases_passed": 2,
+  "cases_attempted": 2,
+  "source_rc_version": "0.15.0-rc1",
+  "source_rc_commit": "45ceb6206bb8256ae0cc8025db02ab45c7ab1722",
+  "source_rc_binary_sha256": "516ea56c045d0cd50644eef400ddb182ebcb57ef032f629ed6f022a83295fd58",
+  "build_scope": "Clean source RC, not a published release archive.",
+  "historical_seed": "d52e940c473be6a3b7d7983a704e2bac9547e6de",
+  "configuration_sha256": "22909db981a9c484487074eb41f6ef6d5ee93b990b91e1c24b6b40195bfe27f8",
+  "manifest_sha256": "cd6416507e6808486ac9d446108f162dedf586b9d3640b848ab74fb55cd55100",
+  "raw_regressions_sha256": "8740f9cdb39fc9a8ca8b0ce4e033fe12b6ddbfc829e9a9db3bb461dd1445e833",
+  "role_seconds": {
+    "coder": 435,
+    "reviewer": 435
+  },
+  "shared_mission_seconds": 435,
+  "outer_attempt_seconds": 480,
+  "case_results": [
+    {
+      "task": "credential redaction",
+      "passed": true,
+      "native_cli_admissions": 2,
+      "providers_admitted": [
+        "codex",
+        "claude"
+      ],
+      "workflow_completed": true,
+      "fresh_review": "approved",
+      "skipped_phases": [
+        "address-review",
+        "final-review"
+      ],
+      "final_check_verified": true,
+      "external_contract_passed": true,
+      "artifact_integrity": true,
+      "evaluator_integrity": true,
+      "application": "explicit adapter apply to disposable historical fixture",
+      "background_failure_recorded": false,
+      "cleanup_errors": 0
+    },
+    {
+      "task": "authenticated trace display",
+      "passed": true,
+      "native_cli_admissions": 2,
+      "providers_admitted": [
+        "codex",
+        "claude"
+      ],
+      "workflow_completed": true,
+      "fresh_review": "approved",
+      "skipped_phases": [
+        "address-review",
+        "final-review"
+      ],
+      "final_check_verified": true,
+      "external_contract_passed": true,
+      "artifact_integrity": true,
+      "evaluator_integrity": true,
+      "application": "explicit adapter apply to disposable historical fixture",
+      "background_failure_recorded": false,
+      "cleanup_errors": 0
+    }
+  ],
+  "actual_additional_cli_admissions": 4,
+  "additional_provider_admissions": {
+    "codex": 2,
+    "claude": 2
+  },
+  "actual_prior_cli_admissions": 11,
+  "actual_combined_cli_admissions": 15,
+  "declared_combined_admission_bound": 19,
+  "requested_model_aliases": {
+    "codex": "gpt-6.1-sol",
+    "claude": "claude-sonnet-5-5"
+  },
+  "served_model_revisions": "unverified",
+  "authentication": {
+    "codex": "ChatGPT subscription",
+    "claude": "first-party Claude Pro subscription",
+    "api_key_routes": false
+  },
+  "inference_requests": null,
+  "normalized_tokens": null,
+  "actual_cost": null,
+  "admission_guards": {
+    "actual_role_preview_435_seconds": true,
+    "preview_started_models": 0,
+    "preview_created_run_files": false,
+    "retained_v014_reports_loaded": 3,
+    "retained_v014_evidence_files_unchanged": 14,
+    "primary_grader_controls_passed": 4
+  },
+  "independent_review": {
+    "frozen_configuration_and_tool_pins_verified": true,
+    "both_candidate_fingerprints_verified": true,
+    "both_patch_and_application_receipts_verified": true,
+    "no_recorded_grader_outside_source_or_credential_reads": true,
+    "no_obvious_test_bypass_found": true
+  },
+  "known_extra_test_limit": "One additional package race-test command in the redaction implementation failed with four Unix-socket permission errors inside the native sandbox. Subsequent focused checks, mandatory acceptance checks and the frozen external contract passed. This is not a full-suite success claim.",
+  "cleanup": {
+    "recorded_background_failures": 0,
+    "tracked_cleanup_errors": 0,
+    "visible_trial_prefix_processes": 0,
+    "audit_signals_sent": false,
+    "scope": "Observed tracked processes and a read-only host command/cwd prefix check; not general containment proof."
+  },
+  "original_pilot_unchanged": {
+    "engine_release": "v0.14.0",
+    "native_codex_passed": 3,
+    "native_codex_attempts": 3,
+    "agentmux_passed": 1,
+    "agentmux_attempts": 3,
+    "separate_invalidated_cli_admissions": 4
+  },
+  "interpretation": [
+    "Only the two previously failed cases were checked after the budget and scoped-check guidance changes.",
+    "No baseline was rerun. These results are not pooled into the original pilot pass rate.",
+    "The combined code/prompt changes were validated together; this does not isolate a single causal improvement.",
+    "No speedup, broad competitive superiority, unaided usability, sustained reliability or billing conclusion follows."
+  ]
+}
